@@ -1,92 +1,108 @@
-﻿# Visual Studio
+﻿# =========================
+# IDE / Editor
+# =========================
 .vs/
+.idea/
+.vscode/
+
 *.suo
 *.user
 *.userosscache
 *.sln.docstates
 
-# Build results
+# =========================
+# Build output
+# =========================
 [Bb]in/
 [Oo]bj/
 out/
 artifacts/
 publish/
 
-# Visual Studio cache/options
-*.VC.db
-*.VC.VC.opendb
+# =========================
+# Logs / Test / Coverage
+# =========================
+*.log
+*.err
+*.out
+*.trx
+TestResults/
+coverage/
+*.coverage
+coverage*.xml
 
-# Rider
-.idea/
-*.sln.iml
-*.DotSettings.user
+# =========================
+# Node (nếu có frontend)
+# =========================
+node_modules/
+bower_components/
 
-# Visual Studio Code
-.vscode/
-
+# =========================
 # NuGet
+# =========================
 *.nupkg
 packages/
 project.lock.json
 project.fragment.lock.json
 
-# dotnet
-generated/
-*.dotnet/
-dotnet_modules/
-runtimeconfig.dump.json
+# =========================
+# Environment / Secrets
+# =========================
+.env
+.env.*
 
-# Publish / deployment
-wwwroot/dist/
-app_Data/
-*.Publish.xml
-
-# Logs, test results, coverage
-TestResults/
-*.trx
-*.log
-*.err
-*.out
-coverage/
-*.coverage
-coverage*.xml
-
-# User secrets (do NOT commit secret store files)
 secrets.json
 secrets.*.json
 
-# Entity Framework Migrations (optional - keep if you commit migrations)
-# Migrations/**/Snapshot.cs
+# =========================
+# App settings (QUAN TRỌNG)
+# =========================
+# Giữ file base để team chạy được
+!appsettings.json
 
-# Rider / ReSharper
-_ReSharper*/
-*_ReSharper*/
-*.ReSharper
-*.DotSettings
+# Ignore config theo môi trường (có thể chứa secret)
+appsettings.Development.json
+appsettings.Production.json
+appsettings.*.local.json
 
+# =========================
+# Entity Framework
+# =========================
+Migrations/
+
+# =========================
 # Docker
+# =========================
 docker-compose.override.yml
 **/bin/Dockerfile*
 **/obj/Dockerfile*
 
+# =========================
 # Azure
+# =========================
 *.publishsettings
-# Azure Functions local settings
 local.settings.json
 
+# =========================
 # OS files
+# =========================
 Thumbs.db
 ehthumbs.db
 Desktop.ini
 .DS_Store
 
-# Other
-node_modules/
-bower_components/
-*.log
-
-# Ignore user-specific and temporary files
+# =========================
+# Temp / cache
+# =========================
 *.tmp
 *.temp
-~$*
 *.swp
+~$*
+
+# =========================
+# Misc
+# =========================
+generated/
+*.dotnet/
+dotnet_modules/
+runtimeconfig.dump.json

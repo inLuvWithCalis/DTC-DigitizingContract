@@ -23,24 +23,57 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>(
+    {},
+  );
+  const [touched, setTouched] = useState<{
+    email?: boolean;
+    password?: boolean;
+  }>({});
+
+  const validateEmail = (value: string): string | undefined => {
+    if (!value.trim()) return "Vui lòng nhập địa chỉ email";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()))
+      return "Địa chỉ email không hợp lệ";
+    return undefined;
+  };
+
+  const validatePassword = (value: string): string | undefined => {
+    if (!value) return "Vui lòng nhập mật khẩu";
+    return undefined;
+  };
+
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+    if (touched.email) {
+      setErrors((prev) => ({ ...prev, email: validateEmail(value) }));
+    }
+  };
+
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    if (touched.password) {
+      setErrors((prev) => ({ ...prev, password: validatePassword(value) }));
+    }
+  };
+
+  const handleBlur = (field: "email" | "password") => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+    const value = field === "email" ? email : password;
+    const validator = field === "email" ? validateEmail : validatePassword;
+    setErrors((prev) => ({ ...prev, [field]: validator(value) }));
+  };
 
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!email.trim()) {
-      toast.error("Vui lòng nhập địa chỉ email");
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      toast.error("Địa chỉ email không hợp lệ");
-      return;
-    }
-    if (!password) {
-      toast.error("Vui lòng nhập mật khẩu");
-      return;
-    }
-    if (password.length < 6) {
-      toast.error("Mật khẩu phải chứa ít nhất 6 ký tự");
+    const emailError = validateEmail(email);
+    const passwordError = validatePassword(password);
+    setTouched({ email: true, password: true });
+    setErrors({ email: emailError, password: passwordError });
+
+    if (emailError || passwordError) {
+      toast.error(emailError || passwordError);
       return;
     }
 
@@ -116,9 +149,24 @@ export default function LoginPage() {
                     type="email"
                     value={email}
                     maxLength={255}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="h-11 rounded-xl"
+                    onChange={(e) => handleEmailChange(e.target.value)}
+                    onBlur={() => handleBlur("email")}
+                    aria-invalid={!!errors.email}
+                    aria-describedby={errors.email ? "email-error" : undefined}
+                    className={`h-11 rounded-xl transition-colors ${
+                      errors.email && touched.email
+                        ? "border-destructive focus-visible:ring-destructive/30"
+                        : ""
+                    }`}
                   />
+                  {errors.email && touched.email && (
+                    <p
+                      id="email-error"
+                      className="text-destructive text-xs font-medium mt-1.5 animate-in fade-in slide-in-from-top-1 duration-200"
+                    >
+                      {errors.email}
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -142,14 +190,25 @@ export default function LoginPage() {
                       type={showPassword ? "text" : "password"}
                       value={password}
                       maxLength={64}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="h-11 rounded-xl pr-24"
+                      onChange={(e) => handlePasswordChange(e.target.value)}
+                      onBlur={() => handleBlur("password")}
+                      aria-invalid={!!errors.password}
+                      aria-describedby={
+                        errors.password ? "password-error" : undefined
+                      }
+                      className={`h-11 rounded-xl pr-24 transition-colors ${
+                        errors.password && touched.password
+                          ? "border-destructive focus-visible:ring-destructive/30"
+                          : ""
+                      }`}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-14 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
-                      aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                      aria-label={
+                        showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"
+                      }
                     >
                       {showPassword ? (
                         <EyeOff className="w-4 h-4" />
@@ -158,6 +217,14 @@ export default function LoginPage() {
                       )}
                     </button>
                   </div>
+                  {errors.password && touched.password && (
+                    <p
+                      id="password-error"
+                      className="text-destructive text-xs font-medium mt-1.5 animate-in fade-in slide-in-from-top-1 duration-200"
+                    >
+                      {errors.password}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center space-x-2.5">

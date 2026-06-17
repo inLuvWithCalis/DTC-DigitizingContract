@@ -20,7 +20,7 @@
   --muted: oklch(0.88 0.01 220);
   --muted-foreground: oklch(0.5 0 0);
   /* Minimal blue accent */
-  --accent: oklch(0.511 0.262 276.966);
+  --accent: oklch(0.96 0.02 272);
   --accent-foreground: oklch(0.98 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.98 0 0);
@@ -129,4 +129,18 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Dark Theme */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+::view-transition-new(root) {
+  z-index: 9999;
 }

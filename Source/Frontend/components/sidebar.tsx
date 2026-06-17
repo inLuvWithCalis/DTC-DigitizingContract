@@ -155,12 +155,6 @@ export function Sidebar() {
         {renderNavItems()}
 
         {/* User Section (Desktop) */}
-        {/* Theme Toggle */}
-        {isExpanded && (
-          <div className="px-3 pb-2 flex justify-center">
-            <ThemeToggle />
-          </div>
-        )}
 
         <div className="border-t border-border p-3">
           <DropdownMenu>

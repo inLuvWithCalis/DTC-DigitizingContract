@@ -22,6 +22,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useRouter } from "next/navigation";
+import { Header } from "@/components/ui/custom/header";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -41,7 +42,8 @@ export default function DashboardPage() {
       icon: FileText,
       color: "text-indigo-600 dark:text-indigo-400",
       bg: "bg-indigo-100 dark:bg-indigo-500/15",
-      border: "group-hover:border-indigo-300 dark:group-hover:border-indigo-500/40",
+      border:
+        "group-hover:border-indigo-300 dark:group-hover:border-indigo-500/40",
     },
     {
       label: "Chờ Phê duyệt",
@@ -51,7 +53,8 @@ export default function DashboardPage() {
       icon: Clock,
       color: "text-amber-600 dark:text-amber-400",
       bg: "bg-amber-100 dark:bg-amber-500/15",
-      border: "group-hover:border-amber-300 dark:group-hover:border-amber-500/40",
+      border:
+        "group-hover:border-amber-300 dark:group-hover:border-amber-500/40",
     },
     {
       label: "Sắp Hết hạn",
@@ -71,7 +74,8 @@ export default function DashboardPage() {
       icon: FileCheck2,
       color: "text-emerald-600 dark:text-emerald-400",
       bg: "bg-emerald-100 dark:bg-emerald-500/15",
-      border: "group-hover:border-emerald-300 dark:group-hover:border-emerald-500/40",
+      border:
+        "group-hover:border-emerald-300 dark:group-hover:border-emerald-500/40",
     },
   ];
 
@@ -109,51 +113,7 @@ export default function DashboardPage() {
 
       <main className="flex-grow flex flex-col overflow-hidden">
         {/* Top Bar */}
-        <header className="bg-card/80 backdrop-blur-md border-b border-border sticky top-0 z-30 flex-shrink-0 transition-all">
-          <div className="px-6 lg:px-8 h-16 flex items-center justify-between">
-            <div className="hidden md:block">
-              <h2 className="text-lg font-semibold text-foreground tracking-tight">
-                Tổng quan Hệ thống
-              </h2>
-            </div>
-            <div className="flex items-center gap-3 ml-auto">
-              <ThemeToggle />
-              <button className="relative p-2 hover:bg-accent rounded-full transition-colors text-muted-foreground hover:text-foreground">
-                <Bell className="w-5 h-5" />
-                {/* Chấm đỏ thông báo */}
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-card"></span>
-              </button>
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-primary/80 hover:opacity-90 text-primary-foreground shadow-sm transition-transform hover:scale-105"
-                  >
-                    U
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48 rounded-xl">
-                  <DropdownMenuItem className="cursor-pointer py-2.5">
-                    <User className="mr-2 h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">
-                      Tài khoản
-                    </span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="cursor-pointer py-2.5 text-rose-600 focus:text-rose-600 dark:focus:bg-rose-500/10 focus:bg-rose-50"
-                    onClick={handleLogout}
-                  >
-                    <span>Đăng xuất</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-        </header>
-
+        <Header />
         {/* Main Content Area */}
         <div className="flex-grow overflow-y-auto">
           {/* Hiệu ứng Fade-in và trượt lên nhẹ cho toàn bộ khối nội dung */}

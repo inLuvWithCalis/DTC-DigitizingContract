@@ -1,4 +1,7 @@
 using ContractManagement.Data;
+using ContractManagement.Domains.Quotation.Interfaces;
+using ContractManagement.Domains.Quotation.Mappings;
+using ContractManagement.Domains.Quotation.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -10,11 +13,20 @@ builder.Services.AddDbContextPool<DbDtctechContext>(option => option.UseSqlServe
     GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.")));
 
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+
+// Add services for DI
+builder.Services.AddScoped<IQuotationService, QuotationService>();
+
 builder.Services.AddOpenApi();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// AutoMapper configuration
+builder.Services.AddAutoMapper(cfg =>
+{
+    cfg.AddProfile<QuotationMappingProfile>();
+});
 
 var app = builder.Build();
 

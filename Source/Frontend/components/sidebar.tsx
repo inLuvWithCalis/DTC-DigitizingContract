@@ -6,17 +6,14 @@ import {
   X,
   LayoutDashboard,
   FileSignature,
-  FileText,
   ShoppingCart,
   Users,
   Settings,
   LogOut,
   User,
   ChevronLeft,
-  Menu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,7 +50,7 @@ export function Sidebar() {
 
   // Component render Menu Item để dùng chung cho cả Desktop và Mobile
   const renderNavItems = () => (
-    <nav className="flex-1 px-3 py-4 space-y-1.5">
+    <nav className="flex-1 px-3 py-4 space-y-1.5 flex flex-col items-stretch">
       {navItems.map((item, i) => {
         const Icon = item.icon;
         // Xử lý Active: Nếu là trang chủ (/dashboard) thì khớp hoàn toàn, còn lại dùng startsWith để active cả trang con
@@ -66,23 +63,22 @@ export function Sidebar() {
           <a
             key={i}
             href={item.href}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative ${
-              isActive
-                ? "bg-primary/10 text-primary font-semibold shadow-sm"
-                : "text-muted-foreground hover:bg-accent hover:text-foreground"
-            }`}
+            className={`flex items-center py-2.5 rounded-xl transition-all duration-200 group relative ${isExpanded ? "gap-3 px-3" : "justify-center px-0"
+              } ${isActive
+                ? "bg-indigo-50 text-indigo-700 font-semibold shadow-sm"
+                : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
+              }`}
           >
             {/* Thanh viền đánh dấu active bên trái */}
             {isActive && (
-              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-r-full" />
+              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-indigo-600 rounded-r-full" />
             )}
 
             <Icon
-              className={`h-5 w-5 flex-shrink-0 transition-colors ${
-                isActive
-                  ? "text-primary"
-                  : "text-muted-foreground/70 group-hover:text-foreground"
-              }`}
+              className={`h-5 w-5 flex-shrink-0 transition-colors ${isActive
+                ? "text-indigo-600"
+                : "text-slate-400 group-hover:text-slate-600"
+                }`}
             />
             {/* Fix lỗi text bị bóp méo khi thu gọn bằng truncate và opacity */}
             <span
@@ -105,9 +101,9 @@ export function Sidebar() {
             variant="outline"
             size="icon"
             onClick={() => setIsMobileOpen(false)}
-            className="border-border bg-card hover:bg-accent shadow-sm rounded-xl"
+            className="border-slate-200 bg-white hover:bg-slate-100 shadow-sm rounded-xl"
           >
-            <X className="h-5 w-5 text-muted-foreground" />
+            <X className="h-5 w-5 text-slate-600" />
           </Button>
         </div>
       )}
@@ -115,25 +111,35 @@ export function Sidebar() {
       {/* Sidebar Desktop - Collapsible with smooth width animation */}
       {/* Lưu ý: Tailwind chuẩn không có w-18, mình đổi sang w-20 (80px) để nó render chuẩn */}
       <aside
-        className={`relative hidden lg:flex h-screen bg-card border-r border-border flex-col flex-shrink-0 transition-all duration-300 ease-in-out z-20 ${
-          isExpanded ? "w-64" : "w-20"
-        }`}
+        className={`relative hidden lg:flex h-screen bg-white border-r border-slate-200 flex-col flex-shrink-0 transition-all duration-300 ease-in-out z-20 ${isExpanded ? "w-64" : "w-20"
+          }`}
       >
         <div
-          className={`h-16 border-b border-border p-4 flex items-center transition-all duration-300 ${
-            isExpanded ? "justify-between" : "justify-center"
-          }`}
+          className={`h-16 border-b border-slate-200 p-4 flex items-center transition-all duration-300 ${isExpanded ? "justify-between" : "justify-center"
+            }`}
         >
           {isExpanded && (
             <div className="flex items-center gap-2.5 overflow-hidden animate-in fade-in duration-300">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm shadow-primary/20">
-                <FileText className="w-4 h-4 text-primary-foreground" />
+              <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm shadow-indigo-200">
+                <svg
+                  className="w-4 h-4 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
               </div>
               <div className="min-w-0">
-                <h1 className="text-sm font-bold leading-tight text-foreground truncate">
+                <h1 className="text-sm font-bold leading-tight text-slate-900 truncate">
                   eContract Hub
                 </h1>
-                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider truncate">
+                <p className="text-[11px] font-medium text-slate-500 uppercase tracking-wider truncate">
                   Quản lý
                 </p>
               </div>
@@ -143,7 +149,7 @@ export function Sidebar() {
             variant="ghost"
             size="icon"
             onClick={() => setIsExpanded(!isExpanded)}
-            className="text-muted-foreground hover:text-foreground hover:bg-accent h-8 w-8 rounded-lg flex-shrink-0"
+            className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 h-8 w-8 rounded-lg flex-shrink-0"
           >
             <ChevronLeft
               className={`h-5 w-5 transition-transform duration-300 ${isExpanded ? "" : "rotate-180"}`}
@@ -155,24 +161,22 @@ export function Sidebar() {
         {renderNavItems()}
 
         {/* User Section (Desktop) */}
-
-        <div className="border-t border-border p-3">
+        <div className="border-t border-slate-200 p-3">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className={`w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-accent transition-colors ${
-                  isExpanded ? "justify-start" : "justify-center"
-                }`}
+                className={`w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-slate-50 transition-colors ${isExpanded ? "justify-start" : "justify-center"
+                  }`}
               >
-                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-primary/80 flex items-center justify-center text-sm font-bold flex-shrink-0 text-primary-foreground shadow-sm">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-sm font-bold flex-shrink-0 text-white shadow-sm">
                   U
                 </div>
                 {isExpanded && (
                   <div className="flex-1 text-left min-w-0 animate-in fade-in">
-                    <p className="text-sm font-semibold text-foreground truncate">
+                    <p className="text-sm font-semibold text-slate-900 truncate">
                       Quản trị viên
                     </p>
-                    <p className="text-xs text-muted-foreground truncate">
+                    <p className="text-xs text-slate-500 truncate">
                       admin@econtract.vn
                     </p>
                   </div>
@@ -186,16 +190,16 @@ export function Sidebar() {
               className="w-56 rounded-xl"
             >
               <DropdownMenuItem className="cursor-pointer py-2">
-                <User className="mr-2 h-4 w-4 text-muted-foreground" />
+                <User className="mr-2 h-4 w-4 text-slate-500" />
                 <span className="font-medium">Hồ sơ cá nhân</span>
               </DropdownMenuItem>
               <DropdownMenuItem className="cursor-pointer py-2">
-                <Settings className="mr-2 h-4 w-4 text-muted-foreground" />
+                <Settings className="mr-2 h-4 w-4 text-slate-500" />
                 <span className="font-medium">Đổi mật khẩu</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                className="cursor-pointer py-2 text-rose-600 focus:text-rose-600 dark:focus:bg-rose-500/10 focus:bg-rose-50"
+                className="cursor-pointer py-2 text-rose-600 focus:text-rose-600 focus:bg-rose-50"
                 onClick={handleLogout}
               >
                 <LogOut className="mr-2 h-4 w-4" />
@@ -210,20 +214,32 @@ export function Sidebar() {
       {isMobileOpen && (
         <>
           <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-30 lg:hidden animate-in fade-in"
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-30 lg:hidden animate-in fade-in"
             onClick={() => setIsMobileOpen(false)}
           />
-          <aside className="fixed left-0 top-0 h-screen w-72 bg-card z-40 flex flex-col overflow-y-auto animate-in slide-in-from-left duration-300 shadow-2xl">
-            <div className="h-16 border-b border-border p-4 flex items-center justify-between">
+          <aside className="fixed left-0 top-0 h-screen w-72 bg-white z-40 flex flex-col overflow-y-auto animate-in slide-in-from-left duration-300 shadow-2xl">
+            <div className="h-16 border-b border-slate-200 p-4 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm shadow-primary/20">
-                  <FileText className="w-4 h-4 text-primary-foreground" />
+                <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm shadow-indigo-200">
+                  <svg
+                    className="w-4 h-4 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
                 </div>
                 <div>
-                  <h1 className="text-sm font-bold leading-tight text-foreground">
+                  <h1 className="text-sm font-bold leading-tight text-slate-900">
                     eContract Hub
                   </h1>
-                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                  <p className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
                     Quản lý
                   </p>
                 </div>
@@ -232,7 +248,7 @@ export function Sidebar() {
                 variant="ghost"
                 size="icon"
                 onClick={() => setIsMobileOpen(false)}
-                className="text-muted-foreground hover:text-foreground hover:bg-accent h-8 w-8 rounded-lg flex-shrink-0"
+                className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 h-8 w-8 rounded-lg flex-shrink-0"
               >
                 <X className="h-5 w-5" />
               </Button>
@@ -242,18 +258,18 @@ export function Sidebar() {
             {renderNavItems()}
 
             {/* User Section (Mobile) */}
-            <div className="border-t border-border p-4">
+            <div className="border-t border-slate-200 p-4">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-accent transition-colors justify-start">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-primary to-primary/80 flex items-center justify-center text-sm font-bold flex-shrink-0 text-primary-foreground shadow-sm">
+                  <button className="w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-slate-50 transition-colors justify-start">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-sm font-bold flex-shrink-0 text-white shadow-sm">
                       U
                     </div>
                     <div className="flex-1 text-left min-w-0">
-                      <p className="text-sm font-semibold text-foreground truncate">
+                      <p className="text-sm font-semibold text-slate-900 truncate">
                         Quản trị viên
                       </p>
-                      <p className="text-xs text-muted-foreground truncate">
+                      <p className="text-xs text-slate-500 truncate">
                         admin@econtract.vn
                       </p>
                     </div>
@@ -265,16 +281,16 @@ export function Sidebar() {
                   className="w-64 rounded-xl"
                 >
                   <DropdownMenuItem className="cursor-pointer py-2.5">
-                    <User className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <User className="mr-2 h-4 w-4 text-slate-500" />
                     <span className="font-medium">Hồ sơ cá nhân</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem className="cursor-pointer py-2.5">
-                    <Settings className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <Settings className="mr-2 h-4 w-4 text-slate-500" />
                     <span className="font-medium">Đổi mật khẩu</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    className="cursor-pointer py-2.5 text-rose-600 focus:text-rose-600 dark:focus:bg-rose-500/10 focus:bg-rose-50"
+                    className="cursor-pointer py-2.5 text-rose-600 focus:text-rose-600 focus:bg-rose-50"
                     onClick={handleLogout}
                   >
                     <LogOut className="mr-2 h-4 w-4" />
@@ -290,9 +306,21 @@ export function Sidebar() {
       {/* Mobile Menu Trigger in Top Bar */}
       <button
         onClick={() => setIsMobileOpen(!isMobileOpen)}
-        className="fixed top-3 left-4 z-20 p-2 lg:hidden hover:bg-accent rounded-xl transition-colors text-muted-foreground bg-card shadow-sm border border-border"
+        className="fixed top-3 left-4 z-20 p-2 lg:hidden hover:bg-slate-100 rounded-xl transition-colors text-slate-600 bg-white shadow-sm border border-slate-200"
       >
-        <Menu className="h-5 w-5" />
+        <svg
+          className="h-5 w-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M4 6h16M4 12h16M4 18h16"
+          />
+        </svg>
       </button>
     </>
   );

@@ -53,10 +53,9 @@ export function Sidebar() {
 
   // Component render Menu Item để dùng chung cho cả Desktop và Mobile
   const renderNavItems = () => (
-    <nav className="flex-1 px-3 py-4 space-y-1.5">
+    <nav className="flex-1 px-3 py-4 space-y-1.5 flex flex-col items-stretch">
       {navItems.map((item, i) => {
         const Icon = item.icon;
-        // Xử lý Active: Nếu là trang chủ (/dashboard) thì khớp hoàn toàn, còn lại dùng startsWith để active cả trang con
         const isActive =
           item.href === "/dashboard"
             ? pathname === "/dashboard"
@@ -66,13 +65,14 @@ export function Sidebar() {
           <a
             key={i}
             href={item.href}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative ${
+            className={`flex items-center py-2.5 rounded-xl transition-all duration-200 group relative ${
+              isExpanded ? "gap-3 px-3" : "justify-center px-0"
+            } ${
               isActive
                 ? "bg-primary/10 text-primary font-semibold shadow-sm"
-                : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             }`}
           >
-            {/* Thanh viền đánh dấu active bên trái */}
             {isActive && (
               <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-r-full" />
             )}

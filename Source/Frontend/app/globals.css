@@ -19,7 +19,7 @@
   --muted: oklch(0.88 0.01 220);
   --muted-foreground: oklch(0.5 0 0);
   /* Minimal blue accent */
-  --accent: oklch(0.96 0.02 272);
+  --accent: oklch(88.641% 0.01975 273.209);
   --accent-foreground: oklch(0.98 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.98 0 0);

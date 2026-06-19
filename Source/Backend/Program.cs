@@ -14,6 +14,19 @@ builder.Services.AddDbContextPool<DbDtctechContext>(option => option.UseSqlServe
 
 builder.Services.AddControllers();
 
+// Configure CORS to allow requests from the React client
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("CorsPolicy", policy =>
+    {
+        policy
+            .WithOrigins("http://localhost:3000")
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
+});
+
 // Add services for DI
 builder.Services.AddScoped<IQuotationService, QuotationService>();
 
@@ -38,6 +51,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseRouting();
+app.UseCors("CorsPolicy");
 
 app.UseAuthorization();
 

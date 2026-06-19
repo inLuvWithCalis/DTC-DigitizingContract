@@ -66,13 +66,11 @@ export function Sidebar() {
           <a
             key={i}
             href={item.href}
-            className={`flex items-center py-2.5 rounded-xl transition-all duration-200 group relative ${
-              isExpanded ? "gap-3 px-3" : "justify-center px-0"
-            } ${
-              isActive
-                ? "bg-indigo-50 text-indigo-700 font-semibold shadow-sm"
-                : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
-            }`}
+            className={`flex items-center py-2.5 rounded-xl transition-all duration-200 group relative ${isExpanded ? "gap-3 px-3" : "justify-center px-0"
+              } ${isActive
+                ? "bg-primary/10 text-primary font-semibold shadow-sm"
+                : "text-accent-600 hover:bg-accent/80 hover:text-accent-900"
+              }`}
           >
             {/* Thanh viền đánh dấu active bên trái */}
             {isActive && (
@@ -80,11 +78,10 @@ export function Sidebar() {
             )}
 
             <Icon
-              className={`h-5 w-5 flex-shrink-0 transition-colors ${
-                isActive
-                  ? "text-primary"
-                  : "text-muted-foreground/70 group-hover:text-foreground"
-              }`}
+              className={`h-5 w-5 flex-shrink-0 transition-colors ${isActive
+                ? "text-primary"
+                : "text-muted-foreground/70 group-hover:text-foreground"
+                }`}
             />
             {/* Fix lỗi text bị bóp méo khi thu gọn bằng truncate và opacity */}
             <span
@@ -117,14 +114,12 @@ export function Sidebar() {
       {/* Sidebar Desktop - Collapsible with smooth width animation */}
       {/* Lưu ý: Tailwind chuẩn không có w-18, mình đổi sang w-20 (80px) để nó render chuẩn */}
       <aside
-        className={`relative hidden lg:flex h-screen bg-card border-r border-border flex-col flex-shrink-0 transition-all duration-300 ease-in-out z-20 ${
-          isExpanded ? "w-64" : "w-20"
-        }`}
+        className={`relative hidden lg:flex h-screen bg-card border-r border-border flex-col flex-shrink-0 transition-all duration-300 ease-in-out z-20 ${isExpanded ? "w-64" : "w-20"
+          }`}
       >
         <div
-          className={`h-16 border-b border-border p-4 flex items-center transition-all duration-300 ${
-            isExpanded ? "justify-between" : "justify-center"
-          }`}
+          className={`h-16 border-b border-border p-4 flex items-center transition-all duration-300 ${isExpanded ? "justify-between" : "justify-center"
+            }`}
         >
           {isExpanded && (
             <div className="flex items-center gap-2.5 overflow-hidden animate-in fade-in duration-300">
@@ -162,9 +157,8 @@ export function Sidebar() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className={`w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-accent transition-colors ${
-                  isExpanded ? "justify-start" : "justify-center"
-                }`}
+                className={`w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-accent transition-colors ${isExpanded ? "justify-start" : "justify-center"
+                  }`}
               >
                 <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-primary/80 flex items-center justify-center text-sm font-bold flex-shrink-0 text-primary-foreground shadow-sm">
                   U

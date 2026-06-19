@@ -5,6 +5,15 @@
     --
     File:$Database\StoredProcedures\Quotations\sp_Quotation_Create.sql
 */
+
+CREATE TYPE dbo.QuotationItemType AS TABLE
+(
+    ProductId INT NOT NULL,
+    Quantity INT NOT NULL,
+    UnitPrice DECIMAL(18, 2) NOT NULL
+);
+GO
+
 CREATE OR ALTER PROCEDURE dbo.sp_Quotation_Create
     @CustomerId INT,
     @CreatedEmployeeId INT,

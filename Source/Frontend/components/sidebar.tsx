@@ -53,7 +53,6 @@ export function Sidebar() {
     <nav className="flex-1 px-3 py-4 space-y-1.5 flex flex-col items-stretch">
       {navItems.map((item, i) => {
         const Icon = item.icon;
-        // Xử lý Active: Nếu là trang chủ (/dashboard) thì khớp hoàn toàn, còn lại dùng startsWith để active cả trang con
         const isActive =
           item.href === "/dashboard"
             ? pathname === "/dashboard"
@@ -65,11 +64,10 @@ export function Sidebar() {
             href={item.href}
             className={`flex items-center py-2.5 rounded-xl transition-all duration-200 group relative ${isExpanded ? "gap-3 px-3" : "justify-center px-0"
               } ${isActive
-                ? "bg-indigo-50 text-indigo-700 font-semibold shadow-sm"
-                : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
+                ? "bg-primary/10 text-primary font-semibold shadow-sm"
+                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
               }`}
           >
-            {/* Thanh viền đánh dấu active bên trái */}
             {isActive && (
               <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-indigo-600 rounded-r-full" />
             )}

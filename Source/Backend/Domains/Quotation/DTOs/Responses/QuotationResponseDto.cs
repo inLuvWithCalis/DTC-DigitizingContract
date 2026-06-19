@@ -7,7 +7,7 @@
         public string QuotationNo { get; set; }
         public int CustomerId { get; set; }
         public DateTime QuotationDate { get; set; }
-        public double TotalAmount { get; set; }
+        public decimal TotalAmount { get; set; }
         public string QuatationStatus { get; set; }
         public List<ItemResponse> Items { get; set; } = new List<ItemResponse>();
 
@@ -16,8 +16,8 @@
             public int ProductId { get; set; }
             public string ProductName { get; set; }
             public int Quantity { get; set; }
-            public double UnitPrice { get; set; }
-            public double Amount { get; set; }
+            public decimal UnitPrice { get; set; }
+            public decimal Amount { get; set; }
         }
     }
 }

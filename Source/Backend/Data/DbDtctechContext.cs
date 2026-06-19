@@ -509,6 +509,7 @@ public partial class DbDtctechContext : DbContext
             entity.HasKey(e => e.QuotationId).HasName("PK__tbl_Quot__E19752938F4FC112");
 
             entity.ToTable("tbl_Quotation");
+            entity.Property(e => e.TotalAmount).HasColumnType("decimal(18, 2)");
 
             entity.Property(e => e.QuatationStatus)
                 .HasMaxLength(30)
@@ -523,6 +524,8 @@ public partial class DbDtctechContext : DbContext
         modelBuilder.Entity<TblQuotationDetail>(entity =>
         {
             entity.HasKey(e => e.QuotationDetailId).HasName("PK__tbl_Quot__0CEE6AE2EC238ED5");
+            entity.Property(e => e.Amount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.UnitPrice).HasColumnType("decimal(18, 2)");
 
             entity.ToTable("tbl_QuotationDetail");
         });

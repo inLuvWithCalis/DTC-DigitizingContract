@@ -18,6 +18,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="Database\StoredProcedures\Quotations\sp_Quotation_Create.sql" />
+    <Content Include="Database\StoredProcedures\Quotations\sp_Quotation_GetById.sql" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Page Include="appsettings.json" />
   </ItemGroup>
 

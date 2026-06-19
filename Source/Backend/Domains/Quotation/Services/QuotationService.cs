@@ -1,10 +1,12 @@
-﻿using AutoMapper;
+using AutoMapper;
 using ContractManagement.Data;
 using ContractManagement.Domains.Quotation.DTOs.Requests;
 using ContractManagement.Domains.Quotation.DTOs.Responses;
 using ContractManagement.Domains.Quotation.Interfaces;
 using ContractManagement.Models;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 
 namespace ContractManagement.Domains.Quotation.Services
 {
@@ -15,66 +17,98 @@ namespace ContractManagement.Domains.Quotation.Services
         // AutoMapper is used to simplify the mapping between DTOs and Entity models.
         private readonly IMapper _mapper;
 
-        public QuotationService(DbDtctechContext dbDtctechContext, IMapper mapper)
+        private readonly string _connectionString;
+        public QuotationService(DbDtctechContext dbDtctechContext, IMapper mapper, IConfiguration configuration)
         {
             _dbDtctechContext = dbDtctechContext;
             _mapper = mapper;
+            _connectionString = configuration.GetConnectionString("DefaultConnection");
         }
 
-        public async Task<QuotationResponseDto> CreateQuotationAsync(CreateQuotationRequestDto request, int currentEmployeeId)
+        public async Task<QuotationResponseDto> CreateQuotationAsync(
+            CreateQuotationRequestDto request,
+            int currentEmployeeId)
         {
-            // 1. Tính toán tổng tiền báo giá từ Items gửi lên trong request.
-            double totalAmount = 0;
-            var detailEnitties = new List<TblQuotationDetail>();
+            DataTable quotationItemsTable =
+                CreateQuotationItemsTable(request.QuotationItems);
 
-            foreach (var item in request.QuotationItems)
+            await using var connection =
+                new SqlConnection(_connectionString);
+
+            await connection.OpenAsync();
+
+            await using var command =
+                CreateQuotationCommand(
+                    connection,
+                    request.CustomerId,
+                    currentEmployeeId,
+                    quotationItemsTable);
+
+            object? result = await command.ExecuteScalarAsync();
+
+            if (result is null || result == DBNull.Value)
             {
-                double amount = item.Quantity * item.UnitPrice;
-                totalAmount += amount;
-
-                var detailItem = _mapper.Map<TblQuotationDetail>(item);
-                detailItem.Amount = amount;
-                detailEnitties.Add(detailItem);
+                throw new InvalidOperationException(
+                    "Failed to create quotation.");
             }
 
-            // 2. Mapping sang entity TblQuotation.
-            var quotationEntity = _mapper.Map<TblQuotation>(request);
-            quotationEntity.QuotationDate = DateTime.Now;
-            quotationEntity.TotalAmount = totalAmount;
-            quotationEntity.QuatationStatus = "Draft";
-            quotationEntity.CreatedEmployeeId = currentEmployeeId;
-            quotationEntity.QuotationNo = $"QT-{DateTime.Now:yyyyMMddHHmmss}"; // Customize
+            int quotationId = Convert.ToInt32(result);
 
-            // 3. Open transaction và lưu vào database.
-            using var transaction = await _dbDtctechContext.Database.BeginTransactionAsync();
-            try
+            return await GetQuotationByIdAsync(quotationId);
+        }
+
+        private static DataTable CreateQuotationItemsTable(
+            List<QuotationItemDto> quotationItems)
+        {
+            var table = new DataTable();
+
+            table.Columns.Add("ProductId", typeof(int));
+            table.Columns.Add("Quantity", typeof(int));
+            table.Columns.Add("UnitPrice", typeof(decimal));
+
+            foreach (var item in quotationItems)
             {
-                // 3.1. Save quotationEntity to database.
-                await _dbDtctechContext.TblQuotations.AddAsync(quotationEntity);
-                await _dbDtctechContext.SaveChangesAsync();
+                table.Rows.Add(
+                    item.ProductId,
+                    item.Quantity,
+                    Convert.ToDecimal(item.UnitPrice));
+            }
 
-                // 3.2. Save detailEnitties to database with the generated QuotationId.
-                foreach (var items in detailEnitties)
+            return table;
+        }
+
+        private static SqlCommand CreateQuotationCommand(
+            SqlConnection connection,
+            int customerId,
+            int currentEmployeeId,
+            DataTable quotationItemsTable)
+        {
+            var command = new SqlCommand(
+                "dbo.sp_Quotation_Create",
+                connection);
+
+            command.CommandType = CommandType.StoredProcedure;
+
+            command.Parameters.Add(
+                new SqlParameter("@CustomerId", SqlDbType.Int)
                 {
-                    items.QuotationId = quotationEntity.QuotationId;
-                }
-                await _dbDtctechContext.TblQuotationDetails.AddRangeAsync(detailEnitties);
-                await _dbDtctechContext.SaveChangesAsync();
+                    Value = customerId
+                });
 
-                // 3.3. Commit transaction nếu tất cả thành công.
-                await transaction.CommitAsync();
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                throw new Exception($"Error creating quotation: {ex.Message}");
-            }
+            command.Parameters.Add(
+                new SqlParameter("@CreatedEmployeeId", SqlDbType.Int)
+                {
+                    Value = currentEmployeeId
+                });
 
-            // 4. Mapping sang QuotationResponseDto và return về client.
-            var response = _mapper.Map<QuotationResponseDto>(quotationEntity);
-            response.Items = _mapper.Map<List<QuotationResponseDto.ItemResponse>>(detailEnitties);
+            command.Parameters.Add(
+                new SqlParameter("@Items", SqlDbType.Structured)
+                {
+                    TypeName = "dbo.QuotationItemType",
+                    Value = quotationItemsTable
+                });
 
-            return response;
+            return command;
         }
 
         public async Task<bool> DeleteQuotationAsync(int quotationId)
@@ -125,27 +159,103 @@ namespace ContractManagement.Domains.Quotation.Services
             return _mapper.Map<List<QuotationResponseDto>>(quotations);
         }
 
-        /* 
-         */
-        public async Task<QuotationResponseDto> GetQuotationByIdAsync(int quotationId)
+        public async Task<QuotationResponseDto> GetQuotationByIdAsync(
+            int quotationId)
         {
-            // 1. Lấy thông tin báo giá từ database.
-            var quotation = await _dbDtctechContext.TblQuotations
-                .FirstOrDefaultAsync(q => q.QuotationId == quotationId);
+            await using var connection = new SqlConnection(_connectionString);
 
-            // 2. Nếu không tìm thấy báo giá, trả về lỗi.
-            if (quotation == null) { throw new Exception("Cannot find quotation with the given ID."); }
+            await connection.OpenAsync();
 
-            // 3. Lấy chi tiết báo giá từ database.
-            var quotationDetails = await _dbDtctechContext.TblQuotationDetails
-                                                          .Where(d => d.QuotationId == quotationId)
-                                                          .ToListAsync();
+            Console.WriteLine($"Database: {connection.Database}");
+            Console.WriteLine($"Server: {connection.DataSource}");
 
-            // 4. Mapping sang QuotationResponseDto và return về client.
-            var response = _mapper.Map<QuotationResponseDto>(quotation);
-            response.Items = _mapper.Map<List<QuotationResponseDto.ItemResponse>>(quotationDetails);
+            await using var command = new SqlCommand(
+                "dbo.sp_Quotation_GetById",
+                connection);
 
-            return response;
+            command.CommandType = CommandType.StoredProcedure;
+
+            command.Parameters.Add(
+                new SqlParameter("@QuotationId", SqlDbType.Int)
+                {
+                    Value = quotationId
+                });
+
+            await using var reader =
+                await command.ExecuteReaderAsync();
+
+            if (!await reader.ReadAsync())
+            {
+                throw new KeyNotFoundException(
+                    $"Quotation {quotationId} was not found.");
+            }
+
+            var quotation = new QuotationResponseDto
+            {
+                QuotationId = reader.GetInt32(
+                    reader.GetOrdinal("QuotationId")),
+
+                QuotationNo = reader.GetString(
+                    reader.GetOrdinal("QuotationNo")),
+
+                CustomerId = reader.GetInt32(
+                    reader.GetOrdinal("CustomerId")),
+
+                QuotationDate = reader.GetDateTime(
+                    reader.GetOrdinal("QuotationDate")),
+
+                TotalAmount = reader.GetDecimal(
+                    reader.GetOrdinal("TotalAmount")),
+
+                QuatationStatus =
+                    reader.IsDBNull(
+                        reader.GetOrdinal("QuatationStatus"))
+                        ? null
+                        : reader.GetString(
+                            reader.GetOrdinal("QuatationStatus"))
+            };
+
+            await reader.NextResultAsync();
+
+            while (await reader.ReadAsync())
+            {
+                quotation.Items.Add(
+                    new QuotationResponseDto.ItemResponse
+                    {
+                        ProductId = reader.GetInt32(
+                            reader.GetOrdinal("ProductId")),
+
+                        ProductName =
+                            reader.IsDBNull(
+                                reader.GetOrdinal("ProductName"))
+                                ? string.Empty
+                                : reader.GetString(
+                                    reader.GetOrdinal("ProductName")),
+
+                        Quantity =
+                            reader.IsDBNull(
+                                reader.GetOrdinal("Quantity"))
+                                ? 0
+                                : reader.GetInt32(
+                                    reader.GetOrdinal("Quantity")),
+
+                        UnitPrice =
+                            reader.IsDBNull(
+                                reader.GetOrdinal("UnitPrice"))
+                                ? 0
+                                : reader.GetDecimal(
+                                    reader.GetOrdinal("UnitPrice")),
+
+                        Amount =
+                            reader.IsDBNull(
+                                reader.GetOrdinal("Amount"))
+                                ? 0
+                                : reader.GetDecimal(
+                                    reader.GetOrdinal("Amount"))
+                    });
+            }
+
+            return quotation;
         }
 
         public async Task<bool> UpdateQuotationAsync(int quotationId, UpdateQuotationRequestDto request)

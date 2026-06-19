@@ -13,7 +13,7 @@ public partial class TblQuotation
 
     public DateTime QuotationDate { get; set; }
 
-    public double TotalAmount { get; set; }
+    public decimal TotalAmount { get; set; }
 
     public string? QuatationStatus { get; set; }
 

@@ -56,7 +56,6 @@ export function Sidebar() {
     <nav className="flex-1 px-3 py-4 space-y-1.5 flex flex-col items-stretch">
       {navItems.map((item, i) => {
         const Icon = item.icon;
-        // Xử lý Active: Nếu là trang chủ (/dashboard) thì khớp hoàn toàn, còn lại dùng startsWith để active cả trang con
         const isActive =
           item.href === "/dashboard"
             ? pathname === "/dashboard"

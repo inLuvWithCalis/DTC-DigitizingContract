@@ -13,6 +13,6 @@ namespace ContractManagement.Domains.Quotation.DTOs.Requests
 
         [Required]
         [Range(0, double.MaxValue, ErrorMessage = "Unit price must be a positive number")]
-        public double UnitPrice { get; set; }
+        public decimal UnitPrice { get; set; }
     }
 }

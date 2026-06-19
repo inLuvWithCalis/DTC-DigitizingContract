@@ -13,7 +13,7 @@ public partial class TblQuotationDetail
 
     public int? Quantity { get; set; }
 
-    public double? UnitPrice { get; set; }
+    public decimal? UnitPrice { get; set; }
 
-    public double? Amount { get; set; }
+    public decimal? Amount { get; set; }
 }

@@ -335,7 +335,7 @@ public partial class DbDtctechContext : DbContext
                 .HasMaxLength(15)
                 .IsUnicode(false);
             entity.Property(e => e.EmployeePassword)
-                .HasMaxLength(50)
+                .HasMaxLength(255)
                 .IsUnicode(false);
             entity.Property(e => e.EmployeePhone)
                 .HasMaxLength(15)

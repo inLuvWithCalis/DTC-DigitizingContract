@@ -33,6 +33,8 @@ builder.Services.AddSession(options =>
 // Hasing and check password
 builder.Services.AddScoped<IPasswordHasher<TblEmployee>, PasswordHasher<TblEmployee>>();
 
+// Resgister SeedData for seeding initial data.
+builder.Services.AddScoped<SeedData>();
 
 // Configure CORS to allow requests from the React client
 builder.Services.AddCors(options =>
@@ -80,5 +82,16 @@ app.UseSession();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Seed initial data if in development environment
+if (app.Environment.IsDevelopment())
+{
+    using (var scope = app.Services.CreateScope())
+    {
+        var services = scope.ServiceProvider;
+        var seedData = services.GetRequiredService<SeedData>();
+        await seedData.InitializeAsync();
+    }
+}
 
 app.Run();

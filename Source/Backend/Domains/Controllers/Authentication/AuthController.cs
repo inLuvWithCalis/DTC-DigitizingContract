@@ -98,5 +98,22 @@ namespace ContractManagement.Domains.Controllers.Authentication
                 message = "Logout successful."
             });
         }
+
+        // [HttpGet("generate-hash")]
+        // public IActionResult GenerateHash(string password = "123456")
+        // {
+        //     // Khởi tạo Hasher
+        //     var hasher = new PasswordHasher<TblEmployee>();
+            
+        //     // Tham số TblEmployee có thể để null nếu bạn chỉ muốn lấy chuỗi hash
+        //     var hashedPassword = hasher.HashPassword(null!, password);
+
+        //     return Ok(new 
+        //     { 
+        //         PlainText = password, 
+        //         HashedPassword = hashedPassword,
+        //         Instruction = "Copy chuỗi HashedPassword này và dán vào cột EmployeePassword trong SQL"
+        //     });
+        // }
     }
 }

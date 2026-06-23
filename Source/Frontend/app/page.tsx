@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2, FileText, ShieldCheck, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { authApi } from "@/services/auth";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,10 +21,26 @@ import {
 } from "@/components/ui/card";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const error = urlParams.get("error");
+
+      if (error === "session_expired") {
+        const timer = setTimeout(() => {
+          toast.error("Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.");
+          window.history.replaceState(null, "", "/");
+        }, 100);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, []);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>(
     {},
   );
@@ -78,15 +96,29 @@ export default function LoginPage() {
     }
 
     setIsLoading(true);
-    setTimeout(() => {
-      window.location.href = "/dashboard";
-    }, 1500);
+    try {
+      const data = await authApi.login({
+        accountName: email,
+        password,
+      });
+
+      toast.success(data.message || "Đăng nhập thành công!");
+      router.push("/dashboard");
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Đăng nhập thất bại, vui lòng thử lại.";
+      toast.error(message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-linear-to-br from-background via-secondary/50 to-primary/5 flex">
       <div className="hidden lg:flex lg:w-1/2 bg-linear-to-br from-slate-900 via-slate-800 to-primary/20 dark:from-black dark:via-slate-950 dark:to-primary/10 flex-col justify-between p-12 relative overflow-hidden">
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:14px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]"></div>
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-size-[14px_24px] mask-[radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]"></div>
 
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-12">

@@ -12,27 +12,9 @@ import {
   TrendingUp,
   TrendingDown,
 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { useRouter } from "next/navigation";
 import { Header } from "@/components/ui/custom/header";
 
 export default function DashboardPage() {
-  const router = useRouter();
-
-  const handleLogout = () => {
-    localStorage.removeItem("auth_token");
-    router.push("/");
-  };
-
-  // Dữ liệu mẫu cho Thống kê Hợp đồng
   const stats = [
     {
       label: "Tổng Hợp đồng",
@@ -111,11 +93,11 @@ export default function DashboardPage() {
     <div className="flex flex-row h-screen w-screen overflow-hidden bg-background">
       <Sidebar />
 
-      <main className="flex-grow flex flex-col overflow-hidden">
+      <main className="grow flex flex-col overflow-hidden">
         {/* Top Bar */}
-        <Header />
+        <Header title="Dashboard" />
         {/* Main Content Area */}
-        <div className="flex-grow overflow-y-auto">
+        <div className="grow overflow-y-auto">
           {/* Hiệu ứng Fade-in và trượt lên nhẹ cho toàn bộ khối nội dung */}
           <div className="px-6 lg:px-10 py-8 animate-in fade-in slide-in-from-bottom-4 duration-700 fill-mode-both">
             {/* Welcome Section */}

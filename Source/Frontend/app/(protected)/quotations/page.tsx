@@ -393,16 +393,13 @@ export default function QuotationListPage() {
     0,
   );
 
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
-  console.log(API_BASE_URL);
-
   return (
     <div className="flex flex-row h-screen w-screen overflow-hidden bg-background">
       <Sidebar />
-      <main className="flex-grow flex flex-col overflow-hidden relative z-10">
+      <main className="grow flex flex-col overflow-hidden relative z-10">
         <Header title="Quản lý Hợp đồng & Báo giá" />
 
-        <div className="flex-grow overflow-y-auto p-6 lg:p-10 space-y-6">
+        <div className="grow overflow-y-auto p-6 lg:p-10 space-y-6">
           {/* Header & Mô tả */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>

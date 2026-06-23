@@ -19,8 +19,8 @@
   --muted: oklch(0.88 0.01 220);
   --muted-foreground: oklch(0.5 0 0);
   /* Minimal blue accent */
-  --accent: oklch(88.641% 0.01975 273.209);
-  --accent-foreground: oklch(0.98 0 0);
+  --accent: oklch(94.007% 0.00011 271.152);
+  --accent-foreground: oklch(25.197% 0.00003 271.152);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.98 0 0);
   /* Subtle borders */

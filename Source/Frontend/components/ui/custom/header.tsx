@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useRouter } from "next/navigation";
 
-export function Header() {
+export function Header({ title }: { title: string }) {
   const router = useRouter();
 
   const handleLogout = () => {
@@ -24,7 +24,7 @@ export function Header() {
       <div className="px-6 lg:px-8 h-16 flex items-center justify-between">
         <div className="hidden md:block">
           <h2 className="text-lg font-semibold text-foreground tracking-tight">
-            Tổng quan Hệ thống
+            {title}
           </h2>
         </div>
         <div className="flex items-center gap-3 ml-auto">

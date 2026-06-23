@@ -71,7 +71,7 @@ import {
 } from "@tanstack/react-table";
 
 // --- Import API Service của bạn ---
-import { quotationApi, QuotationResponseDto } from "@/services/quotations";
+import { quotationApi, QuotationResponseDto } from "@/services/quotations-api";
 import { formatDateTime } from "@/lib/format-date-time";
 import { formatCurrency } from "@/lib/format-currency";
 

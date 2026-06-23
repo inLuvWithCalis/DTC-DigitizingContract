@@ -1,21 +1,26 @@
 "use client";
 
-import { Bell, User } from "lucide-react";
+import { Bell, LogOut, Settings, User } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useRouter } from "next/navigation";
+import { useAuthStore } from "@/hooks/use-auth-store";
+import { authApi } from "@/services/auth-api";
 
 export function Header({ title }: { title: string }) {
   const router = useRouter();
+  const user = useAuthStore((state) => state.user);
 
   const handleLogout = () => {
+    authApi.logout();
     router.push("/");
   };
 
@@ -37,24 +42,48 @@ export function Header({ title }: { title: string }) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                variant="ghost"
+                variant="default"
                 size="icon"
                 className="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-primary/80 hover:opacity-90 text-primary-foreground shadow-sm transition-transform hover:scale-105"
               >
-                U
+                {user?.employeeFullName?.[0]?.toUpperCase() ?? ""}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48 rounded-xl">
-              <DropdownMenuItem className="cursor-pointer py-2.5">
-                <User className="mr-2 h-4 w-4 text-muted-foreground " />
-                <span className="font-medium">Tài khoản</span>
-              </DropdownMenuItem>
+            <DropdownMenuContent
+              align="center"
+              side="bottom"
+              className="w-56 rounded-xl"
+            >
+              <DropdownMenuLabel className="font-normal px-2 py-2.5">
+                <div className="flex flex-col space-y-1.5">
+                  <p className="text-sm font-semibold leading-none text-foreground truncate">
+                    {user?.employeeFullName || "Người dùng"}
+                  </p>
+                  <p className="text-xs leading-none text-muted-foreground truncate">
+                    {user?.employeeEmail || "Chưa cập nhật email"}
+                  </p>
+                </div>
+              </DropdownMenuLabel>
+
               <DropdownMenuSeparator />
+
+              <DropdownMenuItem className="cursor-pointer py-2">
+                <User className="mr-2 h-4 w-4 text-muted-foreground" />
+                <span className="font-medium">Hồ sơ cá nhân</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="cursor-pointer py-2">
+                <Settings className="mr-2 h-4 w-4 text-muted-foreground" />
+                <span className="font-medium">Đổi mật khẩu</span>
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
               <DropdownMenuItem
-                className="cursor-pointer py-2.5 text-rose-600 focus:text-rose-600 dark:focus:bg-rose-500/10 focus:bg-rose-50"
+                className="cursor-pointer py-2 text-destructive focus:text-destructive dark:focus:bg-destructive/10 focus:bg-destructive/10"
                 onClick={handleLogout}
               >
-                <span>Đăng xuất</span>
+                <LogOut className="mr-2 h-4 w-4" />
+                <span className="font-medium">Đăng xuất</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

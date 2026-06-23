@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, FileText, ShieldCheck, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { authApi } from "@/services/auth";
+import { authApi } from "@/services/auth-api";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,7 @@ import {
 
 export default function LoginPage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -41,6 +41,19 @@ export default function LoginPage() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    const checkAlreadyLoggedIn = async () => {
+      try {
+        const res = await authApi.getMe();
+        router.push("/dashboard");
+      } catch (error) {
+        setIsLoading(false);
+      }
+    };
+
+    checkAlreadyLoggedIn();
+  }, [router]);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>(
     {},
   );
@@ -51,8 +64,8 @@ export default function LoginPage() {
 
   const validateEmail = (value: string): string | undefined => {
     if (!value.trim()) return "Vui lòng nhập địa chỉ email";
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()))
-      return "Địa chỉ email không hợp lệ";
+    // if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()))
+    //   return "Địa chỉ email không hợp lệ";
     return undefined;
   };
 
@@ -178,7 +191,6 @@ export default function LoginPage() {
                   </Label>
                   <Input
                     id="email"
-                    type="email"
                     value={email}
                     maxLength={255}
                     onChange={(e) => handleEmailChange(e.target.value)}
@@ -219,7 +231,6 @@ export default function LoginPage() {
                   <div className="relative">
                     <Input
                       id="password"
-                      type={showPassword ? "text" : "password"}
                       value={password}
                       maxLength={64}
                       onChange={(e) => handlePasswordChange(e.target.value)}

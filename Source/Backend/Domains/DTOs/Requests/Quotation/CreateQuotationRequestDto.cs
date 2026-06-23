@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace ContractManagement.Domains.Quotation.DTOs.Requests
+namespace ContractManagement.Domains.DTOs.Requests.Quotation
 {
     public class CreateQuotationRequestDto
     {

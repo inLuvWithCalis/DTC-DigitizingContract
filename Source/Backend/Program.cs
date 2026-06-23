@@ -1,18 +1,38 @@
 using ContractManagement.Data;
-using ContractManagement.Domains.Quotation.Interfaces;
-using ContractManagement.Domains.Quotation.Mappings;
-using ContractManagement.Domains.Quotation.Services;
+using ContractManagement.Domains.Interfaces.Quotation;
+using ContractManagement.Domains.Mappings.Quotation;
+using ContractManagement.Domains.Services.Quotation;
+using ContractManagement.Models;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+builder.Services.AddControllers();
+
 
 // Add DbContext with connection string from configuration
 builder.Services.AddDbContextPool<DbDtctechContext>(option => option.UseSqlServer(builder.Configuration.
     GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.")));
 
-builder.Services.AddControllers();
+// Save session state in memory
+builder.Services.AddDistributedMemoryCache();
+
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromMinutes(30);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
+
+    options.Cookie.Name = "ContractManagement.Session";
+
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+});
+
+// Hasing and check password
+builder.Services.AddScoped<IPasswordHasher<TblEmployee>, PasswordHasher<TblEmployee>>();
+
 
 // Configure CORS to allow requests from the React client
 builder.Services.AddCors(options =>
@@ -54,6 +74,8 @@ app.UseHttpsRedirection();
 
 app.UseRouting();
 app.UseCors("CorsPolicy");
+
+app.UseSession();
 
 app.UseAuthorization();
 

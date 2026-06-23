@@ -1,9 +1,9 @@
 ﻿using AutoMapper;
-using ContractManagement.Domains.Quotation.DTOs.Requests;
-using ContractManagement.Domains.Quotation.DTOs.Responses;
+using ContractManagement.Domains.DTOs.Requests.Quotation;
+using ContractManagement.Domains.DTOs.Responses.Quotation;
 using ContractManagement.Models;
 
-namespace ContractManagement.Domains.Quotation.Mappings
+namespace ContractManagement.Domains.Mappings.Quotation
 {
     public class QuotationMappingProfile : Profile
     {

@@ -1,13 +1,14 @@
-﻿using ContractManagement.Domains.Quotation.DTOs.Requests;
-using ContractManagement.Domains.Quotation.Interfaces;
-using ContractManagement.Domains.Quotation.Services;
+﻿using ContractManagement.Domains.DTOs.Requests.Quotation;
+using ContractManagement.Domains.Interfaces.Quotation;
+using ContractManagement.Filter;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
-namespace ContractManagement.Domains.Quotation.Controllers
+namespace ContractManagement.Domains.Controllers.Quotation
 {
     [Route("api/[controller]")]
     [ApiController]
+    [SessionAuthorize]
     public class QuotationController : ControllerBase
     {
         private readonly IQuotationService _service;
@@ -29,8 +30,9 @@ namespace ContractManagement.Domains.Quotation.Controllers
             // 2. Create quotation
             try
             {
-                int currentEmployeeId = 1; // TODO: Get from auth context
-                var result = await _service.CreateQuotationAsync(request, currentEmployeeId);
+                var currentEmployeeId = HttpContext.Session.GetInt32("EmployeeId");
+
+                var result = await _service.CreateQuotationAsync(request, currentEmployeeId.Value);
 
                 return CreatedAtAction(nameof(CreateQuotation), new { id = result.QuotationId }, result);
             }

@@ -1,7 +1,7 @@
-﻿using ContractManagement.Domains.Quotation.DTOs.Requests;
-using ContractManagement.Domains.Quotation.DTOs.Responses;
+﻿using ContractManagement.Domains.DTOs.Requests.Quotation;
+using ContractManagement.Domains.DTOs.Responses.Quotation;
 
-namespace ContractManagement.Domains.Quotation.Interfaces
+namespace ContractManagement.Domains.Interfaces.Quotation
 {
     public interface IQuotationService
     {

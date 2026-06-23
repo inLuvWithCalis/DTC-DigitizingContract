@@ -1,4 +1,4 @@
-﻿namespace ContractManagement.Domains.Quotation.DTOs.Responses
+﻿namespace ContractManagement.Domains.DTOs.Responses.Quotation
 {
     // This DTO is used to return quotation along with its detail items in a structured format.
     public class QuotationResponseDto

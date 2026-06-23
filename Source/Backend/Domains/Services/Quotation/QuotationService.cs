@@ -1,14 +1,14 @@
 using AutoMapper;
 using ContractManagement.Data;
-using ContractManagement.Domains.Quotation.DTOs.Requests;
-using ContractManagement.Domains.Quotation.DTOs.Responses;
-using ContractManagement.Domains.Quotation.Interfaces;
+using ContractManagement.Domains.DTOs.Requests.Quotation;
+using ContractManagement.Domains.DTOs.Responses.Quotation;
+using ContractManagement.Domains.Interfaces.Quotation;
 using ContractManagement.Models;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using System.Data;
 
-namespace ContractManagement.Domains.Quotation.Services
+namespace ContractManagement.Domains.Services.Quotation
 {
     public class QuotationService : IQuotationService
     {

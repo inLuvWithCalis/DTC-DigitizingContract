@@ -2,6 +2,11 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { X } from "lucide-react";
+
+interface InputProps extends React.ComponentProps<"input"> {
+  onClear?: () => void;
+}
 
 function Input({
   className,
@@ -10,8 +15,11 @@ function Input({
   value,
   defaultValue,
   onChange,
+  onClear,
   ...props
-}: React.ComponentProps<"input">) {
+}: InputProps) {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
   const [charCount, setCharCount] = React.useState(() => {
     if (value) return String(value).length;
     if (defaultValue) return String(defaultValue).length;
@@ -31,9 +39,28 @@ function Input({
     }
   };
 
+  const handleClear = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const input = inputRef.current;
+    if (input) {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value",
+      )?.set;
+      nativeInputValueSetter?.call(input, "");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.focus();
+    }
+    setCharCount(0);
+    if (onClear) onClear();
+  };
+
+  const showClearButton = charCount > 0;
+
   return (
     <div className="relative w-full">
       <input
+        ref={inputRef}
         type={type}
         data-slot="input"
         maxLength={maxLength}
@@ -44,17 +71,30 @@ function Input({
           "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
           "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
           "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
-          maxLength && "pr-14",
+          maxLength ? "pr-20" : "pr-8",
           className,
         )}
         {...props}
       />
 
-      {maxLength && (
-        <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-medium text-muted-foreground/70">
-          {charCount}/{maxLength}
-        </div>
-      )}
+      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+        {showClearButton && (
+          <button
+            type="button"
+            onClick={handleClear}
+            className="p-1 hover:bg-muted rounded-full text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Clear input"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+
+        {maxLength && (
+          <div className="text-[11px] font-medium text-muted-foreground/70 min-w-[24px] text-center">
+            {charCount}/{maxLength}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

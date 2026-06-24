@@ -41,6 +41,7 @@ interface DataTableProps<TData, TValue> {
   filterSlot?: React.ReactNode; // Khe cắm cho các Filter tùy chỉnh (DateRange, Status...)
   isLoading?: boolean;
   onDeleteMany?: (selectedRows: TData[]) => void; // Hàm xử lý khi bấm Xóa Hàng Loạt
+  onRowClick?: (row: TData) => void; // Thêm dòng này
 }
 
 export function DataTable<TData, TValue>({
@@ -51,6 +52,7 @@ export function DataTable<TData, TValue>({
   filterSlot,
   isLoading = false,
   onDeleteMany,
+  onRowClick,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
@@ -78,7 +80,7 @@ export function DataTable<TData, TValue>({
   const selectedRows = table.getFilteredSelectedRowModel().rows;
 
   return (
-    <div className="flex flex-col h-full w-full">
+    <div className="flex flex-col h-full w-full flex-1">
       {/* 1. TOP TOOLBAR: Lọc & Tìm kiếm */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 w-full mb-4">
         <div className="flex flex-wrap items-center gap-3">
@@ -140,6 +142,7 @@ export function DataTable<TData, TValue>({
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
                   className="hover:bg-secondary/40 border-b-border transition-colors cursor-pointer"
+                  onClick={() => onRowClick && onRowClick(row.original)}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id} className="py-3">
@@ -205,7 +208,7 @@ export function DataTable<TData, TValue>({
 
       {/* 4. PAGINATION */}
       {!isLoading && data.length > 0 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between py-4 mt-auto border-t border-transparent">
+        <div className="flex flex-col sm:flex-row items-end justify-between py-4 mt-auto border-t border-transparent flex-1">
           <div className="text-sm text-muted-foreground">
             Hiển thị{" "}
             <span className="font-medium text-foreground">
@@ -244,7 +247,13 @@ export function DataTable<TData, TValue>({
                       {pageSize}
                     </SelectItem>
                   ))}
-                  <SelectItem value={data.length.toString()}>Tất cả</SelectItem>
+
+                  {data.length > 0 &&
+                    ![5, 10, 20, 50].includes(data.length) && (
+                      <SelectItem value={data.length.toString()}>
+                        Tất cả
+                      </SelectItem>
+                    )}
                 </SelectContent>
               </Select>
             </div>

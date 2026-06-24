@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { authApi } from "@/services/auth-api";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuthStore } from "@/hooks/use-auth-store";
+import { Sidebar } from "@/components/sidebar";
+import { Header } from "@/components/ui/custom/header";
 
 export default function ProtectedLayout({
   children,
@@ -39,5 +41,12 @@ export default function ProtectedLayout({
     );
   }
 
-  return <>{children}</>;
+  return (
+    <div className="flex flex-row h-screen w-screen overflow-hidden bg-background">
+      <Sidebar />
+      <main className="grow flex flex-col overflow-hidden relative z-10">
+        {children}
+      </main>
+    </div>
+  );
 }

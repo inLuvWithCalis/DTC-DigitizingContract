@@ -18,10 +18,16 @@ import { authApi } from "@/services/auth-api";
 export function Header({ title }: { title: string }) {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
+  const { logout } = useAuthStore();
 
-  const handleLogout = () => {
-    authApi.logout();
+  const handleLogout = async () => {
+    logout();
     router.push("/");
+    try {
+      await authApi.logout();
+    } catch (error) {
+      console.error("Lỗi khi gọi API logout:", error);
+    }
   };
 
   return (

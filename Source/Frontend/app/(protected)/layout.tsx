@@ -22,7 +22,7 @@ export default function ProtectedLayout({
         setUser(userData);
       } catch (error) {
         setUser(null);
-        router.push("/?error=session_expired");
+        router.replace("/?error=session_expired");
       } finally {
         setIsChecking(false);
       }

@@ -19,6 +19,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { useAuthStore } from "@/hooks/use-auth-store";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -26,6 +27,15 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const { user, isAuthenticated, setUser } = useAuthStore();
+
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>(
+    {},
+  );
+  const [touched, setTouched] = useState<{
+    email?: boolean;
+    password?: boolean;
+  }>({});
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -34,7 +44,9 @@ export default function LoginPage() {
 
       if (error === "session_expired") {
         const timer = setTimeout(() => {
-          toast.error("Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.");
+          toast.error(
+            "Phiên đăng nhập đã hết hạn hoặc không tồn tại, vui lòng đăng nhập lại.",
+          );
           window.history.replaceState(null, "", "/");
         }, 100);
         return () => clearTimeout(timer);
@@ -44,8 +56,13 @@ export default function LoginPage() {
 
   useEffect(() => {
     const checkAlreadyLoggedIn = async () => {
+      if (isAuthenticated && user) {
+        router.push("/dashboard");
+        return;
+      }
+
       try {
-        const res = await authApi.getMe();
+        await authApi.getMe();
         router.push("/dashboard");
       } catch (error) {
         setIsLoading(false);
@@ -53,14 +70,7 @@ export default function LoginPage() {
     };
 
     checkAlreadyLoggedIn();
-  }, [router]);
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>(
-    {},
-  );
-  const [touched, setTouched] = useState<{
-    email?: boolean;
-    password?: boolean;
-  }>({});
+  }, [isAuthenticated, user, router, setUser]);
 
   const validateEmail = (value: string): string | undefined => {
     if (!value.trim()) return "Vui lòng nhập địa chỉ email";
@@ -231,6 +241,7 @@ export default function LoginPage() {
                   <div className="relative">
                     <Input
                       id="password"
+                      type={showPassword ? "text" : "password"}
                       value={password}
                       maxLength={64}
                       onChange={(e) => handlePasswordChange(e.target.value)}
@@ -270,7 +281,7 @@ export default function LoginPage() {
                   )}
                 </div>
 
-                <div className="flex items-center space-x-2.5">
+                {/* <div className="flex items-center space-x-2.5">
                   <Checkbox id="remember-me" />
                   <Label
                     htmlFor="remember-me"
@@ -278,7 +289,7 @@ export default function LoginPage() {
                   >
                     Ghi nhớ đăng nhập
                   </Label>
-                </div>
+                </div> */}
 
                 <Button
                   type="submit"

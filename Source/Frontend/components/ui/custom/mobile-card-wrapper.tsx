@@ -22,7 +22,6 @@ export function MobileCardWrapper<TData>({
   onRowClick,
   children,
 }: MobileCardWrapperProps<TData>) {
-  // Đã sửa lỗi cảnh báo didLongPress ở đây luôn
   const { didLongPress, ...longPressEvents } = useLongPress(onLongPress, {
     delay: 500,
   });

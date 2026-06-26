@@ -13,7 +13,6 @@ import {
   useReactTable,
   Row,
 } from "@tanstack/react-table";
-
 import {
   Table,
   TableBody,
@@ -167,7 +166,7 @@ export function DataTable<TData, TValue>({
         <div className="flex flex-col gap-3">
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+              <Loader2 className="w-5 h-5 animate-spin text-primary" />
             </div>
           ) : table.getRowModel().rows?.length ? (
             table.getRowModel().rows.map((row) => (
@@ -177,7 +176,6 @@ export function DataTable<TData, TValue>({
                 isSelectionMode={isSelectionMode}
                 onRowClick={onRowClick}
                 onLongPress={() => {
-                  // Toggle this row and enter selection mode
                   row.toggleSelected(true);
                 }}
                 onTapInSelectionMode={() => {
@@ -190,7 +188,6 @@ export function DataTable<TData, TValue>({
                     isSelected: row.getIsSelected(),
                   })
                 ) : (
-                  /* Default mobile card */
                   <div
                     className="rounded-xl border border-border bg-card p-4 shadow-sm transition-colors active:bg-secondary/40"
                     data-state={row.getIsSelected() && "selected"}
@@ -312,7 +309,7 @@ export function DataTable<TData, TValue>({
                     className="h-32 text-center text-muted-foreground"
                   >
                     {isLoading ? (
-                      <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+                      <Loader2 className="w-5 h-5 animate-spin mx-auto text-primary" />
                     ) : (
                       "Không tìm thấy dữ liệu."
                     )}
@@ -360,7 +357,9 @@ export function DataTable<TData, TValue>({
 
       {/* 4. PAGINATION */}
       {!isLoading && data.length > 0 && (
-        <div className="flex flex-col gap-3 py-4 mt-auto border-t border-transparent flex-1 sm:flex-row sm:items-end sm:justify-between">
+        <div
+          className={`flex flex-col gap-3 py-4 mt-auto border-t border-transparent flex-1 sm:flex-row sm:items-end sm:justify-between ${isMobile && "justify-end items-center"}`}
+        >
           <div className="text-sm text-muted-foreground text-center sm:text-left">
             Hiển thị{" "}
             <span className="font-medium text-foreground">

@@ -73,7 +73,7 @@ export default function LoginPage() {
   }, [isAuthenticated, user, router, setUser]);
 
   const validateEmail = (value: string): string | undefined => {
-    if (!value.trim()) return "Vui lòng nhập địa chỉ email";
+    if (!value.trim()) return "Vui lòng nhập tên tài khoản";
     // if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()))
     //   return "Địa chỉ email không hợp lệ";
     return undefined;
@@ -186,7 +186,7 @@ export default function LoginPage() {
                   Đăng nhập hệ thống
                 </CardTitle>
                 <CardDescription className="text-muted-foreground text-sm sm:text-base">
-                  Nhập email và mật khẩu để truy cập không gian làm việc
+                  Nhập tên tài khoản và mật khẩu để truy cập không gian làm việc
                 </CardDescription>
               </div>
             </CardHeader>
@@ -197,7 +197,7 @@ export default function LoginPage() {
                     htmlFor="email"
                     className="text-foreground/80 font-semibold"
                   >
-                    Địa chỉ Email
+                    Tên tài khoản
                   </Label>
                   <Input
                     id="email"

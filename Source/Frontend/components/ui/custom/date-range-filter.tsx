@@ -10,6 +10,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { CalendarDays, Delete } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useMediaQuery } from "@/hooks/use-media-query";
 
 export interface DateRange {
   from: Date | undefined;
@@ -22,14 +23,16 @@ interface DateRangeFilterProps {
 }
 
 export function DateRangeFilter({ dateRange, onChange }: DateRangeFilterProps) {
+  const isMobile = useMediaQuery("(max-width: 767px)");
+
   return (
-    <div className="flex items-center gap-2">
+    <div className={`flex items-center gap-2 ${isMobile ? "flex-1" : ""}`}>
       <Popover>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
             className={cn(
-              "justify-start text-left font-normal h-9 bg-background shadow-sm",
+              "justify-start text-left font-normal h-9 bg-background shadow-sm flex-1",
               !dateRange.from && "text-muted-foreground",
             )}
           >
@@ -58,7 +61,7 @@ export function DateRangeFilter({ dateRange, onChange }: DateRangeFilterProps) {
           <Button
             variant="outline"
             className={cn(
-              "justify-start text-left font-normal h-9 bg-background shadow-sm",
+              "justify-start text-left font-normal h-9 bg-background shadow-sm flex-1",
               !dateRange.to && "text-muted-foreground",
             )}
           >

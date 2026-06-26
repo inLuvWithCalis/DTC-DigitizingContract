@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/ui/custom/header";
 import {
-  Loader2,
   CalendarDays,
   ArrowUp,
   ArrowDown,
@@ -15,15 +14,12 @@ import {
   DollarSign,
   Clock,
   Users,
-  Send,
-  Printer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { endOfDay, isWithinInterval, startOfDay } from "date-fns";
 import { toast } from "sonner";
-import { ColumnDef } from "@tanstack/react-table";
+import { ColumnDef, Row } from "@tanstack/react-table";
 import { quotationApi, QuotationResponseDto } from "@/services/quotations-api";
 import { formatDateTime } from "@/lib/format-date-time";
 import { formatCurrency } from "@/lib/format-currency";
@@ -251,9 +247,10 @@ export default function QuotationListPage() {
 
   const QUOTATION_STATUS_OPTIONS = [
     { label: "Tất cả trạng thái", value: "All" },
-    { label: "Chờ duyệt", value: "Pending" },
     { label: "Đã duyệt", value: "Approved" },
     { label: "Từ chối", value: "Rejected" },
+    { label: "Bản nháp", value: "Draft" },
+    { label: "Đã gửi", value: "Sent" },
   ];
   const CustomFilters = (
     <>
@@ -347,6 +344,50 @@ export default function QuotationListPage() {
                 toast.info(`Đang gọi API xóa ${rows.length} dòng...`)
               }
               onRowClick={(row) => handleView(row.quotationId)}
+              mobileCardRenderer={(
+                row: Row<QuotationResponseDto>,
+                { isSelected },
+              ) => {
+                const item = row.original;
+                return (
+                  <div
+                    className={`rounded-xl border bg-card p-4 shadow-sm transition-colors active:bg-secondary/40 ${
+                      isSelected
+                        ? "border-primary/40 bg-primary/5"
+                        : "border-border"
+                    }`}
+                  >
+                    {/* Row 1: Mã báo giá + Trạng thái */}
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-semibold text-foreground truncate">
+                          {item.quotationNo}
+                        </span>
+                        <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                          <CalendarDays className="w-3 h-3 shrink-0" />
+                          {formatDateTime(item.quotationDate)}
+                        </span>
+                      </div>
+                      <StatusBadge status={item.quatationStatus} />
+                    </div>
+
+                    {/* Row 2: Khách hàng + Tổng tiền */}
+                    <div className="flex items-center justify-between gap-3 pt-3 border-t border-border">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center shrink-0">
+                          <Users className="w-3.5 h-3.5 text-muted-foreground" />
+                        </div>
+                        <span className="text-sm text-muted-foreground truncate">
+                          KH-{item.customerId}
+                        </span>
+                      </div>
+                      <span className="font-semibold text-primary text-sm whitespace-nowrap">
+                        {formatCurrency(item.totalAmount)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              }}
             />
           </CardContent>
         </Card>

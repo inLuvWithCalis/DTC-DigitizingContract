@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link"; // Quan trọng: Dùng Link thay vì thẻ <a>
 import {
   X,
   LayoutDashboard,
@@ -24,14 +25,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useSidebar } from "./sidebar-context";
+import { useAuthStore } from "@/hooks/use-auth-store";
 
 export function Sidebar() {
   const { isExpanded, setIsExpanded } = useSidebar();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
+  const { user, logout } = useAuthStore();
+
   const router = useRouter();
   const pathname = usePathname();
-
   useEffect(() => {
     setIsMobileOpen(false);
   }, [pathname]);
@@ -41,16 +44,16 @@ export function Sidebar() {
     { label: "Hợp đồng Bán", icon: FileSignature, href: "/dashboard/sales" },
     { label: "Hợp đồng Mua", icon: ShoppingCart, href: "/dashboard/purchases" },
     { label: "Đối tác", icon: Users, href: "/dashboard/partners" },
-    { label: "Cấu hình hệ thống", icon: Settings, href: "/dashboard/settings" },
+    { label: "Cấu hình", icon: Settings, href: "/dashboard/settings" },
   ];
 
   const handleLogout = () => {
-    localStorage.removeItem("auth_token");
+    logout();
     router.push("/");
   };
 
   const renderNavItems = () => (
-    <nav className="flex-1 px-3 py-4 space-y-1.5 flex flex-col items-stretch">
+    <nav className="flex-1 px-3 py-4 space-y-1.5 flex flex-col items-stretch overflow-y-auto">
       {navItems.map((item, i) => {
         const Icon = item.icon;
         const isActive =
@@ -59,16 +62,16 @@ export function Sidebar() {
             : pathname?.startsWith(item.href);
 
         return (
-          <a
+          <Link
             key={i}
             href={item.href}
             className={`flex items-center py-2.5 rounded-xl transition-all duration-200 group relative ${
-              isExpanded ? "gap-3 px-3" : "justify-center px-0"
+              isExpanded ? "gap-3 px-3" : "justify-center px-0 lg:px-0 px-3" // Mobile luôn có gap và padding
             } ${
               isActive
                 ? "bg-primary/10 text-primary font-semibold shadow-sm"
-                : "text-accent-600 hover:bg-accent/80 hover:text-accent-900"
-            }`}
+                : "text-muted-foreground hover:bg-accent hover:text-foreground"
+            } ${isMobileOpen && "justify-start gap-5"}`}
           >
             {isActive && (
               <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-r-full" />
@@ -82,11 +85,15 @@ export function Sidebar() {
               }`}
             />
             <span
-              className={`text-sm whitespace-nowrap transition-all duration-300 ${isExpanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2 hidden lg:block overflow-hidden w-0"}`}
+              className={`text-sm whitespace-nowrap transition-all duration-300 lg:block ${
+                isExpanded
+                  ? "opacity-100 translate-x-0"
+                  : "lg:opacity-0 lg:-translate-x-2 lg:hidden lg:w-0"
+              } opacity-100 translate-x-0 block`}
             >
               {item.label}
             </span>
-          </a>
+          </Link>
         );
       })}
     </nav>
@@ -94,19 +101,19 @@ export function Sidebar() {
 
   return (
     <>
-      {isMobileOpen && (
-        <div className="fixed top-4 left-4 z-50 lg:hidden">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setIsMobileOpen(false)}
-            className="border-border bg-card hover:bg-accent shadow-sm rounded-xl"
-          >
-            <X className="h-5 w-5 text-muted-foreground" />
-          </Button>
-        </div>
-      )}
+      {/* ========================================= */}
+      {/* 1. NÚT MỞ MENU TRÊN MOBILE (HAMBURGER)    */}
+      {/* ========================================= */}
+      <button
+        onClick={() => setIsMobileOpen(true)}
+        className="fixed top-3 left-4 z-40 p-2 lg:hidden hover:bg-accent rounded-xl transition-colors text-muted-foreground bg-card shadow-sm border border-border"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
 
+      {/* ========================================= */}
+      {/* 2. SIDEBAR TRÊN DESKTOP (MÀN HÌNH LỚN)    */}
+      {/* ========================================= */}
       <aside
         className={`relative hidden lg:flex h-screen bg-card border-r border-border flex-col flex-shrink-0 transition-all duration-300 ease-in-out z-20 ${
           isExpanded ? "w-64" : "w-20"
@@ -139,7 +146,9 @@ export function Sidebar() {
             className="text-muted-foreground hover:text-foreground hover:bg-accent h-8 w-8 rounded-lg flex-shrink-0"
           >
             <ChevronLeft
-              className={`h-5 w-5 transition-transform duration-300 ${isExpanded ? "" : "rotate-180"}`}
+              className={`h-5 w-5 transition-transform duration-300 ${
+                isExpanded ? "" : "rotate-180"
+              }`}
             />
           </Button>
         </div>
@@ -147,14 +156,18 @@ export function Sidebar() {
         {renderNavItems()}
       </aside>
 
+      {/* ========================================= */}
+      {/* 3. SIDEBAR TRÊN MOBILE (MÀN HÌNH NHỎ)     */}
+      {/* ========================================= */}
       {isMobileOpen && (
         <>
           <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-30 lg:hidden animate-in fade-in"
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 lg:hidden animate-in fade-in duration-200"
             onClick={() => setIsMobileOpen(false)}
           />
-          <aside className="fixed left-0 top-0 h-screen w-72 bg-card z-40 flex flex-col overflow-y-auto animate-in slide-in-from-left duration-300 shadow-2xl">
-            <div className="h-16 border-b border-border p-4 flex items-center justify-between">
+
+          <aside className="fixed left-0 top-0 h-screen w-[280px] bg-card z-50 flex flex-col animate-in slide-in-from-left duration-300 shadow-2xl lg:hidden">
+            <div className="h-16 border-b border-border p-4 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm shadow-primary/20">
                   <FileText className="w-4 h-4 text-primary-foreground" />
@@ -180,19 +193,19 @@ export function Sidebar() {
 
             {renderNavItems()}
 
-            <div className="border-t border-border p-4">
+            <div className="border-t border-border p-4 shrink-0">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-accent transition-colors justify-start">
+                  <button className="w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-accent transition-colors justify-start focus:outline-none">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-primary to-primary/80 flex items-center justify-center text-sm font-bold flex-shrink-0 text-primary-foreground shadow-sm">
-                      U
+                      {user?.employeeFullName?.[0]?.toUpperCase() ?? "U"}
                     </div>
                     <div className="flex-1 text-left min-w-0">
                       <p className="text-sm font-semibold text-foreground truncate">
-                        Quản trị viên
+                        {user?.employeeFullName || "Người dùng"}
                       </p>
                       <p className="text-xs text-muted-foreground truncate">
-                        admin@econtract.vn
+                        {user?.employeeEmail || "Chưa cập nhật email"}
                       </p>
                     </div>
                   </button>
@@ -200,11 +213,13 @@ export function Sidebar() {
                 <DropdownMenuContent
                   align="end"
                   side="top"
-                  className="w-64 rounded-xl"
+                  className="w-64 rounded-xl z-60"
                 >
-                  <DropdownMenuItem className="cursor-pointer py-2.5">
-                    <User className="mr-2 h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">Hồ sơ cá nhân</span>
+                  <DropdownMenuItem asChild className="cursor-pointer py-2.5">
+                    <Link href="/dashboard/profile">
+                      <User className="mr-2 h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium">Hồ sơ cá nhân</span>
+                    </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem className="cursor-pointer py-2.5">
                     <Settings className="mr-2 h-4 w-4 text-muted-foreground" />
@@ -212,7 +227,7 @@ export function Sidebar() {
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    className="cursor-pointer py-2.5 text-rose-600 focus:text-rose-600 dark:focus:bg-rose-500/10 focus:bg-rose-50"
+                    className="cursor-pointer py-2.5 text-destructive focus:text-destructive dark:focus:bg-destructive/10 focus:bg-destructive/10"
                     onClick={handleLogout}
                   >
                     <LogOut className="mr-2 h-4 w-4" />
@@ -224,13 +239,6 @@ export function Sidebar() {
           </aside>
         </>
       )}
-
-      <button
-        onClick={() => setIsMobileOpen(!isMobileOpen)}
-        className="fixed top-3 left-4 z-20 p-2 lg:hidden hover:bg-accent rounded-xl transition-colors text-muted-foreground bg-card shadow-sm border border-border"
-      >
-        <Menu className="h-5 w-5" />
-      </button>
     </>
   );
 }

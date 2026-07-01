@@ -10,9 +10,14 @@ const axiosClient: AxiosInstance = axios.create({
   withCredentials: true,
 });
 
-// Response Interceptor
 axiosClient.interceptors.response.use(
-  (response: AxiosResponse) => response.data,
+  (response: AxiosResponse) => {
+    const res = response.data;
+    if (res && typeof res === "object" && "success" in res && "data" in res) {
+      return res.data;
+    }
+    return res;
+  },
 
   (error: AxiosError) => {
     if (error.response?.status === 401) {

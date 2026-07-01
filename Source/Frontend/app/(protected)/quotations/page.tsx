@@ -52,7 +52,7 @@ export default function QuotationListPage() {
       setIsLoading(true);
       try {
         const data = await quotationApi.getAll();
-        setQuotations(data);
+        setQuotations(Array.isArray(data) ? data : (data as any)?.data || []);
       } catch (error) {
         toast.error("Lỗi khi tải danh sách báo giá");
       } finally {

@@ -16,6 +16,8 @@ public sealed class CentralDbContext : DbContext
     {
     }
 
+    public DbSet<SystemAdmin> SystemAdmins => Set<SystemAdmin>();
+
     public DbSet<Tenant> Tenants => Set<Tenant>();
 
     public DbSet<TenantDatabase> TenantDatabases =>
@@ -29,6 +31,48 @@ public sealed class CentralDbContext : DbContext
         ConfigureTenant(modelBuilder);
 
         ConfigureTenantDatabase(modelBuilder);
+
+        ConfigureSystemAdmin(modelBuilder); // Configure SystemAdmin entity
+    }
+
+    /*
+     *  Cấu hình entity SystemAdmin.
+     */
+    private static void ConfigureSystemAdmin(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<SystemAdmin>(entity =>
+        {
+            entity.ToTable("SystemAdmins");
+
+            entity.HasKey(x => x.SystemAdminId);
+
+            entity.Property(x => x.Username)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .IsRequired();
+
+            entity.Property(x => x.PasswordHash)
+                .HasMaxLength(255)
+                .IsUnicode(false)
+                .IsRequired();
+
+            entity.Property(x => x.FullName)
+                .HasMaxLength(200)
+                .IsRequired();
+
+            entity.Property(x => x.Email)
+                .HasMaxLength(200)
+                .IsUnicode(false);
+
+            entity.Property(x => x.IsActive)
+                .HasDefaultValue(true);
+
+            entity.Property(x => x.CreatedAt)
+                .HasColumnType("datetime2");
+
+            entity.HasIndex(x => x.Username)
+                .IsUnique();
+        });
     }
 
     private static void ConfigureTenant(

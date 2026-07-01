@@ -1,14 +1,15 @@
-﻿using ContractManagement.Infrastructure.MultiTenancy.Interfaces;
+﻿using ContractManagement.Infrastructure.DatabaseScripts.SeedData;
+using ContractManagement.Infrastructure.MultiTenancy.Interfaces;
 using ContractManagement.Infrastructure.MultiTenancy.Options;
 using ContractManagement.Infrastructure.MultiTenancy.Services;
 using ContractManagement.Infrastructure.Persistence.Application;
+using ContractManagement.Infrastructure.Persistence.Application.Models;
 using ContractManagement.Infrastructure.Persistence.Central;
+using ContractManagement.Infrastructure.Persistence.Central.Entities;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using ContractManagement.Infrastructure.DatabaseScripts.SeedData;
-using Microsoft.AspNetCore.Identity;
-using ContractManagement.Infrastructure.Persistence.Application.Models;
 
 namespace ContractManagement.Infrastructure.MultiTenancy.DI;
 
@@ -103,7 +104,7 @@ public static class DependencyInjection
             TenantProvisioningService>();
 
         /*
-         * Dang ký các service dùng để seed dữ liệu tenant.
+         * Dang ký các service dùng để seed dữ liệu tenant va admin.
         */
         services.AddScoped<
             IPasswordHasher<TblEmployee>,
@@ -112,6 +113,14 @@ public static class DependencyInjection
         services.AddScoped<
             ITenantSeedData,
             TenantSeedData>();
+
+        services.AddScoped<
+            IPasswordHasher<SystemAdmin>,
+            PasswordHasher<SystemAdmin>>();
+
+        services.AddScoped<
+            ICentralSeedData,
+            CentralSeedData>();
 
         return services;
     }

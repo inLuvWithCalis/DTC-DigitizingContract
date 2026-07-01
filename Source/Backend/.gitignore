@@ -66,11 +66,6 @@ appsettings.Production.json
 appsettings.*.local.json
 
 # =========================
-# Entity Framework
-# =========================
-Migrations/
-
-# =========================
 # Docker
 # =========================
 docker-compose.override.yml

@@ -2,14 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Loader2,
-  FileText,
-  ShieldCheck,
-  Eye,
-  EyeOff,
-  Building,
-} from "lucide-react";
+import { Loader2, FileText, ShieldCheck, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { authApi } from "@/services/auth-api";
@@ -17,7 +10,6 @@ import { authApi } from "@/services/auth-api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
   CardContent,
@@ -31,27 +23,18 @@ import { useAuthStore } from "@/hooks/use-auth-store";
 export default function LoginPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
-  const [tenantCode, setTenantCode] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const { user, isAuthenticated, setUser } = useAuthStore();
 
-  const [errors, setErrors] = useState<{
-    tenantCode?: string;
-    email?: string;
-    password?: string;
-  }>({});
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>(
+    {},
+  );
   const [touched, setTouched] = useState<{
-    tenantCode?: boolean;
     email?: boolean;
     password?: boolean;
   }>({});
-
-  const validateTenantCode = (value: string): string | undefined => {
-    if (!value.trim()) return "Vui lòng nhập Mã công ty (Tenant Code)";
-    return undefined;
-  };
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -114,67 +97,32 @@ export default function LoginPage() {
     }
   };
 
-  const handleTenantCodeChange = (value: string) => {
-    setTenantCode(value);
-    if (touched.tenantCode) {
-      setErrors((prev) => ({ ...prev, tenantCode: validateTenantCode(value) }));
-    }
-  };
-
-  const handleBlur = (field: "tenantCode" | "email" | "password") => {
+  const handleBlur = (field: "email" | "password") => {
     setTouched((prev) => ({ ...prev, [field]: true }));
-    let value = "";
-    let validator;
-
-    if (field === "tenantCode") {
-      value = tenantCode;
-      validator = validateTenantCode;
-    } else if (field === "email") {
-      value = email;
-      validator = validateEmail;
-    } else {
-      value = password;
-      validator = validatePassword;
-    }
-
+    const value = field === "email" ? email : password;
+    const validator = field === "email" ? validateEmail : validatePassword;
     setErrors((prev) => ({ ...prev, [field]: validator(value) }));
   };
 
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const tenantError = validateTenantCode(tenantCode);
     const emailError = validateEmail(email);
     const passwordError = validatePassword(password);
+    setTouched({ email: true, password: true });
+    setErrors({ email: emailError, password: passwordError });
 
-    setTouched({ tenantCode: true, email: true, password: true });
-    setErrors({
-      tenantCode: tenantError,
-      email: emailError,
-      password: passwordError,
-    });
-
-    if (tenantError || emailError || passwordError) {
-      toast.error(tenantError || emailError || passwordError);
+    if (emailError || passwordError) {
+      toast.error(emailError || passwordError);
       return;
     }
 
     setIsLoading(true);
-
-    console.log({
-      accountName: email,
-      password,
-      tenantCode,
-    });
-
     try {
-      const data = await authApi.login(
-        {
-          accountName: email,
-          password,
-        },
-        tenantCode.trim(),
-      );
+      const data = await authApi.login({
+        username: email,
+        password,
+      });
 
       toast.success(data.message || "Đăng nhập thành công!");
       router.push("/dashboard");
@@ -243,32 +191,6 @@ export default function LoginPage() {
             </CardHeader>
             <CardContent className="p-8 sm:p-10">
               <form onSubmit={handleEmailSignIn} className="space-y-5">
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="tenantCode"
-                    className="text-foreground/80 font-semibold flex items-center gap-1.5"
-                  >
-                    Mã công ty
-                  </Label>
-                  <Input
-                    id="tenantCode"
-                    value={tenantCode}
-                    maxLength={50}
-                    onChange={(e) => handleTenantCodeChange(e.target.value)}
-                    onBlur={() => handleBlur("tenantCode")}
-                    aria-invalid={!!errors.tenantCode}
-                    className={`h-11 rounded-xl transition-colors ${
-                      errors.tenantCode && touched.tenantCode
-                        ? "border-destructive focus-visible:ring-destructive/30"
-                        : ""
-                    }`}
-                  />
-                  {errors.tenantCode && touched.tenantCode && (
-                    <p className="text-destructive text-xs font-medium mt-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
-                      {errors.tenantCode}
-                    </p>
-                  )}
-                </div>
                 <div className="space-y-2">
                   <Label
                     htmlFor="email"

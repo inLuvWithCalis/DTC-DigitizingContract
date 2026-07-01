@@ -40,9 +40,12 @@ export interface UserProfileDto {
 }
 
 export const authApi = {
-  login: (payload: LoginRequestDto) => {
+  login: (payload: LoginRequestDto, tenantCode: string) => {
     return axiosClient.post<any, LoginResponseDto>("/Auth/login", payload, {
       withCredentials: true,
+      headers: {
+        "X-Tenant-Code": tenantCode,
+      },
     });
   },
 

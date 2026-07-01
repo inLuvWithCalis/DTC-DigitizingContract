@@ -1,3 +1,4 @@
 <Solution>
-  <Project Path="ContractManagement.csproj" />
+  <Project Path="ContractManagement.API/ContractManagement.API.csproj" />
+  <Project Path="ContractManagement.Infrastructure/ContractManagement.Infrastructure.csproj" />
 </Solution>

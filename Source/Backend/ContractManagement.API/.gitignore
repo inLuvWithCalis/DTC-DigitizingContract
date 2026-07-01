@@ -1,0 +1,108 @@
+﻿# =========================
+# IDE / Editor
+# =========================
+.vs/
+.idea/
+.vscode/
+
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# =========================
+# Build output
+# =========================
+[Bb]in/
+[Oo]bj/
+out/
+artifacts/
+publish/
+
+# =========================
+# Logs / Test / Coverage
+# =========================
+*.log
+*.err
+*.out
+*.trx
+TestResults/
+coverage/
+*.coverage
+coverage*.xml
+
+# =========================
+# Node (nếu có frontend)
+# =========================
+node_modules/
+bower_components/
+
+# =========================
+# NuGet
+# =========================
+*.nupkg
+packages/
+project.lock.json
+project.fragment.lock.json
+
+# =========================
+# Environment / Secrets
+# =========================
+.env
+.env.*
+
+secrets.json
+secrets.*.json
+
+# =========================
+# App settings (QUAN TRỌNG)
+# =========================
+# Giữ file base để team chạy được
+!appsettings.json
+
+# Ignore config theo môi trường (có thể chứa secret)
+appsettings.Development.json
+appsettings.Production.json
+appsettings.*.local.json
+
+# =========================
+# Entity Framework
+# =========================
+Migrations/
+
+# =========================
+# Docker
+# =========================
+docker-compose.override.yml
+**/bin/Dockerfile*
+**/obj/Dockerfile*
+
+# =========================
+# Azure
+# =========================
+*.publishsettings
+local.settings.json
+
+# =========================
+# OS files
+# =========================
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+
+# =========================
+# Temp / cache
+# =========================
+*.tmp
+*.temp
+*.swp
+~$*
+
+# =========================
+# Misc
+# =========================
+generated/
+*.dotnet/
+dotnet_modules/
+runtimeconfig.dump.json

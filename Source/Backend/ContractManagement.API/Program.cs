@@ -1,0 +1,234 @@
+using ContractManagement.Domains.Interfaces.Quotation;
+using ContractManagement.Domains.Mappings.Quotation;
+using ContractManagement.Domains.Services.Quotation;
+using ContractManagement.Infrastructure.MultiTenancy.DI;
+using ContractManagement.Infrastructure.Persistence.Application.Models;
+using ContractManagement.Middleware.MultiTenancy;
+using Microsoft.AspNetCore.Identity;
+
+var builder = WebApplication.CreateBuilder(args);
+
+#region 1. MVC Controllers
+
+/*
+ * Đăng ký Controller cho Web API.
+ */
+builder.Services.AddControllers();
+
+#endregion
+
+#region 2. Swagger / OpenAPI
+
+/*
+ * Dùng để hiển thị Swagger UI và tài liệu API.
+ */
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+/*
+ * AddOpenApi() không bắt buộc nếu bạn đã dùng SwaggerGen.
+ * Có thể bỏ để tránh trùng chức năng.
+ */
+// builder.Services.AddOpenApi();
+
+#endregion
+
+#region 3. Multi-tenancy Infrastructure
+
+/*
+ * Đăng ký toàn bộ thành phần Infrastructure:
+ *
+ * - CentralDbContext
+ * - DbDtctechContext dùng connection string động
+ * - CurrentTenant
+ * - TenantResolver
+ * - TenantProvisioningService
+ * - TenantDatabaseInitializer
+ *
+ * Không đăng ký DbDtctechContext thêm lần nữa trong Program.cs.
+ */
+builder.Services.AddContractManagementInfrastructure(
+    builder.Configuration);
+
+#endregion
+
+#region 4. Session
+
+/*
+ * Session hiện được lưu trong bộ nhớ của server.
+ *
+ * Phù hợp khi phát triển hoặc chỉ chạy một server.
+ * Khi scale nhiều server, nên dùng Redis hoặc SQL Server Session.
+ */
+builder.Services.AddDistributedMemoryCache();
+
+builder.Services.AddSession(options =>
+{
+    /*
+     * Session hết hạn sau 30 phút không hoạt động.
+     */
+    options.IdleTimeout = TimeSpan.FromMinutes(30);
+
+    /*
+     * JavaScript phía frontend không đọc được session cookie.
+     * Giúp hạn chế nguy cơ đánh cắp cookie bằng XSS.
+     */
+    options.Cookie.HttpOnly = true;
+
+    /*
+     * Cho phép cookie session hoạt động
+     * dù người dùng chưa đồng ý cookie không thiết yếu.
+     */
+    options.Cookie.IsEssential = true;
+
+    options.Cookie.Name = "ContractManagement.Session";
+
+    /*
+     * Cho phép cookie được gửi trong các request thông thường
+     * nhưng hạn chế một số request cross-site.
+     */
+    options.Cookie.SameSite = SameSiteMode.Lax;
+
+    /*
+     * Local HTTP vẫn chạy được.
+     * Khi request dùng HTTPS thì cookie cũng dùng Secure.
+     */
+    options.Cookie.SecurePolicy =
+        CookieSecurePolicy.SameAsRequest;
+});
+
+#endregion
+
+#region 5. CORS
+
+/*
+ * Cho phép React frontend gọi API và gửi session cookie.
+ */
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("CorsPolicy", policy =>
+    {
+        policy
+            .WithOrigins("http://localhost:3000")
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
+});
+
+#endregion
+
+#region 6. Authentication helpers
+
+/*
+ * Service dùng để hash và kiểm tra mật khẩu nhân viên.
+ */
+builder.Services.AddScoped<
+    IPasswordHasher<TblEmployee>,
+    PasswordHasher<TblEmployee>>();
+
+#endregion
+
+#region 7. Business services
+
+/*
+ * Đăng ký các service nghiệp vụ.
+ */
+builder.Services.AddScoped<
+    IQuotationService,
+    QuotationService>();
+
+#endregion
+
+#region 8. AutoMapper
+
+/*
+ * Đăng ký profile ánh xạ dữ liệu báo giá.
+ */
+builder.Services.AddAutoMapper(config =>
+{
+    config.AddProfile<QuotationMappingProfile>();
+});
+
+#endregion
+
+var app = builder.Build();
+
+#region 9. Development tools
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+#endregion
+
+#region 10. HTTP middleware pipeline
+
+/*
+ * Chuyển HTTP sang HTTPS.
+ */
+app.UseHttpsRedirection();
+
+/*
+ * Xác định endpoint hiện tại.
+ *
+ * Phải đứng trước TenantResolutionMiddleware để middleware
+ * đọc được metadata như AllowWithoutTenantAttribute.
+ */
+app.UseRouting();
+
+/*
+ * CORS phải chạy trước Controller.
+ */
+app.UseCors("CorsPolicy");
+
+/*
+ * Session phải chạy trước TenantResolutionMiddleware,
+ * vì middleware có thể lấy TenantCode từ session.
+ */
+app.UseSession();
+
+/*
+ * Khi triển khai authentication chuẩn của ASP.NET Core,
+ * thêm middleware này trước TenantResolutionMiddleware:
+ *
+ * app.UseAuthentication();
+ */
+
+/*
+ * Xác định tenant hiện tại:
+ *
+ * 1. Đọc TenantCode từ session, claim hoặc header.
+ * 2. Tra cứu trong Central Database.
+ * 3. Lưu tenant vào CurrentTenant.
+ * 4. DbDtctechContext dùng connection string của tenant đó.
+ */
+app.UseMiddleware<TenantResolutionMiddleware>();
+
+/*
+ * Kiểm tra quyền truy cập.
+ */
+app.UseAuthorization();
+
+/*
+ * Ánh xạ endpoint Controller.
+ */
+app.MapControllers();
+
+#endregion
+
+/*
+ * Không chạy SeedData cũ tại startup ở thời điểm này.
+ *
+ * Lý do:
+ * SeedData dùng DbDtctechContext, nhưng lúc startup chưa có
+ * request và chưa xác định được tenant.
+ *
+ * Seed dữ liệu tenant nên được thực hiện:
+ * - Ngay sau khi tạo database tenant; hoặc
+ * - Bằng một TenantDatabaseInitializer riêng.
+ */
+
+app.Run();

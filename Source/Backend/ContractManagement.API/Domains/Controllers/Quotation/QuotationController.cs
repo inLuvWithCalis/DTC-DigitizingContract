@@ -1,4 +1,6 @@
-﻿using ContractManagement.Domains.DTOs.Requests.Quotation;
+﻿using ContractManagement.Common.Responses;
+using ContractManagement.Domains.DTOs.Requests.Quotation;
+using ContractManagement.Domains.DTOs.Responses.Quotation;
 using ContractManagement.Domains.Interfaces.Quotation;
 using ContractManagement.Filter;
 using Microsoft.AspNetCore.Http;
@@ -8,7 +10,7 @@ namespace ContractManagement.Domains.Controllers.Quotation
 {
     [Route("api/[controller]")]
     [ApiController]
-    //[SessionAuthorize]
+    [SessionAuthorize]
     public class QuotationController : ControllerBase
     {
         private readonly IQuotationService _service;
@@ -21,67 +23,63 @@ namespace ContractManagement.Domains.Controllers.Quotation
         [HttpPost]
         public async Task<IActionResult> CreateQuotation([FromBody] CreateQuotationRequestDto request)
         {
-            // 1. Check input validation
+            // 1. Validate dữ liệu request.
+            // Nếu DTO thiếu field hoặc sai rule thì trả lỗi 400.
             if (!ModelState.IsValid)
             {
-                return BadRequest(ModelState);
+                var errors = ModelState.Values
+                    .SelectMany(v => v.Errors)
+                    .Select(e => e.ErrorMessage)
+                    .ToList();
+
+                return BadRequest(
+                    ApiResponse<object>.Fail(
+                        "Dữ liệu báo giá không hợp lệ.",
+                        errors));
             }
 
-            // 2. Create quotation
-            try
-            {
-                var currentEmployeeId = HttpContext.Session.GetInt32("EmployeeId");
+            // 2. Lấy EmployeeId từ Session.
+            var currentEmployeeId =
+                HttpContext.Session.GetInt32("EmployeeId");
 
-                var result = await _service.CreateQuotationAsync(request, currentEmployeeId.Value);
+            // 3. Gọi service tạo báo giá.
+            // Nếu service throw exception, middleware sẽ tự bắt.
+            var result = await _service.CreateQuotationAsync(
+                request,
+                currentEmployeeId.Value);
 
-                return CreatedAtAction(nameof(CreateQuotation), new { id = result.QuotationId }, result);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = ex.Message });
-            }
+            // 4. Trả response chuẩn cho frontend.
+            return CreatedAtAction(
+                nameof(GetQuotationById),
+                new { id = result.QuotationId },
+                ApiResponse<QuotationResponseDto>.Ok(
+                    result,
+                    "Create quotation successfully!"));
         }
 
         [HttpGet]
         public async Task<IActionResult> GetAllQuotations()
         {
-            try
-            {
-                var result = await _service.GetAllQuotationsAsync();
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = ex.Message });
-            }
+            var result = await _service.GetAllQuotationsAsync();
+
+            return Ok(ApiResponse<List<QuotationResponseDto>>.Ok(result, "Get all quotations successfully!"));
         }
 
         [HttpGet("{id}")]
         public async Task<IActionResult> GetQuotationById(int id)
         {
-            try
-            {
-                var result = await _service.GetQuotationByIdAsync(id);
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
+            var result = await _service.GetQuotationByIdAsync(id);
+
+            return Ok(ApiResponse<QuotationResponseDto>.Ok(result, "Get quotation by ID successfully!"));
         }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteQuotation(int id)
         {
-            try
-            {
-                await _service.DeleteQuotationAsync(id);
-                return Ok(new { message = "Xóa báo giá thành công" });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
+            var result = await _service.DeleteQuotationAsync(id);
+
+            return Ok(
+                ApiResponse<object>.Ok(result, "Delete quotation successfully!"));
         }
     }
 }

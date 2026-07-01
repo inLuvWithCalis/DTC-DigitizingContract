@@ -3,6 +3,7 @@ using ContractManagement.Domains.Mappings.Quotation;
 using ContractManagement.Domains.Services.Quotation;
 using ContractManagement.Infrastructure.MultiTenancy.DI;
 using ContractManagement.Infrastructure.Persistence.Application.Models;
+using ContractManagement.Middleware;
 using ContractManagement.Middleware.MultiTenancy;
 using Microsoft.AspNetCore.Identity;
 
@@ -170,6 +171,11 @@ if (app.Environment.IsDevelopment())
  * Chuyển HTTP sang HTTPS.
  */
 app.UseHttpsRedirection();
+
+/*
+ * Bắt lỗi toàn cục và trả về response thống nhất.
+ */
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 /*
  * Xác định endpoint hiện tại.

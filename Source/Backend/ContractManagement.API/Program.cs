@@ -1,11 +1,14 @@
 using ContractManagement.Domains.Interfaces.Quotation;
 using ContractManagement.Domains.Mappings.Quotation;
 using ContractManagement.Domains.Services.Quotation;
+using ContractManagement.Infrastructure.DatabaseScripts.SeedData;
 using ContractManagement.Infrastructure.MultiTenancy.DI;
 using ContractManagement.Infrastructure.Persistence.Application.Models;
+using ContractManagement.Infrastructure.Persistence.Central.Entities;
 using ContractManagement.Middleware;
 using ContractManagement.Middleware.MultiTenancy;
 using Microsoft.AspNetCore.Identity;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -128,6 +131,12 @@ builder.Services.AddScoped<
     IPasswordHasher<TblEmployee>,
     PasswordHasher<TblEmployee>>();
 
+/*
+ * Service dùng để hash và kiểm tra mật khẩu SystemAdmin.
+ */
+builder.Services.AddScoped<
+    IPasswordHasher<SystemAdmin>,
+    PasswordHasher<SystemAdmin>>();
 #endregion
 
 #region 7. Business services
@@ -154,6 +163,19 @@ builder.Services.AddAutoMapper(config =>
 #endregion
 
 var app = builder.Build();
+
+#region 8.5 Seed central Data
+
+using (var scope = app.Services.CreateScope())
+{
+    var centralSeedData =
+        scope.ServiceProvider
+            .GetRequiredService<ICentralSeedData>();
+
+    await centralSeedData.InitializeAsync();
+}
+
+#endregion
 
 #region 9. Development tools
 

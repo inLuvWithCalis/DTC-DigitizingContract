@@ -1,5 +1,6 @@
 ﻿using ContractManagement.Attributes;
 using ContractManagement.Contracts.Tenants;
+using ContractManagement.Filter;
 using ContractManagement.Infrastructure.MultiTenancy.Contracts;
 using ContractManagement.Infrastructure.MultiTenancy.Interfaces;
 using Microsoft.AspNetCore.Mvc;
@@ -9,6 +10,7 @@ namespace ContractManagement.Controllers.Admin;
 [ApiController]
 [Route("api/admin/tenants")]
 [AllowWithoutTenant]
+[SystemAdminAuthorize]
 
 /*
  * Khi hoàn thành phân quyền, thêm:

@@ -51,11 +51,18 @@ internal static class DesignTimeConfiguration
                 + "của project ContractManagement.");
         }
 
+        string environment =
+            Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+            ?? "Production";
+
         return new ConfigurationBuilder()
             .SetBasePath(basePath)
             .AddJsonFile(
                 "appsettings.json",
                 optional: false)
+            .AddJsonFile(
+                $"appsettings.{environment}.json",
+                optional: true)
             .AddEnvironmentVariables()
             .Build();
     }

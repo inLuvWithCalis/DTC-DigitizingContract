@@ -259,7 +259,7 @@ export function DataTable<TData, TValue>({
         </div>
       ) : (
         /* ────────────── DESKTOP TABLE VIEW ────────────── */
-        <div className="relative w-full overflow-auto rounded-md border border-border">
+        <div className="relative w-full overflow-auto rounded-md border border-border flex-1">
           <Table>
             <TableHeader className="bg-secondary/50">
               {table.getHeaderGroups().map((headerGroup) => (
@@ -358,7 +358,7 @@ export function DataTable<TData, TValue>({
       {/* 4. PAGINATION */}
       {!isLoading && data.length > 0 && (
         <div
-          className={`flex flex-col gap-3 py-4 mt-auto border-t border-transparent flex-1 sm:flex-row sm:items-end sm:justify-between ${isMobile && "justify-end items-center"}`}
+          className={`flex flex-col gap-3 py-4 mt-auto border-t border-transparent sm:flex-row sm:items-center sm:justify-between ${isMobile && "justify-end items-center"}`}
         >
           <div className="text-sm text-muted-foreground text-center sm:text-left">
             Hiển thị{" "}

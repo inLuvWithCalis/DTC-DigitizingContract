@@ -1,5 +1,9 @@
+using ContractManagement.Domains.Interfaces.Contract;
+using ContractManagement.Domains.Interfaces.File;
 using ContractManagement.Domains.Interfaces.Quotation;
 using ContractManagement.Domains.Mappings.Quotation;
+using ContractManagement.Domains.Services.Contract;
+using ContractManagement.Domains.Services.File;
 using ContractManagement.Domains.Services.Quotation;
 using ContractManagement.Infrastructure.DatabaseScripts.SeedData;
 using ContractManagement.Infrastructure.MultiTenancy.DI;
@@ -147,6 +151,14 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IQuotationService,
     QuotationService>();
+
+builder.Services.AddScoped<
+    IFileStorageService,
+    FileStorageService>();
+
+builder.Services.AddScoped<
+    IContractAttachmentService,
+    ContractAttachmentService>();
 
 #endregion
 

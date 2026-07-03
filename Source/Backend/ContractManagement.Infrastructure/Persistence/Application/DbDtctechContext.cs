@@ -169,6 +169,8 @@ public partial class DbDtctechContext : DbContext
             entity.Property(e => e.UploadDate)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
+            entity.Property(e => e.DocumentType)
+                .HasDefaultValue((byte)99);
         });
 
         modelBuilder.Entity<TblContractTerm>(entity =>

@@ -23,14 +23,17 @@ public sealed class TenantResolutionMiddleware
     }
 
     public async Task InvokeAsync(
-        HttpContext context,
-        ITenantResolver tenantResolver,
-        ICurrentTenant currentTenant)
+      HttpContext context,
+      ITenantResolver tenantResolver,
+      ICurrentTenant currentTenant)
     {
-        /*
-         * Kiểm tra endpoint có được phép chạy
-         * mà không cần tenant hay không.
-         */
+        // Chỉ áp dụng Tenant cho API
+        if (!context.Request.Path.StartsWithSegments("/api"))
+        {
+            await _next(context);
+            return;
+        }
+
         bool allowWithoutTenant =
             context.GetEndpoint()?
                 .Metadata

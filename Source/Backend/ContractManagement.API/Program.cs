@@ -8,7 +8,7 @@ using ContractManagement.Infrastructure.Persistence.Central.Entities;
 using ContractManagement.Middleware;
 using ContractManagement.Middleware.MultiTenancy;
 using Microsoft.AspNetCore.Identity;
-
+using ContractManagement.API.Helpers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,6 +19,9 @@ var builder = WebApplication.CreateBuilder(args);
  */
 builder.Services.AddControllers();
 
+builder.Services
+    .AddReverseProxy()
+    .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
 #endregion
 
 #region 2. Swagger / OpenAPI
@@ -245,6 +248,13 @@ app.UseAuthorization();
  */
 app.MapControllers();
 
+/*
+ * Chuyển các request không khớp Controller
+ * sang Next.js.
+ */
+app.MapReverseProxy();
+
+FrontendLauncher.Start();
 #endregion
 
 /*

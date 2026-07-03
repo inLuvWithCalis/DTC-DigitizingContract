@@ -101,3 +101,9 @@ generated/
 *.dotnet/
 dotnet_modules/
 runtimeconfig.dump.json
+
+# =========================
+# Uploads
+# =========================
+wwwroot/uploads/*
+!wwwroot/uploads/.gitkeep

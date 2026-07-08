@@ -16,4 +16,18 @@ public partial class TblContractAttachment
     public DateTime? UploadDate { get; set; }
 
     public int? UploadEmployeeId { get; set; }
+
+    /// <summary>
+    /// Loại tài liệu đính kèm.
+    /// Ví dụ:
+    /// 0 = QuotationFile
+    /// 1 = AcceptanceRecord
+    /// 2 = HandoverRecord
+    /// 3 = LiquidationRecord
+    /// 4 = VATInvoice
+    /// 5 = BankGuarantee
+    /// 6 = SignedScanCopy
+    /// 99 = Other
+    /// </summary>
+    public byte DocumentType { get; set; } = 99;
 }

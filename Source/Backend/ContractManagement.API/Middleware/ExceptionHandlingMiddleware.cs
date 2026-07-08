@@ -1,4 +1,4 @@
-﻿using ContractManagement.Common.Responses;
+﻿using ContractManagement.API.Common.Responses;
 using System.Net;
 using System.Text.Json;
 

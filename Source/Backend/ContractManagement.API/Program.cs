@@ -1,4 +1,8 @@
+using ContractManagement.API.Domains.Interfaces.Department;
+using ContractManagement.API.Domains.Services.Department;
+using ContractManagement.API.Domains.Services.Employee;
 using ContractManagement.Domains.Interfaces.Contract;
+using ContractManagement.Domains.Interfaces.Employee;
 using ContractManagement.Domains.Interfaces.File;
 using ContractManagement.Domains.Interfaces.Quotation;
 using ContractManagement.Domains.Mappings.Quotation;
@@ -162,6 +166,14 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IContractAttachmentService,
     ContractAttachmentService>();
+
+builder.Services.AddScoped<
+    IDepartmentService,
+    DepartmentService>();
+
+builder.Services.AddScoped<
+    IEmployeeService,
+    EmployeeService>();
 
 #endregion
 

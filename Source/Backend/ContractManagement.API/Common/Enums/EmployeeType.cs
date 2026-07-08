@@ -1,4 +1,4 @@
-﻿namespace ContractManagement.Common.Enums
+﻿namespace ContractManagement.API.Common.Enums
 {
     /// <summary>
     /// Loại nhân viên dùng để phân quyền nghiệp vụ.

@@ -1,4 +1,4 @@
-﻿using ContractManagement.Common.Responses;
+﻿using ContractManagement.API.Common.Responses;
 using ContractManagement.Domains.DTOs.Requests.File;
 using ContractManagement.Domains.DTOs.Responses.File;
 using ContractManagement.Domains.Interfaces.File;
@@ -25,7 +25,7 @@ namespace ContractManagement.Domains.Controllers.File
 
         /// <summary>
         /// Upload file generic.
-        /// Dùng form-data:
+        /// Dùng form-data
         /// - file
         /// - objectType
         /// - objectId

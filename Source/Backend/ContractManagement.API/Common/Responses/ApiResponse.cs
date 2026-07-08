@@ -1,4 +1,4 @@
-﻿namespace ContractManagement.Common.Responses
+﻿namespace ContractManagement.API.Common.Responses
 {
     /// <summary>
     /// Response wrapper dùng chung cho API.

@@ -9,20 +9,19 @@ import {
   ArrowDown,
   ArrowUpDown,
   Eye,
-  Trash2,
-  FileText,
-  DollarSign,
-  Clock,
-  Users,
+  Building2,
+  Lock,
+  Unlock,
+  Building,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { ColumnDef, Row } from "@tanstack/react-table";
-import { quotationApi, QuotationResponseDto } from "@/services/quotations-api";
+import { departmentApi, DepartmentResponse } from "@/services/departments-api";
 import { formatDateTime } from "@/lib/format-date-time";
-import { formatCurrency } from "@/lib/format-currency";
 import { DataTable } from "@/components/ui/custom/data-table";
 import { SelectFilter } from "@/components/ui/custom/select-filter";
 import { DateRangeFilter } from "@/components/ui/custom/date-range-filter";
@@ -35,15 +34,15 @@ import {
   SummaryCards,
 } from "@/components/ui/custom/summary-cards";
 
-export default function QuotationListPage() {
+export default function DepartmentListPage() {
   const router = useRouter();
 
-  const [quotations, setQuotations] = useState<QuotationResponseDto[]>([]);
+  const [departments, setDepartments] = useState<DepartmentResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const [loadingId, setLoadingId] = useState<number | null>(null);
-  const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [toggleStatusId, setToggleStatusId] = useState<number | null>(null);
+  const [isToggling, setIsToggling] = useState(false);
 
   const [filterStatus, setFilterStatus] = useState<string>("All");
   const [dateRange, setDateRange] = useState<{
@@ -51,52 +50,63 @@ export default function QuotationListPage() {
     to: Date | undefined;
   }>({ from: undefined, to: undefined });
 
+  const fetchDepartments = async () => {
+    setIsLoading(true);
+    try {
+      const data = await departmentApi.getAll();
+      setDepartments(Array.isArray(data) ? data : (data as any)?.data || []);
+    } catch (error) {
+      toast.error("Lỗi khi tải danh sách phòng ban");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchQuotations = async () => {
-      setIsLoading(true);
-      try {
-        const data = await quotationApi.getAll();
-        setQuotations(Array.isArray(data) ? data : (data as any)?.data || []);
-      } catch (error) {
-        toast.error("Lỗi khi tải danh sách báo giá");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchQuotations();
+    fetchDepartments();
   }, []);
 
   const filteredData = useMemo(() => {
     return applyTableFilters({
-      data: quotations,
+      data: departments,
       statusValue: filterStatus,
-      statusKey: "quatationStatus",
+      statusKey: "status",
       dateRange: dateRange,
-      dateKey: "quotationDate",
+      dateKey: "modifiedDate",
     });
-  }, [quotations, filterStatus, dateRange]);
+  }, [departments, filterStatus, dateRange]);
 
   const handleView = (id: number) => {
     setLoadingId(id);
-    router.push(`/quotations/${id}`);
+    router.push(`/departments/${id}`);
   };
 
-  const handleDeleteConfirm = async () => {
-    if (!deleteId) return;
-    setIsDeleting(true);
+  const handleToggleStatusConfirm = async () => {
+    if (!toggleStatusId) return;
+    setIsToggling(true);
     try {
-      await quotationApi.delete(deleteId);
-      toast.success("Xóa báo giá thành công");
-      setQuotations(quotations.filter((q) => q.quotationId !== deleteId));
-      setDeleteId(null);
+      const targetDept = departments.find(
+        (d) => d.departmentId === toggleStatusId,
+      );
+      const newStatus = targetDept?.status === 1 ? 0 : 1;
+
+      await departmentApi.setStatus(toggleStatusId, newStatus);
+      toast.success("Cập nhật trạng thái phòng ban thành công");
+
+      setDepartments((prev) =>
+        prev.map((d) =>
+          d.departmentId === toggleStatusId ? { ...d, status: newStatus } : d,
+        ),
+      );
+      setToggleStatusId(null);
     } catch (error) {
-      toast.error("Không thể xóa báo giá này");
+      toast.error("Không thể cập nhật trạng thái");
     } finally {
-      setIsDeleting(false);
+      setIsToggling(false);
     }
   };
 
-  const columns = useMemo<ColumnDef<QuotationResponseDto>[]>(
+  const columns = useMemo<ColumnDef<DepartmentResponse>[]>(
     () => [
       {
         id: "select",
@@ -131,13 +141,13 @@ export default function QuotationListPage() {
         enableSorting: false,
       },
       {
-        accessorKey: "quotationNo",
+        accessorKey: "departmentCode",
         header: ({ column }) => (
           <div
             className="flex items-center gap-1.5 select-none cursor-pointer group"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
           >
-            Mã Báo giá & Ngày
+            Mã Phòng ban
             {{
               asc: <ArrowUp className="w-3.5 h-3.5 text-primary" />,
               desc: <ArrowDown className="w-3.5 h-3.5 text-primary" />,
@@ -148,67 +158,46 @@ export default function QuotationListPage() {
         ),
         cell: ({ row }) => (
           <div className="flex flex-col pl-1">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-foreground">
-                {row.original.quotationNo}
-              </span>
-            </div>
-            <span className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-              <CalendarDays className="w-3 h-3" />
-              {formatDateTime(row.original.quotationDate)}
+            <span className="font-semibold text-foreground">
+              {row.original.departmentCode}
             </span>
           </div>
         ),
       },
       {
-        accessorKey: "customerId",
-        header: "Đối tác (KH)",
+        accessorKey: "departmentName",
+        header: "Tên phòng ban",
         cell: ({ row }) => (
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
-              <Users className="w-4 h-4 text-muted-foreground" />
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <Building2 className="w-4 h-4 text-primary" />
             </div>
-            <div className="flex flex-col">
-              <span className="font-medium text-foreground text-sm">
-                KH-{row.original.customerId}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                ID Khách hàng
-              </span>
-            </div>
+            <span className="font-medium text-foreground text-sm">
+              {row.original.departmentName}
+            </span>
           </div>
         ),
       },
       {
-        accessorKey: "totalAmount",
-        header: ({ column }) => (
-          <div
-            className="flex items-center justify-end gap-1.5 select-none cursor-pointer group"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
-            Tổng tiền
-            {{
-              asc: <ArrowUp className="w-3.5 h-3.5 text-primary" />,
-              desc: <ArrowDown className="w-3.5 h-3.5 text-primary" />,
-            }[column.getIsSorted() as string] ?? (
-              <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-            )}
-          </div>
-        ),
+        accessorKey: "modifiedDate",
+        header: "Cập nhật lần cuối",
         cell: ({ row }) => (
-          <div className="text-right font-semibold text-primary">
-            {formatCurrency(row.original.totalAmount)}
+          <div className="text-sm text-muted-foreground flex items-center gap-1.5">
+            <CalendarDays className="w-3.5 h-3.5" />
+            {row.original.modifiedDate
+              ? formatDateTime(row.original.modifiedDate)
+              : "Chưa cập nhật"}
           </div>
         ),
       },
       {
-        accessorKey: "quatationStatus",
+        accessorKey: "status",
         header: () => <div className="text-center">Trạng thái</div>,
         cell: ({ row }) => {
-          const status = row.original.quatationStatus;
+          const statusStr = row.original.status === 1 ? "Active" : "Inactive";
           return (
             <div className="text-center">
-              <StatusBadge status={row.original.quatationStatus} />
+              <StatusBadge status={statusStr} />
             </div>
           );
         },
@@ -218,18 +207,23 @@ export default function QuotationListPage() {
         header: () => <div className="text-right pr-4">Thao tác</div>,
         cell: ({ row }) => {
           const item = row.original;
+          const isActive = item.status === 1;
           return (
             <SplitActionMenu
               primaryLabel="Chi tiết"
               primaryIcon={<Eye className="w-4 h-4" />}
-              onPrimaryClick={() => handleView(item.quotationId)}
-              isLoading={loadingId === item.quotationId}
+              onPrimaryClick={() => handleView(item.departmentId)}
+              isLoading={loadingId === item.departmentId}
               menuItems={[
                 {
-                  label: "Xóa báo giá",
-                  icon: <Trash2 className="w-4 h-4" />,
-                  isDestructive: true,
-                  onClick: () => setDeleteId(item.quotationId),
+                  label: isActive ? "Khóa phòng ban" : "Mở khóa",
+                  icon: isActive ? (
+                    <Lock className="w-4 h-4" />
+                  ) : (
+                    <Unlock className="w-4 h-4" />
+                  ),
+                  isDestructive: isActive,
+                  onClick: () => setToggleStatusId(item.departmentId),
                 },
               ]}
             />
@@ -240,58 +234,54 @@ export default function QuotationListPage() {
     [loadingId],
   );
 
-  const QUOTATION_STATUS_OPTIONS = [
+  const DEPARTMENT_STATUS_OPTIONS = [
     { label: "Tất cả trạng thái", value: "All" },
-    { label: "Đã duyệt", value: "Approved" },
-    { label: "Từ chối", value: "Rejected" },
-    { label: "Bản nháp", value: "Draft" },
-    { label: "Đã gửi", value: "Sent" },
+    { label: "Đang hoạt động", value: "1" },
+    { label: "Tạm khóa", value: "0" },
   ];
+
   const CustomFilters = (
     <>
       <SelectFilter
         value={filterStatus}
         onChange={setFilterStatus}
-        options={QUOTATION_STATUS_OPTIONS}
+        options={DEPARTMENT_STATUS_OPTIONS}
         placeholder="Trạng thái"
       />
-
       <DateRangeFilter dateRange={dateRange} onChange={setDateRange} />
     </>
   );
 
-  const totalQuotations = quotations.length;
-  const pendingCount = quotations.filter(
-    (q) => q.quatationStatus === "Pending",
-  ).length;
-  const totalValue = quotations.reduce(
-    (acc, curr) => acc + (curr.totalAmount || 0),
-    0,
-  );
+  const totalDepartments = departments.length;
+  const activeCount = departments.filter((d) => d.status === 1).length;
+  const inactiveCount = totalDepartments - activeCount;
 
   const summaryItems: SummaryCardItem[] = [
     {
-      title: "Tổng báo giá",
-      value: totalQuotations,
-      icon: <FileText className="w-6 h-6" />,
+      title: "Tổng số phòng ban",
+      value: totalDepartments,
+      icon: <Building className="w-6 h-6" />,
       iconWrapperClassName: "bg-primary/10 text-primary",
     },
     {
-      title: "Chờ phê duyệt",
-      value: pendingCount,
-      icon: <Clock className="w-6 h-6" />,
-      iconWrapperClassName:
-        "bg-amber-500/10 text-amber-600 dark:text-amber-500",
-    },
-    {
-      title: "Tổng giá trị",
-      value: formatCurrency(totalValue),
-      icon: <DollarSign className="w-6 h-6" />,
+      title: "Đang hoạt động",
+      value: activeCount,
+      icon: <CheckCircle2 className="w-6 h-6" />,
       iconWrapperClassName:
         "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500",
-      valueClassName: "text-xl",
+    },
+    {
+      title: "Đang tạm khóa",
+      value: inactiveCount,
+      icon: <Lock className="w-6 h-6" />,
+      iconWrapperClassName: "bg-rose-500/10 text-rose-600 dark:text-rose-500",
     },
   ];
+
+  const currentToggleItem = departments.find(
+    (d) => d.departmentId === toggleStatusId,
+  );
+  const isTogglingToLock = currentToggleItem?.status === 1;
 
   return (
     <>
@@ -301,35 +291,40 @@ export default function QuotationListPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              Danh sách Báo giá
+              Danh sách Phòng ban
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Quản lý, theo dõi trạng thái và tạo các báo giá gửi cho đối tác.
+              Quản lý danh sách, cấu hình và trạng thái của các phòng ban trong
+              hệ thống.
             </p>
           </div>
           <Button className="shadow-sm">
-            <FileText className="w-4 h-4 mr-2" /> Tạo báo giá mới
+            <Building2 className="w-4 h-4 mr-2" /> Thêm phòng ban
           </Button>
         </div>
+
         <SummaryCards items={summaryItems} />
+
         <Card className="border-border shadow-sm bg-card min-h-[500px] flex flex-col gap-0 p-0">
           <CardContent className="p-4 flex flex-col justify-between flex-1 pb-0">
             <DataTable
               columns={columns}
               data={filteredData}
               isLoading={isLoading}
-              searchKey="quotationNo"
-              searchPlaceholder="Tìm mã báo giá..."
+              searchKey="departmentName"
+              searchPlaceholder="Tìm tên phòng ban..."
               filterSlot={CustomFilters}
               onSelectMany={(rows) =>
-                toast.info(`Đang gọi API xóa ${rows.length} dòng...`)
+                toast.info(`Đang gọi API xử lý ${rows.length} dòng...`)
               }
-              onRowClick={(row) => handleView(row.quotationId)}
+              onRowClick={(row) => handleView(row.departmentId)}
               mobileCardRenderer={(
-                row: Row<QuotationResponseDto>,
+                row: Row<DepartmentResponse>,
                 { isSelected },
               ) => {
                 const item = row.original;
+                const statusStr = item.status === 1 ? "Active" : "Inactive";
+
                 return (
                   <div
                     className={`rounded-xl border bg-card p-4 shadow-sm transition-colors active:bg-secondary/40 ${
@@ -338,33 +333,28 @@ export default function QuotationListPage() {
                         : "border-border"
                     }`}
                   >
-                    {/* Row 1: Mã báo giá + Trạng thái */}
                     <div className="flex items-start justify-between gap-3 mb-3">
                       <div className="flex flex-col min-w-0">
                         <span className="font-semibold text-foreground truncate">
-                          {item.quotationNo}
+                          {item.departmentName}
                         </span>
-                        <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                          <CalendarDays className="w-3 h-3 shrink-0" />
-                          {formatDateTime(item.quotationDate)}
+                        <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-md w-fit mt-1.5">
+                          {item.departmentCode}
                         </span>
                       </div>
-                      <StatusBadge status={item.quatationStatus} />
+                      <StatusBadge status={statusStr} />
                     </div>
 
-                    {/* Row 2: Khách hàng + Tổng tiền */}
                     <div className="flex items-center justify-between gap-3 pt-3 border-t border-border">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center shrink-0">
-                          <Users className="w-3.5 h-3.5 text-muted-foreground" />
-                        </div>
-                        <span className="text-sm text-muted-foreground truncate">
-                          KH-{item.customerId}
+                      <div className="flex items-center gap-2 min-w-0 text-sm text-muted-foreground">
+                        <CalendarDays className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">
+                          Cập nhật:{" "}
+                          {item.modifiedDate
+                            ? formatDateTime(item.modifiedDate)
+                            : "N/A"}
                         </span>
                       </div>
-                      <span className="font-semibold text-primary text-sm whitespace-nowrap">
-                        {formatCurrency(item.totalAmount)}
-                      </span>
                     </div>
                   </div>
                 );
@@ -374,16 +364,28 @@ export default function QuotationListPage() {
         </Card>
 
         <ConfirmDialog
-          isOpen={!!deleteId}
-          onClose={() => setDeleteId(null)}
-          onConfirm={handleDeleteConfirm}
-          title="Xác nhận xóa báo giá"
-          description="Bạn có chắc chắn muốn xóa báo giá này không? Hành động này không thể hoàn tác và toàn bộ dữ liệu sẽ bị xóa khỏi hệ thống."
-          icon={<Trash2 className="w-5 h-5" />}
-          confirmText="Xóa báo giá"
-          variant="destructive"
-          titleClassName="text-destructive"
-          isLoading={isDeleting}
+          isOpen={!!toggleStatusId}
+          onClose={() => setToggleStatusId(null)}
+          onConfirm={handleToggleStatusConfirm}
+          title={isTogglingToLock ? "Khóa phòng ban" : "Mở khóa phòng ban"}
+          description={
+            isTogglingToLock
+              ? `Bạn có chắc chắn muốn khóa phòng ban "${currentToggleItem?.departmentName}"? Các nhân viên thuộc phòng ban này có thể bị ảnh hưởng.`
+              : `Xác nhận mở khóa hoạt động cho phòng ban "${currentToggleItem?.departmentName}"?`
+          }
+          icon={
+            isTogglingToLock ? (
+              <Lock className="w-5 h-5" />
+            ) : (
+              <Unlock className="w-5 h-5" />
+            )
+          }
+          confirmText={isTogglingToLock ? "Xác nhận khóa" : "Xác nhận mở"}
+          variant={isTogglingToLock ? "destructive" : "default"}
+          titleClassName={
+            isTogglingToLock ? "text-destructive" : "text-primary"
+          }
+          isLoading={isToggling}
         />
       </div>
     </>

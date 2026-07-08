@@ -12,6 +12,7 @@ using ContractManagement.Domains.Interfaces.Employee;
 using ContractManagement.Domains.Interfaces.File;
 using ContractManagement.Domains.Interfaces.Quotation;
 using ContractManagement.Domains.Mappings.Quotation;
+using ContractManagement.Domains.Services.Catalog;
 using ContractManagement.Domains.Services.Contract;
 using ContractManagement.Domains.Services.File;
 using ContractManagement.Domains.Services.Quotation;
@@ -189,6 +190,11 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     ICategoryService,
     CategoryService>();
+
+builder.Services.AddScoped<
+    IProductService,
+    ProductService>();
+
 #endregion
 
 #region 8. AutoMapper

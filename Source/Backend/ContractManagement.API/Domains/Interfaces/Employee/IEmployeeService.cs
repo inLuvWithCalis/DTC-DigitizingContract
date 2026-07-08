@@ -12,7 +12,9 @@ namespace ContractManagement.Domains.Interfaces.Employee
         Task<PagedResult<EmployeeResponse>> GetListAsync(
             int page,
             int pageSize,
-            string? keyword);
+            string? keyword,
+            byte? status,
+            DateTime? dateCreated);
 
         Task<EmployeeResponse> GetByIdAsync(int id);
 

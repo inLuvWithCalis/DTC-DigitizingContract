@@ -1,7 +1,7 @@
 ﻿using ContractManagement.API.Domains.DTOs.Requests.Department;
 using ContractManagement.API.Domains.DTOs.Responses.Department;
 using ContractManagement.API.Domains.Interfaces.Department;
-using ContractManagement.Common.Responses;
+using ContractManagement.API.Common.Responses;
 using ContractManagement.Filter;
 using Microsoft.AspNetCore.Mvc;
 

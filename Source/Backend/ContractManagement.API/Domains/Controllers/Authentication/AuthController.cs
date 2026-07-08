@@ -28,7 +28,7 @@ namespace ContractManagement.Domains.Controllers.Authentication
         }
 
         [HttpPost("login")]
-        public async Task<IActionResult> Login(LoginRequest request)
+        public async Task<IActionResult> Login([FromHeader(Name = "X-Tenant-Code")] string tenantCode,[FromBody] LoginRequest request)
         {
             // 0. Get current tenant (if needed for multi-tenancy)
             var tenant = _currentTenant.GetRequiredTenant();

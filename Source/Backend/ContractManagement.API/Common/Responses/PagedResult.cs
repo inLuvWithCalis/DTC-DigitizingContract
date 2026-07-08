@@ -1,4 +1,4 @@
-﻿namespace ContractManagement.Common.Responses
+﻿namespace ContractManagement.API.Common.Responses
 {
     /// <summary>
     /// Kết quả phân trang dùng chung cho các API dạng danh sách.

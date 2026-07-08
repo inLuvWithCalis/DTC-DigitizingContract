@@ -1,3 +1,5 @@
+using ContractManagement.API.Domains.Interfaces.Department;
+using ContractManagement.API.Domains.Services.Department;
 using ContractManagement.Domains.Interfaces.Contract;
 using ContractManagement.Domains.Interfaces.File;
 using ContractManagement.Domains.Interfaces.Quotation;
@@ -159,6 +161,10 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IContractAttachmentService,
     ContractAttachmentService>();
+
+builder.Services.AddScoped<
+    IDepartmentService,
+    DepartmentService>();
 
 #endregion
 

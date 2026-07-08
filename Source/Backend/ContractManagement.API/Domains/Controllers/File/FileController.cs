@@ -25,7 +25,7 @@ namespace ContractManagement.Domains.Controllers.File
 
         /// <summary>
         /// Upload file generic.
-        /// Dùng form-data:
+        /// Dùng form-data
         /// - file
         /// - objectType
         /// - objectId

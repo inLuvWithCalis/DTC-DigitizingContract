@@ -1,6 +1,8 @@
+using ContractManagement.API.Domains.Interfaces.Catalog;
 using ContractManagement.API.Domains.Interfaces.Customer;
 using ContractManagement.API.Domains.Interfaces.CustomerInteraction;
 using ContractManagement.API.Domains.Interfaces.Department;
+using ContractManagement.API.Domains.Services.Catalog;
 using ContractManagement.API.Domains.Services.Customer;
 using ContractManagement.API.Domains.Services.CustomerInteraction;
 using ContractManagement.API.Domains.Services.Department;
@@ -184,6 +186,9 @@ builder.Services.AddScoped<
     ICustomerInteractionService,
     CustomerInteractionService>();
 
+builder.Services.AddScoped<
+    ICategoryService,
+    CategoryService>();
 #endregion
 
 #region 8. AutoMapper

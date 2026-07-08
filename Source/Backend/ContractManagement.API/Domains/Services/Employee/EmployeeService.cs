@@ -33,7 +33,9 @@ namespace ContractManagement.API.Domains.Services.Employee
         public async Task<PagedResult<EmployeeResponse>> GetListAsync(
             int page,
             int pageSize,
-            string? keyword)
+            string? keyword,
+            byte? status,
+            DateTime? dateCreated)
         {
             if (page <= 0) page = 1;
             if (pageSize <= 0) pageSize = 20;
@@ -48,6 +50,17 @@ namespace ContractManagement.API.Domains.Services.Employee
                     (x.EmployeeFullName != null && x.EmployeeFullName.Contains(keyword)) ||
                     (x.EmployeeAccount != null && x.EmployeeAccount.Contains(keyword)) ||
                     (x.EmployeeEmail != null && x.EmployeeEmail.Contains(keyword)));
+            }
+
+            if (status.HasValue)
+            {
+                query = query.Where(x => x.Status == status.Value);
+            }
+
+            if (dateCreated.HasValue)
+            {
+                var date = dateCreated.Value.Date;
+                query = query.Where(x => x.DateCreated >= date && x.DateCreated < date.AddDays(1));
             }
 
             var totalCount = await query.CountAsync();

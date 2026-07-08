@@ -1,4 +1,8 @@
+using ContractManagement.API.Domains.Interfaces.Customer;
+using ContractManagement.API.Domains.Interfaces.CustomerInteraction;
 using ContractManagement.API.Domains.Interfaces.Department;
+using ContractManagement.API.Domains.Services.Customer;
+using ContractManagement.API.Domains.Services.CustomerInteraction;
 using ContractManagement.API.Domains.Services.Department;
 using ContractManagement.API.Domains.Services.Employee;
 using ContractManagement.Domains.Interfaces.Contract;
@@ -174,6 +178,14 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IEmployeeService,
     EmployeeService>();
+
+builder.Services.AddScoped<
+    ICustomerService,
+    CustomerService>();
+
+builder.Services.AddScoped<
+    ICustomerInteractionService,
+    CustomerInteractionService>();
 
 #endregion
 

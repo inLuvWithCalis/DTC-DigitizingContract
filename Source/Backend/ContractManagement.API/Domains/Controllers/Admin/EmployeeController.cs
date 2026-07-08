@@ -34,12 +34,16 @@ namespace ContractManagement.Domains.Controllers.Admin
         public async Task<IActionResult> GetList(
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20,
-            [FromQuery] string? keyword = null)
+            [FromQuery] string? keyword = null,
+            [FromQuery] byte? status = null,
+            [FromQuery] DateTime? dateCreated = null)
         {
             var result = await _service.GetListAsync(
                 page,
                 pageSize,
-                keyword);
+                keyword,
+                status,
+                dateCreated);
 
             return Ok(
                 ApiResponse<PagedResult<EmployeeResponse>>.Ok(

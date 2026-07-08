@@ -1,6 +1,8 @@
+using ContractManagement.API.Domains.Interfaces.Catalog;
 using ContractManagement.API.Domains.Interfaces.Customer;
 using ContractManagement.API.Domains.Interfaces.CustomerInteraction;
 using ContractManagement.API.Domains.Interfaces.Department;
+using ContractManagement.API.Domains.Services.Catalog;
 using ContractManagement.API.Domains.Services.Customer;
 using ContractManagement.API.Domains.Services.CustomerInteraction;
 using ContractManagement.API.Domains.Services.Department;
@@ -10,6 +12,7 @@ using ContractManagement.Domains.Interfaces.Employee;
 using ContractManagement.Domains.Interfaces.File;
 using ContractManagement.Domains.Interfaces.Quotation;
 using ContractManagement.Domains.Mappings.Quotation;
+using ContractManagement.Domains.Services.Catalog;
 using ContractManagement.Domains.Services.Contract;
 using ContractManagement.Domains.Services.File;
 using ContractManagement.Domains.Services.Quotation;
@@ -186,6 +189,14 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     ICustomerInteractionService,
     CustomerInteractionService>();
+
+builder.Services.AddScoped<
+    ICategoryService,
+    CategoryService>();
+
+builder.Services.AddScoped<
+    IProductService,
+    ProductService>();
 
 #endregion
 

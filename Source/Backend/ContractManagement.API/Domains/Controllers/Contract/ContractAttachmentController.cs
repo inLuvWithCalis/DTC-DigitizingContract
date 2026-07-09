@@ -1,4 +1,4 @@
-﻿using ContractManagement.Common.Responses;
+﻿using ContractManagement.API.Common.Responses;
 using ContractManagement.Domains.DTOs.Requests.Contract;
 using ContractManagement.Domains.DTOs.Responses.Contract;
 using ContractManagement.Domains.Interfaces.Contract;

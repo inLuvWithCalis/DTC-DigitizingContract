@@ -46,7 +46,11 @@ interface DataTableProps<TData, TValue> {
   searchPlaceholder?: string;
   filterSlot?: React.ReactNode;
   isLoading?: boolean;
-  onDeleteMany?: (selectedRows: TData[]) => void;
+  onSelectMany?: (selectedRows: TData[]) => void;
+  bulkActions?: (
+    selectedRows: TData[],
+    resetSelection: () => void,
+  ) => React.ReactNode;
   onRowClick?: (row: TData) => void;
   mobileCardRenderer?: (
     row: Row<TData>,
@@ -61,7 +65,8 @@ export function DataTable<TData, TValue>({
   searchPlaceholder = "Tìm kiếm...",
   filterSlot,
   isLoading = false,
-  onDeleteMany,
+  onSelectMany,
+  bulkActions,
   onRowClick,
   mobileCardRenderer,
 }: DataTableProps<TData, TValue>) {
@@ -251,7 +256,7 @@ export function DataTable<TData, TValue>({
           {/* Long-press hint — shown when NOT in selection mode */}
           {!isSelectionMode &&
             table.getRowModel().rows?.length > 0 &&
-            onDeleteMany && (
+            (bulkActions || onSelectMany) && (
               <p className="text-center text-xs text-muted-foreground/60 mt-1 select-none">
                 Nhấn giữ để chọn nhiều dòng
               </p>
@@ -259,7 +264,7 @@ export function DataTable<TData, TValue>({
         </div>
       ) : (
         /* ────────────── DESKTOP TABLE VIEW ────────────── */
-        <div className="relative w-full overflow-auto rounded-md border border-border">
+        <div className="relative w-full overflow-auto rounded-md border border-border flex-1">
           <Table>
             <TableHeader className="bg-secondary/50">
               {table.getHeaderGroups().map((headerGroup) => (
@@ -322,7 +327,7 @@ export function DataTable<TData, TValue>({
       )}
 
       {/* 3. BULK ACTION (Xóa nhiều) */}
-      {selectedRows.length > 0 && onDeleteMany && (
+      {selectedRows.length > 0 && (bulkActions || onSelectMany) && (
         <div className="bg-primary/5 border border-primary/20 text-primary px-3 py-2.5 mt-4 rounded-xl flex flex-col gap-3 text-sm shadow-sm animate-in fade-in slide-in-from-bottom-2 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-3">
           <span>
             Đã chọn:{" "}
@@ -340,17 +345,24 @@ export function DataTable<TData, TValue>({
             >
               Hủy bỏ
             </Button>
-            <Button
-              size="sm"
-              variant="destructive"
-              className="h-9 shadow-sm flex-1 sm:flex-none"
-              onClick={() => {
-                onDeleteMany(selectedRows.map((row) => row.original));
-                table.resetRowSelection();
-              }}
-            >
-              Xóa tất cả
-            </Button>
+            {bulkActions ? (
+              bulkActions(
+                selectedRows.map((row) => row.original),
+                () => table.resetRowSelection(),
+              )
+            ) : (
+              <Button
+                size="sm"
+                variant="destructive"
+                className="h-9 shadow-sm flex-1 sm:flex-none"
+                onClick={() => {
+                  onSelectMany?.(selectedRows.map((row) => row.original));
+                  table.resetRowSelection();
+                }}
+              >
+                Xóa tất cả
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -358,7 +370,7 @@ export function DataTable<TData, TValue>({
       {/* 4. PAGINATION */}
       {!isLoading && data.length > 0 && (
         <div
-          className={`flex flex-col gap-3 py-4 mt-auto border-t border-transparent flex-1 sm:flex-row sm:items-end sm:justify-between ${isMobile && "justify-end items-center"}`}
+          className={`flex flex-col gap-3 py-4 mt-auto border-t border-transparent sm:flex-row sm:items-center sm:justify-between ${isMobile && "justify-end items-center"}`}
         >
           <div className="text-sm text-muted-foreground text-center sm:text-left">
             Hiển thị{" "}

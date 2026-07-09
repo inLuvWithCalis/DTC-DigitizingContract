@@ -30,6 +30,10 @@ import { StatusBadge } from "@/components/ui/custom/status-badge";
 import { ConfirmDialog } from "@/components/ui/custom/confirm-dialog";
 import { applyTableFilters } from "@/lib/filter-utils";
 import { SplitActionMenu } from "@/components/ui/custom/split-action-menu";
+import {
+  SummaryCardItem,
+  SummaryCards,
+} from "@/components/ui/custom/summary-cards";
 
 export default function QuotationListPage() {
   const router = useRouter();
@@ -236,15 +240,6 @@ export default function QuotationListPage() {
     [loadingId],
   );
 
-  const totalQuotations = quotations.length;
-  const pendingCount = quotations.filter(
-    (q) => q.quatationStatus === "Pending",
-  ).length;
-  const totalValue = quotations.reduce(
-    (acc, curr) => acc + (curr.totalAmount || 0),
-    0,
-  );
-
   const QUOTATION_STATUS_OPTIONS = [
     { label: "Tất cả trạng thái", value: "All" },
     { label: "Đã duyệt", value: "Approved" },
@@ -264,9 +259,43 @@ export default function QuotationListPage() {
       <DateRangeFilter dateRange={dateRange} onChange={setDateRange} />
     </>
   );
+
+  const totalQuotations = quotations.length;
+  const pendingCount = quotations.filter(
+    (q) => q.quatationStatus === "Pending",
+  ).length;
+  const totalValue = quotations.reduce(
+    (acc, curr) => acc + (curr.totalAmount || 0),
+    0,
+  );
+
+  const summaryItems: SummaryCardItem[] = [
+    {
+      title: "Tổng báo giá",
+      value: totalQuotations,
+      icon: <FileText className="w-6 h-6" />,
+      iconWrapperClassName: "bg-primary/10 text-primary",
+    },
+    {
+      title: "Chờ phê duyệt",
+      value: pendingCount,
+      icon: <Clock className="w-6 h-6" />,
+      iconWrapperClassName:
+        "bg-amber-500/10 text-amber-600 dark:text-amber-500",
+    },
+    {
+      title: "Tổng giá trị",
+      value: formatCurrency(totalValue),
+      icon: <DollarSign className="w-6 h-6" />,
+      iconWrapperClassName:
+        "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500",
+      valueClassName: "text-xl",
+    },
+  ];
+
   return (
     <>
-      <Header title="Quản lý Hợp đồng & Báo giá" />
+      <Header />
 
       <div className="grow overflow-y-auto p-6 lg:p-10 space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -282,55 +311,7 @@ export default function QuotationListPage() {
             <FileText className="w-4 h-4 mr-2" /> Tạo báo giá mới
           </Button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="bg-card border-border shadow-sm">
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="p-3 bg-primary/10 text-primary rounded-lg">
-                <FileText className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground font-medium">
-                  Tổng báo giá
-                </p>
-                <h3 className="text-2xl font-bold text-foreground">
-                  {totalQuotations}
-                </h3>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card border-border shadow-sm">
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="p-3 bg-amber-500/10 text-amber-600 rounded-lg dark:text-amber-500">
-                <Clock className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground font-medium">
-                  Chờ phê duyệt
-                </p>
-                <h3 className="text-2xl font-bold text-foreground">
-                  {pendingCount}
-                </h3>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card border-border shadow-sm">
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="p-3 bg-emerald-500/10 text-emerald-600 rounded-lg dark:text-emerald-500">
-                <DollarSign className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground font-medium">
-                  Tổng giá trị
-                </p>
-                <h3 className="text-xl font-bold text-foreground">
-                  {formatCurrency(totalValue)}
-                </h3>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <SummaryCards items={summaryItems} />
         <Card className="border-border shadow-sm bg-card min-h-[500px] flex flex-col gap-0 p-0">
           <CardContent className="p-4 flex flex-col justify-between flex-1 pb-0">
             <DataTable
@@ -340,7 +321,7 @@ export default function QuotationListPage() {
               searchKey="quotationNo"
               searchPlaceholder="Tìm mã báo giá..."
               filterSlot={CustomFilters}
-              onDeleteMany={(rows) =>
+              onSelectMany={(rows) =>
                 toast.info(`Đang gọi API xóa ${rows.length} dòng...`)
               }
               onRowClick={(row) => handleView(row.quotationId)}

@@ -25,20 +25,23 @@ export interface CreateQuotationRequestDto {
   quatationStatus: string;
   items: Omit<QuotationItemResponse, "amount" | "productName">[];
 }
+
+const BASE_URL = "/Quotation";
+
 export const quotationApi = {
   getAll: () => {
-    return axiosClient.get<any, QuotationResponseDto[]>("/Quotation");
+    return axiosClient.get<any, QuotationResponseDto[]>(BASE_URL);
   },
 
   getById: (id: number) => {
-    return axiosClient.get<any, QuotationResponseDto>(`/Quotation/${id}`);
+    return axiosClient.get<any, QuotationResponseDto>(`${BASE_URL}/${id}`);
   },
 
   create: (data: CreateQuotationRequestDto) => {
-    return axiosClient.post<any, QuotationResponseDto>("/Quotation", data);
+    return axiosClient.post<any, QuotationResponseDto>(BASE_URL, data);
   },
 
   delete: (id: number) => {
-    return axiosClient.delete<any, void>(`/Quotation/${id}`);
+    return axiosClient.delete<any, void>(`${BASE_URL}/${id}`);
   },
 };

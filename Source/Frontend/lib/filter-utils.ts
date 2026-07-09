@@ -25,6 +25,7 @@ export function applyTableFilters<T>({
   if (!Array.isArray(data)) {
     return [];
   }
+
   return data.filter((item) => {
     // 1. Lọc theo trạng thái (Nếu có truyền statusKey và statusValue)
     let matchesStatus = true;

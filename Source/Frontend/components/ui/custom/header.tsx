@@ -15,7 +15,7 @@ import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/hooks/use-auth-store";
 import { authApi } from "@/services/auth-api";
 
-export function Header({ title }: { title: string }) {
+export function Header({ title }: { title?: string }) {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const { logout } = useAuthStore();

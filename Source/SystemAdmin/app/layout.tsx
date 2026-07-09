@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "eContract Hub | Quản lý Hợp đồng",
+  title: "System Admin | eContract Hub | Quản lý Hợp đồng",
   description:
     "Nền tảng số hóa, lưu trữ và quản lý hợp đồng doanh nghiệp (Mua, Bán, Phụ lục, Bàn giao).",
   generator: "Next.js",

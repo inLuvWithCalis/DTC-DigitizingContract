@@ -11,6 +11,7 @@ import {
   ShoppingCart,
   Users,
   Settings,
+  Building2,
   LogOut,
   User,
   ChevronLeft,
@@ -41,6 +42,7 @@ export function Sidebar() {
 
   const navItems = [
     { label: "Tổng quan", icon: LayoutDashboard, href: "/dashboard" },
+    { label: "Quản lý tenant", icon: Building2, href: "/tenants" },
     { label: "Hợp đồng Bán", icon: FileSignature, href: "/dashboard/sales" },
     { label: "Hợp đồng Mua", icon: ShoppingCart, href: "/dashboard/purchases" },
     { label: "Đối tác", icon: Users, href: "/dashboard/partners" },

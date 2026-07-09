@@ -77,7 +77,7 @@ export default function TenantsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="tenantCode">Mã tenant <span className="text-destructive">*</span></Label>
-                  <Input id="tenantCode" value={tenantCode} onChange={(event) => setTenantCode(event.target.value.toLowerCase().replace(/\s+/g, "-"))} placeholder="Ví dụ: dtc-company" minLength={3} maxLength={50} pattern="[a-z0-9-]{3,50}" aria-invalid={codeIsInvalid} disabled={isSubmitting} required />
+                  <Input id="tenantCode" value={tenantCode} onChange={(event) => setTenantCode(event.target.value.toLowerCase().replace(/\s+/g, "-"))} placeholder="Ví dụ: dtc-company" minLength={3} maxLength={50} pattern="[a-z0-9\\-]{3,50}" aria-invalid={codeIsInvalid} disabled={isSubmitting} required />
                   <p className={codeIsInvalid ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>3–50 ký tự; chỉ dùng chữ thường, số và dấu gạch ngang.</p>
                 </div>
                 {error && <Alert variant="destructive"><AlertTitle>Tạo tenant không thành công</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}

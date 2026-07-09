@@ -18,36 +18,101 @@ public static class FrontendLauncher
 
         _started = true;
 
-        // Nếu frontend đã chạy thì thôi
-        if (IsPortOpen("localhost", 3000))
-            return;
+        var sourcePath = Path.GetFullPath(
+            Path.Combine(
+                AppContext.BaseDirectory,
+                "..",
+                "..",
+                "..",
+                "..",
+                ".."));
 
-        var frontendPath = Path.GetFullPath(
-      Path.Combine(
-          AppContext.BaseDirectory,
-          "..",
-          "..",
-          "..",
-          "..",
-          "..",
-          "Frontend"));
+        var tenantFrontendPath = Path.Combine(
+            sourcePath,
+            "Frontend");
 
-        var process = new Process();
-        Console.WriteLine(frontendPath);
-        process.StartInfo.FileName = "cmd.exe";
-        process.StartInfo.Arguments = "/c npm run dev";
-        process.StartInfo.WorkingDirectory = frontendPath;
-        process.StartInfo.UseShellExecute = true;
+        var systemAdminFrontendPath = Path.Combine(
+            sourcePath,
+            "SystemAdmin");
 
-        process.Start();
+        StartFrontend(
+            name: "Tenant Frontend",
+            frontendPath: tenantFrontendPath,
+            port: 3000);
+
+        StartFrontend(
+            name: "System Admin Frontend",
+            frontendPath: systemAdminFrontendPath,
+            port: 3001);
     }
 
-    private static bool IsPortOpen(string host, int port)
+    private static void StartFrontend(
+        string name,
+        string frontendPath,
+        int port)
+    {
+        if (IsPortOpen("localhost", port))
+        {
+            Console.WriteLine(
+                $"[{name}] Port {port} đang chạy, bỏ qua khởi động.");
+
+            return;
+        }
+
+        if (!Directory.Exists(frontendPath))
+        {
+            Console.WriteLine(
+                $"[{name}] Không tìm thấy thư mục: {frontendPath}");
+
+            return;
+        }
+
+        var packageJsonPath = Path.Combine(
+            frontendPath,
+            "package.json");
+
+        if (!File.Exists(packageJsonPath))
+        {
+            Console.WriteLine(
+                $"[{name}] Không tìm thấy package.json: {packageJsonPath}");
+
+            return;
+        }
+
+        try
+        {
+            var process = new Process();
+
+            process.StartInfo.FileName = "cmd.exe";
+            process.StartInfo.Arguments = "/c npm run dev";
+            process.StartInfo.WorkingDirectory = frontendPath;
+            process.StartInfo.UseShellExecute = true;
+
+            process.Start();
+
+            Console.WriteLine(
+                $"[{name}] Đã khởi động tại port {port}.");
+
+            Console.WriteLine(
+                $"[{name}] Thư mục: {frontendPath}");
+        }
+        catch (Exception exception)
+        {
+            Console.WriteLine(
+                $"[{name}] Không thể khởi động: {exception.Message}");
+        }
+    }
+
+    private static bool IsPortOpen(
+        string host,
+        int port)
     {
         try
         {
             using var client = new TcpClient();
+
             client.Connect(host, port);
+
             return true;
         }
         catch

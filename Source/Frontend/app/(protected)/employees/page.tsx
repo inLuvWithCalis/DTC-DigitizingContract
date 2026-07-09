@@ -361,7 +361,7 @@ export default function EmployeeListPage() {
     <>
       <Header />
 
-      <div className="grow overflow-y-auto p-6 lg:p-10 space-y-6">
+      <div className="grow overflow-y-auto p-2 lg:p-10 space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">

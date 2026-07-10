@@ -31,19 +31,9 @@ namespace ContractManagement.Domains.Controllers.Admin
         /// GET /api/admin/employees?page=1&pageSize=20&keyword=an
         /// </summary>
         [HttpGet]
-        public async Task<IActionResult> GetList(
-            [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 20,
-            [FromQuery] string? keyword = null,
-            [FromQuery] byte? status = null,
-            [FromQuery] DateTime? dateCreated = null)
+        public async Task<IActionResult> GetList([FromQuery] EmployeeFilterRequest filter)
         {
-            var result = await _service.GetListAsync(
-                page,
-                pageSize,
-                keyword,
-                status,
-                dateCreated);
+            var result = await _service.GetListAsync(filter);
 
             return Ok(
                 ApiResponse<PagedResult<EmployeeResponse>>.Ok(

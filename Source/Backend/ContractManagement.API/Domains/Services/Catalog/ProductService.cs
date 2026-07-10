@@ -23,6 +23,7 @@ namespace ContractManagement.Domains.Services.Catalog
             _dbContext = dbContext;
         }
 
+
         public async Task<PagedResult<ProductResponse>> GetListAsync(ProductFilterRequest filter)
         {
             if (filter.Page <= 0) filter.Page = 1;
@@ -49,6 +50,9 @@ namespace ContractManagement.Domains.Services.Catalog
             {
                 query = query.Where(x => x.Status == filter.Status.Value);
             }
+
+            // Apply date filters
+            query = ApplyDateFilters(query, filter.FromDate, filter.ToDate);
 
             var totalCount = await query.CountAsync();
 
@@ -287,6 +291,19 @@ namespace ContractManagement.Domains.Services.Catalog
             return categories.ToDictionary(
                 x => (int)x.CategoryId,
                 x => x.CategoryName ?? string.Empty);
+        }
+
+        private IQueryable<TblProduct> ApplyDateFilters(IQueryable<TblProduct> query, DateTime? fromDate, DateTime? toDate)
+        {
+            if (!fromDate.HasValue && !toDate.HasValue)
+            {
+                return query;
+            }
+
+            var from = fromDate?.Date ?? DateTime.MinValue;
+            var to = toDate?.Date.AddDays(1) ?? DateTime.MaxValue;
+
+            return query.Where(x => x.ProductCreatedDate >= from && x.ProductCreatedDate < to);
         }
 
         private static ProductResponse MapToResponse(

@@ -9,12 +9,7 @@ namespace ContractManagement.Domains.Interfaces.Employee
     /// </summary>
     public interface IEmployeeService
     {
-        Task<PagedResult<EmployeeResponse>> GetListAsync(
-            int page,
-            int pageSize,
-            string? keyword,
-            byte? status,
-            DateTime? dateCreated);
+        Task<PagedResult<EmployeeResponse>> GetListAsync(EmployeeFilterRequest filter);
 
         Task<EmployeeResponse> GetByIdAsync(int id);
 

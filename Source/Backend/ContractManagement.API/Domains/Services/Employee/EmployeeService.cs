@@ -30,21 +30,16 @@ namespace ContractManagement.API.Domains.Services.Employee
             _passwordHasher = passwordHasher;
         }
 
-        public async Task<PagedResult<EmployeeResponse>> GetListAsync(
-            int page,
-            int pageSize,
-            string? keyword,
-            byte? status,
-            DateTime? dateCreated)
+        public async Task<PagedResult<EmployeeResponse>> GetListAsync(EmployeeFilterRequest filter)
         {
-            if (page <= 0) page = 1;
-            if (pageSize <= 0) pageSize = 20;
+            if (filter.Page <= 0) filter.Page = 1;
+            if (filter.PageSize <= 0) filter.PageSize = 20;
 
             var query = _dbContext.TblEmployees.AsNoTracking();
 
-            if (!string.IsNullOrWhiteSpace(keyword))
+            if (!string.IsNullOrWhiteSpace(filter.Keyword))
             {
-                keyword = keyword.Trim();
+                var keyword = filter.Keyword.Trim();
 
                 query = query.Where(x =>
                     (x.EmployeeFullName != null && x.EmployeeFullName.Contains(keyword)) ||
@@ -52,23 +47,19 @@ namespace ContractManagement.API.Domains.Services.Employee
                     (x.EmployeeEmail != null && x.EmployeeEmail.Contains(keyword)));
             }
 
-            if (status.HasValue)
+            if (filter.Status.HasValue)
             {
-                query = query.Where(x => x.Status == status.Value);
+                query = query.Where(x => x.Status == filter.Status.Value);
             }
 
-            if (dateCreated.HasValue)
-            {
-                var date = dateCreated.Value.Date;
-                query = query.Where(x => x.DateCreated >= date && x.DateCreated < date.AddDays(1));
-            }
+            query = ApplyDateFilter(query, filter.FromDate, filter.ToDate);
 
             var totalCount = await query.CountAsync();
 
             var employees = await query
                 .OrderByDescending(x => x.EmployeeId)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
+                .Skip((filter.Page - 1) * filter.PageSize)
+                .Take(filter.PageSize)
                 .ToListAsync();
 
             var departmentNames = await GetDepartmentNamesAsync(employees);
@@ -85,8 +76,8 @@ namespace ContractManagement.API.Domains.Services.Employee
                     .ToList(),
 
                 TotalCount = totalCount,
-                Page = page,
-                PageSize = pageSize
+                Page = filter.Page,
+                PageSize = filter.PageSize
             };
         }
 
@@ -273,6 +264,19 @@ namespace ContractManagement.API.Domains.Services.Employee
                 .ToDictionaryAsync(
                     x => (int)x.DepartmentId,
                     x => x.DepartmentName);
+        }
+
+        private IQueryable<TblEmployee> ApplyDateFilter(IQueryable<TblEmployee> query, DateTime? fromDate, DateTime? toDate)
+        {
+            if (!fromDate.HasValue && !toDate.HasValue)
+            {
+                return query;
+            }
+
+            var from = fromDate?.Date ?? DateTime.MinValue;
+            var to = toDate?.Date.AddDays(1) ?? DateTime.MaxValue;
+
+            return query.Where(x => x.DateCreated >= from && x.DateCreated < to);
         }
 
         private static EmployeeResponse MapToResponse(

@@ -233,16 +233,25 @@ export function ProductFormModal({
           onValueChange={setActiveTab}
           className="w-full mt-2"
         >
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="basic" className="flex items-center gap-2">
+          <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 h-auto gap-1 sm:gap-0">
+            <TabsTrigger
+              value="basic"
+              className="flex items-center justify-start sm:justify-center gap-2"
+            >
               <Package className="w-4 h-4" />
               <span>Thông tin cơ bản</span>
             </TabsTrigger>
-            <TabsTrigger value="details" className="flex items-center gap-2">
+            <TabsTrigger
+              value="details"
+              className="flex items-center justify-start sm:justify-center gap-2"
+            >
               <FileText className="w-4 h-4" />
               <span>Chi tiết & Đặc điểm</span>
             </TabsTrigger>
-            <TabsTrigger value="seo" className="flex items-center gap-2">
+            <TabsTrigger
+              value="seo"
+              className="flex items-center justify-start sm:justify-center gap-2"
+            >
               <Globe className="w-4 h-4" />
               <span>SEO & Metadata</span>
             </TabsTrigger>

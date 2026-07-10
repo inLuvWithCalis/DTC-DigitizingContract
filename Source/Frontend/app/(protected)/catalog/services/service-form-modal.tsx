@@ -13,12 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Package, DollarSign, Globe } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -228,9 +223,7 @@ export function ServiceFormModal({
       const message =
         error?.response?.data?.message ||
         error?.message ||
-        (isEditMode
-          ? "Không thể cập nhật dịch vụ"
-          : "Không thể thêm dịch vụ");
+        (isEditMode ? "Không thể cập nhật dịch vụ" : "Không thể thêm dịch vụ");
       toast.error(message);
     } finally {
       setIsSaving(false);
@@ -257,17 +250,30 @@ export function ServiceFormModal({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mt-2">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="basic" className="flex items-center gap-2">
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="w-full mt-2"
+        >
+          <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 h-auto gap-1 sm:gap-0">
+            <TabsTrigger
+              value="basic"
+              className="flex items-center justify-start sm:justify-center gap-2"
+            >
               <Package className="w-4 h-4" />
               <span>Thông tin cơ bản</span>
             </TabsTrigger>
-            <TabsTrigger value="pricing_details" className="flex items-center gap-2">
+            <TabsTrigger
+              value="pricing_details"
+              className="flex items-center justify-start sm:justify-center gap-2"
+            >
               <DollarSign className="w-4 h-4" />
               <span>Đơn giá & Chi tiết</span>
             </TabsTrigger>
-            <TabsTrigger value="seo" className="flex items-center gap-2">
+            <TabsTrigger
+              value="seo"
+              className="flex items-center justify-start sm:justify-center gap-2"
+            >
               <Globe className="w-4 h-4" />
               <span>SEO & Metadata</span>
             </TabsTrigger>
@@ -488,7 +494,9 @@ export function ServiceFormModal({
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="titleBrowser">Tiêu đề trình duyệt (Title Browser)</Label>
+              <Label htmlFor="titleBrowser">
+                Tiêu đề trình duyệt (Title Browser)
+              </Label>
               <Input
                 id="titleBrowser"
                 placeholder="Tiêu đề hiển thị trên thanh tab trình duyệt / Google..."
@@ -512,7 +520,9 @@ export function ServiceFormModal({
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="metaDescription">Mô tả SEO (Meta Description)</Label>
+              <Label htmlFor="metaDescription">
+                Mô tả SEO (Meta Description)
+              </Label>
               <Textarea
                 id="metaDescription"
                 placeholder="Mô tả chuẩn SEO hiển thị trên kết quả tìm kiếm..."

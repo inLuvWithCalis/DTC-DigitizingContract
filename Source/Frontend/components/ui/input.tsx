@@ -33,6 +33,10 @@ function Input({
   }, [value]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // HTML maxLength doesn't work on type="number", enforce it manually
+    if (type === "number" && maxLength && e.target.value.length > maxLength) {
+      e.target.value = e.target.value.slice(0, maxLength);
+    }
     setCharCount(e.target.value.length);
     if (onChange) {
       onChange(e);

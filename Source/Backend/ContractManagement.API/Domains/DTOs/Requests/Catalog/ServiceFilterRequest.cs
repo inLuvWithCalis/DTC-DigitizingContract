@@ -1,9 +1,9 @@
 ﻿namespace ContractManagement.API.Domains.DTOs.Requests.Catalog
 {
     /// <summary>
-    /// Filter danh sách sản phẩm.
+    /// Filter danh sách dịch vụ.
     /// </summary>
-    public class ProductFilterRequest
+    public class ServiceFilterRequest
     {
         public int Page { get; set; } = 1;
 
@@ -11,9 +11,11 @@
 
         public string? Keyword { get; set; }
 
-        public int? CategoryId { get; set; }
+        public byte? ServiceTypeId { get; set; }
 
         public byte? Status { get; set; }
+
+        public int? LangId { get; set; }
 
         public DateTime? FromDate { get; set; }
 

@@ -198,6 +198,14 @@ builder.Services.AddScoped<
     IProductService,
     ProductService>();
 
+builder.Services.AddScoped<
+    IServiceTypeService,
+    ServiceTypeService>();
+
+builder.Services.AddScoped<
+    IServiceService,
+    ServiceService>();
+
 #endregion
 
 #region 8. AutoMapper

@@ -33,6 +33,9 @@ function Input({
   }, [value]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (type === "number" && maxLength && e.target.value.length > maxLength) {
+      e.target.value = e.target.value.slice(0, maxLength);
+    }
     setCharCount(e.target.value.length);
     if (onChange) {
       onChange(e);
@@ -71,26 +74,33 @@ function Input({
           "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
           "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
           "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
-          maxLength ? "pr-20" : "pr-8",
           className,
+          showClearButton && maxLength
+            ? "pr-16"
+            : maxLength
+              ? "pr-14"
+              : showClearButton
+                ? "pr-9"
+                : "pr-3",
         )}
         {...props}
       />
 
-      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5 z-10 bg-transparent">
         {showClearButton && (
           <button
             type="button"
             onClick={handleClear}
-            className="p-1 hover:bg-muted rounded-full text-muted-foreground hover:text-foreground transition-colors"
+            className="p-1 hover:bg-muted rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0 flex items-center justify-center"
             aria-label="Clear input"
+            title="Xóa nội dung"
           >
             <X className="w-3.5 h-3.5" />
           </button>
         )}
 
         {maxLength && (
-          <div className="text-[11px] font-medium text-muted-foreground/70 min-w-[24px] text-center">
+          <div className="text-[11px] font-medium text-muted-foreground/70 min-w-[28px] text-right select-none shrink-0">
             {charCount}/{maxLength}
           </div>
         )}

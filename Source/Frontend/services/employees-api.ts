@@ -14,7 +14,7 @@ export enum EmployeeStatus {
   Inactive = 0,
 }
 
-export const getEmployeeTypeLabel = (type?: EmployeeType) => {
+export const getEmployeeTypeLabel = (type?: EmployeeType | number | null) => {
   switch (type) {
     case EmployeeType.Sale:
       return "Nhân viên Sale";
@@ -33,14 +33,27 @@ export const getEmployeeTypeLabel = (type?: EmployeeType) => {
   }
 };
 
-export const getEmployeeStatusLabel = (status?: number) => {
+export const getEmployeeStatusLabel = (status?: number | null) => {
   switch (status) {
     case EmployeeStatus.Active:
       return "Đang hoạt động";
     case EmployeeStatus.Inactive:
       return "Tạm khóa";
+    default:
+      return "Chưa xác định";
   }
 };
+
+export interface EmployeeFilterParams {
+  page?: number;
+  pageSize?: number;
+  keyword?: string;
+  categoryId?: number;
+  status?: number;
+  fromDate?: string;
+  toDate?: string;
+  dateCreated?: string;
+}
 
 export interface CreateEmployeeRequest {
   employeeCode?: string | null;
@@ -68,15 +81,19 @@ export interface ChangePasswordRequest {
 
 export interface EmployeeResponse {
   employeeId: number;
-  employeeCode?: string;
-  employeeAccount: string;
-  employeeFullName: string;
-  employeeMobile?: string;
-  employeeEmail?: string;
-  departmentId?: number;
-  employeeType?: EmployeeType;
-  status?: number;
-  createdDate?: string;
+  employeeCode?: string | null;
+  employeeAccount?: string | null;
+  employeeFullName?: string | null;
+  employeeMobile?: string | null;
+  employeeEmail?: string | null;
+  departmentId?: number | null;
+  departmentName?: string | null;
+  employeeType?: EmployeeType | number | null;
+  employeeTypeName?: string | null;
+  status?: number | null;
+  dateCreated?: string | null;
+  createdDate?: string | null;
+  dateModified?: string | null;
 }
 
 export interface PagedResult<T> {
@@ -90,13 +107,7 @@ export interface PagedResult<T> {
 const BASE_URL = "/admin/employees";
 
 export const employeeApi = {
-  getList: (params: {
-    page?: number;
-    pageSize?: number;
-    keyword?: string;
-    status?: number;
-    dateCreated?: string;
-  }) => {
+  getList: (params: EmployeeFilterParams) => {
     return axiosClient.get<any, PagedResult<EmployeeResponse>>(BASE_URL, {
       params,
     });

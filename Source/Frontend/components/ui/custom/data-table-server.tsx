@@ -94,14 +94,28 @@ export function DataTable<TData, TValue>({
 
   const [localSearch, setLocalSearch] = useState(searchValue);
 
+  const triggerSearch = useCallback(
+    (newVal?: string) => {
+      const targetSearch = newVal !== undefined ? newVal : localSearch;
+      if (onSearchChange && targetSearch !== searchValue) {
+        onSearchChange(targetSearch);
+        if (onPaginationChange && pagination && pagination.pageIndex !== 0) {
+          onPaginationChange({
+            ...pagination,
+            pageIndex: 0,
+          });
+        }
+      }
+    },
+    [localSearch, onSearchChange, searchValue, onPaginationChange, pagination],
+  );
+
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (onSearchChange && localSearch !== searchValue) {
-        onSearchChange(localSearch);
-      }
+      triggerSearch();
     }, 500);
     return () => clearTimeout(timer);
-  }, [localSearch, onSearchChange, searchValue]);
+  }, [triggerSearch]);
 
   useEffect(() => {
     setLocalSearch(searchValue);
@@ -153,12 +167,14 @@ export function DataTable<TData, TValue>({
               placeholder={searchPlaceholder}
               value={localSearch}
               onChange={(event) => setLocalSearch(event.target.value)}
+              onClear={() => {
+                setLocalSearch("");
+                triggerSearch("");
+              }}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.preventDefault();
-                  if (onSearchChange && localSearch !== searchValue) {
-                    onSearchChange(localSearch);
-                  }
+                  triggerSearch();
                 }
               }}
               className="h-9 bg-background pr-9"
@@ -169,11 +185,7 @@ export function DataTable<TData, TValue>({
               variant="ghost"
               size="icon"
               className="ml-2"
-              onClick={() => {
-                if (onSearchChange && localSearch !== searchValue) {
-                  onSearchChange(localSearch);
-                }
-              }}
+              onClick={() => triggerSearch()}
             >
               <Search className="w-4 h-4" />
             </Button>

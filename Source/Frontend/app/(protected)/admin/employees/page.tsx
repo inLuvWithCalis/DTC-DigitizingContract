@@ -33,7 +33,10 @@ import { StatusBadge } from "@/components/ui/custom/status-badge";
 import { ConfirmDialog } from "@/components/ui/custom/confirm-dialog";
 import { SplitActionMenu } from "@/components/ui/custom/split-action-menu";
 import { SelectFilter } from "@/components/ui/custom/select-filter";
-import { DateFilter } from "@/components/ui/custom/date-filter";
+import {
+  DateRangeFilter,
+  DateRange,
+} from "@/components/ui/custom/date-range-filter";
 import { format } from "date-fns";
 import {
   SummaryCardItem,
@@ -85,7 +88,10 @@ export default function EmployeeListPage() {
   });
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("All");
-  const [filterDate, setFilterDate] = useState<Date | undefined>(undefined);
+  const [dateRange, setDateRange] = useState<DateRange>({
+    from: undefined,
+    to: undefined,
+  });
   const [loadingId, setLoadingId] = useState<number | null>(null);
   const [toggleStatusId, setToggleStatusId] = useState<number | null>(null);
   const [isToggling, setIsToggling] = useState(false);
@@ -101,8 +107,11 @@ export default function EmployeeListPage() {
         filterStatus !== "All" && filterStatus !== ""
           ? Number(filterStatus)
           : undefined;
-      const dateCreatedParam = filterDate
-        ? format(filterDate, "yyyy-MM-dd")
+      const fromDateParam = dateRange.from
+        ? format(dateRange.from, "yyyy-MM-dd")
+        : undefined;
+      const toDateParam = dateRange.to
+        ? format(dateRange.to, "yyyy-MM-dd")
         : undefined;
 
       const res = await employeeApi.getList({
@@ -110,7 +119,8 @@ export default function EmployeeListPage() {
         pageSize: pagination.pageSize,
         keyword: searchTerm || undefined,
         status: statusParam,
-        dateCreated: dateCreatedParam,
+        fromDate: fromDateParam,
+        toDate: toDateParam,
       });
 
       setEmployees(res.items || []);
@@ -125,7 +135,8 @@ export default function EmployeeListPage() {
     pagination.pageSize,
     searchTerm,
     filterStatus,
-    filterDate,
+    dateRange.from,
+    dateRange.to,
   ]);
 
   useEffect(() => {
@@ -246,6 +257,17 @@ export default function EmployeeListPage() {
         ),
       },
       {
+        accessorKey: "dateModified",
+        header: () => <div className="text-center">Ngày chỉnh sửa</div>,
+        cell: ({ row }) => (
+          <div className="text-center text-sm text-muted-foreground">
+            {row.original.dateModified
+              ? format(new Date(row.original.dateModified), "dd/MM/yyyy")
+              : "N/A"}
+          </div>
+        ),
+      },
+      {
         accessorKey: "status",
         header: () => <div className="text-center">Trạng thái</div>,
         cell: ({ row }) => {
@@ -341,13 +363,12 @@ export default function EmployeeListPage() {
         options={EMPLOYEE_STATUS_OPTIONS}
         placeholder="Trạng thái"
       />
-      <DateFilter
-        date={filterDate}
-        onChange={(date) => {
-          setFilterDate(date);
+      <DateRangeFilter
+        dateRange={dateRange}
+        onChange={(range) => {
+          setDateRange(range);
           setPagination((prev) => ({ ...prev, pageIndex: 0 }));
         }}
-        placeholder="Ngày tạo"
       />
     </>
   );

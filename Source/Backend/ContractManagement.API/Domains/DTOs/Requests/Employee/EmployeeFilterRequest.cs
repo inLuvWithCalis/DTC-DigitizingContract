@@ -1,9 +1,9 @@
-﻿namespace ContractManagement.API.Domains.DTOs.Requests.Catalog
+﻿namespace ContractManagement.API.Domains.DTOs.Requests.Employee
 {
     /// <summary>
-    /// Filter danh sách sản phẩm.
+    /// Filter danh sách nhân viên.
     /// </summary>
-    public class ProductFilterRequest
+    public class EmployeeFilterRequest
     {
         public int Page { get; set; } = 1;
 

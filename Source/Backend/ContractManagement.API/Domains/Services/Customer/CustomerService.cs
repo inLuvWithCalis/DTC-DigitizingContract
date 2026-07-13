@@ -23,6 +23,16 @@ namespace ContractManagement.API.Domains.Services.Customer
             _dbContext = dbContext;
         }
 
+        private IQueryable<TblCustomer> ApplyDateFilter(IQueryable<TblCustomer> query, DateTime? fromDate, DateTime? toDate)
+        {
+            if (!fromDate.HasValue && !toDate.HasValue) return query;
+
+            var from = fromDate?.Date ?? DateTime.MinValue;
+            var to = toDate?.Date.AddDays(1) ?? DateTime.MaxValue;
+
+            return query.Where(x => x.DateCreated >= from && x.DateCreated < to);
+        }
+
         public async Task<PagedResult<CustomerResponse>> GetListAsync(
             CustomerFilterRequest filter)
         {
@@ -47,6 +57,8 @@ namespace ContractManagement.API.Domains.Services.Customer
             {
                 query = query.Where(x => x.Status == filter.Status.Value);
             }
+
+            query = ApplyDateFilter(query, filter.FromDate, filter.ToDate);
 
             var totalCount = await query.CountAsync();
 

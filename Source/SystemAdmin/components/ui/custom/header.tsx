@@ -1,6 +1,7 @@
 "use client";
 
 import { Bell, LogOut, Settings, User } from "lucide-react";
+import Link from "next/link";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -73,9 +74,11 @@ export function Header({ title }: { title: string }) {
 
               <DropdownMenuSeparator />
 
-              <DropdownMenuItem className="cursor-pointer py-2">
-                <User className="mr-2 h-4 w-4 text-muted-foreground" />
-                <span className="font-medium">Hồ sơ cá nhân</span>
+              <DropdownMenuItem asChild className="cursor-pointer py-2">
+                <Link href="/dashboard/profile">
+                  <User className="mr-2 h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium">Hồ sơ cá nhân</span>
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuItem className="cursor-pointer py-2">
                 <Settings className="mr-2 h-4 w-4 text-muted-foreground" />

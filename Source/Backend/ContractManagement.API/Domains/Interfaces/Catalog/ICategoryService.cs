@@ -1,4 +1,5 @@
-﻿using ContractManagement.API.Domains.DTOs.Requests.Catalog;
+using ContractManagement.API.Common.Responses;
+using ContractManagement.API.Domains.DTOs.Requests.Catalog;
 using ContractManagement.API.Domains.DTOs.Responses.Catalog;
 
 namespace ContractManagement.API.Domains.Interfaces.Catalog
@@ -8,7 +9,13 @@ namespace ContractManagement.API.Domains.Interfaces.Catalog
     /// </summary>
     public interface ICategoryService
     {
-        Task<List<CategoryResponse>> GetAllAsync();
+        Task<PagedResult<CategoryResponse>> GetListAsync(CategoryFilterRequest filter);
+
+        /// <summary>
+        /// Lấy danh sách danh mục cha có danh mục con.
+        /// Dùng cho dropdown chọn danh mục cha trên Frontend.
+        /// </summary>
+        Task<PagedResult<CategoryResponse>> GetParentsAsync(CategoryFilterRequest filter);
 
         Task<CategoryResponse> GetByIdAsync(byte id);
 
@@ -18,4 +25,4 @@ namespace ContractManagement.API.Domains.Interfaces.Catalog
 
         Task DeleteAsync(byte id);
     }
-}
+}

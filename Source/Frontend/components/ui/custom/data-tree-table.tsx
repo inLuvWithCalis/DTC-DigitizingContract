@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ColumnDef,
-  SortingState,
   flexRender,
   getCoreRowModel,
+  getExpandedRowModel,
+  getPaginationRowModel, // Thêm dòng này để xử lý Client Pagination
   useReactTable,
   Row,
-  PaginationState,
-  OnChangeFn,
+  ExpandedState,
 } from "@tanstack/react-table";
 import {
   Table,
@@ -30,10 +30,10 @@ import {
 } from "@/components/ui/select";
 import {
   Loader2,
-  ChevronLeft,
-  ChevronRight,
   CheckCheck,
   Search,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { MobileCardWrapper } from "./mobile-card-wrapper";
@@ -44,15 +44,18 @@ interface MobileCardRenderContext {
   actionCell: React.ReactNode;
 }
 
-interface DataTableProps<TData, TValue> {
+interface TreeDataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
-  data: TData[];
-  pageCount: number;
-  rowCount: number;
-  pagination: PaginationState;
-  onPaginationChange: OnChangeFn<PaginationState>;
-  sorting?: SortingState;
-  onSortingChange?: OnChangeFn<SortingState>;
+  data: TData[]; // Dữ liệu đã được build thành dạng cây
+  getSubRows: (row: TData) => TData[] | undefined;
+  defaultExpanded?: boolean;
+
+  // Hỗ trợ phân trang Server-side (tùy chọn)
+  pageCount?: number;
+  rowCount?: number;
+  pagination?: { pageIndex: number; pageSize: number };
+  onPaginationChange?: (pagination: any) => void;
+
   searchValue?: string;
   onSearchChange?: (value: string) => void;
   searchPlaceholder?: string;
@@ -70,15 +73,15 @@ interface DataTableProps<TData, TValue> {
   ) => React.ReactNode;
 }
 
-export function DataTable<TData, TValue>({
+export function TreeDataTable<TData, TValue>({
   columns,
   data,
+  getSubRows,
+  defaultExpanded = true,
   pageCount,
   rowCount,
   pagination,
   onPaginationChange,
-  sorting = [],
-  onSortingChange,
   searchValue = "",
   onSearchChange,
   searchPlaceholder = "Tìm kiếm...",
@@ -88,10 +91,25 @@ export function DataTable<TData, TValue>({
   bulkActions,
   onRowClick,
   mobileCardRenderer,
-}: DataTableProps<TData, TValue>) {
+}: TreeDataTableProps<TData, TValue>) {
   const [rowSelection, setRowSelection] = useState({});
-  const isMobile = useMediaQuery("(max-width: 767px)");
+  const [expanded, setExpanded] = useState<ExpandedState>(
+    defaultExpanded ? true : {},
+  );
+  // Khởi tạo Pagination State (Client-side fallback)
+  const [internalPagination, setInternalPagination] = useState({
+    pageIndex: 0,
+    pageSize: 10,
+  });
 
+  const isServerSide =
+    pagination !== undefined && onPaginationChange !== undefined;
+  const currentPagination = isServerSide ? pagination : internalPagination;
+  const handlePaginationChange = isServerSide
+    ? onPaginationChange
+    : setInternalPagination;
+
+  const isMobile = useMediaQuery("(max-width: 767px)");
   const [localSearch, setLocalSearch] = useState(searchValue);
 
   const triggerSearch = useCallback(
@@ -99,21 +117,16 @@ export function DataTable<TData, TValue>({
       const targetSearch = newVal !== undefined ? newVal : localSearch;
       if (onSearchChange && targetSearch !== searchValue) {
         onSearchChange(targetSearch);
-        if (onPaginationChange && pagination && pagination.pageIndex !== 0) {
-          onPaginationChange({
-            ...pagination,
-            pageIndex: 0,
-          });
+        if (!isServerSide) {
+          setInternalPagination((prev) => ({ ...prev, pageIndex: 0 }));
         }
       }
     },
-    [localSearch, onSearchChange, searchValue, onPaginationChange, pagination],
+    [localSearch, onSearchChange, searchValue, isServerSide],
   );
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      triggerSearch();
-    }, 500);
+    const timer = setTimeout(() => triggerSearch(), 500);
     return () => clearTimeout(timer);
   }, [triggerSearch]);
 
@@ -121,27 +134,31 @@ export function DataTable<TData, TValue>({
     setLocalSearch(searchValue);
   }, [searchValue]);
 
+  // Cấu hình Table
   const table = useReactTable({
     data,
     columns,
-    pageCount,
-    rowCount,
     state: {
-      pagination,
-      sorting,
       rowSelection,
+      expanded,
+      pagination: currentPagination,
     },
-    manualPagination: true,
-    manualSorting: true,
-    manualFiltering: true,
-    onPaginationChange,
-    onSortingChange,
+    manualPagination: isServerSide,
+    pageCount: isServerSide ? (pageCount ?? -1) : undefined,
+    getSubRows,
+    onExpandedChange: setExpanded,
+    getExpandedRowModel: getExpandedRowModel(),
     onRowSelectionChange: setRowSelection,
+    onPaginationChange: handlePaginationChange,
     getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: isServerSide ? undefined : getPaginationRowModel(),
   });
 
   const selectedRows = table.getFilteredSelectedRowModel().rows;
   const isSelectionMode = isMobile && selectedRows.length > 0;
+  const totalRowsCount = isServerSide
+    ? (rowCount ?? data.length)
+    : table.getPrePaginationRowModel().rows.length;
 
   const exitSelectionMode = useCallback(() => {
     table.resetRowSelection();
@@ -149,6 +166,7 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="flex flex-col h-full w-full flex-1">
+      {/* ------------------ TOP BAR ------------------ */}
       <div className="flex flex-col gap-3 w-full mb-4 md:flex-row md:items-center md:justify-between md:gap-4">
         <div className="flex flex-wrap items-center gap-2 md:gap-3">
           {filterSlot && (
@@ -193,6 +211,7 @@ export function DataTable<TData, TValue>({
         )}
       </div>
 
+      {/* ------------------ MOBILE SELECTION HEADER ------------------ */}
       {isSelectionMode && (
         <div className="flex items-center justify-between gap-3 mb-3 px-1 animate-in fade-in slide-in-from-top-1 duration-200">
           <div className="flex items-center gap-2">
@@ -207,14 +226,6 @@ export function DataTable<TData, TValue>({
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 text-xs"
-              onClick={() => table.toggleAllPageRowsSelected(true)}
-            >
-              Chọn tất cả
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
               className="h-8 text-xs text-muted-foreground"
               onClick={exitSelectionMode}
             >
@@ -225,7 +236,7 @@ export function DataTable<TData, TValue>({
       )}
 
       {isMobile ? (
-        /* ────────────── MOBILE CARD VIEW ────────────── */
+        /* ------------------ MOBILE CARD VIEW ------------------ */
         <div className="flex flex-col gap-3">
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
@@ -233,7 +244,6 @@ export function DataTable<TData, TValue>({
             </div>
           ) : table.getRowModel().rows?.length ? (
             table.getRowModel().rows.map((row) => {
-              // TỰ ĐỘNG TÌM VÀ RENDER CỘT ACTION
               const actionColumn = row
                 .getVisibleCells()
                 .find((c) => c.column.id === "action");
@@ -262,7 +272,6 @@ export function DataTable<TData, TValue>({
                   }
                 >
                   {mobileCardRenderer ? (
-                    // Truyền actionNode xuống cho Page sử dụng
                     mobileCardRenderer(row, {
                       isSelectionMode,
                       isSelected: row.getIsSelected(),
@@ -270,42 +279,10 @@ export function DataTable<TData, TValue>({
                     })
                   ) : (
                     <div
-                      className="rounded-xl border border-border bg-card p-4 shadow-sm transition-colors active:bg-secondary/40"
+                      className="rounded-xl border bg-card p-4 shadow-sm"
                       data-state={row.getIsSelected() && "selected"}
                     >
-                      <div className="flex flex-col gap-2.5">
-                        {row.getVisibleCells().map((cell) => {
-                          const header = cell.column.columnDef.header;
-                          const columnId = cell.column.id;
-
-                          if (columnId === "select" || columnId === "action")
-                            return null;
-
-                          let label: React.ReactNode = columnId;
-                          if (typeof header === "string") {
-                            label = header;
-                          }
-
-                          return (
-                            <div
-                              key={cell.id}
-                              className="flex items-start justify-between gap-3"
-                            >
-                              <span className="text-xs font-medium text-muted-foreground shrink-0 pt-0.5 capitalize">
-                                {label}
-                              </span>
-                              <div className="text-sm text-right">
-                                {flexRender(
-                                  cell.column.columnDef.cell,
-                                  cell.getContext(),
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {actionNode}
+                      Mobile view needs mobileCardRenderer prop
                     </div>
                   )}
                 </MobileCardWrapper>
@@ -316,17 +293,9 @@ export function DataTable<TData, TValue>({
               Không tìm thấy dữ liệu.
             </div>
           )}
-
-          {!isSelectionMode &&
-            table.getRowModel().rows?.length > 0 &&
-            (bulkActions || onSelectMany) && (
-              <p className="text-center text-xs text-muted-foreground/60 mt-1 select-none">
-                Nhấn giữ để chọn nhiều dòng
-              </p>
-            )}
         </div>
       ) : (
-        /* ────────────── DESKTOP TABLE VIEW ────────────── */
+        /* ------------------ DESKTOP TREE TABLE VIEW ------------------ */
         <div className="relative w-full overflow-auto rounded-md border border-border flex-1">
           <Table>
             <TableHeader className="bg-secondary/50">
@@ -352,7 +321,16 @@ export function DataTable<TData, TValue>({
               ))}
             </TableHeader>
             <TableBody>
-              {table.getRowModel().rows?.length ? (
+              {isLoading ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={columns.length}
+                    className="h-32 text-center text-muted-foreground"
+                  >
+                    <Loader2 className="w-5 h-5 animate-spin mx-auto text-primary" />
+                  </TableCell>
+                </TableRow>
+              ) : table.getRowModel().rows?.length ? (
                 table.getRowModel().rows.map((row) => (
                   <TableRow
                     key={row.id}
@@ -376,11 +354,7 @@ export function DataTable<TData, TValue>({
                     colSpan={columns.length}
                     className="h-32 text-center text-muted-foreground"
                   >
-                    {isLoading ? (
-                      <Loader2 className="w-5 h-5 animate-spin mx-auto text-primary" />
-                    ) : (
-                      "Không tìm thấy dữ liệu."
-                    )}
+                    Không tìm thấy dữ liệu.
                   </TableCell>
                 </TableRow>
               )}
@@ -389,7 +363,8 @@ export function DataTable<TData, TValue>({
         </div>
       )}
 
-      {selectedRows.length > 0 && (bulkActions || onSelectMany) && (
+      {/* ------------------ BULK ACTIONS BANNER (PC) ------------------ */}
+      {selectedRows.length > 0 && bulkActions && !isSelectionMode && (
         <div className="bg-primary/5 border border-primary/20 text-primary px-3 py-2.5 mt-4 rounded-xl flex flex-col gap-3 text-sm shadow-sm animate-in fade-in slide-in-from-bottom-2 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-3">
           <span>
             Đã chọn:{" "}
@@ -407,29 +382,16 @@ export function DataTable<TData, TValue>({
             >
               Hủy bỏ
             </Button>
-            {bulkActions ? (
-              bulkActions(
-                selectedRows.map((row) => row.original),
-                () => table.resetRowSelection(),
-              )
-            ) : (
-              <Button
-                size="sm"
-                variant="destructive"
-                className="h-9 shadow-sm flex-1 sm:flex-none"
-                onClick={() => {
-                  onSelectMany?.(selectedRows.map((row) => row.original));
-                  table.resetRowSelection();
-                }}
-              >
-                Xóa tất cả
-              </Button>
+            {bulkActions(
+              selectedRows.map((row) => row.original),
+              () => table.resetRowSelection(),
             )}
           </div>
         </div>
       )}
 
-      {rowCount > 0 && (
+      {/* ------------------ PAGINATION FOOTER ------------------ */}
+      {totalRowsCount > 0 && (
         <div
           className={`flex flex-col gap-3 py-4 mt-auto border-t border-transparent sm:flex-row sm:items-center sm:justify-between ${
             isMobile && "justify-end items-center"
@@ -447,12 +409,14 @@ export function DataTable<TData, TValue>({
               {Math.min(
                 (table.getState().pagination.pageIndex + 1) *
                   table.getState().pagination.pageSize,
-                rowCount,
+                totalRowsCount,
               )}
             </span>{" "}
             trong{" "}
-            <span className="font-medium text-foreground">{rowCount}</span> kết
-            quả
+            <span className="font-medium text-foreground">
+              {totalRowsCount}
+            </span>{" "}
+            kết quả
           </div>
 
           <div className="flex items-center justify-between gap-3 sm:gap-6">
@@ -469,7 +433,7 @@ export function DataTable<TData, TValue>({
                 </SelectTrigger>
                 <SelectContent
                   showSearch={false}
-                  className="min-w-(--radix-select-trigger-width) w-(--radix-select-trigger-width)"
+                  className="min-w-[var(--radix-select-trigger-width)] w-[var(--radix-select-trigger-width)]"
                 >
                   {[5, 10, 20, 50, 100].map((pageSize) => (
                     <SelectItem key={pageSize} value={pageSize.toString()}>

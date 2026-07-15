@@ -1,4 +1,5 @@
-﻿using ContractManagement.API.Domains.DTOs.Requests.Catalog;
+using ContractManagement.API.Common.Responses;
+using ContractManagement.API.Domains.DTOs.Requests.Catalog;
 using ContractManagement.API.Domains.DTOs.Responses.Catalog;
 using ContractManagement.API.Domains.Interfaces.Catalog;
 using ContractManagement.Infrastructure.Persistence.Application;
@@ -22,15 +23,134 @@ namespace ContractManagement.API.Domains.Services.Catalog
             _dbContext = dbContext;
         }
 
-        public async Task<List<CategoryResponse>> GetAllAsync()
+        public async Task<PagedResult<CategoryResponse>> GetListAsync(
+            CategoryFilterRequest filter)
         {
-            var categories = await _dbContext.TblCategories
+            if (filter.Page <= 0) filter.Page = 1;
+            if (filter.PageSize <= 0) filter.PageSize = 20;
+
+            var query = _dbContext.TblCategories
+                .AsNoTracking()
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(filter.Keyword))
+            {
+                var keyword = filter.Keyword.Trim();
+
+                query = query.Where(x =>
+                    (x.CategoryName != null && x.CategoryName.Contains(keyword)) ||
+                    (x.CategoryShortDesc != null && x.CategoryShortDesc.Contains(keyword)));
+            }
+
+            var totalCount = await query.CountAsync();
+
+            var categories = await query
+                .OrderBy(x => x.CategoryOrder)
+                .ThenBy(x => x.CategoryName)
+                .Skip((filter.Page - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .ToListAsync();
+
+            var mapped = await MapListAsync(categories);
+
+            return new PagedResult<CategoryResponse>
+            {
+                Items = mapped,
+                TotalCount = totalCount,
+                Page = filter.Page,
+                PageSize = filter.PageSize
+            };
+        }
+
+        public async Task<PagedResult<CategoryResponse>> GetParentsAsync(CategoryFilterRequest filter)
+        {
+            if (filter.Page <= 0) filter.Page = 1;
+            if (filter.PageSize <= 0) filter.PageSize = 20;
+
+            // Load toàn bộ categories một lần.
+            var allCategories = await _dbContext.TblCategories
                 .AsNoTracking()
                 .OrderBy(x => x.CategoryOrder)
                 .ThenBy(x => x.CategoryName)
                 .ToListAsync();
 
-            return await MapListAsync(categories);
+            // Nhóm children theo ParentId.
+            var childrenByParent = allCategories
+                .Where(x => x.CategoryParentId.HasValue)
+                .GroupBy(x => x.CategoryParentId!.Value)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            if (childrenByParent.Count == 0)
+            {
+                return new PagedResult<CategoryResponse>
+                {
+                    Items = new List<CategoryResponse>(),
+                    TotalCount = 0,
+                    Page = filter.Page,
+                    PageSize = filter.PageSize
+                };
+            }
+
+            // Lấy danh sách các category cha thực sự có con
+            var parentCategories = allCategories
+                .Where(x => childrenByParent.ContainsKey(x.CategoryId))
+                .ToList();
+
+            if (!string.IsNullOrWhiteSpace(filter.Keyword))
+            {
+                var keyword = filter.Keyword.Trim();
+                parentCategories = parentCategories.Where(x =>
+                    (x.CategoryName != null && x.CategoryName.Contains(keyword, StringComparison.OrdinalIgnoreCase)) ||
+                    (x.CategoryShortDesc != null && x.CategoryShortDesc.Contains(keyword, StringComparison.OrdinalIgnoreCase)) ||
+                    (childrenByParent.ContainsKey(x.CategoryId) && childrenByParent[x.CategoryId].Any(c =>
+                        (c.CategoryName != null && c.CategoryName.Contains(keyword, StringComparison.OrdinalIgnoreCase)) ||
+                        (c.CategoryShortDesc != null && c.CategoryShortDesc.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                    ))
+                ).ToList();
+            }
+
+            var totalCount = parentCategories.Count;
+
+            var pagedParents = parentCategories
+                .Skip((filter.Page - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .ToList();
+
+            // Đếm product cho các categories cha trong trang này và con của chúng
+            var relevantIds = pagedParents.Select(p => (int)p.CategoryId)
+                .Concat(pagedParents.SelectMany(p => childrenByParent[p.CategoryId].Select(c => (int)c.CategoryId)))
+                .Distinct()
+                .ToList();
+
+            var productCounts = await _dbContext.TblProducts
+                .AsNoTracking()
+                .Where(x => x.CategoryId.HasValue && relevantIds.Contains(x.CategoryId.Value))
+                .GroupBy(x => x.CategoryId!.Value)
+                .ToDictionaryAsync(x => x.Key, x => x.Count());
+
+            // Build response: trả về các category cha (đã phân trang & lọc keyword) kèm danh sách con
+            var items = pagedParents.Select(parent =>
+            {
+                var resp = MapToResponse(
+                    parent,
+                    productCounts.TryGetValue(parent.CategoryId, out var pc) ? pc : 0);
+
+                resp.Items = childrenByParent[parent.CategoryId]
+                    .Select(child => MapToResponse(
+                        child,
+                        productCounts.TryGetValue(child.CategoryId, out var cc) ? cc : 0))
+                    .ToList();
+
+                return resp;
+            }).ToList();
+
+            return new PagedResult<CategoryResponse>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                Page = filter.Page,
+                PageSize = filter.PageSize
+            };
         }
 
         public async Task<CategoryResponse> GetByIdAsync(byte id)

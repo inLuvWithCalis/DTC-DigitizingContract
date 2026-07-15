@@ -1,4 +1,4 @@
-﻿using ContractManagement.API.Common.Responses;
+using ContractManagement.API.Common.Responses;
 using ContractManagement.API.Domains.DTOs.Requests.Catalog;
 using ContractManagement.API.Domains.DTOs.Responses.Catalog;
 using ContractManagement.API.Domains.Interfaces.Catalog;
@@ -23,13 +23,27 @@ namespace ContractManagement.API.Domains.Controllers.Catalog
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetList(
+            [FromQuery] CategoryFilterRequest filter)
         {
-            var result = await _service.GetAllAsync();
+            var result = await _service.GetListAsync(filter);
 
-            return Ok(ApiResponse<List<CategoryResponse>>.Ok(
+            return Ok(ApiResponse<PagedResult<CategoryResponse>>.Ok(
                 result,
                 "Lấy danh sách danh mục thành công."));
+        }
+
+        /// <summary>
+        /// Lấy danh sách danh mục cha có danh mục con.
+        /// </summary>
+        [HttpGet("parents")]
+        public async Task<IActionResult> GetParents([FromQuery] CategoryFilterRequest filter)
+        {
+            var result = await _service.GetParentsAsync(filter);
+
+            return Ok(ApiResponse<PagedResult<CategoryResponse>>.Ok(
+                result,
+                "Lấy danh sách danh mục cha thành công."));
         }
 
         [HttpGet("{id:int}")]

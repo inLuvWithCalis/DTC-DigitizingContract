@@ -44,6 +44,7 @@ import {
   SummaryCards,
 } from "@/components/ui/custom/summary-cards";
 import { CustomerFormModal } from "./customer-form-modal";
+import { useRouter } from "next/navigation";
 
 function CustomerBulkActions({
   selectedRows,
@@ -116,6 +117,8 @@ export default function CustomerListPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CustomerResponse | null>(null);
   const [viewingItem, setViewingItem] = useState<CustomerResponse | null>(null);
+
+  const router = useRouter();
 
   const fetchCustomers = useCallback(async () => {
     setIsLoading(true);
@@ -335,7 +338,9 @@ export default function CustomerListPage() {
             <SplitActionMenu
               primaryLabel="Chi tiết"
               primaryIcon={<Eye className="w-4 h-4" />}
-              onPrimaryClick={() => setViewingItem(item)}
+              onPrimaryClick={() => {
+                router.push(`/customers/${item.customerId}`);
+              }}
               isLoading={loadingId === item.customerId}
               menuItems={[
                 {
@@ -461,7 +466,7 @@ export default function CustomerListPage() {
               isLoading={isLoading}
               searchPlaceholder="Tìm kiếm tên, mã KH, công ty, email, số ĐT..."
               filterSlot={CustomFilters}
-              onRowClick={(row) => setViewingItem(row)}
+              onRowClick={(row) => router.push(`/customers/${row.customerId}`)}
               searchValue={searchTerm}
               onSearchChange={(value) => setSearchTerm(value)}
               bulkActions={(selectedRows, resetSelection) => (
@@ -564,13 +569,13 @@ export default function CustomerListPage() {
           item={editingItem}
         />
 
-        <CustomerFormModal
+        {/* <CustomerFormModal
           isOpen={!!viewingItem}
           onClose={() => setViewingItem(null)}
           onSuccess={() => {}}
           item={viewingItem}
           viewOnly
-        />
+        /> */}
       </div>
     </>
   );

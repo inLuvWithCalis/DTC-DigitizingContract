@@ -8,7 +8,7 @@ export enum CustomerStatus {
 export const getCustomerStatusLabel = (status?: number | null) => {
   switch (status) {
     case CustomerStatus.Active:
-      return "Đang hoạt động";
+      return "Hoạt động";
     case CustomerStatus.Inactive:
       return "Ngừng hoạt động";
     default:

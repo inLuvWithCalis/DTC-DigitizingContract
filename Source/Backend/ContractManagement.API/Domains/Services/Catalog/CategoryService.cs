@@ -67,33 +67,19 @@ namespace ContractManagement.API.Domains.Services.Catalog
             if (filter.Page <= 0) filter.Page = 1;
             if (filter.PageSize <= 0) filter.PageSize = 20;
 
-            // Load toàn bộ categories một lần.
             var allCategories = await _dbContext.TblCategories
                 .AsNoTracking()
                 .OrderBy(x => x.CategoryOrder)
                 .ThenBy(x => x.CategoryName)
                 .ToListAsync();
 
-            // Nhóm children theo ParentId.
             var childrenByParent = allCategories
                 .Where(x => x.CategoryParentId.HasValue)
                 .GroupBy(x => x.CategoryParentId!.Value)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
-            if (childrenByParent.Count == 0)
-            {
-                return new PagedResult<CategoryResponse>
-                {
-                    Items = new List<CategoryResponse>(),
-                    TotalCount = 0,
-                    Page = filter.Page,
-                    PageSize = filter.PageSize
-                };
-            }
-
-            // Lấy danh sách các category cha thực sự có con
             var parentCategories = allCategories
-                .Where(x => childrenByParent.ContainsKey(x.CategoryId))
+                .Where(x => !x.CategoryParentId.HasValue)
                 .ToList();
 
             if (!string.IsNullOrWhiteSpace(filter.Keyword))
@@ -116,11 +102,17 @@ namespace ContractManagement.API.Domains.Services.Catalog
                 .Take(filter.PageSize)
                 .ToList();
 
-            // Đếm product cho các categories cha trong trang này và con của chúng
-            var relevantIds = pagedParents.Select(p => (int)p.CategoryId)
-                .Concat(pagedParents.SelectMany(p => childrenByParent[p.CategoryId].Select(c => (int)c.CategoryId)))
-                .Distinct()
-                .ToList();
+            var relevantIds = pagedParents.Select(p => (int)p.CategoryId).ToList();
+            
+            foreach (var parent in pagedParents)
+            {
+                if (childrenByParent.TryGetValue(parent.CategoryId, out var children))
+                {
+                    relevantIds.AddRange(children.Select(c => (int)c.CategoryId));
+                }
+            }
+            
+            relevantIds = relevantIds.Distinct().ToList();
 
             var productCounts = await _dbContext.TblProducts
                 .AsNoTracking()
@@ -128,18 +120,24 @@ namespace ContractManagement.API.Domains.Services.Catalog
                 .GroupBy(x => x.CategoryId!.Value)
                 .ToDictionaryAsync(x => x.Key, x => x.Count());
 
-            // Build response: trả về các category cha (đã phân trang & lọc keyword) kèm danh sách con
             var items = pagedParents.Select(parent =>
             {
                 var resp = MapToResponse(
                     parent,
                     productCounts.TryGetValue(parent.CategoryId, out var pc) ? pc : 0);
 
-                resp.Items = childrenByParent[parent.CategoryId]
-                    .Select(child => MapToResponse(
-                        child,
-                        productCounts.TryGetValue(child.CategoryId, out var cc) ? cc : 0))
-                    .ToList();
+                if (childrenByParent.TryGetValue(parent.CategoryId, out var children))
+                {
+                    resp.Items = children
+                        .Select(child => MapToResponse(
+                            child,
+                            productCounts.TryGetValue(child.CategoryId, out var cc) ? cc : 0))
+                        .ToList();
+                }
+                else
+                {
+                    resp.Items = new List<CategoryResponse>();  
+                }
 
                 return resp;
             }).ToList();
@@ -213,7 +211,6 @@ namespace ContractManagement.API.Domains.Services.Catalog
                 throw new KeyNotFoundException("Không tìm thấy danh mục.");
             }
 
-            // Không cho danh mục tự chọn chính nó làm cha.
             if (request.CategoryParentId == id)
             {
                 throw new InvalidOperationException("Danh mục cha không hợp lệ.");
@@ -241,17 +238,38 @@ namespace ContractManagement.API.Domains.Services.Catalog
                 throw new KeyNotFoundException("Không tìm thấy danh mục.");
             }
 
-            // Vì DB không có FK, service tự check Product đang dùng Category này.
+            var idsToDelete = new List<byte> { id };
+            var currentLevelIds = new List<byte> { id };
+
+            while (true)
+            {
+                var nextLevelIds = await _dbContext.TblCategories
+                    .Where(x => x.CategoryParentId.HasValue && currentLevelIds.Contains(x.CategoryParentId.Value))
+                    .Select(x => x.CategoryId)
+                    .ToListAsync();
+
+                if (!nextLevelIds.Any())
+                    break;
+
+                idsToDelete.AddRange(nextLevelIds);
+                currentLevelIds = nextLevelIds;
+            }
+
+            var intIdsToDelete = idsToDelete.Select(x => (int)x).ToList();
             var hasProducts = await _dbContext.TblProducts
-                .AnyAsync(x => x.CategoryId == id);
+                .AnyAsync(x => x.CategoryId.HasValue && intIdsToDelete.Contains(x.CategoryId.Value));
 
             if (hasProducts)
             {
                 throw new InvalidOperationException(
-                    "Không thể xóa danh mục vì đang có sản phẩm sử dụng.");
+                    "Không thể xóa vì danh mục này (hoặc danh mục con của nó) đang chứa sản phẩm.");
             }
 
-            _dbContext.TblCategories.Remove(category);
+            var categoriesToDelete = await _dbContext.TblCategories
+                .Where(x => idsToDelete.Contains(x.CategoryId))
+                .ToListAsync();
+
+            _dbContext.TblCategories.RemoveRange(categoriesToDelete);
             await _dbContext.SaveChangesAsync();
         }
 

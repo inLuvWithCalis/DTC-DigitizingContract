@@ -13,6 +13,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -28,6 +35,7 @@ interface CategoryFormModalProps {
   onSuccess: () => void;
   item?: CategoryResponse | null;
   viewOnly?: boolean;
+  initialParentId?: number | null;
 }
 
 export function CategoryFormModal({
@@ -36,8 +44,9 @@ export function CategoryFormModal({
   onSuccess,
   item,
   viewOnly = false,
+  initialParentId = null,
 }: CategoryFormModalProps) {
-  const isEditMode = !item && !viewOnly;
+  const isEditMode = !!item && !viewOnly;
 
   const [categoryName, setCategoryName] = useState("");
   const [categoryShortDesc, setCategoryShortDesc] = useState("");
@@ -47,6 +56,31 @@ export function CategoryFormModal({
   const [image, setImage] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
+
+  const [parentOptions, setParentOptions] = useState<CategoryResponse[]>([]);
+  const [isLoadingParents, setIsLoadingParents] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      const fetchParents = async () => {
+        setIsLoadingParents(true);
+        try {
+          const res = await categoryApi.getList({ page: 1, pageSize: 1000 });
+
+          const validParents = (res.items || []).filter(
+            (c) => !item || c.categoryId !== item.categoryId,
+          );
+          setParentOptions(validParents);
+        } catch (error) {
+          console.error("Lỗi khi tải danh sách danh mục cha", error);
+        } finally {
+          setIsLoadingParents(false);
+        }
+      };
+
+      fetchParents();
+    }
+  }, [isOpen, item]);
 
   useEffect(() => {
     if (isOpen) {
@@ -74,27 +108,26 @@ export function CategoryFormModal({
         setCategoryName("");
         setCategoryShortDesc("");
         setCategoryOrder("");
-        setCategoryParentId("");
+        setCategoryParentId(initialParentId ? String(initialParentId) : "");
         setLangId("");
         setImage("");
       }
     }
-  }, [isOpen, item]);
+  }, [isOpen, item, initialParentId]);
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
+
     if (!categoryName.trim()) {
       newErrors.categoryName = "Vui lòng nhập tên danh mục";
     }
     if (categoryOrder && isNaN(Number(categoryOrder))) {
-      newErrors.categoryOrder = "Thứ tự phải là số";
-    }
-    if (categoryParentId && isNaN(Number(categoryParentId))) {
-      newErrors.categoryParentId = "ID Danh mục cha phải là số";
+      newErrors.categoryOrder = "Thứ tự phải là số hợp lệ";
     }
     if (langId && isNaN(Number(langId))) {
-      newErrors.langId = "ID Ngôn ngữ phải là số";
+      newErrors.langId = "ID Ngôn ngữ phải là số hợp lệ";
     }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -102,9 +135,13 @@ export function CategoryFormModal({
   const handleSubmit = async () => {
     if (viewOnly || !validate()) return;
     setIsSaving(true);
+
     try {
       const orderVal = categoryOrder ? Number(categoryOrder) : null;
-      const parentIdVal = categoryParentId ? Number(categoryParentId) : null;
+      const parentIdVal =
+        categoryParentId && categoryParentId !== "none"
+          ? Number(categoryParentId)
+          : null;
       const langIdVal = langId ? Number(langId) : null;
 
       if (isEditMode && item) {
@@ -177,7 +214,7 @@ export function CategoryFormModal({
               value={categoryName}
               onChange={(e) => setCategoryName(e.target.value)}
               disabled={viewOnly}
-              aria-invalid={!errors.categoryName}
+              aria-invalid={!!errors.categoryName}
               maxLength={500}
             />
             {errors.categoryName && (
@@ -198,7 +235,7 @@ export function CategoryFormModal({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="categoryOrder">Thứ tự sắp xếp</Label>
               <Input
@@ -208,7 +245,7 @@ export function CategoryFormModal({
                 value={categoryOrder}
                 onChange={(e) => setCategoryOrder(e.target.value)}
                 disabled={viewOnly}
-                aria-invalid={!errors.categoryOrder}
+                aria-invalid={!!errors.categoryOrder}
               />
               {errors.categoryOrder && (
                 <p className="text-xs text-destructive">
@@ -218,16 +255,41 @@ export function CategoryFormModal({
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="categoryParentId">ID Danh mục cha</Label>
-              <Input
-                id="categoryParentId"
-                type="number"
-                placeholder="Ví dụ: để trống nếu là nút gốc"
-                value={categoryParentId}
-                onChange={(e) => setCategoryParentId(e.target.value)}
-                disabled={viewOnly}
-                aria-invalid={!errors.categoryParentId}
-              />
+              <Label>Danh mục cha</Label>
+              <Select
+                value={categoryParentId || "none"}
+                onValueChange={(val) =>
+                  setCategoryParentId(val === "none" ? "" : val)
+                }
+                disabled={viewOnly || isLoadingParents}
+              >
+                <SelectTrigger
+                  className="w-full"
+                  aria-invalid={!!errors.categoryParentId}
+                >
+                  <SelectValue
+                    placeholder={
+                      isLoadingParents ? "Đang tải..." : "-- Là danh mục gốc --"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem
+                    value="none"
+                    className="font-semibold text-primary"
+                  >
+                    -- Là danh mục gốc --
+                  </SelectItem>
+                  {parentOptions.map((cat) => (
+                    <SelectItem
+                      key={cat.categoryId}
+                      value={String(cat.categoryId)}
+                    >
+                      {cat.categoryName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {errors.categoryParentId && (
                 <p className="text-xs text-destructive">
                   {errors.categoryParentId}
@@ -236,7 +298,7 @@ export function CategoryFormModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="langId">ID Ngôn ngữ</Label>
               <Input
@@ -246,7 +308,7 @@ export function CategoryFormModal({
                 value={langId}
                 onChange={(e) => setLangId(e.target.value)}
                 disabled={viewOnly}
-                aria-invalid={!errors.langId}
+                aria-invalid={!!errors.langId}
               />
               {errors.langId && (
                 <p className="text-xs text-destructive">{errors.langId}</p>

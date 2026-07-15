@@ -6,7 +6,7 @@ import {
   flexRender,
   getCoreRowModel,
   getExpandedRowModel,
-  getPaginationRowModel, // Thêm dòng này để xử lý Client Pagination
+  getPaginationRowModel,
   useReactTable,
   Row,
   ExpandedState,
@@ -46,11 +46,10 @@ interface MobileCardRenderContext {
 
 interface TreeDataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
-  data: TData[]; // Dữ liệu đã được build thành dạng cây
+  data: TData[];
   getSubRows: (row: TData) => TData[] | undefined;
   defaultExpanded?: boolean;
 
-  // Hỗ trợ phân trang Server-side (tùy chọn)
   pageCount?: number;
   rowCount?: number;
   pagination?: { pageIndex: number; pageSize: number };
@@ -96,7 +95,6 @@ export function TreeDataTable<TData, TValue>({
   const [expanded, setExpanded] = useState<ExpandedState>(
     defaultExpanded ? true : {},
   );
-  // Khởi tạo Pagination State (Client-side fallback)
   const [internalPagination, setInternalPagination] = useState({
     pageIndex: 0,
     pageSize: 10,
@@ -134,7 +132,6 @@ export function TreeDataTable<TData, TValue>({
     setLocalSearch(searchValue);
   }, [searchValue]);
 
-  // Cấu hình Table
   const table = useReactTable({
     data,
     columns,
@@ -154,7 +151,7 @@ export function TreeDataTable<TData, TValue>({
     getPaginationRowModel: isServerSide ? undefined : getPaginationRowModel(),
   });
 
-  const selectedRows = table.getFilteredSelectedRowModel().rows;
+  const selectedRows = table.getFilteredSelectedRowModel().flatRows;
   const isSelectionMode = isMobile && selectedRows.length > 0;
   const totalRowsCount = isServerSide
     ? (rowCount ?? data.length)
@@ -166,7 +163,6 @@ export function TreeDataTable<TData, TValue>({
 
   return (
     <div className="flex flex-col h-full w-full flex-1">
-      {/* ------------------ TOP BAR ------------------ */}
       <div className="flex flex-col gap-3 w-full mb-4 md:flex-row md:items-center md:justify-between md:gap-4">
         <div className="flex flex-wrap items-center gap-2 md:gap-3">
           {filterSlot && (
@@ -211,7 +207,6 @@ export function TreeDataTable<TData, TValue>({
         )}
       </div>
 
-      {/* ------------------ MOBILE SELECTION HEADER ------------------ */}
       {isSelectionMode && (
         <div className="flex items-center justify-between gap-3 mb-3 px-1 animate-in fade-in slide-in-from-top-1 duration-200">
           <div className="flex items-center gap-2">
@@ -236,7 +231,6 @@ export function TreeDataTable<TData, TValue>({
       )}
 
       {isMobile ? (
-        /* ------------------ MOBILE CARD VIEW ------------------ */
         <div className="flex flex-col gap-3">
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
@@ -247,6 +241,7 @@ export function TreeDataTable<TData, TValue>({
               const actionColumn = row
                 .getVisibleCells()
                 .find((c) => c.column.id === "action");
+
               const actionNode =
                 !isSelectionMode && actionColumn ? (
                   <div
@@ -260,6 +255,12 @@ export function TreeDataTable<TData, TValue>({
                   </div>
                 ) : null;
 
+              const nameCell = row
+                .getVisibleCells()
+                .find((c) => c.column.id === "categoryName");
+
+              const isSelected = row.getIsSelected();
+
               return (
                 <MobileCardWrapper
                   key={row.id}
@@ -267,22 +268,66 @@ export function TreeDataTable<TData, TValue>({
                   isSelectionMode={isSelectionMode}
                   onRowClick={onRowClick}
                   onLongPress={() => row.toggleSelected(true)}
-                  onTapInSelectionMode={() =>
-                    row.toggleSelected(!row.getIsSelected())
-                  }
+                  onTapInSelectionMode={() => row.toggleSelected(!isSelected)}
                 >
                   {mobileCardRenderer ? (
                     mobileCardRenderer(row, {
                       isSelectionMode,
-                      isSelected: row.getIsSelected(),
+                      isSelected,
                       actionCell: actionNode,
                     })
                   ) : (
                     <div
-                      className="rounded-xl border bg-card p-4 shadow-sm"
-                      data-state={row.getIsSelected() && "selected"}
+                      className={`rounded-xl border p-4 shadow-sm transition-all relative ${
+                        isSelected
+                          ? "bg-primary/10 border-primary shadow-inner"
+                          : "bg-card border-border"
+                      } ${row.depth > 0 ? "border-l-4" : ""}`}
+                      data-state={isSelected ? "selected" : undefined}
                     >
-                      Mobile view needs mobileCardRenderer prop
+                      <div className="flex items-start gap-2 mb-3 pb-3 border-b border-border/50">
+                        <div className="flex-1">
+                          {nameCell
+                            ? flexRender(
+                                nameCell.column.columnDef.cell,
+                                nameCell.getContext(),
+                              )
+                            : null}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-2.5">
+                        {row.getVisibleCells().map((cell) => {
+                          const columnId = cell.column.id;
+                          if (
+                            columnId === "select" ||
+                            columnId === "action" ||
+                            columnId === "categoryName"
+                          )
+                            return null;
+
+                          return (
+                            <div
+                              key={cell.id}
+                              className="flex items-start justify-between gap-3"
+                            >
+                              <span className="text-xs font-medium text-muted-foreground shrink-0 pt-0.5 capitalize">
+                                {typeof cell.column.columnDef.header ===
+                                "string"
+                                  ? cell.column.columnDef.header
+                                  : columnId}
+                              </span>
+                              <div className="text-sm text-right font-medium">
+                                {flexRender(
+                                  cell.column.columnDef.cell,
+                                  cell.getContext(),
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {actionNode}
                     </div>
                   )}
                 </MobileCardWrapper>
@@ -295,7 +340,6 @@ export function TreeDataTable<TData, TValue>({
           )}
         </div>
       ) : (
-        /* ------------------ DESKTOP TREE TABLE VIEW ------------------ */
         <div className="relative w-full overflow-auto rounded-md border border-border flex-1">
           <Table>
             <TableHeader className="bg-secondary/50">
@@ -363,8 +407,7 @@ export function TreeDataTable<TData, TValue>({
         </div>
       )}
 
-      {/* ------------------ BULK ACTIONS BANNER (PC) ------------------ */}
-      {selectedRows.length > 0 && bulkActions && !isSelectionMode && (
+      {selectedRows.length > 0 && (bulkActions || onSelectMany) && (
         <div className="bg-primary/5 border border-primary/20 text-primary px-3 py-2.5 mt-4 rounded-xl flex flex-col gap-3 text-sm shadow-sm animate-in fade-in slide-in-from-bottom-2 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-3">
           <span>
             Đã chọn:{" "}
@@ -382,15 +425,28 @@ export function TreeDataTable<TData, TValue>({
             >
               Hủy bỏ
             </Button>
-            {bulkActions(
-              selectedRows.map((row) => row.original),
-              () => table.resetRowSelection(),
+            {bulkActions ? (
+              bulkActions(
+                selectedRows.map((row) => row.original),
+                () => table.resetRowSelection(),
+              )
+            ) : (
+              <Button
+                size="sm"
+                variant="destructive"
+                className="h-9 shadow-sm flex-1 sm:flex-none"
+                onClick={() => {
+                  onSelectMany?.(selectedRows.map((row) => row.original));
+                  table.resetRowSelection();
+                }}
+              >
+                Xóa tất cả
+              </Button>
             )}
           </div>
         </div>
       )}
 
-      {/* ------------------ PAGINATION FOOTER ------------------ */}
       {totalRowsCount > 0 && (
         <div
           className={`flex flex-col gap-3 py-4 mt-auto border-t border-transparent sm:flex-row sm:items-center sm:justify-between ${
@@ -433,7 +489,7 @@ export function TreeDataTable<TData, TValue>({
                 </SelectTrigger>
                 <SelectContent
                   showSearch={false}
-                  className="min-w-[var(--radix-select-trigger-width)] w-[var(--radix-select-trigger-width)]"
+                  className="min-w-[--radix-select-trigger-width] w-[--radix-select-trigger-width]"
                 >
                   {[5, 10, 20, 50, 100].map((pageSize) => (
                     <SelectItem key={pageSize} value={pageSize.toString()}>

@@ -9,9 +9,9 @@ import {
   Trash2,
   FolderTree,
   Package,
-  Layers,
   ChevronRight,
   ChevronDown,
+  SortAsc,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,10 +23,6 @@ import { categoryApi, CategoryResponse } from "@/services/catalog/category-api";
 import { TreeDataTable } from "@/components/ui/custom/data-tree-table"; // Import component mới
 import { ConfirmDialog } from "@/components/ui/custom/confirm-dialog";
 import { SplitActionMenu } from "@/components/ui/custom/split-action-menu";
-import {
-  SummaryCardItem,
-  SummaryCards,
-} from "@/components/ui/custom/summary-cards";
 import { CategoryFormModal } from "./category-form-modal";
 
 export type CategoryTreeNode = CategoryResponse;
@@ -46,6 +42,7 @@ export default function CategoryListPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CategoryResponse | null>(null);
   const [viewingItem, setViewingItem] = useState<CategoryResponse | null>(null);
+  const [initialParentId, setInitialParentId] = useState<number | null>(null);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -86,7 +83,6 @@ export default function CategoryListPage() {
     }
   };
 
-  // Cấu hình Cột (Rất quan trọng: Sử dụng row.depth để thụt lề)
   const columns = useMemo<ColumnDef<CategoryTreeNode>[]>(
     () => [
       {
@@ -122,7 +118,7 @@ export default function CategoryListPage() {
         cell: ({ row }) => {
           const item = row.original;
           const hasChildren = row.getCanExpand();
-          const paddingLeft = row.depth * 24; // Thụt lề theo cấp bậc (Level)
+          const paddingLeft = row.depth * 24;
 
           return (
             <div
@@ -207,7 +203,9 @@ export default function CategoryListPage() {
                     label: "Thêm danh mục con",
                     icon: <Plus className="w-4 h-4" />,
                     onClick: () => {
-                      // Logic thêm danh mục con (Gán ParentID)
+                      setEditingItem(null);
+                      setInitialParentId(item.categoryId);
+                      setIsFormOpen(true);
                     },
                   },
                   {
@@ -248,6 +246,7 @@ export default function CategoryListPage() {
             className="shadow-sm"
             onClick={() => {
               setEditingItem(null);
+              setInitialParentId(null);
               setIsFormOpen(true);
             }}
           >
@@ -264,6 +263,7 @@ export default function CategoryListPage() {
               getSubRows={(row) =>
                 row.items && row.items.length > 0 ? row.items : undefined
               }
+              onRowClick={(row) => setViewingItem(row)}
               isLoading={isLoading}
               pageCount={Math.ceil(totalCount / pagination.pageSize)}
               rowCount={totalCount}
@@ -274,16 +274,40 @@ export default function CategoryListPage() {
                 setSearchTerm(val);
                 setPagination((prev) => ({ ...prev, pageIndex: 0 }));
               }}
+              onSelectMany={async (selectedItems) => {
+                if (
+                  !confirm(
+                    `Bạn có chắc chắn muốn xóa ${selectedItems.length} danh mục đã chọn?`,
+                  )
+                )
+                  return;
+                setIsDeleting(true);
+                try {
+                  await Promise.all(
+                    selectedItems.map((item) =>
+                      categoryApi.delete(item.categoryId),
+                    ),
+                  );
+                  toast.success(
+                    `Đã xóa ${selectedItems.length} danh mục thành công`,
+                  );
+                  fetchData();
+                } catch (error: any) {
+                  toast.error(
+                    "Có lỗi khi xóa một số danh mục (có thể đang có sản phẩm hoặc danh mục con sử dụng)",
+                  );
+                  fetchData();
+                } finally {
+                  setIsDeleting(false);
+                }
+              }}
               searchPlaceholder="Tìm tên danh mục..."
-              // Hỗ trợ Mobile Card
               mobileCardRenderer={(row, { isSelected, actionCell }) => {
                 const item = row.original;
-                // Thụt lề nhẹ trên mobile bằng margin
-                const ml = row.depth > 0 ? `${row.depth * 1}rem` : "0";
+                const hasChildren = row.getCanExpand();
 
                 return (
                   <div
-                    style={{ marginLeft: ml }}
                     className={`rounded-xl border bg-card p-4 shadow-sm transition-colors active:bg-secondary/40 ${
                       isSelected
                         ? "border-primary/40 bg-primary/5"
@@ -291,13 +315,42 @@ export default function CategoryListPage() {
                     } ${row.depth > 0 ? "border-l-2 border-l-primary/50" : ""}`}
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <span className="text-xs font-semibold text-primary uppercase tracking-wider block">
-                          ID #{item.categoryId}
-                        </span>
-                        <h3 className="text-base font-bold text-foreground mt-0.5">
-                          {item.categoryName || "Chưa có tên"}
-                        </h3>
+                      <div className="flex items-start gap-2.5 flex-1">
+                        {hasChildren ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              row.toggleExpanded();
+                            }}
+                            className="p-1 hover:bg-muted rounded-md text-muted-foreground transition-colors mt-0.5"
+                          >
+                            {row.getIsExpanded() ? (
+                              <ChevronDown className="w-4 h-4" />
+                            ) : (
+                              <ChevronRight className="w-4 h-4" />
+                            )}
+                          </button>
+                        ) : (
+                          <span className="w-4 h-4 block shrink-0 mt-0.5" />
+                        )}
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-primary uppercase tracking-wider block">
+                              ID #{item.categoryId}
+                            </span>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-medium shrink-0">
+                              <Package className="w-3 h-3 mr-1" />
+                              {item.productCount || 0} SP
+                            </span>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-medium shrink-0">
+                              <SortAsc className="w-3 h-3 mr-1" />
+                              STT: {item.categoryOrder || 0}
+                            </span>
+                          </div>
+                          <h3 className="text-base font-bold text-foreground mt-0.5">
+                            {item.categoryName || "Chưa có tên"}
+                          </h3>
+                        </div>
                       </div>
                     </div>
                     {actionCell}
@@ -325,9 +378,11 @@ export default function CategoryListPage() {
           onClose={() => {
             setIsFormOpen(false);
             setEditingItem(null);
+            setInitialParentId(null);
           }}
           onSuccess={fetchData}
           item={editingItem}
+          initialParentId={initialParentId}
         />
 
         <CategoryFormModal

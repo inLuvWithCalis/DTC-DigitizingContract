@@ -1,4 +1,5 @@
 <Solution>
   <Project Path="ContractManagement.API/ContractManagement.API.csproj" />
   <Project Path="ContractManagement.Infrastructure/ContractManagement.Infrastructure.csproj" />
+  <Project Path="ContractManagement.Tests/ContractManagement.Tests.csproj" />
 </Solution>

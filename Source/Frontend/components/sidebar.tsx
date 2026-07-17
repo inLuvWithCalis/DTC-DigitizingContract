@@ -1,20 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import Link from "next/link"; // Quan trọng: Dùng Link thay vì thẻ <a>
 import {
-  X,
-  LayoutDashboard,
+  BriefcaseBusiness,
+  Building2,
+  ChevronLeft,
   FileSignature,
   FileText,
-  ShoppingCart,
-  Users,
-  Settings,
+  LayoutDashboard,
   LogOut,
-  User,
-  ChevronLeft,
   Menu,
+  Package,
+  Settings,
+  Tags,
+  User,
+  Users,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,28 +27,31 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useSidebar } from "./sidebar-context";
 import { useAuthStore } from "@/hooks/use-auth-store";
+import { useSidebar } from "./sidebar-context";
+
+const navItems = [
+  { label: "Tổng quan", icon: LayoutDashboard, href: "/dashboard" },
+  { label: "Báo giá", icon: FileSignature, href: "/quotations" },
+  { label: "Khách hàng", icon: Users, href: "/customers" },
+  { label: "Sản phẩm", icon: Package, href: "/catalog/products" },
+  { label: "Dịch vụ", icon: BriefcaseBusiness, href: "/catalog/services" },
+  { label: "Loại dịch vụ", icon: Tags, href: "/catalog/service-types" },
+  { label: "Nhân viên", icon: User, href: "/admin/employees" },
+  { label: "Phòng ban", icon: Building2, href: "/admin/departments" },
+  { label: "Cấu hình", icon: Settings, href: "/dashboard/settings" },
+];
 
 export function Sidebar() {
   const { isExpanded, setIsExpanded } = useSidebar();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-
   const { user, logout } = useAuthStore();
-
   const router = useRouter();
   const pathname = usePathname();
+
   useEffect(() => {
     setIsMobileOpen(false);
   }, [pathname]);
-
-  const navItems = [
-    { label: "Tổng quan", icon: LayoutDashboard, href: "/dashboard" },
-    { label: "Hợp đồng Bán", icon: FileSignature, href: "/dashboard/sales" },
-    { label: "Hợp đồng Mua", icon: ShoppingCart, href: "/dashboard/purchases" },
-    { label: "Đối tác", icon: Users, href: "/dashboard/partners" },
-    { label: "Cấu hình", icon: Settings, href: "/dashboard/settings" },
-  ];
 
   const handleLogout = () => {
     logout();
@@ -54,7 +60,7 @@ export function Sidebar() {
 
   const renderNavItems = () => (
     <nav className="flex-1 px-3 py-4 space-y-1.5 flex flex-col items-stretch overflow-y-auto">
-      {navItems.map((item, i) => {
+      {navItems.map((item) => {
         const Icon = item.icon;
         const isActive =
           item.href === "/dashboard"
@@ -63,10 +69,10 @@ export function Sidebar() {
 
         return (
           <Link
-            key={i}
+            key={item.href}
             href={item.href}
             className={`flex items-center py-2.5 rounded-xl transition-all duration-200 group relative ${
-              isExpanded ? "gap-3 px-3" : "justify-center px-0 lg:px-0 px-3" // Mobile luôn có gap và padding
+              isExpanded ? "gap-3 px-3" : "justify-center px-0 lg:px-0 px-3"
             } ${
               isActive
                 ? "bg-primary/10 text-primary font-semibold shadow-sm"
@@ -101,9 +107,6 @@ export function Sidebar() {
 
   return (
     <>
-      {/* ========================================= */}
-      {/* 1. NÚT MỞ MENU TRÊN MOBILE (HAMBURGER)    */}
-      {/* ========================================= */}
       <button
         onClick={() => setIsMobileOpen(true)}
         className="fixed top-3 left-4 z-40 p-2 lg:hidden hover:bg-accent rounded-xl transition-colors text-muted-foreground bg-card shadow-sm border border-border"
@@ -111,9 +114,6 @@ export function Sidebar() {
         <Menu className="h-5 w-5" />
       </button>
 
-      {/* ========================================= */}
-      {/* 2. SIDEBAR TRÊN DESKTOP (MÀN HÌNH LỚN)    */}
-      {/* ========================================= */}
       <aside
         className={`relative hidden lg:flex h-screen bg-card border-r border-border flex-col flex-shrink-0 transition-all duration-300 ease-in-out z-20 ${
           isExpanded ? "w-64" : "w-20"
@@ -156,9 +156,6 @@ export function Sidebar() {
         {renderNavItems()}
       </aside>
 
-      {/* ========================================= */}
-      {/* 3. SIDEBAR TRÊN MOBILE (MÀN HÌNH NHỎ)     */}
-      {/* ========================================= */}
       {isMobileOpen && (
         <>
           <div

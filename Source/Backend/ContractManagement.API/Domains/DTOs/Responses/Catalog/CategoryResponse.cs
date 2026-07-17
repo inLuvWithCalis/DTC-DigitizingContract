@@ -1,4 +1,4 @@
-﻿namespace ContractManagement.API.Domains.DTOs.Responses.Catalog
+namespace ContractManagement.API.Domains.DTOs.Responses.Catalog
 {
     /// <summary>
     /// Response trả về thông tin danh mục sản phẩm.
@@ -20,5 +20,10 @@
         public string? Image { get; set; }
 
         public int ProductCount { get; set; }
+
+        /// <summary>
+        /// Danh sách danh mục con (chỉ có giá trị trong API parents).
+        /// </summary>
+        public List<CategoryResponse>? Items { get; set; }
     }
 }

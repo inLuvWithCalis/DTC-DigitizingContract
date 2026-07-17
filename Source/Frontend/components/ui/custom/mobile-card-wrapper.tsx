@@ -40,8 +40,11 @@ export function MobileCardWrapper<TData>({
     }
   };
 
+  const ml = row.depth > 0 ? `${row.depth * 1.25}rem` : "0";
+
   return (
     <div
+      style={{ marginLeft: ml }}
       className={`relative transition-all duration-200 ${
         isSelected ? "ring-2 ring-primary/50 rounded-xl" : ""
       }`}

@@ -58,7 +58,7 @@ function Input({
     if (onClear) onClear();
   };
 
-  const showClearButton = charCount > 0 && !props.disabled;
+  const showClearButton = charCount > 0 && !props.disabled && !props.readOnly;
 
   return (
     <div className="relative w-full">

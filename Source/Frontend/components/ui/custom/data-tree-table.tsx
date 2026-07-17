@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ColumnDef,
-  SortingState,
   flexRender,
   getCoreRowModel,
+  getExpandedRowModel,
+  getPaginationRowModel,
   useReactTable,
   Row,
-  PaginationState,
-  OnChangeFn,
+  ExpandedState,
 } from "@tanstack/react-table";
 import {
   Table,
@@ -30,10 +30,10 @@ import {
 } from "@/components/ui/select";
 import {
   Loader2,
-  ChevronLeft,
-  ChevronRight,
   CheckCheck,
   Search,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { MobileCardWrapper } from "./mobile-card-wrapper";
@@ -44,15 +44,17 @@ interface MobileCardRenderContext {
   actionCell: React.ReactNode;
 }
 
-interface DataTableProps<TData, TValue> {
+interface TreeDataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
-  pageCount: number;
-  rowCount: number;
-  pagination: PaginationState;
-  onPaginationChange: OnChangeFn<PaginationState>;
-  sorting?: SortingState;
-  onSortingChange?: OnChangeFn<SortingState>;
+  getSubRows: (row: TData) => TData[] | undefined;
+  defaultExpanded?: boolean;
+
+  pageCount?: number;
+  rowCount?: number;
+  pagination?: { pageIndex: number; pageSize: number };
+  onPaginationChange?: (pagination: any) => void;
+
   searchValue?: string;
   onSearchChange?: (value: string) => void;
   searchPlaceholder?: string;
@@ -70,15 +72,15 @@ interface DataTableProps<TData, TValue> {
   ) => React.ReactNode;
 }
 
-export function DataTable<TData, TValue>({
+export function TreeDataTable<TData, TValue>({
   columns,
   data,
+  getSubRows,
+  defaultExpanded = true,
   pageCount,
   rowCount,
   pagination,
   onPaginationChange,
-  sorting = [],
-  onSortingChange,
   searchValue = "",
   onSearchChange,
   searchPlaceholder = "Tìm kiếm...",
@@ -88,10 +90,24 @@ export function DataTable<TData, TValue>({
   bulkActions,
   onRowClick,
   mobileCardRenderer,
-}: DataTableProps<TData, TValue>) {
+}: TreeDataTableProps<TData, TValue>) {
   const [rowSelection, setRowSelection] = useState({});
-  const isMobile = useMediaQuery("(max-width: 767px)");
+  const [expanded, setExpanded] = useState<ExpandedState>(
+    defaultExpanded ? true : {},
+  );
+  const [internalPagination, setInternalPagination] = useState({
+    pageIndex: 0,
+    pageSize: 10,
+  });
 
+  const isServerSide =
+    pagination !== undefined && onPaginationChange !== undefined;
+  const currentPagination = isServerSide ? pagination : internalPagination;
+  const handlePaginationChange = isServerSide
+    ? onPaginationChange
+    : setInternalPagination;
+
+  const isMobile = useMediaQuery("(max-width: 767px)");
   const [localSearch, setLocalSearch] = useState(searchValue);
 
   const triggerSearch = useCallback(
@@ -99,21 +115,16 @@ export function DataTable<TData, TValue>({
       const targetSearch = newVal !== undefined ? newVal : localSearch;
       if (onSearchChange && targetSearch !== searchValue) {
         onSearchChange(targetSearch);
-        if (onPaginationChange && pagination && pagination.pageIndex !== 0) {
-          onPaginationChange({
-            ...pagination,
-            pageIndex: 0,
-          });
+        if (!isServerSide) {
+          setInternalPagination((prev) => ({ ...prev, pageIndex: 0 }));
         }
       }
     },
-    [localSearch, onSearchChange, searchValue, onPaginationChange, pagination],
+    [localSearch, onSearchChange, searchValue, isServerSide],
   );
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      triggerSearch();
-    }, 500);
+    const timer = setTimeout(() => triggerSearch(), 500);
     return () => clearTimeout(timer);
   }, [triggerSearch]);
 
@@ -124,24 +135,27 @@ export function DataTable<TData, TValue>({
   const table = useReactTable({
     data,
     columns,
-    pageCount,
-    rowCount,
     state: {
-      pagination,
-      sorting,
       rowSelection,
+      expanded,
+      pagination: currentPagination,
     },
-    manualPagination: true,
-    manualSorting: true,
-    manualFiltering: true,
-    onPaginationChange,
-    onSortingChange,
+    manualPagination: isServerSide,
+    pageCount: isServerSide ? (pageCount ?? -1) : undefined,
+    getSubRows,
+    onExpandedChange: setExpanded,
+    getExpandedRowModel: getExpandedRowModel(),
     onRowSelectionChange: setRowSelection,
+    onPaginationChange: handlePaginationChange,
     getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: isServerSide ? undefined : getPaginationRowModel(),
   });
 
-  const selectedRows = table.getFilteredSelectedRowModel().rows;
+  const selectedRows = table.getFilteredSelectedRowModel().flatRows;
   const isSelectionMode = isMobile && selectedRows.length > 0;
+  const totalRowsCount = isServerSide
+    ? (rowCount ?? data.length)
+    : table.getPrePaginationRowModel().rows.length;
 
   const exitSelectionMode = useCallback(() => {
     table.resetRowSelection();
@@ -207,14 +221,6 @@ export function DataTable<TData, TValue>({
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 text-xs"
-              onClick={() => table.toggleAllPageRowsSelected(true)}
-            >
-              Chọn tất cả
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
               className="h-8 text-xs text-muted-foreground"
               onClick={exitSelectionMode}
             >
@@ -225,7 +231,6 @@ export function DataTable<TData, TValue>({
       )}
 
       {isMobile ? (
-        /* ────────────── MOBILE CARD VIEW ────────────── */
         <div className="flex flex-col gap-3">
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
@@ -233,10 +238,10 @@ export function DataTable<TData, TValue>({
             </div>
           ) : table.getRowModel().rows?.length ? (
             table.getRowModel().rows.map((row) => {
-              // TỰ ĐỘNG TÌM VÀ RENDER CỘT ACTION
               const actionColumn = row
                 .getVisibleCells()
                 .find((c) => c.column.id === "action");
+
               const actionNode =
                 !isSelectionMode && actionColumn ? (
                   <div
@@ -250,6 +255,12 @@ export function DataTable<TData, TValue>({
                   </div>
                 ) : null;
 
+              const nameCell = row
+                .getVisibleCells()
+                .find((c) => c.column.id === "categoryName");
+
+              const isSelected = row.getIsSelected();
+
               return (
                 <MobileCardWrapper
                   key={row.id}
@@ -257,34 +268,43 @@ export function DataTable<TData, TValue>({
                   isSelectionMode={isSelectionMode}
                   onRowClick={onRowClick}
                   onLongPress={() => row.toggleSelected(true)}
-                  onTapInSelectionMode={() =>
-                    row.toggleSelected(!row.getIsSelected())
-                  }
+                  onTapInSelectionMode={() => row.toggleSelected(!isSelected)}
                 >
                   {mobileCardRenderer ? (
-                    // Truyền actionNode xuống cho Page sử dụng
                     mobileCardRenderer(row, {
                       isSelectionMode,
-                      isSelected: row.getIsSelected(),
+                      isSelected,
                       actionCell: actionNode,
                     })
                   ) : (
                     <div
-                      className="rounded-xl border border-border bg-card p-4 shadow-sm transition-colors active:bg-secondary/40"
-                      data-state={row.getIsSelected() && "selected"}
+                      className={`rounded-xl border p-4 shadow-sm transition-all relative ${
+                        isSelected
+                          ? "bg-primary/10 border-primary shadow-inner"
+                          : "bg-card border-border"
+                      } ${row.depth > 0 ? "border-l-4" : ""}`}
+                      data-state={isSelected ? "selected" : undefined}
                     >
+                      <div className="flex items-start gap-2 mb-3 pb-3 border-b border-border/50">
+                        <div className="flex-1">
+                          {nameCell
+                            ? flexRender(
+                                nameCell.column.columnDef.cell,
+                                nameCell.getContext(),
+                              )
+                            : null}
+                        </div>
+                      </div>
+
                       <div className="flex flex-col gap-2.5">
                         {row.getVisibleCells().map((cell) => {
-                          const header = cell.column.columnDef.header;
                           const columnId = cell.column.id;
-
-                          if (columnId === "select" || columnId === "action")
+                          if (
+                            columnId === "select" ||
+                            columnId === "action" ||
+                            columnId === "categoryName"
+                          )
                             return null;
-
-                          let label: React.ReactNode = columnId;
-                          if (typeof header === "string") {
-                            label = header;
-                          }
 
                           return (
                             <div
@@ -292,9 +312,12 @@ export function DataTable<TData, TValue>({
                               className="flex items-start justify-between gap-3"
                             >
                               <span className="text-xs font-medium text-muted-foreground shrink-0 pt-0.5 capitalize">
-                                {label}
+                                {typeof cell.column.columnDef.header ===
+                                "string"
+                                  ? cell.column.columnDef.header
+                                  : columnId}
                               </span>
-                              <div className="text-sm text-right">
+                              <div className="text-sm text-right font-medium">
                                 {flexRender(
                                   cell.column.columnDef.cell,
                                   cell.getContext(),
@@ -304,7 +327,6 @@ export function DataTable<TData, TValue>({
                           );
                         })}
                       </div>
-
                       {actionNode}
                     </div>
                   )}
@@ -316,17 +338,8 @@ export function DataTable<TData, TValue>({
               Không tìm thấy dữ liệu.
             </div>
           )}
-
-          {!isSelectionMode &&
-            table.getRowModel().rows?.length > 0 &&
-            (bulkActions || onSelectMany) && (
-              <p className="text-center text-xs text-muted-foreground/60 mt-1 select-none">
-                Nhấn giữ để chọn nhiều dòng
-              </p>
-            )}
         </div>
       ) : (
-        /* ────────────── DESKTOP TABLE VIEW ────────────── */
         <div className="relative w-full overflow-auto rounded-md border border-border flex-1">
           <Table>
             <TableHeader className="bg-secondary/50">
@@ -352,7 +365,16 @@ export function DataTable<TData, TValue>({
               ))}
             </TableHeader>
             <TableBody>
-              {table.getRowModel().rows?.length ? (
+              {isLoading ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={columns.length}
+                    className="h-32 text-center text-muted-foreground"
+                  >
+                    <Loader2 className="w-5 h-5 animate-spin mx-auto text-primary" />
+                  </TableCell>
+                </TableRow>
+              ) : table.getRowModel().rows?.length ? (
                 table.getRowModel().rows.map((row) => (
                   <TableRow
                     key={row.id}
@@ -376,11 +398,7 @@ export function DataTable<TData, TValue>({
                     colSpan={columns.length}
                     className="h-32 text-center text-muted-foreground"
                   >
-                    {isLoading ? (
-                      <Loader2 className="w-5 h-5 animate-spin mx-auto text-primary" />
-                    ) : (
-                      "Không tìm thấy dữ liệu."
-                    )}
+                    Không tìm thấy dữ liệu.
                   </TableCell>
                 </TableRow>
               )}
@@ -429,7 +447,7 @@ export function DataTable<TData, TValue>({
         </div>
       )}
 
-      {rowCount > 0 && (
+      {totalRowsCount > 0 && (
         <div
           className={`flex flex-col gap-3 py-4 mt-auto border-t border-transparent sm:flex-row sm:items-center sm:justify-between ${
             isMobile && "justify-end items-center"
@@ -447,12 +465,14 @@ export function DataTable<TData, TValue>({
               {Math.min(
                 (table.getState().pagination.pageIndex + 1) *
                   table.getState().pagination.pageSize,
-                rowCount,
+                totalRowsCount,
               )}
             </span>{" "}
             trong{" "}
-            <span className="font-medium text-foreground">{rowCount}</span> kết
-            quả
+            <span className="font-medium text-foreground">
+              {totalRowsCount}
+            </span>{" "}
+            kết quả
           </div>
 
           <div className="flex items-center justify-between gap-3 sm:gap-6">
@@ -469,7 +489,7 @@ export function DataTable<TData, TValue>({
                 </SelectTrigger>
                 <SelectContent
                   showSearch={false}
-                  className="min-w-(--radix-select-trigger-width) w-(--radix-select-trigger-width)"
+                  className="min-w-[--radix-select-trigger-width] w-[--radix-select-trigger-width]"
                 >
                   {[5, 10, 20, 50, 100].map((pageSize) => (
                     <SelectItem key={pageSize} value={pageSize.toString()}>

@@ -122,7 +122,7 @@ export default function CategoryListPage() {
 
           return (
             <div
-              className="flex items-center gap-2 max-w-[400px]"
+              className="flex items-center gap-2 w-[400px]"
               style={{ paddingLeft: `${paddingLeft}px` }}
             >
               <div className="w-6 h-6 flex items-center justify-center shrink-0">

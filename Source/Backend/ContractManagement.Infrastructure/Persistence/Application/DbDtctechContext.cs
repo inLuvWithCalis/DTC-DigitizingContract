@@ -291,14 +291,75 @@ public partial class DbDtctechContext : DbContext
 
         modelBuilder.Entity<TblContractVersion>(entity =>
         {
-            entity.HasKey(e => e.VersionId).HasName("PK__tbl_Cont__16C6400F510A7D28");
+            entity.HasKey(e => e.VersionId)
+                .HasName("PK_tbl_ContractVersion");
 
-            entity.ToTable("tbl_ContractVersion");
+            entity.ToTable("tbl_ContractVersion", table =>
+            {
+                // Version bắt đầu từ 1, không chấp nhận 0 hoặc số âm.
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractVersion_VersionNo",
+                    "[VersionNo] > 0");
 
-            entity.Property(e => e.ChangeNote).HasMaxLength(2000);
+                /*
+                 * Version chưa khóa:
+                 * - không có LockedDate;
+                 * - không có LockedByEmployeeId.
+                 *
+                 * Version đã khóa:
+                 * - phải biết thời điểm/người khóa;
+                 * - phải có snapshot và hash để xác định nội dung bất biến.
+                 */
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractVersion_LockState",
+                    "([IsLocked] = 0 " +
+                    "AND [LockedDate] IS NULL " +
+                    "AND [LockedByEmployeeId] IS NULL) " +
+                    "OR " +
+                    "([IsLocked] = 1 " +
+                    "AND [LockedDate] IS NOT NULL " +
+                    "AND [LockedByEmployeeId] IS NOT NULL " +
+                    "AND [SnapshotJson] IS NOT NULL " +
+                    "AND [SnapshotHash] IS NOT NULL)");
+            });
+
+            // Một hợp đồng không thể có hai version cùng VersionNo.
+            entity.HasIndex(e => new { e.ContractId, e.VersionNo })
+                .IsUnique()
+                .HasDatabaseName("UX_tbl_ContractVersion_ContractId_VersionNo");
+
+            entity.HasIndex(e => e.SourceVersionId)
+                .HasDatabaseName("IX_tbl_ContractVersion_SourceVersionId");
+
+            entity.HasIndex(e => e.TemplateVersionId)
+                .HasDatabaseName("IX_tbl_ContractVersion_TemplateVersionId");
+
+            entity.Property(e => e.ChangeNote)
+                .HasMaxLength(2000);
+
+            entity.Property(e => e.SnapshotJson)
+                .HasColumnType("nvarchar(max)");
+
+            entity.Property(e => e.SnapshotHash)
+                .HasMaxLength(64)
+                .IsUnicode(false)
+                .IsFixedLength();
+
+            entity.Property(e => e.IsLocked)
+                .HasDefaultValue(false, "DF_tbl_ContractVersion_IsLocked");
+
+            entity.Property(e => e.LockedDate)
+                .HasColumnType("datetime2");
+
             entity.Property(e => e.CreatedDate)
-                .HasDefaultValueSql("(getdate())")
-                .HasColumnType("datetime");
+                .HasColumnType("datetime2")
+                .HasDefaultValueSql(
+                    "(sysutcdatetime())",
+                    "DF_tbl_ContractVersion_CreatedDate");
+
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
         });
 
         modelBuilder.Entity<TblCustomer>(entity =>

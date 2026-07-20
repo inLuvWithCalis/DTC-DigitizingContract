@@ -119,22 +119,128 @@ public partial class DbDtctechContext : DbContext
         {
             entity.HasKey(e => e.ContractId);
 
-            entity.ToTable("tbl_Contract");
+            entity.ToTable("tbl_Contract", table =>
+            {
+                // Chỉ chấp nhận các trạng thái thuộc lifecycle.
+                table.HasCheckConstraint(
+                    "CK_tbl_Contract_Status",
+                    "[Status] IN (0, 1, 2, 3, 4, 5, 6, 7)");
+
+                // ContractType hiện có ba loại hợp đồng hợp lệ.
+                // Không cho phép giá trị 0 vì 0 không mang ý nghĩa nghiệp vụ.
+                table.HasCheckConstraint(
+                    "CK_tbl_Contract_ContractType",
+                    "[ContractType] IN (1, 2, 3)");
+
+                // 1 = Vietnamese, 2 = Bilingual.
+                table.HasCheckConstraint(
+                    "CK_tbl_Contract_LanguageMode",
+                    "[LanguageMode] IN (1, 2)");
+
+                // Giá trị hợp đồng không được âm.
+                table.HasCheckConstraint(
+                    "CK_tbl_Contract_TotalAmount",
+                    "[TotalAmount] >= 0");
+            });
+            /*
+             * ContractCode có thể null khi còn Draft.
+             * Khi đã có code thì code phải duy nhất trong tenant.
+             */
+            entity.HasIndex(
+                    e => e.ContractCode,
+                    "UX_tbl_Contract_ContractCode")
+                .IsUnique()
+                .HasFilter("[ContractCode] IS NOT NULL");
+
+            /*
+             * Các index phục vụ query theo Customer, Owner và trạng thái.
+             * Dự án không dùng foreign key vật lý nhưng vẫn cần index.
+             */
+            entity.HasIndex(
+                e => e.CustomerId,
+                "IX_tbl_Contract_CustomerId");
+
+            entity.HasIndex(
+                e => new { e.EmployeeId, e.Status },
+                "IX_tbl_Contract_EmployeeId_Status");
+
+            entity.HasIndex(
+                e => e.TemplateVersionId,
+                "IX_tbl_Contract_TemplateVersionId");
+
+            entity.HasIndex(
+                e => e.ParentContractId,
+                "IX_tbl_Contract_ParentContractId");
+
+            entity.HasIndex(
+                e => e.CurrentVersionId,
+                "IX_tbl_Contract_CurrentVersionId");
 
             entity.Property(e => e.ContractCode)
                 .HasMaxLength(50)
                 .IsUnicode(false);
-            entity.Property(e => e.ContractName).HasMaxLength(1000);
+
+            entity.Property(e => e.ContractName)
+                .HasMaxLength(1000)
+                .IsRequired();
+
             entity.Property(e => e.ContractNameEn)
-                .HasMaxLength(500)
-                .IsUnicode(false);
+                .HasMaxLength(1000);
+
+            entity.Property(e => e.SignDate)
+                .HasColumnType("datetime2");
+
+            entity.Property(e => e.EffectiveDate)
+                .HasColumnType("datetime2");
+
+            entity.Property(e => e.ExpireDate)
+                .HasColumnType("datetime2");
+
+            /*
+             * ContractStatus.Draft = 0.
+             * Không reference API enum từ Infrastructure.
+             */
+            entity.Property(e => e.Status)
+                .HasDefaultValue((byte)0);
+
+            /*
+             * Tiền bắt buộc dùng decimal.
+             */
+            entity.Property(e => e.TotalAmount)
+                .HasPrecision(18, 2)
+                .HasDefaultValue(0m);
+
+            entity.Property(e => e.CurrencyCode)
+                .HasMaxLength(3)
+                .IsUnicode(false)
+                .IsFixedLength()
+                .HasDefaultValue("VND");
+
+            /*
+             * ContractLanguageMode.Vietnamese = 1.
+             */
+            entity.Property(e => e.LanguageMode)
+                .HasDefaultValue((byte)1);
+
+            entity.Property(e => e.IsLegacy)
+                .HasDefaultValue(false);
+
             entity.Property(e => e.CreatedDate)
-                .HasDefaultValueSql("(getdate())", "DF_tbl_Contract_CreatedDate")
-                .HasColumnType("datetime");
-            entity.Property(e => e.EffectiveDate).HasColumnType("datetime");
-            entity.Property(e => e.ExpireDate).HasColumnType("datetime");
-            entity.Property(e => e.SignDate).HasColumnType("datetime");
-            entity.Property(e => e.UpdateDate).HasColumnType("datetime");
+                .HasDefaultValueSql(
+                    "(sysutcdatetime())",
+                    "DF_tbl_Contract_CreatedDate")
+                .HasColumnType("datetime2");
+
+            entity.Property(e => e.UpdateDate)
+                .HasColumnType("datetime2");
+
+            /*
+             * RowVersion do SQL Server tự sinh.
+             * Client không được tự gán giá trị cho cột này.
+             */
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
         });
 
         modelBuilder.Entity<TblContractAppendix>(entity =>

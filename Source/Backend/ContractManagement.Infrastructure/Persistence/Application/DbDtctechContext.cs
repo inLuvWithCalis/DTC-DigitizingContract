@@ -281,12 +281,86 @@ public partial class DbDtctechContext : DbContext
 
         modelBuilder.Entity<TblContractTerm>(entity =>
         {
-            entity.HasKey(e => e.TermId).HasName("PK__tbl_Cont__410A21A507DB2563");
+            entity.HasKey(e => e.TermId)
+                .HasName("PK_tbl_ContractTerm");
 
-            entity.ToTable("tbl_ContractTerm");
+            entity.ToTable("tbl_ContractTerm", table =>
+            {
+                // Không chấp nhận mã term rỗng hoặc chỉ chứa khoảng trắng.
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractTerm_TermCode",
+                    "LEN(LTRIM(RTRIM([TermCode]))) > 0");
 
-            entity.Property(e => e.DisplayOrder).HasDefaultValue(0);
-            entity.Property(e => e.TermTitle).HasMaxLength(500);
+                // Thứ tự hiển thị không được âm.
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractTerm_DisplayOrder",
+                    "[DisplayOrder] >= 0");
+            });
+
+            /*
+             * Trong một version, mỗi TermCode chỉ được xuất hiện một lần.
+             * Version khác vẫn được phép có cùng TermCode vì đó là snapshot mới.
+             */
+            entity.HasIndex(e => new { e.VersionId, e.TermCode })
+                .IsUnique()
+                .HasDatabaseName("UX_tbl_ContractTerm_VersionId_TermCode");
+
+            // Phục vụ lấy danh sách term đúng thứ tự của một contract/version.
+            entity.HasIndex(e => new
+            {
+                e.ContractId,
+                e.VersionId,
+                e.DisplayOrder
+            })
+                .HasDatabaseName(
+                    "IX_tbl_ContractTerm_ContractId_VersionId_DisplayOrder");
+
+            entity.HasIndex(e => e.SourceTemplateTermId)
+                .HasDatabaseName("IX_tbl_ContractTerm_SourceTemplateTermId");
+
+            entity.Property(e => e.TermCode)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+
+            entity.Property(e => e.TermTitle)
+                .HasMaxLength(500);
+
+            entity.Property(e => e.TermTitleEn)
+                .HasMaxLength(500);
+
+            entity.Property(e => e.TermContent)
+                .HasColumnType("nvarchar(max)");
+
+            entity.Property(e => e.TermContentEn)
+                .HasColumnType("nvarchar(max)");
+
+            /*
+             * Mặc định đóng:
+             * nếu người tạo template quên cấu hình, khách hàng không được
+             * comment nhầm vào điều khoản cứng.
+             */
+            entity.Property(e => e.IsNegotiable)
+                .HasDefaultValue(
+                    false,
+                    "DF_tbl_ContractTerm_IsNegotiable");
+
+            entity.Property(e => e.DisplayOrder)
+                .HasDefaultValue(
+                    0,
+                    "DF_tbl_ContractTerm_DisplayOrder");
+
+            entity.Property(e => e.CreatedDate)
+                .HasColumnType("datetime2")
+                .HasDefaultValueSql(
+                    "(sysutcdatetime())",
+                    "DF_tbl_ContractTerm_CreatedDate");
+
+            entity.Property(e => e.UpdatedDate)
+                .HasColumnType("datetime2");
+
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
         });
 
         modelBuilder.Entity<TblContractVersion>(entity =>

@@ -231,11 +231,15 @@ namespace ContractManagement.API.Domains.Services.Customer
                 return new Dictionary<int, int>();
             }
 
-            // Query bo qua các hợp đồng không có CustomerId (null) và group by CustomerId để đếm số lượng hợp đồng cho từng khách hàng
             return await _dbContext.TblContracts
                 .AsNoTracking()
-                .Where(x => x.CustomerId.HasValue && customerIds.Contains(x.CustomerId.Value))
-                .GroupBy(x => x.CustomerId.Value)
+
+                /*
+                 * TblContract.CustomerId hiện là int bắt buộc,
+                 * nên không cần HasValue hoặc Value nữa.
+                 */
+                .Where(x => customerIds.Contains(x.CustomerId))
+                .GroupBy(x => x.CustomerId)
                 .ToDictionaryAsync(
                     x => x.Key,
                     x => x.Count());

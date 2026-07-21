@@ -4,16 +4,19 @@ using ContractManagement.Infrastructure.Persistence.Application;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace ContractManagement.Migrations
+namespace ContractManagement.Infrastructure.Migrations.Application
 {
     [DbContext(typeof(DbDtctechContext))]
-    partial class DbDtctechContextModelSnapshot : ModelSnapshot
+    [Migration("20260721060008_AddContractTemplateTables")]
+    partial class AddContractTemplateTables
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -431,177 +434,6 @@ namespace ContractManagement.Migrations
                             t.HasCheckConstraint("CK_tbl_ContractTemplate_LanguageMode", "[LanguageMode] IN (1, 2)");
 
                             t.HasCheckConstraint("CK_tbl_ContractTemplate_TemplateCode", "LEN(LTRIM(RTRIM([TemplateCode]))) > 0");
-                        });
-                });
-
-            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplateField", b =>
-                {
-                    b.Property<int>("TemplateFieldId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("TemplateFieldId"));
-
-                    b.Property<DateTime>("CreatedDate")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("(sysutcdatetime())", "DF_tbl_ContractTemplateField_CreatedDate");
-
-                    b.Property<int>("CreatedEmployeeId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("DataSource")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .IsUnicode(false)
-                        .HasColumnType("varchar(500)");
-
-                    b.Property<string>("DefaultValue")
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
-
-                    b.Property<int>("DisplayOrder")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(0, "DF_tbl_ContractTemplateField_DisplayOrder");
-
-                    b.Property<string>("FieldLabel")
-                        .IsRequired()
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
-
-                    b.Property<string>("FormatString")
-                        .HasMaxLength(100)
-                        .IsUnicode(false)
-                        .HasColumnType("varchar(100)");
-
-                    b.Property<bool>("IsRequired")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(false, "DF_tbl_ContractTemplateField_IsRequired");
-
-                    b.Property<string>("PlaceholderKey")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .IsUnicode(false)
-                        .HasColumnType("varchar(100)");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<int>("TemplateVersionId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("UpdatedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("UpdatedEmployeeId")
-                        .HasColumnType("int");
-
-                    b.HasKey("TemplateFieldId")
-                        .HasName("PK_tbl_ContractTemplateField");
-
-                    b.HasIndex("TemplateVersionId", "DisplayOrder")
-                        .HasDatabaseName("IX_tbl_ContractTemplateField_Version_DisplayOrder");
-
-                    b.HasIndex("TemplateVersionId", "PlaceholderKey")
-                        .IsUnique()
-                        .HasDatabaseName("UX_tbl_ContractTemplateField_Version_Placeholder");
-
-                    b.ToTable("tbl_ContractTemplateField", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_tbl_ContractTemplateField_DataSource", "LEN(LTRIM(RTRIM([DataSource]))) > 0");
-
-                            t.HasCheckConstraint("CK_tbl_ContractTemplateField_DisplayOrder", "[DisplayOrder] >= 0");
-
-                            t.HasCheckConstraint("CK_tbl_ContractTemplateField_PlaceholderKey", "LEN(LTRIM(RTRIM([PlaceholderKey]))) > 0");
-
-                            t.HasCheckConstraint("CK_tbl_ContractTemplateField_TemplateVersionId", "[TemplateVersionId] > 0");
-                        });
-                });
-
-            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplateTerm", b =>
-                {
-                    b.Property<int>("TemplateTermId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("TemplateTermId"));
-
-                    b.Property<DateTime>("CreatedDate")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("(sysutcdatetime())", "DF_tbl_ContractTemplateTerm_CreatedDate");
-
-                    b.Property<int>("CreatedEmployeeId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("DisplayOrder")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(0, "DF_tbl_ContractTemplateTerm_DisplayOrder");
-
-                    b.Property<bool>("IsNegotiable")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(false, "DF_tbl_ContractTemplateTerm_IsNegotiable");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<int>("TemplateVersionId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("TermCode")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .IsUnicode(false)
-                        .HasColumnType("varchar(100)");
-
-                    b.Property<string>("TermContent")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("TermContentEn")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("TermTitle")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("TermTitleEn")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<DateTime?>("UpdatedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("UpdatedEmployeeId")
-                        .HasColumnType("int");
-
-                    b.HasKey("TemplateTermId")
-                        .HasName("PK_tbl_ContractTemplateTerm");
-
-                    b.HasIndex("TemplateVersionId", "DisplayOrder")
-                        .HasDatabaseName("IX_tbl_ContractTemplateTerm_Version_DisplayOrder");
-
-                    b.HasIndex("TemplateVersionId", "TermCode")
-                        .IsUnique()
-                        .HasDatabaseName("UX_tbl_ContractTemplateTerm_Version_TermCode");
-
-                    b.ToTable("tbl_ContractTemplateTerm", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_tbl_ContractTemplateTerm_DisplayOrder", "[DisplayOrder] >= 0");
-
-                            t.HasCheckConstraint("CK_tbl_ContractTemplateTerm_TemplateVersionId", "[TemplateVersionId] > 0");
-
-                            t.HasCheckConstraint("CK_tbl_ContractTemplateTerm_TermCode", "LEN(LTRIM(RTRIM([TermCode]))) > 0");
                         });
                 });
 

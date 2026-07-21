@@ -691,6 +691,22 @@ public partial class DbDtctechContext : DbContext
 
             entity.ToTable("tbl_ContractTerm", table =>
             {
+                // Contract sở hữu term phải là logical ID hợp lệ.
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractTerm_ContractId",
+                    "[ContractId] > 0");
+
+                // Mỗi term bắt buộc phải thuộc một contract version.
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractTerm_VersionId",
+                    "[VersionId] > 0");
+
+                // Term nhập thủ công có thể không có nguồn template.
+                // Nếu có nguồn thì ID phải hợp lệ.
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractTerm_SourceTemplateTermId",
+                    "[SourceTemplateTermId] IS NULL OR [SourceTemplateTermId] > 0");
+
                 // Không chấp nhận mã term rỗng hoặc chỉ chứa khoảng trắng.
                 table.HasCheckConstraint(
                     "CK_tbl_ContractTerm_TermCode",
@@ -775,6 +791,23 @@ public partial class DbDtctechContext : DbContext
 
             entity.ToTable("tbl_ContractVersion", table =>
             {
+                // Contract sở hữu version phải là logical ID hợp lệ.
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractVersion_ContractId",
+                    "[ContractId] > 0");
+
+                // Version nguồn có thể null đối với version đầu tiên.
+                // Nếu có thì phải là logical ID hợp lệ.
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractVersion_SourceVersionId",
+                    "[SourceVersionId] IS NULL OR [SourceVersionId] > 0");
+
+                // TemplateVersionId được phép null với hợp đồng legacy.
+                // Nếu có thì phải là logical ID hợp lệ.
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractVersion_TemplateVersionId",
+                    "[TemplateVersionId] IS NULL OR [TemplateVersionId] > 0");
+
                 // Version bắt đầu từ 1, không chấp nhận 0 hoặc số âm.
                 table.HasCheckConstraint(
                     "CK_tbl_ContractVersion_VersionNo",

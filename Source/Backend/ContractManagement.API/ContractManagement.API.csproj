@@ -5,6 +5,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
 
+	 <!-- Sinh tài liệu XML từ các comment /// để Swagger hiển thị -->
+	 <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+	 <!-- Không cảnh báo các class chưa có XML comment -->
+	 <NoWarn>$(NoWarn);1591</NoWarn>
+
 	<AssemblyName>ContractManagement.API</AssemblyName>
 	<RootNamespace>ContractManagement.API</RootNamespace>
   </PropertyGroup>
@@ -34,6 +40,7 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
     <PackageReference Include="NUnit" Version="4.6.1" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.0.0" />
   </ItemGroup>

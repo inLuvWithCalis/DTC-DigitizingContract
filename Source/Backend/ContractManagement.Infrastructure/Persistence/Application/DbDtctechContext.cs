@@ -16,6 +16,8 @@ public partial class DbDtctechContext : DbContext
     {
     }
 
+    public virtual DbSet<TblContractApprovalRequest> TblContractApprovalRequests { get; set; }
+
     public virtual DbSet<TblApprovalHistory> TblApprovalHistories { get; set; }
 
     public virtual DbSet<TblApprovalWorkflow> TblApprovalWorkflows { get; set; }
@@ -27,6 +29,8 @@ public partial class DbDtctechContext : DbContext
     public virtual DbSet<TblContractAppendix> TblContractAppendices { get; set; }
 
     public virtual DbSet<TblContractAttachment> TblContractAttachments { get; set; }
+
+    public virtual DbSet<TblContractItem> TblContractItems { get; set; }
 
     public virtual DbSet<TblContractTerm> TblContractTerms { get; set; }
 
@@ -88,6 +92,61 @@ public partial class DbDtctechContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<TblContractApprovalRequest>(entity =>
+        {
+            entity.HasKey(x => x.ApprovalRequestId);
+
+            entity.ToTable("tbl_ContractApprovalRequest", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractApprovalRequest_Status",
+                    "[Status] IN (0, 1, 2, 3, 4)");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractApprovalRequest_ContractId",
+                    "[ContractId] > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractApprovalRequest_VersionId",
+                    "[VersionId] > 0");
+            });
+
+            /*
+             * Mỗi hợp đồng chỉ được có một request Pending.
+             * Các request cũ đã kết thúc vẫn được giữ làm lịch sử.
+             */
+            entity.HasIndex(x => x.ContractId)
+                .IsUnique()
+                .HasFilter("[Status] = 0")
+                .HasDatabaseName(
+                    "UX_tbl_ContractApprovalRequest_PendingContract");
+
+            entity.HasIndex(x => x.VersionId)
+                .HasDatabaseName(
+                    "IX_tbl_ContractApprovalRequest_VersionId");
+
+            entity.HasIndex(x => x.WorkflowId)
+                .HasDatabaseName(
+                    "IX_tbl_ContractApprovalRequest_WorkflowId");
+
+            entity.Property(x => x.Status)
+                .HasDefaultValue((byte)0);
+
+            entity.Property(x => x.SubmittedDate)
+                .HasColumnType("datetime2")
+                .HasDefaultValueSql("(sysutcdatetime())");
+
+            entity.Property(x => x.ResolvedDate)
+                .HasColumnType("datetime2");
+
+            entity.Property(x => x.DecisionComment)
+                .HasMaxLength(1000);
+
+            entity.Property(x => x.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+        });
+
         modelBuilder.Entity<TblApprovalHistory>(entity =>
         {
             entity.HasKey(e => e.ApprovalHistoryId).HasName("PK__tbl_Appr__46B53247FB4F4CF5");
@@ -691,6 +750,22 @@ public partial class DbDtctechContext : DbContext
 
             entity.ToTable("tbl_ContractTerm", table =>
             {
+                // Contract sở hữu term phải là logical ID hợp lệ.
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractTerm_ContractId",
+                    "[ContractId] > 0");
+
+                // Mỗi term bắt buộc phải thuộc một contract version.
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractTerm_VersionId",
+                    "[VersionId] > 0");
+
+                // Term nhập thủ công có thể không có nguồn template.
+                // Nếu có nguồn thì ID phải hợp lệ.
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractTerm_SourceTemplateTermId",
+                    "[SourceTemplateTermId] IS NULL OR [SourceTemplateTermId] > 0");
+
                 // Không chấp nhận mã term rỗng hoặc chỉ chứa khoảng trắng.
                 table.HasCheckConstraint(
                     "CK_tbl_ContractTerm_TermCode",
@@ -768,6 +843,196 @@ public partial class DbDtctechContext : DbContext
                 .IsConcurrencyToken();
         });
 
+        modelBuilder.Entity<TblContractItem>(entity =>
+        {
+            entity.HasKey(e => e.ContractItemId)
+                .HasName("PK_tbl_ContractItem");
+
+            entity.ToTable("tbl_ContractItem", table =>
+            {
+                // Contract và Version phải là logical ID hợp lệ.
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractItem_ContractId",
+                    "[ContractId] > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractItem_VersionId",
+                    "[VersionId] > 0");
+
+                // 1 = Product, 2 = Service.
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractItem_ItemType",
+                    "[ItemType] IN (1, 2)");
+
+                /*
+                 * Product không được tham chiếu Service.
+                 * Service không được tham chiếu Product.
+                 * Cả hai Source ID đều null thì là item nhập ngoài catalog.
+                 */
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractItem_SourceByType",
+                    "([ItemType] = 1 AND [SourceServiceId] IS NULL) " +
+                    "OR ([ItemType] = 2 AND [SourceProductId] IS NULL)");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractItem_SourceProductId",
+                    "[SourceProductId] IS NULL OR [SourceProductId] > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractItem_SourceServiceId",
+                    "[SourceServiceId] IS NULL OR [SourceServiceId] > 0");
+
+                // Tên snapshot bắt buộc phải có nội dung.
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractItem_ItemName",
+                    "LEN(LTRIM(RTRIM([ItemName]))) > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractItem_Quantity",
+                    "[Quantity] > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractItem_UnitPrice",
+                    "[UnitPrice] >= 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractItem_LineSubtotal",
+                    "[LineSubtotal] >= 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractItem_DiscountPercent",
+                    "[DiscountPercent] >= 0 AND [DiscountPercent] <= 100");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractItem_DiscountAmount",
+                    "[DiscountAmount] >= 0 AND [DiscountAmount] <= [LineSubtotal]");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractItem_VatPercent",
+                    "[VatPercent] >= 0 AND [VatPercent] <= 100");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractItem_VatAmount",
+                    "[VatAmount] >= 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractItem_LineTotal",
+                    "[LineTotal] >= 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractItem_DisplayOrder",
+                    "[DisplayOrder] >= 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractItem_CreatedEmployeeId",
+                    "[CreatedEmployeeId] > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractItem_UpdatedEmployeeId",
+                    "[UpdatedEmployeeId] IS NULL OR [UpdatedEmployeeId] > 0");
+            });
+
+            // Lấy item của một version theo đúng thứ tự hiển thị.
+            entity.HasIndex(e => new
+            {
+                e.VersionId,
+                e.DisplayOrder
+            })
+                .HasDatabaseName(
+                    "IX_tbl_ContractItem_Version_DisplayOrder");
+
+            // Hỗ trợ truy vấn các item theo hợp đồng và version.
+            entity.HasIndex(e => new
+            {
+                e.ContractId,
+                e.VersionId
+            })
+                .HasDatabaseName(
+                    "IX_tbl_ContractItem_Contract_Version");
+
+            entity.Property(e => e.ItemCode)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+
+            entity.Property(e => e.ItemName)
+                .HasMaxLength(500)
+                .IsRequired();
+
+            entity.Property(e => e.ItemNameEn)
+                .HasMaxLength(500);
+
+            // Không giới hạn độ dài mô tả:
+            // SQL Server sẽ sử dụng nvarchar(max).
+            entity.Property(e => e.ItemDescription);
+
+            entity.Property(e => e.ItemDescriptionEn);
+
+            entity.Property(e => e.UnitName)
+                .HasMaxLength(100);
+
+            entity.Property(e => e.UnitNameEn)
+                .HasMaxLength(100);
+
+            // Hỗ trợ số lượng lẻ, ví dụ 1.5 tháng hoặc 2.25 đơn vị.
+            entity.Property(e => e.Quantity)
+                .HasPrecision(18, 4)
+                .HasDefaultValue(
+                    1m,
+                    "DF_tbl_ContractItem_Quantity");
+
+            // Các giá trị tiền dùng chính xác 2 chữ số thập phân.
+            entity.Property(e => e.UnitPrice)
+                .HasPrecision(18, 2);
+
+            entity.Property(e => e.LineSubtotal)
+                .HasPrecision(18, 2);
+
+            entity.Property(e => e.DiscountPercent)
+                .HasPrecision(5, 2)
+                .HasDefaultValue(
+                    0m,
+                    "DF_tbl_ContractItem_DiscountPercent");
+
+            entity.Property(e => e.DiscountAmount)
+                .HasPrecision(18, 2)
+                .HasDefaultValue(
+                    0m,
+                    "DF_tbl_ContractItem_DiscountAmount");
+
+            entity.Property(e => e.VatPercent)
+                .HasPrecision(5, 2)
+                .HasDefaultValue(
+                    0m,
+                    "DF_tbl_ContractItem_VatPercent");
+
+            entity.Property(e => e.VatAmount)
+                .HasPrecision(18, 2)
+                .HasDefaultValue(
+                    0m,
+                    "DF_tbl_ContractItem_VatAmount");
+
+            entity.Property(e => e.LineTotal)
+                .HasPrecision(18, 2);
+
+            entity.Property(e => e.DisplayOrder)
+                .HasDefaultValue(
+                    0,
+                    "DF_tbl_ContractItem_DisplayOrder");
+
+            entity.Property(e => e.CreatedDate)
+                .HasColumnType("datetime2")
+                .HasDefaultValueSql(
+                    "(sysutcdatetime())",
+                    "DF_tbl_ContractItem_CreatedDate");
+
+            entity.Property(e => e.UpdatedDate)
+                .HasColumnType("datetime2");
+
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+        });
+
         modelBuilder.Entity<TblContractVersion>(entity =>
         {
             entity.HasKey(e => e.VersionId)
@@ -775,6 +1040,23 @@ public partial class DbDtctechContext : DbContext
 
             entity.ToTable("tbl_ContractVersion", table =>
             {
+                // Contract sở hữu version phải là logical ID hợp lệ.
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractVersion_ContractId",
+                    "[ContractId] > 0");
+
+                // Version nguồn có thể null đối với version đầu tiên.
+                // Nếu có thì phải là logical ID hợp lệ.
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractVersion_SourceVersionId",
+                    "[SourceVersionId] IS NULL OR [SourceVersionId] > 0");
+
+                // TemplateVersionId được phép null với hợp đồng legacy.
+                // Nếu có thì phải là logical ID hợp lệ.
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractVersion_TemplateVersionId",
+                    "[TemplateVersionId] IS NULL OR [TemplateVersionId] > 0");
+
                 // Version bắt đầu từ 1, không chấp nhận 0 hoặc số âm.
                 table.HasCheckConstraint(
                     "CK_tbl_ContractVersion_VersionNo",

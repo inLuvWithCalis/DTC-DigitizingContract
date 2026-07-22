@@ -4,16 +4,19 @@ using ContractManagement.Infrastructure.Persistence.Application;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace ContractManagement.Migrations
+namespace ContractManagement.Infrastructure.Migrations.Application
 {
     [DbContext(typeof(DbDtctechContext))]
-    partial class DbDtctechContextModelSnapshot : ModelSnapshot
+    [Migration("20260721125650_AddContractVersionSnapshotConstraints")]
+    partial class AddContractVersionSnapshotConstraints
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -308,75 +311,6 @@ namespace ContractManagement.Migrations
                     b.ToTable("tbl_ContractAppendix", (string)null);
                 });
 
-            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractApprovalRequest", b =>
-                {
-                    b.Property<int>("ApprovalRequestId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ApprovalRequestId"));
-
-                    b.Property<int>("ContractId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("DecisionComment")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<int?>("ResolvedByEmployeeId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("ResolvedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<byte>("Status")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("tinyint")
-                        .HasDefaultValue((byte)0);
-
-                    b.Property<int>("SubmittedByEmployeeId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("SubmittedDate")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("(sysutcdatetime())");
-
-                    b.Property<int>("VersionId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("WorkflowId")
-                        .HasColumnType("int");
-
-                    b.HasKey("ApprovalRequestId");
-
-                    b.HasIndex("ContractId")
-                        .IsUnique()
-                        .HasDatabaseName("UX_tbl_ContractApprovalRequest_PendingContract")
-                        .HasFilter("[Status] = 0");
-
-                    b.HasIndex("VersionId")
-                        .HasDatabaseName("IX_tbl_ContractApprovalRequest_VersionId");
-
-                    b.HasIndex("WorkflowId")
-                        .HasDatabaseName("IX_tbl_ContractApprovalRequest_WorkflowId");
-
-                    b.ToTable("tbl_ContractApprovalRequest", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_tbl_ContractApprovalRequest_ContractId", "[ContractId] > 0");
-
-                            t.HasCheckConstraint("CK_tbl_ContractApprovalRequest_Status", "[Status] IN (0, 1, 2, 3, 4)");
-
-                            t.HasCheckConstraint("CK_tbl_ContractApprovalRequest_VersionId", "[VersionId] > 0");
-                        });
-                });
-
             modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAttachment", b =>
                 {
                     b.Property<int>("AttachmentId")
@@ -415,173 +349,6 @@ namespace ContractManagement.Migrations
                         .HasName("PK__tbl_Cont__442C64BE6AC2F4CE");
 
                     b.ToTable("tbl_ContractAttachment", (string)null);
-                });
-
-            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractItem", b =>
-                {
-                    b.Property<int>("ContractItemId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ContractItemId"));
-
-                    b.Property<int>("ContractId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedDate")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("(sysutcdatetime())", "DF_tbl_ContractItem_CreatedDate");
-
-                    b.Property<int>("CreatedEmployeeId")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("DiscountAmount")
-                        .ValueGeneratedOnAdd()
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)")
-                        .HasDefaultValue(0m, "DF_tbl_ContractItem_DiscountAmount");
-
-                    b.Property<decimal>("DiscountPercent")
-                        .ValueGeneratedOnAdd()
-                        .HasPrecision(5, 2)
-                        .HasColumnType("decimal(5,2)")
-                        .HasDefaultValue(0m, "DF_tbl_ContractItem_DiscountPercent");
-
-                    b.Property<int>("DisplayOrder")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(0, "DF_tbl_ContractItem_DisplayOrder");
-
-                    b.Property<string>("ItemCode")
-                        .HasMaxLength(100)
-                        .IsUnicode(false)
-                        .HasColumnType("varchar(100)");
-
-                    b.Property<string>("ItemDescription")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("ItemDescriptionEn")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("ItemName")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("ItemNameEn")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<byte>("ItemType")
-                        .HasColumnType("tinyint");
-
-                    b.Property<decimal>("LineSubtotal")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("LineTotal")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("Quantity")
-                        .ValueGeneratedOnAdd()
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)")
-                        .HasDefaultValue(1m, "DF_tbl_ContractItem_Quantity");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<int?>("SourceProductId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("SourceServiceId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("UnitName")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("UnitNameEn")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<decimal>("UnitPrice")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime?>("UpdatedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("UpdatedEmployeeId")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("VatAmount")
-                        .ValueGeneratedOnAdd()
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)")
-                        .HasDefaultValue(0m, "DF_tbl_ContractItem_VatAmount");
-
-                    b.Property<decimal>("VatPercent")
-                        .ValueGeneratedOnAdd()
-                        .HasPrecision(5, 2)
-                        .HasColumnType("decimal(5,2)")
-                        .HasDefaultValue(0m, "DF_tbl_ContractItem_VatPercent");
-
-                    b.Property<int>("VersionId")
-                        .HasColumnType("int");
-
-                    b.HasKey("ContractItemId")
-                        .HasName("PK_tbl_ContractItem");
-
-                    b.HasIndex("ContractId", "VersionId")
-                        .HasDatabaseName("IX_tbl_ContractItem_Contract_Version");
-
-                    b.HasIndex("VersionId", "DisplayOrder")
-                        .HasDatabaseName("IX_tbl_ContractItem_Version_DisplayOrder");
-
-                    b.ToTable("tbl_ContractItem", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_tbl_ContractItem_ContractId", "[ContractId] > 0");
-
-                            t.HasCheckConstraint("CK_tbl_ContractItem_CreatedEmployeeId", "[CreatedEmployeeId] > 0");
-
-                            t.HasCheckConstraint("CK_tbl_ContractItem_DiscountAmount", "[DiscountAmount] >= 0 AND [DiscountAmount] <= [LineSubtotal]");
-
-                            t.HasCheckConstraint("CK_tbl_ContractItem_DiscountPercent", "[DiscountPercent] >= 0 AND [DiscountPercent] <= 100");
-
-                            t.HasCheckConstraint("CK_tbl_ContractItem_DisplayOrder", "[DisplayOrder] >= 0");
-
-                            t.HasCheckConstraint("CK_tbl_ContractItem_ItemName", "LEN(LTRIM(RTRIM([ItemName]))) > 0");
-
-                            t.HasCheckConstraint("CK_tbl_ContractItem_ItemType", "[ItemType] IN (1, 2)");
-
-                            t.HasCheckConstraint("CK_tbl_ContractItem_LineSubtotal", "[LineSubtotal] >= 0");
-
-                            t.HasCheckConstraint("CK_tbl_ContractItem_LineTotal", "[LineTotal] >= 0");
-
-                            t.HasCheckConstraint("CK_tbl_ContractItem_Quantity", "[Quantity] > 0");
-
-                            t.HasCheckConstraint("CK_tbl_ContractItem_SourceByType", "([ItemType] = 1 AND [SourceServiceId] IS NULL) OR ([ItemType] = 2 AND [SourceProductId] IS NULL)");
-
-                            t.HasCheckConstraint("CK_tbl_ContractItem_SourceProductId", "[SourceProductId] IS NULL OR [SourceProductId] > 0");
-
-                            t.HasCheckConstraint("CK_tbl_ContractItem_SourceServiceId", "[SourceServiceId] IS NULL OR [SourceServiceId] > 0");
-
-                            t.HasCheckConstraint("CK_tbl_ContractItem_UnitPrice", "[UnitPrice] >= 0");
-
-                            t.HasCheckConstraint("CK_tbl_ContractItem_UpdatedEmployeeId", "[UpdatedEmployeeId] IS NULL OR [UpdatedEmployeeId] > 0");
-
-                            t.HasCheckConstraint("CK_tbl_ContractItem_VatAmount", "[VatAmount] >= 0");
-
-                            t.HasCheckConstraint("CK_tbl_ContractItem_VatPercent", "[VatPercent] >= 0 AND [VatPercent] <= 100");
-
-                            t.HasCheckConstraint("CK_tbl_ContractItem_VersionId", "[VersionId] > 0");
-                        });
                 });
 
             modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplate", b =>

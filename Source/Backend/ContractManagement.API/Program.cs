@@ -45,13 +45,17 @@ builder.Services
  * Dùng để hiển thị Swagger UI và tài liệu API.
  */
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    var xmlFileName =
+        $"{builder.Environment.ApplicationName}.xml";
 
-/*
- * AddOpenApi() không bắt buộc nếu bạn đã dùng SwaggerGen.
- * Có thể bỏ để tránh trùng chức năng.
- */
-// builder.Services.AddOpenApi();
+    var xmlFilePath = Path.Combine(
+        AppContext.BaseDirectory,
+        xmlFileName);
+
+    options.IncludeXmlComments(xmlFilePath);
+});
 
 #endregion
 
@@ -205,6 +209,10 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IServiceService,
     ServiceService>();
+
+builder.Services.AddScoped<
+    IContractService,
+    ContractService>();
 
 #endregion
 

@@ -4,16 +4,19 @@ using ContractManagement.Infrastructure.Persistence.Application;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace ContractManagement.Migrations
+namespace ContractManagement.Infrastructure.Migrations.Application
 {
     [DbContext(typeof(DbDtctechContext))]
-    partial class DbDtctechContextModelSnapshot : ModelSnapshot
+    [Migration("20260721134533_AddContractItemSnapshotTable")]
+    partial class AddContractItemSnapshotTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -306,75 +309,6 @@ namespace ContractManagement.Migrations
                         .HasName("PK__tbl_Cont__44B149C44BC57074");
 
                     b.ToTable("tbl_ContractAppendix", (string)null);
-                });
-
-            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractApprovalRequest", b =>
-                {
-                    b.Property<int>("ApprovalRequestId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ApprovalRequestId"));
-
-                    b.Property<int>("ContractId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("DecisionComment")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<int?>("ResolvedByEmployeeId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("ResolvedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<byte>("Status")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("tinyint")
-                        .HasDefaultValue((byte)0);
-
-                    b.Property<int>("SubmittedByEmployeeId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("SubmittedDate")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("(sysutcdatetime())");
-
-                    b.Property<int>("VersionId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("WorkflowId")
-                        .HasColumnType("int");
-
-                    b.HasKey("ApprovalRequestId");
-
-                    b.HasIndex("ContractId")
-                        .IsUnique()
-                        .HasDatabaseName("UX_tbl_ContractApprovalRequest_PendingContract")
-                        .HasFilter("[Status] = 0");
-
-                    b.HasIndex("VersionId")
-                        .HasDatabaseName("IX_tbl_ContractApprovalRequest_VersionId");
-
-                    b.HasIndex("WorkflowId")
-                        .HasDatabaseName("IX_tbl_ContractApprovalRequest_WorkflowId");
-
-                    b.ToTable("tbl_ContractApprovalRequest", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_tbl_ContractApprovalRequest_ContractId", "[ContractId] > 0");
-
-                            t.HasCheckConstraint("CK_tbl_ContractApprovalRequest_Status", "[Status] IN (0, 1, 2, 3, 4)");
-
-                            t.HasCheckConstraint("CK_tbl_ContractApprovalRequest_VersionId", "[VersionId] > 0");
-                        });
                 });
 
             modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAttachment", b =>

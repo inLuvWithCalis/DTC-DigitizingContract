@@ -1,4 +1,5 @@
 ﻿using ContractManagement.API.Common.Responses;
+using Microsoft.EntityFrameworkCore;
 using System.Net;
 using System.Text.Json;
 
@@ -69,6 +70,11 @@ namespace ContractManagement.Middleware
 
                 case ArgumentException:
                     statusCode = HttpStatusCode.BadRequest;
+                    message = exception.Message;
+                    break;
+
+                case DbUpdateConcurrencyException:
+                    statusCode = HttpStatusCode.Conflict;
                     message = exception.Message;
                     break;
             }

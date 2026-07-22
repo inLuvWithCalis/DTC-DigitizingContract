@@ -24,5 +24,13 @@ namespace ContractManagement.Domains.Interfaces.Contract
         Task<ContractDetailResponse> GetDetailAsync(
             int contractId,
             int employeeId);
+
+        /// <summary>
+        /// Cập nhật Contract, Items và Terms khi hợp đồng còn là Draft.
+        /// </summary>
+        Task<ContractDetailResponse> UpdateDraftAsync(
+            int contractId,
+            UpdateContractDraftRequest request,
+            int employeeId);
     }
 }

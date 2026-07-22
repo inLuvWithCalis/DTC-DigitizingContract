@@ -127,5 +127,46 @@ namespace ContractManagement.Domains.Controllers.Contract
                     result,
                     "Lấy chi tiết hợp đồng thành công."));
         }
+
+        /// <summary>
+        /// Cập nhật toàn bộ nội dung của hợp đồng Draft.
+        /// </summary>
+        [HttpPut("{contractId:int}/draft")]
+        [Consumes("application/json")]
+        [Produces("application/json")]
+        [ProducesResponseType(
+            typeof(ApiResponse<ContractDetailResponse>),
+            StatusCodes.Status200OK)]
+        [ProducesResponseType(
+            StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(
+            StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(
+            StatusCodes.Status404NotFound)]
+        [ProducesResponseType(
+            StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> UpdateDraft(
+            int contractId,
+            [FromBody] UpdateContractDraftRequest request)
+        {
+            var employeeId =
+                HttpContext.Session.GetInt32("EmployeeId");
+
+            if (employeeId is null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Bạn chưa đăng nhập hoặc session đã hết hạn.");
+            }
+
+            var result = await _contractService.UpdateDraftAsync(
+                contractId,
+                request,
+                employeeId.Value);
+
+            return Ok(
+                ApiResponse<ContractDetailResponse>.Ok(
+                    result,
+                    "Cập nhật hợp đồng nháp thành công."));
+        }
     }
 }

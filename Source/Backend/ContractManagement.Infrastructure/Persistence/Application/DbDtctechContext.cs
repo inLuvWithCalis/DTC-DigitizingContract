@@ -16,6 +16,8 @@ public partial class DbDtctechContext : DbContext
     {
     }
 
+    public virtual DbSet<TblContractApprovalRequest> TblContractApprovalRequests { get; set; }
+
     public virtual DbSet<TblApprovalHistory> TblApprovalHistories { get; set; }
 
     public virtual DbSet<TblApprovalWorkflow> TblApprovalWorkflows { get; set; }
@@ -90,6 +92,61 @@ public partial class DbDtctechContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<TblContractApprovalRequest>(entity =>
+        {
+            entity.HasKey(x => x.ApprovalRequestId);
+
+            entity.ToTable("tbl_ContractApprovalRequest", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractApprovalRequest_Status",
+                    "[Status] IN (0, 1, 2, 3, 4)");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractApprovalRequest_ContractId",
+                    "[ContractId] > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractApprovalRequest_VersionId",
+                    "[VersionId] > 0");
+            });
+
+            /*
+             * Mỗi hợp đồng chỉ được có một request Pending.
+             * Các request cũ đã kết thúc vẫn được giữ làm lịch sử.
+             */
+            entity.HasIndex(x => x.ContractId)
+                .IsUnique()
+                .HasFilter("[Status] = 0")
+                .HasDatabaseName(
+                    "UX_tbl_ContractApprovalRequest_PendingContract");
+
+            entity.HasIndex(x => x.VersionId)
+                .HasDatabaseName(
+                    "IX_tbl_ContractApprovalRequest_VersionId");
+
+            entity.HasIndex(x => x.WorkflowId)
+                .HasDatabaseName(
+                    "IX_tbl_ContractApprovalRequest_WorkflowId");
+
+            entity.Property(x => x.Status)
+                .HasDefaultValue((byte)0);
+
+            entity.Property(x => x.SubmittedDate)
+                .HasColumnType("datetime2")
+                .HasDefaultValueSql("(sysutcdatetime())");
+
+            entity.Property(x => x.ResolvedDate)
+                .HasColumnType("datetime2");
+
+            entity.Property(x => x.DecisionComment)
+                .HasMaxLength(1000);
+
+            entity.Property(x => x.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+        });
+
         modelBuilder.Entity<TblApprovalHistory>(entity =>
         {
             entity.HasKey(e => e.ApprovalHistoryId).HasName("PK__tbl_Appr__46B53247FB4F4CF5");

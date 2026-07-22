@@ -168,5 +168,78 @@ namespace ContractManagement.Domains.Controllers.Contract
                     result,
                     "Cập nhật hợp đồng nháp thành công."));
         }
+
+        /// <summary>
+        /// Chuyển hợp đồng từ Draft sang Negotiating.
+        /// Version vẫn được phép chỉnh sửa.
+        /// </summary>
+        [HttpPost("{contractId:int}/start-negotiation")]
+        [ProducesResponseType(
+            typeof(ApiResponse<ContractDetailResponse>),
+            StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> StartNegotiation(
+            int contractId,
+            [FromBody] StartContractNegotiationRequest request)
+        {
+            var employeeId =
+                HttpContext.Session.GetInt32("EmployeeId");
+
+            if (employeeId is null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Bạn chưa đăng nhập hoặc session đã hết hạn.");
+            }
+
+            var result =
+                await _contractService.StartNegotiationAsync(
+                    contractId,
+                    request,
+                    employeeId.Value);
+
+            return Ok(
+                ApiResponse<ContractDetailResponse>.Ok(
+                    result,
+                    "Hợp đồng đã chuyển sang giai đoạn đàm phán."));
+        }
+
+        /// <summary>
+        /// Gửi version hiện hành đi duyệt và khóa snapshot.
+        /// </summary>
+        [HttpPost("{contractId:int}/submit-approval")]
+        [ProducesResponseType(
+            typeof(ApiResponse<SubmitContractForApprovalResponse>),
+            StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> SubmitApproval(
+            int contractId,
+            [FromBody] SubmitContractForApprovalRequest request)
+        {
+            var employeeId =
+                HttpContext.Session.GetInt32("EmployeeId");
+
+            if (employeeId is null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Bạn chưa đăng nhập hoặc session đã hết hạn.");
+            }
+
+            var result =
+                await _contractService.SubmitForApprovalAsync(
+                    contractId,
+                    request,
+                    employeeId.Value);
+
+            return Ok(
+                ApiResponse<SubmitContractForApprovalResponse>.Ok(
+                    result,
+                    "Gửi hợp đồng duyệt thành công."));
+        }
     }
 }

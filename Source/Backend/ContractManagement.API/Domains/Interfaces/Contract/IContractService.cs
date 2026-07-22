@@ -32,5 +32,15 @@ namespace ContractManagement.Domains.Interfaces.Contract
             int contractId,
             UpdateContractDraftRequest request,
             int employeeId);
+
+        Task<ContractDetailResponse> StartNegotiationAsync(
+            int contractId,
+            StartContractNegotiationRequest request,
+            int employeeId);
+
+        Task<SubmitContractForApprovalResponse> SubmitForApprovalAsync(
+            int contractId,
+            SubmitContractForApprovalRequest request,
+            int employeeId);
     }
 }

@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   FileSignature,
   FileText,
+  FolderTree,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -32,8 +33,10 @@ import { useSidebar } from "./sidebar-context";
 
 const navItems = [
   { label: "Tổng quan", icon: LayoutDashboard, href: "/dashboard" },
+  { label: "Hợp đồng", icon: FileText, href: "/contracts" },
   { label: "Báo giá", icon: FileSignature, href: "/quotations" },
   { label: "Khách hàng", icon: Users, href: "/customers" },
+  { label: "Danh mục", icon: FolderTree, href: "/catalog/categories" },
   { label: "Sản phẩm", icon: Package, href: "/catalog/products" },
   { label: "Dịch vụ", icon: BriefcaseBusiness, href: "/catalog/services" },
   { label: "Loại dịch vụ", icon: Tags, href: "/catalog/service-types" },

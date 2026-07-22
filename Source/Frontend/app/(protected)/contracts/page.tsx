@@ -1,162 +1,372 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Search, Eye } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ColumnDef, Row } from "@tanstack/react-table";
+import {
+  CalendarDays,
+  CheckCircle2,
+  Clock,
+  Eye,
+  FileSignature,
+  FileText,
+  Link2,
+  Plus,
+  Users,
+  WalletCards,
+} from "lucide-react";
+import { Header } from "@/components/ui/custom/header";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { DataTable } from "@/components/ui/custom/data-table";
+import { SelectFilter } from "@/components/ui/custom/select-filter";
+import { SplitActionMenu } from "@/components/ui/custom/split-action-menu";
+import {
+  SummaryCardItem,
+  SummaryCards,
+} from "@/components/ui/custom/summary-cards";
+import { formatCurrency } from "@/lib/format-currency";
+import {
+  CONTRACT_STATUS_LABELS,
+  CONTRACT_STATUS_OPTIONS,
+  CONTRACT_TYPE_LABELS,
+  ContractMock,
+  ContractStatus,
+  mockContracts,
+} from "@/services/contracts-mock";
 
-// Tích hợp Fake Data trực tiếp vào file
-const CONTRACT_STATUSES = [
-  {
-    value: "negotiating",
-    label: "Đang đàm phán",
-    color: "bg-blue-100 text-blue-700",
-  },
-  { value: "signing", label: "Đang ký", color: "bg-amber-100 text-amber-700" },
-  {
-    value: "hardcopy_pending",
-    label: "Bản cứng chưa về",
-    color: "bg-orange-100 text-orange-700",
-  },
-  {
-    value: "closed",
-    label: "Hoàn tất (Closed)",
-    color: "bg-emerald-100 text-emerald-700",
-  },
-  {
-    value: "maintenance",
-    label: "Bảo trì",
-    color: "bg-purple-100 text-purple-700",
-  },
-];
+const statusClasses: Record<ContractStatus, string> = {
+  Draft:
+    "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20",
+  Negotiating:
+    "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20",
+  Approved:
+    "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20",
+  Signed:
+    "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20",
+  Closing:
+    "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20",
+  Closed:
+    "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20",
+};
 
-const MOCK_CONTRACTS = [
-  {
-    id: "HD-2026-001",
-    customer: "Công ty Cổ phần Alpha",
-    value: "150,000,000",
-    status: "negotiating",
-    date: "15/07/2026",
-  },
-  {
-    id: "HD-2026-002",
-    customer: "Tập đoàn Xây dựng Beta",
-    value: "320,000,000",
-    status: "signing",
-    date: "10/07/2026",
-  },
-  {
-    id: "HD-2026-003",
-    customer: "Công ty TNHH Gamma",
-    value: "85,000,000",
-    status: "hardcopy_pending",
-    date: "05/07/2026",
-  },
-  {
-    id: "HD-2025-102",
-    customer: "Hệ thống Bán lẻ Delta",
-    value: "450,000,000",
-    status: "closed",
-    date: "12/12/2025",
-  },
-  {
-    id: "HD-2024-055",
-    customer: "Công ty Công nghệ Epsilon",
-    value: "50,000,000",
-    status: "maintenance",
-    date: "01/06/2024",
-  },
-];
+function ContractStatusBadge({ status }: { status: ContractStatus }) {
+  return (
+    <Badge variant="outline" className={statusClasses[status]}>
+      {CONTRACT_STATUS_LABELS[status]}
+    </Badge>
+  );
+}
+
+function formatShortDate(value: string) {
+  return new Date(value).toLocaleDateString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
 
 export default function ContractListPage() {
-  const [filter, setFilter] = useState("all");
+  const router = useRouter();
+  const [filterStatus, setFilterStatus] = useState("All");
+  const [loadingId, setLoadingId] = useState<number | null>(null);
 
-  const filteredContracts =
-    filter === "all"
-      ? MOCK_CONTRACTS
-      : MOCK_CONTRACTS.filter((c) => c.status === filter);
+  const filteredContracts = useMemo(() => {
+    if (filterStatus === "All") return mockContracts;
+    return mockContracts.filter((contract) => contract.status === filterStatus);
+  }, [filterStatus]);
 
-  return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Quản lý Hợp đồng</h1>
-          <p className="text-sm text-gray-500">
-            Theo dõi toàn bộ vòng đời hợp đồng của khách hàng.
-          </p>
-        </div>
-        <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium">
-          <Plus className="w-4 h-4" /> Khởi tạo Hợp đồng
-        </button>
-      </div>
+  const handleView = (id: number) => {
+    setLoadingId(id);
+    router.push(`/contracts/${id}`);
+  };
 
-      <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
-        <div className="p-4 border-b flex gap-4 bg-gray-50/50">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Tìm kiếm mã HĐ, tên khách hàng..."
-              className="w-full pl-9 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+  const columns = useMemo<ColumnDef<ContractMock>[]>(
+    () => [
+      {
+        id: "select",
+        header: ({ table }) => (
+          <div className="flex justify-center">
+            <Checkbox
+              checked={
+                table.getIsAllPageRowsSelected() ||
+                (table.getIsSomePageRowsSelected() && "indeterminate")
+              }
+              onCheckedChange={(value) =>
+                table.toggleAllPageRowsSelected(!!value)
+              }
+              aria-label="Select all"
+              className="translate-y-[2px]"
             />
           </div>
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="border rounded-lg px-4 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+        ),
+        cell: ({ row }) => (
+          <div
+            className="flex justify-center"
+            onClick={(event) => event.stopPropagation()}
           >
-            <option value="all">Tất cả trạng thái</option>
-            {CONTRACT_STATUSES.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
+            <Checkbox
+              checked={row.getIsSelected()}
+              onCheckedChange={(value) => row.toggleSelected(!!value)}
+              aria-label="Select row"
+              className="translate-y-[2px]"
+            />
+          </div>
+        ),
+        enableSorting: false,
+      },
+      {
+        accessorKey: "contractNo",
+        header: "Mã hợp đồng",
+        cell: ({ row }) => (
+          <div className="flex flex-col pl-1">
+            <span className="font-semibold text-foreground">
+              {row.original.contractNo}
+            </span>
+            <span className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+              <CalendarDays className="h-3 w-3" />
+              {formatShortDate(row.original.createdAt)}
+            </span>
+          </div>
+        ),
+      },
+      {
+        accessorKey: "title",
+        header: "Thông tin hợp đồng",
+        cell: ({ row }) => (
+          <div className="max-w-[320px]">
+            <p className="truncate font-medium text-foreground">
+              {row.original.title}
+            </p>
+            <p className="mt-1 truncate text-xs text-muted-foreground">
+              {CONTRACT_TYPE_LABELS[row.original.type]}
+            </p>
+          </div>
+        ),
+      },
+      {
+        accessorKey: "customerCompany",
+        header: "Khách hàng",
+        cell: ({ row }) => (
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary">
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">
+                {row.original.customerName}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">
+                {row.original.customerCompany}
+              </p>
+            </div>
+          </div>
+        ),
+      },
+      {
+        accessorKey: "value",
+        header: () => <div className="text-right">Giá trị</div>,
+        cell: ({ row }) => (
+          <div className="text-right font-semibold text-primary">
+            {formatCurrency(row.original.value)}
+          </div>
+        ),
+      },
+      {
+        accessorKey: "paymentProgress",
+        header: "Thanh toán",
+        cell: ({ row }) => (
+          <div className="min-w-[130px]">
+            <div className="mb-1 flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Tiến độ</span>
+              <span className="font-medium">
+                {row.original.paymentProgress}%
+              </span>
+            </div>
+            <Progress value={row.original.paymentProgress} className="h-2" />
+          </div>
+        ),
+      },
+      {
+        accessorKey: "status",
+        header: () => <div className="text-center">Trạng thái</div>,
+        cell: ({ row }) => (
+          <div className="flex justify-center">
+            <ContractStatusBadge status={row.original.status} />
+          </div>
+        ),
+      },
+      {
+        id: "action",
+        header: () => <div className="text-right pr-4">Thao tác</div>,
+        cell: ({ row }) => {
+          const item = row.original;
+          return (
+            <SplitActionMenu
+              primaryLabel="Chi tiết"
+              primaryIcon={<Eye className="h-4 w-4" />}
+              onPrimaryClick={() => handleView(item.id)}
+              isLoading={loadingId === item.id}
+              menuItems={[
+                {
+                  label: "Copy link khách xem",
+                  icon: <Link2 className="h-4 w-4" />,
+                  onClick: () =>
+                    navigator.clipboard?.writeText(item.publicLink),
+                },
+              ]}
+            />
+          );
+        },
+      },
+    ],
+    [loadingId],
+  );
+
+  const totalValue = mockContracts.reduce(
+    (sum, contract) => sum + contract.value,
+    0,
+  );
+  const closingCount = mockContracts.filter(
+    (contract) => contract.status === "Closing",
+  ).length;
+  const signedCount = mockContracts.filter((contract) =>
+    ["Signed", "Closing", "Closed"].includes(contract.status),
+  ).length;
+
+  const summaryItems: SummaryCardItem[] = [
+    {
+      title: "Tổng hợp đồng",
+      value: mockContracts.length,
+      icon: <FileSignature className="h-6 w-6" />,
+      iconWrapperClassName: "bg-primary/10 text-primary",
+    },
+    {
+      title: "Đã ký điện tử",
+      value: signedCount,
+      icon: <CheckCircle2 className="h-6 w-6" />,
+      iconWrapperClassName:
+        "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500",
+    },
+    {
+      title: "Cần hoàn thiện hồ sơ",
+      value: closingCount,
+      icon: <Clock className="h-6 w-6" />,
+      iconWrapperClassName:
+        "bg-amber-500/10 text-amber-600 dark:text-amber-500",
+    },
+    {
+      title: "Tổng giá trị",
+      value: formatCurrency(totalValue),
+      icon: <WalletCards className="h-6 w-6" />,
+      iconWrapperClassName: "bg-blue-500/10 text-blue-600 dark:text-blue-500",
+      valueClassName: "text-xl",
+    },
+  ];
+
+  const filters = (
+    <SelectFilter
+      value={filterStatus}
+      onChange={setFilterStatus}
+      options={CONTRACT_STATUS_OPTIONS}
+      placeholder="Trạng thái"
+    />
+  );
+
+  return (
+    <>
+      <Header />
+
+      <div className="grow overflow-y-auto p-2 lg:p-10 space-y-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              Danh sách Hợp đồng
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Mock UI theo dõi vòng đời hợp đồng: nháp, đàm phán, ký điện tử và
+              hoàn thiện hồ sơ.
+            </p>
+          </div>
+          <Button
+            className="shadow-sm"
+            onClick={() => router.push("/contracts/create")}
+          >
+            <Plus className="mr-2 h-4 w-4" /> Tạo hợp đồng nháp
+          </Button>
         </div>
 
-        <table className="w-full text-left text-sm">
-          <thead className="bg-gray-50 text-gray-600">
-            <tr>
-              <th className="p-4 font-semibold">Mã Hợp đồng</th>
-              <th className="p-4 font-semibold">Khách hàng</th>
-              <th className="p-4 font-semibold">Giá trị (VNĐ)</th>
-              <th className="p-4 font-semibold">Ngày tạo</th>
-              <th className="p-4 font-semibold">Trạng thái</th>
-              <th className="p-4 font-semibold text-right">Thao tác</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {filteredContracts.map((contract) => {
-              const statusObj = CONTRACT_STATUSES.find(
-                (s) => s.value === contract.status,
-              );
-              return (
-                <tr
-                  key={contract.id}
-                  className="hover:bg-gray-50/50 transition-colors"
-                >
-                  <td className="p-4 font-medium text-gray-900">
-                    {contract.id}
-                  </td>
-                  <td className="p-4">{contract.customer}</td>
-                  <td className="p-4 font-medium">{contract.value}</td>
-                  <td className="p-4 text-gray-500">{contract.date}</td>
-                  <td className="p-4">
-                    <span
-                      className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusObj?.color}`}
-                    >
-                      {statusObj?.label}
-                    </span>
-                  </td>
-                  <td className="p-4 text-right">
-                    <button className="text-gray-400 hover:text-blue-600 p-1">
-                      <Eye className="w-5 h-5" />
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <SummaryCards items={summaryItems} />
+
+        <Card className="border-border shadow-sm bg-card min-h-[500px] flex flex-col gap-0 p-0">
+          <CardContent className="p-4 flex flex-col justify-between flex-1 pb-0">
+            <DataTable
+              columns={columns}
+              data={filteredContracts}
+              searchKey="contractNo"
+              searchPlaceholder="Tìm mã hợp đồng..."
+              filterSlot={filters}
+              onRowClick={(row) => handleView(row.id)}
+              mobileCardRenderer={(row: Row<ContractMock>, { isSelected }) => {
+                const item = row.original;
+                return (
+                  <div
+                    className={`rounded-xl border bg-card p-4 shadow-sm transition-colors active:bg-secondary/40 ${
+                      isSelected
+                        ? "border-primary/40 bg-primary/5"
+                        : "border-border"
+                    }`}
+                  >
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-foreground">
+                          {item.contractNo}
+                        </p>
+                        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                          {item.title}
+                        </p>
+                      </div>
+                      <ContractStatusBadge status={item.status} />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 rounded-lg border bg-muted/40 p-2.5 text-sm">
+                      <div>
+                        <p className="text-xs text-muted-foreground">
+                          Khách hàng
+                        </p>
+                        <p className="truncate font-medium">
+                          {item.customerCompany}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Giá trị</p>
+                        <p className="truncate font-semibold text-primary">
+                          {formatCurrency(item.value)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-3">
+                      <div className="mb-1 flex justify-between text-xs">
+                        <span className="text-muted-foreground">
+                          Thanh toán
+                        </span>
+                        <span className="font-medium">
+                          {item.paymentProgress}%
+                        </span>
+                      </div>
+                      <Progress value={item.paymentProgress} className="h-2" />
+                    </div>
+                  </div>
+                );
+              }}
+            />
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </>
   );
 }

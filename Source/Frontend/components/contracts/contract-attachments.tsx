@@ -97,8 +97,7 @@ export function ContractAttachments({
   const [attachments, setAttachments] =
     useState<ContractAttachmentItem[]>(initialAttachments);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [documentType, setDocumentType] =
-    useState<ContractDocumentType>(99);
+  const [documentType, setDocumentType] = useState<ContractDocumentType>(99);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -214,7 +213,7 @@ export function ContractAttachments({
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
       <Card className="overflow-hidden">
-        <CardHeader className="border-b bg-muted/20">
+        <CardHeader className="border-b">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <CardTitle className="flex items-center gap-2">
@@ -226,7 +225,10 @@ export function ContractAttachments({
               </p>
             </div>
             {mockMode && (
-              <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
+              <Badge
+                variant="outline"
+                className="border-amber-200 bg-amber-50 text-amber-700"
+              >
                 Chế độ xem thử
               </Badge>
             )}
@@ -240,9 +242,13 @@ export function ContractAttachments({
               </div>
               <p className="mt-4 font-semibold">Chưa có tài liệu đính kèm</p>
               <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-                Thêm hợp đồng đã ký, biên bản nghiệm thu, hóa đơn hoặc tài liệu liên quan.
+                Thêm hợp đồng đã ký, biên bản nghiệm thu, hóa đơn hoặc tài liệu
+                liên quan.
               </p>
-              <Button className="mt-5" onClick={() => inputRef.current?.click()}>
+              <Button
+                className="mt-5"
+                onClick={() => inputRef.current?.click()}
+              >
                 <Plus className="size-4" />
                 Chọn file đầu tiên
               </Button>
@@ -261,18 +267,25 @@ export function ContractAttachments({
                         <FileIcon className="size-5" />
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate font-medium" title={attachment.name}>
+                        <p
+                          className="truncate font-medium"
+                          title={attachment.name}
+                        >
                           {attachment.name}
                         </p>
                         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                           <span>{formatFileSize(attachment.size)}</span>
                           <span>•</span>
-                          <span>{attachment.uploadedBy || "Không rõ người tải"}</span>
+                          <span>
+                            {attachment.uploadedBy || "Không rõ người tải"}
+                          </span>
                           {attachment.uploadedAt && (
                             <>
                               <span>•</span>
                               <span>
-                                {new Date(attachment.uploadedAt).toLocaleString("vi-VN")}
+                                {new Date(attachment.uploadedAt).toLocaleString(
+                                  "vi-VN",
+                                )}
                               </span>
                             </>
                           )}
@@ -352,9 +365,7 @@ export function ContractAttachments({
             <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
               <UploadCloud className="size-6" />
             </div>
-            <p className="mt-3 text-sm font-semibold">
-              Kéo thả file vào đây
-            </p>
+            <p className="mt-3 text-sm font-semibold">Kéo thả file vào đây</p>
             <p className="mt-1 text-xs text-muted-foreground">
               hoặc bấm để chọn từ máy tính
             </p>
@@ -370,7 +381,9 @@ export function ContractAttachments({
                   <CheckCircle2 className="size-4" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{selectedFile.name}</p>
+                  <p className="truncate text-sm font-medium">
+                    {selectedFile.name}
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     {formatFileSize(selectedFile.size)}
                   </p>
@@ -423,10 +436,31 @@ export function ContractAttachments({
           </Button>
 
           <p className="text-center text-xs leading-5 text-muted-foreground">
-            File được phân loại để dễ theo dõi tiến độ hoàn thiện hồ sơ hợp đồng.
+            File được phân loại để dễ theo dõi tiến độ hoàn thiện hồ sơ hợp
+            đồng.
           </p>
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// --- ContractDocuments: wrapper dùng cho tab "Chứng từ" ---
+import { ContractDetailResponse } from "@/services/contract-api";
+
+export function ContractDocuments({
+  contract,
+}: {
+  contract: ContractDetailResponse;
+}) {
+  // Placeholder cho API Documents sau này
+  const attachments: ContractAttachmentItem[] = [];
+
+  return (
+    <ContractAttachments
+      contractId={contract.contractId}
+      initialAttachments={attachments}
+      mockMode
+    />
   );
 }

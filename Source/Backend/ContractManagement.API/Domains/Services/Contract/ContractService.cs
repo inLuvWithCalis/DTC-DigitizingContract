@@ -319,6 +319,251 @@ namespace ContractManagement.Domains.Services.Contract
             });
         }
 
+
+        /// <summary>
+        /// Lấy chi tiết hợp đồng tại version hiện hành.
+        /// </summary>
+        public async Task<ContractDetailResponse> GetDetailAsync(
+            int contractId,
+            int employeeId)
+        {
+            if (contractId <= 0)
+            {
+                throw new ArgumentException(
+                    "ContractId phải lớn hơn 0.");
+            }
+
+            if (employeeId <= 0)
+            {
+                throw new UnauthorizedAccessException(
+                    "Không xác định được nhân viên đang đăng nhập.");
+            }
+
+            /*
+             * Lọc EmployeeId ngay trong truy vấn.
+             *
+             * Như vậy:
+             * - Người khác không đọc được hợp đồng.
+             * - API không tiết lộ hợp đồng có tồn tại hay không.
+             * - Không cần tải hợp đồng ra rồi mới kiểm tra quyền.
+             */
+            var header = await (
+                from contracts in _dbContext.TblContracts.AsNoTracking()
+
+                join customer in _dbContext.TblCustomers.AsNoTracking()
+                    on contracts.CustomerId equals customer.CustomerId
+
+                join responsibleEmployee in
+                    _dbContext.TblEmployees.AsNoTracking()
+                    on contracts.EmployeeId
+                    equals responsibleEmployee.EmployeeId
+
+                where contracts.ContractId == contractId
+                      && contracts.EmployeeId == employeeId
+
+                select new
+                {
+                    Contract = contracts,
+                    Customer = customer,
+                    ResponsibleEmployee = responsibleEmployee
+                })
+                .FirstOrDefaultAsync();
+
+            /*
+             * - Hợp đồng không tồn tại.
+             * - Hợp đồng tồn tại nhưng người dùng không có quyền.
+             */
+            if (header == null)
+            {
+                throw new KeyNotFoundException(
+                    "Không tìm thấy hợp đồng.");
+            }
+
+            var contract = header.Contract;
+
+            if (contract.CurrentVersionId is null)
+            {
+                throw new InvalidOperationException(
+                    "Hợp đồng chưa có version hiện hành.");
+            }
+
+            /*
+             * Không lấy MAX(VersionNo).
+             * Luôn đọc đúng version được Contract.CurrentVersionId trỏ tới.
+             */
+            var version = await _dbContext.TblContractVersions
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.VersionId == contract.CurrentVersionId.Value
+                    && x.ContractId == contract.ContractId);
+
+            if (version == null)
+            {
+                throw new InvalidOperationException(
+                    "Không tìm thấy version hiện hành của hợp đồng.");
+            }
+
+            /*
+             * Items phải đồng thời thuộc đúng Contract và CurrentVersion.
+             * Không đọc lại tên hoặc giá từ Product/Service catalog.
+             */
+            var items = await _dbContext.TblContractItems
+                .AsNoTracking()
+                .Where(x =>
+                    x.ContractId == contract.ContractId
+                    && x.VersionId == version.VersionId)
+                .OrderBy(x => x.DisplayOrder)
+                .ThenBy(x => x.ContractItemId)
+                .ToListAsync();
+
+            /*
+             * Terms cũng được đọc từ snapshot của hợp đồng,
+             * không đọc lại từ ContractTemplateTerm.
+             */
+            var terms = await _dbContext.TblContractTerms
+                .AsNoTracking()
+                .Where(x =>
+                    x.ContractId == contract.ContractId
+                    && x.VersionId == version.VersionId)
+                .OrderBy(x => x.DisplayOrder)
+                .ThenBy(x => x.TermId)
+                .ToListAsync();
+
+            return new ContractDetailResponse
+            {
+                ContractId = contract.ContractId,
+                ContractCode = contract.ContractCode,
+                ContractName = contract.ContractName,
+                ContractNameEn = contract.ContractNameEn,
+
+                ContractType = (ContractType)contract.ContractType,
+                TemplateVersionId = contract.TemplateVersionId,
+                ParentContractId = contract.ParentContractId,
+                Status = (ContractStatus)contract.Status,
+
+                SignDate = contract.SignDate,
+                EffectiveDate = contract.EffectiveDate,
+                ExpireDate = contract.ExpireDate,
+
+                TotalAmount = contract.TotalAmount,
+                CurrencyCode = contract.CurrencyCode,
+
+                LanguageMode =
+                    (ContractLanguageMode)contract.LanguageMode,
+
+                IsLegacy = contract.IsLegacy,
+                CreatedEmployeeId = contract.CreatedEmployeeId,
+                CreatedDate = contract.CreatedDate,
+                UpdatedDate = contract.UpdateDate,
+
+                RowVersion = EncodeRowVersion(contract.RowVersion),
+
+                Customer = new ContractCustomerSummaryResponse
+                {
+                    CustomerId = header.Customer.CustomerId,
+                    CustomerCode = header.Customer.CustomerCode,
+                    CustomerFullName = header.Customer.CustomerFullName,
+                    CustomerCompany = header.Customer.CustomerCompany,
+                    CustomerTaxCode = header.Customer.CustomerTaxCode,
+                    CustomerEmail = header.Customer.CustomerEmail,
+                    CustomerMobile = header.Customer.CustomerMobile,
+                    CustomerAddress = header.Customer.CustomerAddress
+                },
+
+                ResponsibleEmployee =
+                    new ContractEmployeeSummaryResponse
+                    {
+                        EmployeeId =
+                            header.ResponsibleEmployee.EmployeeId,
+
+                        EmployeeCode =
+                            header.ResponsibleEmployee.EmployeeCode,
+
+                        EmployeeFullName =
+                            header.ResponsibleEmployee.EmployeeFullName,
+
+                        EmployeeEmail =
+                            header.ResponsibleEmployee.EmployeeEmail,
+
+                        EmployeeMobile =
+                            header.ResponsibleEmployee.EmployeeMobile
+                    },
+
+                CurrentVersion = new ContractVersionDetailResponse
+                {
+                    VersionId = version.VersionId,
+                    VersionNo = version.VersionNo,
+                    SourceVersionId = version.SourceVersionId,
+                    TemplateVersionId = version.TemplateVersionId,
+                    ChangeNote = version.ChangeNote,
+                    SnapshotHash = version.SnapshotHash,
+
+                    IsLocked = version.IsLocked,
+                    LockedDate = version.LockedDate,
+                    LockedByEmployeeId = version.LockedByEmployeeId,
+
+                    CreatedEmployeeId = version.CreatedEmployeeId,
+                    CreatedDate = version.CreatedDate,
+                    RowVersion = EncodeRowVersion(version.RowVersion),
+
+                    Items = items
+                        .Select(item => new ContractItemDetailResponse
+                        {
+                            ContractItemId = item.ContractItemId,
+
+                            ItemType =
+                                (ContractItemType)item.ItemType,
+
+                            SourceProductId = item.SourceProductId,
+                            SourceServiceId = item.SourceServiceId,
+                            ItemCode = item.ItemCode,
+                            ItemName = item.ItemName,
+                            ItemNameEn = item.ItemNameEn,
+                            ItemDescription = item.ItemDescription,
+
+                            ItemDescriptionEn =
+                                item.ItemDescriptionEn,
+
+                            UnitName = item.UnitName,
+                            UnitNameEn = item.UnitNameEn,
+                            Quantity = item.Quantity,
+                            UnitPrice = item.UnitPrice,
+                            LineSubtotal = item.LineSubtotal,
+
+                            DiscountPercent =
+                                item.DiscountPercent,
+
+                            DiscountAmount = item.DiscountAmount,
+                            VatPercent = item.VatPercent,
+                            VatAmount = item.VatAmount,
+                            LineTotal = item.LineTotal,
+                            DisplayOrder = item.DisplayOrder,
+                            RowVersion = EncodeRowVersion(item.RowVersion)
+                        })
+                        .ToList(),
+
+                    Terms = terms
+                        .Select(term => new ContractTermDetailResponse
+                        {
+                            TermId = term.TermId,
+
+                            SourceTemplateTermId =
+                                term.SourceTemplateTermId,
+
+                            TermCode = term.TermCode,
+                            TermTitle = term.TermTitle,
+                            TermTitleEn = term.TermTitleEn,
+                            TermContent = term.TermContent,
+                            TermContentEn = term.TermContentEn,
+                            IsNegotiable = term.IsNegotiable,
+                            DisplayOrder = term.DisplayOrder,
+                            RowVersion = EncodeRowVersion(term.RowVersion)
+                        })
+                        .ToList()
+                }
+            };
+        }
+
         /// <summary>
         /// Kiểm tra phòng thủ trong service.
         /// DTO validation vẫn là lớp kiểm tra đầu tiên.
@@ -687,6 +932,17 @@ namespace ContractManagement.Domains.Services.Contract
             return string.IsNullOrWhiteSpace(value)
                 ? null
                 : value.Trim();
+        }
+
+        /// <summary>
+        /// Chuyển SQL Server rowversion thành chuỗi Base64
+        /// để frontend có thể gửi lại khi cập nhật dữ liệu.
+        /// </summary>
+        private static string EncodeRowVersion(byte[]? rowVersion)
+        {
+            return rowVersion is { Length: > 0 }
+                ? Convert.ToBase64String(rowVersion)
+                : string.Empty;
         }
     }
 }

@@ -15,5 +15,14 @@ namespace ContractManagement.Domains.Interfaces.Contract
         Task<CreateContractResponse> CreateAsync(
             CreateContractRequest request,
             int createdEmployeeId);
+
+        /// <summary>
+        /// Lấy hợp đồng cùng version hiện hành, items và terms.
+        ///
+        /// Chỉ nhân viên đang phụ trách hợp đồng mới được xem.
+        /// </summary>
+        Task<ContractDetailResponse> GetDetailAsync(
+            int contractId,
+            int employeeId);
     }
 }

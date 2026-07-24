@@ -1,6 +1,13 @@
 "use client";
 
-import { ChangeEvent, DragEvent, useRef, useState } from "react";
+import {
+  ChangeEvent,
+  DragEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   CheckCircle2,
   Download,
@@ -29,6 +36,7 @@ import {
 } from "@/components/ui/select";
 import {
   CONTRACT_DOCUMENT_TYPES,
+  ContractAttachmentResponse,
   ContractDocumentType,
   contractAttachmentsApi,
 } from "@/services/contract-attachments-api";
@@ -88,6 +96,26 @@ function documentTypeLabel(value: ContractDocumentType) {
   );
 }
 
+function mapAttachment(
+  attachment: ContractAttachmentResponse,
+): ContractAttachmentItem {
+  return {
+    id: attachment.attachmentId,
+    name:
+      attachment.contractFileName ||
+      `Tài liệu #${attachment.attachmentId}`,
+    documentType: attachment.documentType,
+    documentTypeName:
+      documentTypeLabel(attachment.documentType) ||
+      attachment.documentTypeName,
+    uploadedAt: attachment.uploadDate,
+    uploadedBy: attachment.uploadEmployeeId
+      ? `Nhân viên #${attachment.uploadEmployeeId}`
+      : undefined,
+    downloadUrl: attachment.contractFilePath,
+  };
+}
+
 export function ContractAttachments({
   contractId,
   initialAttachments = [],
@@ -101,9 +129,36 @@ export function ContractAttachments({
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [isLoadingAttachments, setIsLoadingAttachments] = useState(!mockMode);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const loadAttachments = useCallback(async () => {
+    if (mockMode) return;
+
+    setIsLoadingAttachments(true);
+    setLoadError(null);
+
+    try {
+      const response = await contractAttachmentsApi.getAll(contractId);
+      setAttachments(response.map(mapAttachment));
+    } catch {
+      setLoadError("Không thể tải danh sách chứng từ.");
+    } finally {
+      setIsLoadingAttachments(false);
+    }
+  }, [contractId, mockMode]);
+
+  useEffect(() => {
+    void loadAttachments();
+  }, [loadAttachments]);
 
   const validateAndSelectFile = (file?: File) => {
     if (!file) return;
+
+    if (file.size === 0) {
+      toast.error("File đang trống (0 byte). Vui lòng chọn file có nội dung.");
+      return;
+    }
 
     const extension = getExtension(file.name);
     if (!ACCEPTED_EXTENSIONS.includes(extension)) {
@@ -235,7 +290,29 @@ export function ContractAttachments({
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          {attachments.length === 0 ? (
+          {isLoadingAttachments ? (
+            <div className="flex items-center justify-center gap-2 px-6 py-16 text-sm text-muted-foreground">
+              <Loader2 className="size-5 animate-spin text-primary" />
+              Đang tải danh sách chứng từ...
+            </div>
+          ) : loadError ? (
+            <div className="px-6 py-16 text-center">
+              <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+                <FileText className="size-7" />
+              </div>
+              <p className="mt-4 font-semibold">Không thể tải chứng từ</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {loadError}
+              </p>
+              <Button
+                variant="outline"
+                className="mt-5"
+                onClick={() => void loadAttachments()}
+              >
+                Thử lại
+              </Button>
+            </div>
+          ) : attachments.length === 0 ? (
             <div className="px-6 py-16 text-center">
               <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                 <FileText className="size-7" />
@@ -453,14 +530,10 @@ export function ContractDocuments({
 }: {
   contract: ContractDetailResponse;
 }) {
-  // Placeholder cho API Documents sau này
-  const attachments: ContractAttachmentItem[] = [];
-
   return (
     <ContractAttachments
       contractId={contract.contractId}
-      initialAttachments={attachments}
-      mockMode
+      mockMode={false}
     />
   );
 }

@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 97.4%;
+    --foreground: 0 0% 8.6%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 8.6%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 8.6%;
+    /* Primary */
+    --primary: 207.2 100% 29.8%;
+    --primary-foreground: 0 0% 97.4%;
+    /* Light gray secondary for softer backgrounds */
+    --secondary: 195.2 40.3% 94.4%;
+    --secondary-foreground: 0 0% 8.6%;
+    --muted: 195.2 13.9% 84%;
+    --muted-foreground: 0 0% 38.9%;
+    /* Minimal blue accent */
+    --accent: 224.8 0.3% 92.2%;
+    --accent-foreground: 224.8 0% 13.3%;
+    --destructive: 357.2 100% 45.3%;
+    --destructive-foreground: 0 0% 97.4%;
+    /* Subtle borders */
+    --border: 195.2 20.7% 89.2%;
+    --input: 0 0% 96.1%;
+    --ring: 207.2 100% 29.8%;
+    --chart-1: 18 100% 48%;
+    --chart-2: 174.7 100% 29.5%;
+    --chart-3: 195.8 72.1% 22.9%;
+    --chart-4: 43.6 100% 50%;
+    --chart-5: 36.3 100% 49.7%;
+    --radius: 0.625rem;
+    /* White sidebar with blue accents */
+    --sidebar: 0 0% 97.4%;
+    --sidebar-foreground: 0 0% 8.6%;
+    --sidebar-primary: 207.2 100% 29.8%;
+    --sidebar-primary-foreground: 0 0% 97.4%;
+    --sidebar-accent: 195.2 40.3% 94.4%;
+    --sidebar-accent-foreground: 0 0% 8.6%;
+    --sidebar-border: 195.2 20.7% 89.2%;
+    --sidebar-ring: 207.2 100% 29.8%;
+  }
+
+  .dark {
+    --background: 205.3 35.3% 4%;
+    --foreground: 204.5 12.7% 90.9%;
+    --card: 204 27.6% 6.9%;
+    --card-foreground: 204.5 12.7% 90.9%;
+    --popover: 204 27.6% 6.9%;
+    --popover-foreground: 204.5 12.7% 90.9%;
+    --primary: 201 100% 46.6%;
+    --primary-foreground: 0 0% 97.4%;
+    --secondary: 204 24% 10.4%;
+    --secondary-foreground: 204.5 8.9% 87%;
+    --muted: 204.1 19.5% 13.1%;
+    --muted-foreground: 204.4 4.9% 56.1%;
+    --accent: 203.8 26.3% 13.1%;
+    --accent-foreground: 204.5 36.1% 93.5%;
+    --destructive: 0.2 67.8% 47.8%;
+    --destructive-foreground: 0 0% 97.4%;
+    --border: 204.1 16.4% 16%;
+    --input: 204.1 19% 10.4%;
+    --ring: 201 100% 46.6%;
+    --chart-1: 201 100% 46.6%;
+    --chart-2: 159.7 100% 36.9%;
+    --chart-3: 36.3 100% 49.7%;
+    --chart-4: 273.3 100% 63.8%;
+    --chart-5: 345.3 100% 56.2%;
+    --sidebar: 204.1 35.5% 5.2%;
+    --sidebar-foreground: 204.5 12.7% 90.9%;
+    --sidebar-primary: 201 100% 46.6%;
+    --sidebar-primary-foreground: 0 0% 97.4%;
+    --sidebar-accent: 204 24% 10.4%;
+    --sidebar-accent-foreground: 204.5 8.9% 87%;
+    --sidebar-border: 204.1 16.4% 16%;
+    --sidebar-ring: 201 100% 46.6%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+:root {
+  --font-display:
+    Spline Sans, Inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji,
+    Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono,
+    Courier New, monospace;
+  --font-rounded:
+    "SF Pro Rounded", "Hiragino Maru Gothic ProN", Meiryo, "MS PGothic",
+    sans-serif;
+  --font-serif: Georgia, "Times New Roman", serif;
+}

@@ -217,11 +217,11 @@ export default function CreateContractPage() {
 
   const progressValue = ((currentStep + 1) / steps.length) * 100;
 
-  const canGoNext = useMemo(() => {
-    if (currentStep === 0)
+  const isStepCompleted = (stepIdx: number) => {
+    if (stepIdx === 0)
       return !!customerId && !!templateVersionId && !!contractTitle.trim();
-    if (currentStep === 1) return selectedItems.length > 0;
-    if (currentStep === 2)
+    if (stepIdx === 1) return selectedItems.length > 0;
+    if (stepIdx === 2)
       return (
         !!effectiveDate &&
         !!expiredDate &&
@@ -230,7 +230,12 @@ export default function CreateContractPage() {
           (term) => term.termTitle.trim() && term.termContent.trim(),
         )
       );
-    return true;
+    return false;
+  };
+
+  const canGoNext = useMemo(() => {
+    if (currentStep === 3) return true;
+    return isStepCompleted(currentStep);
   }, [
     currentStep,
     customerId,
@@ -278,6 +283,51 @@ export default function CreateContractPage() {
 
   // -- SUBMIT ACTION --
   const handleSubmit = async () => {
+    // 1. Validate Step 0: Khách hàng & Mẫu
+    if (!customerId) {
+      toast.error("Vui lòng chọn khách hàng / đối tác.");
+      setCurrentStep(0);
+      return;
+    }
+    if (!contractTitle.trim()) {
+      toast.error("Vui lòng nhập tên hợp đồng.");
+      setCurrentStep(0);
+      return;
+    }
+    if (!templateVersionId) {
+      toast.error("Vui lòng chọn template hợp đồng.");
+      setCurrentStep(0);
+      return;
+    }
+
+    // 2. Validate Step 1: Sản phẩm
+    if (selectedItems.length === 0) {
+      toast.error("Vui lòng chọn ít nhất 1 sản phẩm hoặc dịch vụ.");
+      setCurrentStep(1);
+      return;
+    }
+
+    // 3. Validate Step 2: Điều khoản
+    if (!effectiveDate || !expiredDate) {
+      toast.error("Vui lòng chọn thời hạn hiệu lực của hợp đồng.");
+      setCurrentStep(2);
+      return;
+    }
+    if (draftTerms.length === 0) {
+      toast.error("Hợp đồng phải có ít nhất một điều khoản.");
+      setCurrentStep(2);
+      return;
+    }
+    if (
+      draftTerms.some(
+        (term) => !term.termTitle.trim() || !term.termContent.trim(),
+      )
+    ) {
+      toast.error("Vui lòng nhập đầy đủ tiêu đề và nội dung điều khoản.");
+      setCurrentStep(2);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const itemsPayload: CreateContractItemRequest[] =
@@ -359,7 +409,7 @@ export default function CreateContractPage() {
           </div>
         </div>
 
-        <Card className="shadow-sm">
+        <Card className="shadow-sm py-0">
           <CardContent className="p-4 md:p-6">
             <div className="mb-4 flex items-center justify-between gap-4">
               <div>
@@ -379,12 +429,14 @@ export default function CreateContractPage() {
 
             <div className="mt-5 grid gap-3 md:grid-cols-4">
               {steps.map((step, index) => (
-                <div
+                <button
+                  type="button"
                   key={step.title}
-                  className={`rounded-xl border p-3 ${
+                  onClick={() => setCurrentStep(index)}
+                  className={`rounded-xl border p-3 cursor-pointer hover:border-primary/50 transition-colors text-left ${
                     index === currentStep
                       ? "border-primary bg-primary/5"
-                      : index < currentStep
+                      : isStepCompleted(index)
                         ? "border-emerald-200 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/20"
                         : "bg-muted/30"
                   }`}
@@ -392,12 +444,12 @@ export default function CreateContractPage() {
                   <div className="flex items-center gap-2">
                     <div
                       className={`flex size-7 items-center justify-center rounded-full text-xs font-semibold ${
-                        index <= currentStep
+                        isStepCompleted(index) || index === currentStep
                           ? "bg-primary text-primary-foreground"
                           : "bg-muted text-muted-foreground"
                       }`}
                     >
-                      {index < currentStep ? (
+                      {isStepCompleted(index) ? (
                         <CheckCircle2 className="size-4" />
                       ) : (
                         index + 1
@@ -410,7 +462,7 @@ export default function CreateContractPage() {
                       </p>
                     </div>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           </CardContent>
@@ -675,8 +727,9 @@ export default function CreateContractPage() {
                           }`}
                         >
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div
-                              className="flex items-start gap-3 flex-1 cursor-pointer"
+                            <button
+                              type="button"
+                              className="flex items-start gap-3 flex-1 cursor-pointer text-left"
                               onClick={() => toggleCatalogItem(item.id)}
                             >
                               <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -691,7 +744,7 @@ export default function CreateContractPage() {
                                     : "Dịch vụ"}
                                 </p>
                               </div>
-                            </div>
+                            </button>
                             <div className="flex items-center gap-3">
                               {selected && (
                                 <div className="flex items-center gap-2 mr-2">
@@ -716,7 +769,8 @@ export default function CreateContractPage() {
                               <span className="font-semibold text-primary">
                                 {formatCurrency(item.unitPrice * item.quantity)}
                               </span>
-                              <div
+                              <button
+                                type="button"
                                 className="cursor-pointer ml-1"
                                 onClick={() => toggleCatalogItem(item.id)}
                               >
@@ -726,11 +780,11 @@ export default function CreateContractPage() {
                                     Đã chọn
                                   </Badge>
                                 ) : (
-                                  <div className="h-6 px-3 border rounded-full text-xs font-medium flex items-center justify-center text-muted-foreground hover:bg-muted">
+                                  <span className="h-6 px-3 border rounded-full text-xs font-medium flex items-center justify-center text-muted-foreground hover:bg-muted">
                                     Chọn
-                                  </div>
+                                  </span>
                                 )}
-                              </div>
+                              </button>
                             </div>
                           </div>
                         </div>

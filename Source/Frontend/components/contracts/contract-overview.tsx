@@ -346,9 +346,10 @@ export function ContractOverview({
                         </div>
                       ) : (
                         catalogItems.map((item) => (
-                          <div
+                          <button
+                            type="button"
                             key={item.id}
-                            className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer"
+                            className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer w-full text-left"
                             onClick={() => handleAddCatalogItem(item)}
                           >
                             <div className="flex items-center gap-3">
@@ -367,7 +368,7 @@ export function ContractOverview({
                             <span className="font-semibold text-primary">
                               {formatCurrency(item.unitPrice)}
                             </span>
-                          </div>
+                          </button>
                         ))
                       )}
                     </div>

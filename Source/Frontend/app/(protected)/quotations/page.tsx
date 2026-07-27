@@ -133,7 +133,8 @@ export default function QuotationListPage() {
       {
         accessorKey: "quotationNo",
         header: ({ column }) => (
-          <div
+          <button
+            type="button"
             className="flex items-center gap-1.5 select-none cursor-pointer group"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
           >
@@ -144,7 +145,7 @@ export default function QuotationListPage() {
             }[column.getIsSorted() as string] ?? (
               <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
             )}
-          </div>
+          </button>
         ),
         cell: ({ row }) => (
           <div className="flex flex-col pl-1">
@@ -182,7 +183,8 @@ export default function QuotationListPage() {
       {
         accessorKey: "totalAmount",
         header: ({ column }) => (
-          <div
+          <button
+            type="button"
             className="flex items-center justify-end gap-1.5 select-none cursor-pointer group"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
           >
@@ -193,7 +195,7 @@ export default function QuotationListPage() {
             }[column.getIsSorted() as string] ?? (
               <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
             )}
-          </div>
+          </button>
         ),
         cell: ({ row }) => (
           <div className="text-right font-semibold text-primary">

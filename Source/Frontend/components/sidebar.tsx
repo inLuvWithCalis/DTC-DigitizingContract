@@ -161,7 +161,9 @@ export function Sidebar() {
 
       {isMobileOpen && (
         <>
-          <div
+          <button
+            type="button"
+            aria-label="Đóng menu"
             className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 lg:hidden animate-in fade-in duration-200"
             onClick={() => setIsMobileOpen(false)}
           />

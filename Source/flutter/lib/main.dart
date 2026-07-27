@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'models/auth_dto.dart';
+import 'pages/catalog/services/service_list_page.dart';
+import 'pages/catalog/service-types/service_type_list_page.dart';
 import 'pages/dashboard_page.dart';
+import 'services/api_client.dart';
 import 'services/auth_api.dart';
 import 'theme/app_theme.dart';
 import 'utils/app_toast.dart';
@@ -246,7 +249,10 @@ class _LoginPageState extends State<LoginPage> {
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 16,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -260,7 +266,9 @@ class _LoginPageState extends State<LoginPage> {
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                              color: theme.colorScheme.primary.withValues(
+                                alpha: 0.3,
+                              ),
                               blurRadius: 12,
                               offset: const Offset(0, 4),
                             ),
@@ -286,7 +294,9 @@ class _LoginPageState extends State<LoginPage> {
                         'Đăng nhập vào eContract để tiếp tục công việc của bạn.',
                         style: TextStyle(
                           fontSize: 16,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.6,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 40),
@@ -303,7 +313,9 @@ class _LoginPageState extends State<LoginPage> {
                         hasError: _tenantError != null && _tenantTouched,
                         onChanged: (val) {
                           if (_tenantTouched) {
-                            setState(() => _tenantError = _validateTenantCode(val));
+                            setState(
+                              () => _tenantError = _validateTenantCode(val),
+                            );
                           }
                         },
                       ),
@@ -345,23 +357,29 @@ class _LoginPageState extends State<LoginPage> {
                               obscureText: !_showPassword,
                               maxLength: 64,
                               placeholder: '••••••••',
-                              hasError: _passwordError != null && _passwordTouched,
+                              hasError:
+                                  _passwordError != null && _passwordTouched,
                               onChanged: (val) {
                                 if (_passwordTouched) {
-                                  setState(() => _passwordError = _validatePassword(val));
+                                  setState(
+                                    () =>
+                                        _passwordError = _validatePassword(val),
+                                  );
                                 }
                               },
                             ),
                           ),
                           const SizedBox(width: 12),
                           InkWell(
-                            onTap: () => setState(() => _showPassword = !_showPassword),
+                            onTap: () =>
+                                setState(() => _showPassword = !_showPassword),
                             borderRadius: BorderRadius.circular(16),
                             child: Container(
                               height: 56,
                               width: 56,
                               decoration: BoxDecoration(
-                                color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                                color: theme.colorScheme.surfaceContainerHighest
+                                    .withValues(alpha: 0.3),
                                 borderRadius: BorderRadius.circular(16),
                               ),
                               child: Icon(
@@ -454,7 +472,9 @@ class _LoginPageState extends State<LoginPage> {
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
-                                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.6,
+                                ),
                               ),
                             ),
                           ],
@@ -475,10 +495,7 @@ class _LoginPageState extends State<LoginPage> {
   Widget _buildLabel(String label) {
     return Text(
       label,
-      style: const TextStyle(
-        fontSize: 14,
-        fontWeight: FontWeight.w600,
-      ),
+      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
     );
   }
 
@@ -502,6 +519,7 @@ void main() async {
   try {
     await dotenv.load(fileName: ".env");
   } catch (_) {}
+  await ApiClient().init();
   runApp(const MyApp());
 }
 
@@ -520,6 +538,8 @@ class MyApp extends StatelessWidget {
       routes: {
         '/': (context) => const LoginPage(),
         '/dashboard': (context) => const DashboardPage(),
+        '/catalog/service-types': (context) => const ServiceTypeListPage(),
+        '/catalog/services': (context) => const ServiceListPage(),
       },
     );
   }

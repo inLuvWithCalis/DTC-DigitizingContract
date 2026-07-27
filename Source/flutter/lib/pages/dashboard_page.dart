@@ -73,28 +73,32 @@ class _DashboardPageState extends State<DashboardPage> {
 
     final quickActions = [
       _QuickActionItem(
-        title: "Tạo HĐ mới",
-        icon: Icons.add_circle_outline_rounded,
+        title: "Dịch vụ",
+        icon: Icons.miscellaneous_services_outlined,
         color: const Color(0xFF4F46E5),
         bgColor: const Color(0xFFEEF2FF),
+        onTap: () => Navigator.of(context).pushNamed('/catalog/services'),
       ),
       _QuickActionItem(
-        title: "Số hóa / OCR",
-        icon: Icons.qr_code_scanner_rounded,
+        title: "Loại dịch vụ",
+        icon: Icons.category_outlined,
         color: const Color(0xFF0284C7),
         bgColor: const Color(0xFFE0F2FE),
+        onTap: () => Navigator.of(context).pushNamed('/catalog/service-types'),
       ),
       _QuickActionItem(
         title: "Duyệt HĐ",
         icon: Icons.verified_outlined,
         color: const Color(0xFFD97706),
         bgColor: const Color(0xFFFFFBEB),
+        onTap: () {},
       ),
       _QuickActionItem(
         title: "Tra cứu",
         icon: Icons.search_rounded,
         color: const Color(0xFF7C3AED),
         bgColor: const Color(0xFFF3E8FF),
+        onTap: () {},
       ),
     ];
 
@@ -282,7 +286,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: quickActions.map((qa) {
                   return InkWell(
-                    onTap: () {},
+                    onTap: qa.onTap,
                     borderRadius: BorderRadius.circular(16),
                     child: Column(
                       children: [
@@ -826,12 +830,14 @@ class _QuickActionItem {
   final IconData icon;
   final Color color;
   final Color bgColor;
+  final VoidCallback? onTap;
 
   _QuickActionItem({
     required this.title,
     required this.icon,
     required this.color,
     required this.bgColor,
+    this.onTap,
   });
 }
 

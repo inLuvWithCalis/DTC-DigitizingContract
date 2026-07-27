@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
 
 class ApiException implements Exception {
@@ -20,16 +21,41 @@ class ApiClient {
   factory ApiClient() => _instance;
   ApiClient._internal();
 
-  String _baseUrl = AppConfig.apiBaseUrl;
+  static const String _sessionCookieKey = 'app_session_cookies';
 
+  String _baseUrl = AppConfig.apiBaseUrl;
   final Map<String, String> _cookies = {};
+  bool _isInitialized = false;
+
+  /// Khởi tạo và nạp Session Cookie đã lưu từ SharedPreferences (disk)
+  Future<void> init() async {
+    if (_isInitialized) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedCookiesJson = prefs.getString(_sessionCookieKey);
+      if (savedCookiesJson != null && savedCookiesJson.isNotEmpty) {
+        final decoded = jsonDecode(savedCookiesJson) as Map<String, dynamic>;
+        decoded.forEach((key, value) {
+          _cookies[key] = value.toString();
+        });
+        if (kDebugMode) {
+          debugPrint('[ApiClient] Loaded persistent cookies: $_cookies');
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[ApiClient] Error loading persistent cookies: $e');
+      }
+    } finally {
+      _isInitialized = true;
+    }
+  }
 
   String get baseUrl {
     final effectiveUrl =
         (!kIsWeb && Platform.isAndroid && _baseUrl.contains('localhost'))
         ? _baseUrl.replaceAll('localhost', '10.0.2.2')
         : _baseUrl;
-    debugPrint('Base URL: $effectiveUrl');
     return effectiveUrl;
   }
 
@@ -44,11 +70,22 @@ class ApiClient {
     return identical(0, 0.0);
   }
 
-  void clearCookies() {
+  Future<void> clearCookies() async {
     _cookies.clear();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_sessionCookieKey);
+    } catch (_) {}
     if (kDebugMode) {
       debugPrint('[ApiClient] Cleared all session cookies.');
     }
+  }
+
+  Future<void> _saveCookies() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_sessionCookieKey, jsonEncode(_cookies));
+    } catch (_) {}
   }
 
   void _updateCookies(http.Response response) {
@@ -63,8 +100,9 @@ class ApiClient {
           _cookies[key] = val;
         }
       }
+      _saveCookies();
       if (kDebugMode) {
-        debugPrint('[ApiClient] Updated cookies: $_cookies');
+        debugPrint('[ApiClient] Updated and saved cookies: $_cookies');
       }
     }
   }
@@ -184,6 +222,96 @@ class ApiClient {
     } catch (e) {
       if (kDebugMode) {
         debugPrint('⚠️ [HTTP Exception] POST $url -> $e');
+      }
+      rethrow;
+    }
+  }
+
+  Future<dynamic> put(
+    String endpoint, {
+    dynamic body,
+    Map<String, String>? headers,
+  }) async {
+    final url = Uri.parse('$baseUrl$endpoint');
+    final builtHeaders = _buildHeaders(headers);
+    final jsonBody = body != null ? jsonEncode(body) : null;
+
+    if (kDebugMode) {
+      debugPrint('🌐 [HTTP Request] PUT $url');
+      debugPrint('   Headers: $builtHeaders');
+      if (jsonBody != null) {
+        debugPrint('   Body: $jsonBody');
+      }
+    }
+
+    try {
+      final response = await http.put(
+        url,
+        headers: builtHeaders,
+        body: jsonBody,
+      );
+      return _processResponse(response, url, 'PUT');
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [HTTP Exception] PUT $url -> $e');
+      }
+      rethrow;
+    }
+  }
+
+  Future<dynamic> delete(
+    String endpoint, {
+    Map<String, String>? headers,
+  }) async {
+    final url = Uri.parse('$baseUrl$endpoint');
+    final builtHeaders = _buildHeaders(headers);
+
+    if (kDebugMode) {
+      debugPrint('🌐 [HTTP Request] DELETE $url');
+      debugPrint('   Headers: $builtHeaders');
+    }
+
+    try {
+      final response = await http.delete(
+        url,
+        headers: builtHeaders,
+      );
+      return _processResponse(response, url, 'DELETE');
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [HTTP Exception] DELETE $url -> $e');
+      }
+      rethrow;
+    }
+  }
+
+  Future<dynamic> patch(
+    String endpoint, {
+    dynamic body,
+    Map<String, String>? headers,
+  }) async {
+    final url = Uri.parse('$baseUrl$endpoint');
+    final builtHeaders = _buildHeaders(headers);
+    final jsonBody = body != null ? jsonEncode(body) : null;
+
+    if (kDebugMode) {
+      debugPrint('🌐 [HTTP Request] PATCH $url');
+      debugPrint('   Headers: $builtHeaders');
+      if (jsonBody != null) {
+        debugPrint('   Body: $jsonBody');
+      }
+    }
+
+    try {
+      final response = await http.patch(
+        url,
+        headers: builtHeaders,
+        body: jsonBody,
+      );
+      return _processResponse(response, url, 'PATCH');
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [HTTP Exception] PATCH $url -> $e');
       }
       rethrow;
     }

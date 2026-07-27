@@ -14,6 +14,7 @@ class AppTextField extends StatelessWidget {
   final bool autocorrect;
   final bool enableSuggestions;
   final Widget? suffixIcon;
+  final TextInputType? keyboardType;
 
   const AppTextField({
     super.key,
@@ -28,6 +29,7 @@ class AppTextField extends StatelessWidget {
     this.autocorrect = true,
     this.enableSuggestions = true,
     this.suffixIcon,
+    this.keyboardType,
   });
 
   @override
@@ -39,6 +41,7 @@ class AppTextField extends StatelessWidget {
       focusNode: focusNode,
       obscureText: obscureText,
       maxLength: maxLength,
+      keyboardType: keyboardType,
       onChanged: onChanged,
       onTap: onTap,
       autocorrect: autocorrect,

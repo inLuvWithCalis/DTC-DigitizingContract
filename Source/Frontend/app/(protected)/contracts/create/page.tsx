@@ -38,9 +38,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
 import { DateRangeFilter } from "@/components/ui/custom/date-range-filter";
 import { format } from "date-fns";
+import { CreateContractTermsMock } from "@/components/contracts/create-contract-terms-mock";
 
 import {
   ContractType,
@@ -55,6 +55,11 @@ import {
 import { customerApi, CustomerResponse } from "@/services/customers-api";
 import { productApi } from "@/services/catalog/products-api";
 import { serviceApi } from "@/services/catalog/services-api";
+import {
+  cloneMockTerms,
+  MockContractTerm,
+  mockContractTemplates,
+} from "@/services/contract-templates-mock";
 
 const steps = [
   { title: "Khách hàng & Mẫu", description: "Thiết lập cơ bản" },
@@ -78,13 +83,6 @@ const contractTypeOptions = [
   ContractType.SoftwareSupply,
   ContractType.SoftwareMaintenance,
   ContractType.SoftwareUpkeep,
-];
-
-// --- MOCK TEMPLATES (Sẽ thay bằng API Fetch sau) ---
-const mockTemplates = [
-  { versionId: 1, name: "Hợp đồng phần mềm tiêu chuẩn (v1.0)" },
-  { versionId: 2, name: "Hợp đồng dịch vụ bảo trì (v2.1)" },
-  { versionId: 3, name: "Hợp đồng triển khai Enterprise (v1.5)" },
 ];
 
 const formatCurrency = (amount: number) => {
@@ -164,6 +162,7 @@ export default function CreateContractPage() {
   const [contractTitle, setContractTitle] = useState(
     "Triển khai hệ thống quản lý hợp đồng điện tử",
   );
+  const [draftTerms, setDraftTerms] = useState<MockContractTerm[]>([]);
 
   // Step 2: Items, Filter & Pagination
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
@@ -199,18 +198,11 @@ export default function CreateContractPage() {
   // Step 3: Terms & Dates
   const [effectiveDate, setEffectiveDate] = useState("2026-08-01");
   const [expiredDate, setExpiredDate] = useState("2027-08-01");
-  const [paymentTerms, setPaymentTerms] = useState(
-    "Thanh toán 40% sau khi ký hợp đồng, 60% sau nghiệm thu.",
-  );
-  const [softTerms, setSoftTerms] = useState(
-    "Hai bên thống nhất lịch nghiệm thu theo từng giai đoạn triển khai. Các yêu cầu hỗ trợ ngoài phạm vi sẽ được ghi nhận bằng phụ lục.",
-  );
-
   // -- COMPUTED VALUES --
   const selectedCustomer = customers.find(
     (item) => item.customerId === Number(customerId),
   );
-  const selectedTemplate = mockTemplates.find(
+  const selectedTemplate = mockContractTemplates.find(
     (item) => item.versionId === Number(templateVersionId),
   );
 
@@ -230,7 +222,14 @@ export default function CreateContractPage() {
       return !!customerId && !!templateVersionId && !!contractTitle.trim();
     if (currentStep === 1) return selectedItems.length > 0;
     if (currentStep === 2)
-      return !!effectiveDate && !!expiredDate && !!paymentTerms.trim();
+      return (
+        !!effectiveDate &&
+        !!expiredDate &&
+        draftTerms.length > 0 &&
+        draftTerms.every(
+          (term) => term.termTitle.trim() && term.termContent.trim(),
+        )
+      );
     return true;
   }, [
     currentStep,
@@ -240,8 +239,28 @@ export default function CreateContractPage() {
     selectedItems.length,
     effectiveDate,
     expiredDate,
-    paymentTerms,
+    draftTerms,
   ]);
+
+  const handleContractTypeChange = (value: string) => {
+    const nextType = Number(value) as ContractType;
+    setContractType(nextType);
+
+    if (selectedTemplate?.contractType !== nextType) {
+      setTemplateVersionId("");
+      setDraftTerms([]);
+    }
+  };
+
+  const handleTemplateSelect = (versionId: number) => {
+    const template = mockContractTemplates.find(
+      (item) => item.versionId === versionId,
+    );
+    if (!template) return;
+
+    setTemplateVersionId(String(versionId));
+    setDraftTerms(cloneMockTerms(template.terms));
+  };
 
   const toggleCatalogItem = (id: string) => {
     setSelectedItems((prev) =>
@@ -444,9 +463,7 @@ export default function CreateContractPage() {
                     <Label>Loại hợp đồng</Label>
                     <Select
                       value={String(contractType)}
-                      onValueChange={(value) =>
-                        setContractType(Number(value) as ContractType)
-                      }
+                      onValueChange={handleContractTypeChange}
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue />
@@ -472,28 +489,80 @@ export default function CreateContractPage() {
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label>
-                      Template hợp đồng <span className="text-red-500">*</span>
-                    </Label>
-                    <Select
-                      value={templateVersionId}
-                      onValueChange={setTemplateVersionId}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Chọn mẫu template..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {mockTemplates.map((tpl) => (
-                          <SelectItem
-                            key={tpl.versionId}
-                            value={String(tpl.versionId)}
+                  <div className="space-y-3 md:col-span-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                      <div>
+                        <Label>
+                          Template hợp đồng{" "}
+                          <span className="text-red-500">*</span>
+                        </Label>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Chọn mẫu phù hợp để nạp sẵn bộ điều khoản.
+                        </p>
+                      </div>
+                      <Badge variant="secondary">Dữ liệu mock</Badge>
+                    </div>
+
+                    <div className="grid gap-3 lg:grid-cols-3">
+                      {mockContractTemplates.map((template) => {
+                        const selected =
+                          template.versionId === Number(templateVersionId);
+                        const compatible =
+                          template.contractType === contractType;
+
+                        return (
+                          <button
+                            key={template.versionId}
+                            type="button"
+                            disabled={!compatible}
+                            onClick={() =>
+                              handleTemplateSelect(template.versionId)
+                            }
+                            className={`rounded-2xl border p-4 text-left transition-all ${
+                              selected
+                                ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary"
+                                : compatible
+                                  ? "bg-background hover:border-primary/50 hover:bg-accent/40"
+                                  : "cursor-not-allowed bg-muted/30 opacity-50"
+                            }`}
                           >
-                            {tpl.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                                <LayoutTemplate className="size-5" />
+                              </div>
+                              {selected ? (
+                                <Badge className="gap-1">
+                                  <CheckCircle2 className="size-3.5" />
+                                  Đã chọn
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline">
+                                  v{template.version}
+                                </Badge>
+                              )}
+                            </div>
+
+                            <p className="mt-4 font-semibold leading-snug">
+                              {template.name}
+                            </p>
+                            <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                              {template.description}
+                            </p>
+
+                            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                              <span>{template.terms.length} điều khoản</span>
+                              <span>•</span>
+                              <span>{template.templateCode}</span>
+                            </div>
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              {compatible
+                                ? `Cập nhật ${template.updatedAt}`
+                                : getContractTypeLabel(template.contractType)}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -707,39 +776,39 @@ export default function CreateContractPage() {
               {/* STEP 3: TERMS & DATES */}
               {currentStep === 2 && (
                 <div className="space-y-5">
-                  <div className="space-y-2">
-                    <Label>Thời hạn hiệu lực</Label>
-                    <DateRangeFilter
-                      dateRange={{
-                        from: effectiveDate ? new Date(effectiveDate) : undefined,
-                        to: expiredDate ? new Date(expiredDate) : undefined,
-                      }}
-                      onChange={(range) => {
-                        setEffectiveDate(range.from ? format(range.from, "yyyy-MM-dd") : "");
-                        setExpiredDate(range.to ? format(range.to, "yyyy-MM-dd") : "");
-                      }}
-                    />
+                  <div className="rounded-2xl border bg-muted/20 p-4">
+                    <div className="space-y-2">
+                      <Label>Thời hạn hiệu lực</Label>
+                      <DateRangeFilter
+                        dateRange={{
+                          from: effectiveDate
+                            ? new Date(effectiveDate)
+                            : undefined,
+                          to: expiredDate ? new Date(expiredDate) : undefined,
+                        }}
+                        onChange={(range) => {
+                          setEffectiveDate(
+                            range.from
+                              ? format(range.from, "yyyy-MM-dd")
+                              : "",
+                          );
+                          setExpiredDate(
+                            range.to ? format(range.to, "yyyy-MM-dd") : "",
+                          );
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Thời hạn này được dùng cho bản hợp đồng nháp khi khởi
+                        tạo.
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label>
-                      Điều khoản thanh toán (Lưu sau bằng Draft Update)
-                    </Label>
-                    <Textarea
-                      value={paymentTerms}
-                      onChange={(event) => setPaymentTerms(event.target.value)}
-                      className="min-h-24"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Điều khoản mềm / ghi chú đàm phán</Label>
-                    <Textarea
-                      value={softTerms}
-                      onChange={(event) => setSoftTerms(event.target.value)}
-                      className="min-h-28"
-                    />
-                  </div>
+                  <CreateContractTermsMock
+                    terms={draftTerms}
+                    templateName={selectedTemplate?.name}
+                    onChange={setDraftTerms}
+                  />
                 </div>
               )}
 
@@ -750,8 +819,9 @@ export default function CreateContractPage() {
                     <FileSignature className="size-4" />
                     <AlertTitle>Sẵn sàng khởi tạo</AlertTitle>
                     <AlertDescription>
-                      Dữ liệu sẽ được gửi tới backend để tạo Hợp đồng mới dựa
-                      trên Template đã chọn.
+                      Thông tin cơ bản được gửi tới backend để tạo hợp đồng.
+                      Bộ điều khoản bên dưới đang là mock và chỉ dùng để xem
+                      trước giao diện.
                     </AlertDescription>
                   </Alert>
 
@@ -822,6 +892,48 @@ export default function CreateContractPage() {
                             <span className="font-medium">
                               {formatCurrency(item.unitPrice)}
                             </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <Separator className="my-5" />
+
+                    <div>
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-semibold">
+                          Điều khoản hợp đồng ({draftTerms.length})
+                        </p>
+                        <Badge variant="secondary">Dữ liệu mock</Badge>
+                      </div>
+                      <div className="space-y-2">
+                        {draftTerms.map((term) => (
+                          <div
+                            key={term.id}
+                            className="rounded-xl bg-background p-3"
+                          >
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                              <div>
+                                <p className="text-sm font-semibold">
+                                  {term.termTitle}
+                                </p>
+                                <p className="mt-1 line-clamp-2 text-sm leading-6 text-muted-foreground">
+                                  {term.termContent}
+                                </p>
+                              </div>
+                              <Badge
+                                variant="outline"
+                                className={
+                                  term.isNegotiable
+                                    ? "shrink-0 text-emerald-700"
+                                    : "shrink-0 text-amber-700"
+                                }
+                              >
+                                {term.isNegotiable
+                                  ? "Có thể đàm phán"
+                                  : "Cố định"}
+                              </Badge>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -901,6 +1013,23 @@ export default function CreateContractPage() {
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {getContractTypeLabel(contractType)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <ShieldCheck className="size-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">
+                      {draftTerms.length} điều khoản
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {
+                        draftTerms.filter((term) => term.isNegotiable).length
+                      }{" "}
+                      điều khoản có thể đàm phán
                     </p>
                   </div>
                 </div>

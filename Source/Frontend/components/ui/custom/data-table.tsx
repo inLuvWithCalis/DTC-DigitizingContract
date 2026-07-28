@@ -30,7 +30,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, CheckCheck } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  MoreHorizontal,
+  CheckCheck,
+  Search,
+} from "lucide-react";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { MobileCardWrapper } from "./mobile-card-wrapper";
 import {
@@ -43,6 +51,35 @@ import {
 interface MobileCardRenderContext {
   isSelectionMode: boolean;
   isSelected: boolean;
+  actionCell?: React.ReactNode;
+}
+
+function getPaginationRange(currentPage: number, totalPages: number) {
+  if (totalPages <= 5) {
+    return Array.from({ length: Math.max(1, totalPages) }, (_, i) => i + 1);
+  }
+  if (currentPage <= 3) {
+    return [1, 2, 3, 4, "...", totalPages];
+  }
+  if (currentPage >= totalPages - 2) {
+    return [
+      1,
+      "...",
+      totalPages - 3,
+      totalPages - 2,
+      totalPages - 1,
+      totalPages,
+    ];
+  }
+  return [
+    1,
+    "...",
+    currentPage - 1,
+    currentPage,
+    currentPage + 1,
+    "...",
+    totalPages,
+  ];
 }
 
 interface DataTableProps<TData, TValue> {
@@ -183,79 +220,98 @@ export function DataTable<TData, TValue>({
           {isLoading ? (
             <MobileCardSkeleton count={5} />
           ) : table.getRowModel().rows?.length ? (
-            table.getRowModel().rows.map((row) => (
-              <MobileCardWrapper
-                key={row.id}
-                row={row}
-                isSelectionMode={isSelectionMode}
-                onRowClick={onRowClick}
-                onLongPress={() => {
-                  row.toggleSelected(true);
-                }}
-                onTapInSelectionMode={() => {
-                  row.toggleSelected(!row.getIsSelected());
-                }}
-              >
-                {mobileCardRenderer ? (
-                  mobileCardRenderer(row, {
-                    isSelectionMode,
-                    isSelected: row.getIsSelected(),
-                  })
-                ) : (
+            table.getRowModel().rows.map((row) => {
+              const actionColumn = row
+                .getVisibleCells()
+                .find((c) => c.column.id === "action");
+              const actionNode =
+                !isSelectionMode && actionColumn ? (
                   <div
-                    className="rounded-xl border border-border bg-card p-4 shadow-sm transition-colors active:bg-secondary/40"
-                    data-state={row.getIsSelected() && "selected"}
+                    className="pt-3 mt-3 border-t border-border flex justify-end w-full"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <div className="flex flex-col gap-2.5">
-                      {row.getVisibleCells().map((cell) => {
-                        const header = cell.column.columnDef.header;
-                        const columnId = cell.column.id;
+                    {flexRender(
+                      actionColumn.column.columnDef.cell,
+                      actionColumn.getContext(),
+                    )}
+                  </div>
+                ) : null;
 
-                        if (columnId === "select") return null;
+              return (
+                <MobileCardWrapper
+                  key={row.id}
+                  row={row}
+                  isSelectionMode={isSelectionMode}
+                  onRowClick={onRowClick}
+                  onLongPress={() => {
+                    row.toggleSelected(true);
+                  }}
+                  onTapInSelectionMode={() => {
+                    row.toggleSelected(!row.getIsSelected());
+                  }}
+                >
+                  {mobileCardRenderer ? (
+                    mobileCardRenderer(row, {
+                      isSelectionMode,
+                      isSelected: row.getIsSelected(),
+                      actionCell: actionNode,
+                    })
+                  ) : (
+                    <div
+                      className="rounded-xl border border-border bg-card p-4 shadow-sm transition-colors active:bg-secondary/40"
+                      data-state={row.getIsSelected() && "selected"}
+                    >
+                      <div className="flex flex-col gap-2.5">
+                        {row.getVisibleCells().map((cell) => {
+                          const header = cell.column.columnDef.header;
+                          const columnId = cell.column.id;
 
-                        let label: React.ReactNode = columnId;
-                        if (typeof header === "string") {
-                          label = header;
-                        }
+                          if (columnId === "select") return null;
 
-                        if (columnId === "action") {
-                          if (isSelectionMode) return null;
+                          let label: React.ReactNode = columnId;
+                          if (typeof header === "string") {
+                            label = header;
+                          }
+
+                          if (columnId === "action") {
+                            if (isSelectionMode) return null;
+                            return (
+                              <div
+                                key={cell.id}
+                                className="pt-2 mt-1 border-t border-border"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {flexRender(
+                                  cell.column.columnDef.cell,
+                                  cell.getContext(),
+                                )}
+                              </div>
+                            );
+                          }
+
                           return (
                             <div
                               key={cell.id}
-                              className="pt-2 mt-1 border-t border-border"
-                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-start justify-between gap-3"
                             >
-                              {flexRender(
-                                cell.column.columnDef.cell,
-                                cell.getContext(),
-                              )}
+                              <span className="text-xs font-medium text-muted-foreground shrink-0 pt-0.5 capitalize">
+                                {label}
+                              </span>
+                              <div className="text-sm text-right">
+                                {flexRender(
+                                  cell.column.columnDef.cell,
+                                  cell.getContext(),
+                                )}
+                              </div>
                             </div>
                           );
-                        }
-
-                        return (
-                          <div
-                            key={cell.id}
-                            className="flex items-start justify-between gap-3"
-                          >
-                            <span className="text-xs font-medium text-muted-foreground shrink-0 pt-0.5 capitalize">
-                              {label}
-                            </span>
-                            <div className="text-sm text-right">
-                              {flexRender(
-                                cell.column.columnDef.cell,
-                                cell.getContext(),
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </MobileCardWrapper>
-            ))
+                  )}
+                </MobileCardWrapper>
+              );
+            })
           ) : (
             <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">
               Không tìm thấy dữ liệu.
@@ -483,36 +539,91 @@ export function DataTable<TData, TValue>({
               </Select>
             </div>
 
-            <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="flex items-center gap-1">
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
+                onClick={() => table.setPageIndex(0)}
+                disabled={
+                  isLoading || data.length <= 0 || !table.getCanPreviousPage()
+                }
+                className="h-8 w-8"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+                <span className="sr-only">Trang đầu</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
                 onClick={() => table.previousPage()}
                 disabled={
                   isLoading || data.length <= 0 || !table.getCanPreviousPage()
                 }
-                className="h-8 px-2 sm:px-3"
+                className="h-8 w-8"
               >
-                <ChevronLeft className="w-4 h-4 sm:mr-1" />
-                <span className="hidden sm:inline">Trước</span>
+                <ChevronLeft className="w-4 h-4" />
+                <span className="sr-only">Trang trước</span>
               </Button>
-              <div className="text-sm font-medium text-foreground px-1.5 sm:px-2 min-w-[60px] sm:min-w-[80px] text-center">
-                {data.length > 0
-                  ? table.getState().pagination.pageIndex + 1
-                  : 0}{" "}
-                / {data.length > 0 ? table.getPageCount() : 0}
-              </div>
+
+              {getPaginationRange(
+                data.length > 0 ? table.getState().pagination.pageIndex + 1 : 1,
+                data.length > 0 ? table.getPageCount() : 1,
+              ).map((page, idx) => {
+                if (page === "...") {
+                  return (
+                    <span
+                      key={`gap-${idx}`}
+                      className="flex h-8 w-6 items-center justify-center text-xs text-muted-foreground select-none"
+                    >
+                      <MoreHorizontal className="h-3.5 w-3.5" />
+                    </span>
+                  );
+                }
+
+                const pageNum = page as number;
+                const isCurrent =
+                  data.length > 0 &&
+                  pageNum === table.getState().pagination.pageIndex + 1;
+
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={isCurrent ? "default" : "outline"}
+                    size="icon"
+                    onClick={() => table.setPageIndex(pageNum - 1)}
+                    disabled={isLoading || data.length <= 0}
+                    className="h-8 w-8 text-xs font-medium"
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
                 onClick={() => table.nextPage()}
                 disabled={
                   isLoading || data.length <= 0 || !table.getCanNextPage()
                 }
-                className="h-8 px-2 sm:px-3"
+                className="h-8 w-8"
               >
-                <span className="hidden sm:inline">Sau</span>
-                <ChevronRight className="w-4 h-4 sm:ml-1" />
+                <ChevronRight className="w-4 h-4" />
+                <span className="sr-only">Trang sau</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() =>
+                  table.setPageIndex(Math.max(0, table.getPageCount() - 1))
+                }
+                disabled={
+                  isLoading || data.length <= 0 || !table.getCanNextPage()
+                }
+                className="h-8 w-8"
+              >
+                <ChevronsRight className="w-4 h-4" />
+                <span className="sr-only">Trang cuối</span>
               </Button>
             </div>
           </div>

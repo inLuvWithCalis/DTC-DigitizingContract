@@ -28,7 +28,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CheckCheck, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  CheckCheck,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  MoreHorizontal,
+} from "lucide-react";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { MobileCardWrapper } from "./mobile-card-wrapper";
 import {
@@ -42,6 +50,19 @@ interface MobileCardRenderContext {
   isSelectionMode: boolean;
   isSelected: boolean;
   actionCell: React.ReactNode;
+}
+
+function getPaginationRange(currentPage: number, totalPages: number) {
+  if (totalPages <= 5) {
+    return Array.from({ length: Math.max(1, totalPages) }, (_, i) => i + 1);
+  }
+  if (currentPage <= 3) {
+    return [1, 2, 3, 4, "...", totalPages];
+  }
+  if (currentPage >= totalPages - 2) {
+    return [1, "...", totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  }
+  return [1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages];
 }
 
 interface TreeDataTableProps<TData, TValue> {
@@ -549,38 +570,95 @@ export function TreeDataTable<TData, TValue>({
               </Select>
             </div>
 
-            <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="flex items-center gap-1">
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
+                onClick={() => table.setPageIndex(0)}
+                disabled={
+                  isLoading ||
+                  totalRowsCount <= 0 ||
+                  !table.getCanPreviousPage()
+                }
+                className="h-8 w-8"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+                <span className="sr-only">Trang đầu</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
                 onClick={() => table.previousPage()}
                 disabled={
                   isLoading ||
                   totalRowsCount <= 0 ||
                   !table.getCanPreviousPage()
                 }
-                className="h-8 px-2 sm:px-3"
+                className="h-8 w-8"
               >
-                <ChevronLeft className="w-4 h-4 sm:mr-1" />
-                <span className="hidden sm:inline">Trước</span>
+                <ChevronLeft className="w-4 h-4" />
+                <span className="sr-only">Trang trước</span>
               </Button>
-              <div className="text-sm font-medium text-foreground px-1.5 sm:px-2 min-w-[60px] sm:min-w-[80px] text-center">
-                {totalRowsCount > 0
-                  ? table.getState().pagination.pageIndex + 1
-                  : 0}{" "}
-                / {totalRowsCount > 0 ? table.getPageCount() : 0}
-              </div>
+
+              {getPaginationRange(
+                totalRowsCount > 0 ? table.getState().pagination.pageIndex + 1 : 1,
+                totalRowsCount > 0 ? table.getPageCount() : 1,
+              ).map((page, idx) => {
+                if (page === "...") {
+                  return (
+                    <span
+                      key={`gap-${idx}`}
+                      className="flex h-8 w-6 items-center justify-center text-xs text-muted-foreground select-none"
+                    >
+                      <MoreHorizontal className="h-3.5 w-3.5" />
+                    </span>
+                  );
+                }
+
+                const pageNum = page as number;
+                const isCurrent =
+                  totalRowsCount > 0 &&
+                  pageNum === table.getState().pagination.pageIndex + 1;
+
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={isCurrent ? "default" : "outline"}
+                    size="icon"
+                    onClick={() => table.setPageIndex(pageNum - 1)}
+                    disabled={isLoading || totalRowsCount <= 0}
+                    className="h-8 w-8 text-xs font-medium"
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
                 onClick={() => table.nextPage()}
                 disabled={
                   isLoading || totalRowsCount <= 0 || !table.getCanNextPage()
                 }
-                className="h-8 px-2 sm:px-3"
+                className="h-8 w-8"
               >
-                <span className="hidden sm:inline">Sau</span>
-                <ChevronRight className="w-4 h-4 sm:ml-1" />
+                <ChevronRight className="w-4 h-4" />
+                <span className="sr-only">Trang sau</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() =>
+                  table.setPageIndex(Math.max(0, table.getPageCount() - 1))
+                }
+                disabled={
+                  isLoading || totalRowsCount <= 0 || !table.getCanNextPage()
+                }
+                className="h-8 w-8"
+              >
+                <ChevronsRight className="w-4 h-4" />
+                <span className="sr-only">Trang cuối</span>
               </Button>
             </div>
           </div>

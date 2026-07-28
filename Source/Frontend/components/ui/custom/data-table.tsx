@@ -33,7 +33,12 @@ import {
 import { ChevronLeft, ChevronRight, CheckCheck } from "lucide-react";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { MobileCardWrapper } from "./mobile-card-wrapper";
-import { TableRowSkeleton, MobileCardSkeleton } from "./table-skeleton";
+import {
+  TableRowSkeleton,
+  MobileCardSkeleton,
+  TableHeaderSkeleton,
+  TablePaginationSkeleton,
+} from "./table-skeleton";
 
 interface MobileCardRenderContext {
   isSelectionMode: boolean;
@@ -105,34 +110,35 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="flex flex-col h-full w-full flex-1">
-      {/* 1. TOP TOOLBAR: Lọc & Tìm kiếm */}
-      <div className="flex flex-col gap-3 w-full mb-4 md:flex-row md:items-center md:justify-between md:gap-4">
-        <div className="flex flex-wrap items-center gap-2 md:gap-3">
-          {filterSlot && (
-            <>
-              <span className="text-sm font-medium text-muted-foreground hidden md:block">
-                Bộ lọc:
-              </span>
-              {filterSlot}
-            </>
+      {(!!filterSlot || !!searchKey) && (
+        <div className="flex flex-col gap-3 w-full mb-4 md:flex-row md:items-center md:justify-between md:gap-4">
+          <div className="flex flex-wrap items-center gap-2 md:gap-3">
+            {filterSlot && (
+              <>
+                <span className="text-sm font-medium text-muted-foreground hidden md:block">
+                  Bộ lọc:
+                </span>
+                {filterSlot}
+              </>
+            )}
+          </div>
+
+          {searchKey && (
+            <div className="relative w-full md:w-64">
+              <Input
+                placeholder={searchPlaceholder}
+                value={
+                  (table.getColumn(searchKey)?.getFilterValue() as string) ?? ""
+                }
+                onChange={(event) =>
+                  table.getColumn(searchKey)?.setFilterValue(event.target.value)
+                }
+                className="h-9 bg-background"
+              />
+            </div>
           )}
         </div>
-
-        {searchKey && (
-          <div className="relative w-full md:w-64">
-            <Input
-              placeholder={searchPlaceholder}
-              value={
-                (table.getColumn(searchKey)?.getFilterValue() as string) ?? ""
-              }
-              onChange={(event) =>
-                table.getColumn(searchKey)?.setFilterValue(event.target.value)
-              }
-              className="h-9 bg-background"
-            />
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Mobile selection mode toolbar */}
       {isMobile && isSelectionMode && (
@@ -267,112 +273,122 @@ export function DataTable<TData, TValue>({
         </div>
       ) : (
         /* ────────────── DESKTOP TABLE VIEW ────────────── */
-        <div className="relative w-full overflow-auto rounded-md border border-border flex-1">
+        <div
+          className={`relative w-full overflow-auto rounded-md border border-border flex-1 ${
+            table.getState().pagination.pageSize <= 5
+              ? "min-h-108.5"
+              : "min-h-full"
+          }`}
+        >
           <Table>
-            <TableHeader className="bg-secondary/50">
-              {table.getHeaderGroups().map((headerGroup) => {
-                const hasSelectColumn = headerGroup.headers.some(
-                  (h) => h.column.id === "select",
-                );
-                const hasSelectedRows = selectedRows.length > 0;
+            {isLoading ? (
+              <TableHeaderSkeleton columnCount={columns.length} />
+            ) : (
+              <TableHeader className="bg-secondary/50">
+                {table.getHeaderGroups().map((headerGroup) => {
+                  const hasSelectColumn = headerGroup.headers.some(
+                    (h) => h.column.id === "select",
+                  );
+                  const hasSelectedRows = selectedRows.length > 0;
 
-                return (
-                  <TableRow
-                    key={headerGroup.id}
-                    className="hover:bg-transparent border-b-border"
-                  >
-                    {headerGroup.headers.map((header, index) => {
-                      if (hasSelectedRows) {
-                        if (header.column.id === "select") {
+                  return (
+                    <TableRow
+                      key={headerGroup.id}
+                      className="hover:bg-transparent border-b-border"
+                    >
+                      {headerGroup.headers.map((header, index) => {
+                        if (hasSelectedRows) {
+                          if (header.column.id === "select") {
+                            return (
+                              <TableHead
+                                key={header.id}
+                                className="h-11 font-semibold text-muted-foreground"
+                              >
+                                {header.isPlaceholder
+                                  ? null
+                                  : flexRender(
+                                      header.column.columnDef.header,
+                                      header.getContext(),
+                                    )}
+                              </TableHead>
+                            );
+                          }
+
+                          const isOverlayPosition = hasSelectColumn
+                            ? index === 1
+                            : index === 0;
+
+                          if (!isOverlayPosition) return null;
+
+                          const colSpan =
+                            headerGroup.headers.length -
+                            (hasSelectColumn ? 1 : 0);
+
                           return (
                             <TableHead
-                              key={header.id}
-                              className="h-11 font-semibold text-muted-foreground"
+                              key="selection-header-overlay"
+                              colSpan={colSpan}
+                              className="h-11 font-normal text-foreground py-0"
                             >
-                              {header.isPlaceholder
-                                ? null
-                                : flexRender(
-                                    header.column.columnDef.header,
-                                    header.getContext(),
+                              <div className="flex items-center justify-between gap-3 px-1 animate-in fade-in duration-150">
+                                <div className="flex items-center gap-2">
+                                  <CheckCheck className="w-4 h-4 text-primary" />
+                                  <span className="text-sm font-medium text-foreground">
+                                    Đã chọn{" "}
+                                    <strong className="text-primary">
+                                      {selectedRows.length}
+                                    </strong>{" "}
+                                    dòng
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 text-xs"
+                                    onClick={() =>
+                                      table.toggleAllPageRowsSelected(true)
+                                    }
+                                  >
+                                    Chọn tất cả
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 text-xs text-muted-foreground"
+                                    onClick={exitSelectionMode}
+                                  >
+                                    Hủy
+                                  </Button>
+                                  {bulkActions?.(
+                                    selectedRows.map((row) => row.original),
+                                    () => table.resetRowSelection(),
                                   )}
+                                </div>
+                              </div>
                             </TableHead>
                           );
                         }
 
-                        const isOverlayPosition = hasSelectColumn
-                          ? index === 1
-                          : index === 0;
-
-                        if (!isOverlayPosition) return null;
-
-                        const colSpan =
-                          headerGroup.headers.length -
-                          (hasSelectColumn ? 1 : 0);
-
                         return (
                           <TableHead
-                            key="selection-header-overlay"
-                            colSpan={colSpan}
-                            className="h-11 font-normal text-foreground py-0"
+                            key={header.id}
+                            className="h-11 font-semibold text-muted-foreground"
                           >
-                            <div className="flex items-center justify-between gap-3 px-1 animate-in fade-in duration-150">
-                              <div className="flex items-center gap-2">
-                                <CheckCheck className="w-4 h-4 text-primary" />
-                                <span className="text-sm font-medium text-foreground">
-                                  Đã chọn{" "}
-                                  <strong className="text-primary">
-                                    {selectedRows.length}
-                                  </strong>{" "}
-                                  dòng
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 text-xs"
-                                  onClick={() =>
-                                    table.toggleAllPageRowsSelected(true)
-                                  }
-                                >
-                                  Chọn tất cả
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 text-xs text-muted-foreground"
-                                  onClick={exitSelectionMode}
-                                >
-                                  Hủy
-                                </Button>
-                                {bulkActions?.(
-                                  selectedRows.map((row) => row.original),
-                                  () => table.resetRowSelection(),
+                            {header.isPlaceholder
+                              ? null
+                              : flexRender(
+                                  header.column.columnDef.header,
+                                  header.getContext(),
                                 )}
-                              </div>
-                            </div>
                           </TableHead>
                         );
-                      }
-
-                      return (
-                        <TableHead
-                          key={header.id}
-                          className="h-11 font-semibold text-muted-foreground"
-                        >
-                          {header.isPlaceholder
-                            ? null
-                            : flexRender(
-                                header.column.columnDef.header,
-                                header.getContext(),
-                              )}
-                        </TableHead>
-                      );
-                    })}
-                  </TableRow>
-                );
-              })}
-            </TableHeader>
+                      })}
+                    </TableRow>
+                  );
+                })}
+              </TableHeader>
+            )}
             <TableBody>
               {isLoading ? (
                 <TableRowSkeleton columnCount={columns.length} rowCount={5} />
@@ -398,7 +414,11 @@ export function DataTable<TData, TValue>({
                 <TableRow>
                   <TableCell
                     colSpan={columns.length}
-                    className="h-32 text-center text-muted-foreground"
+                    className={`${
+                      table.getState().pagination.pageSize <= 5
+                        ? "h-86"
+                        : "h-172"
+                    } text-center text-muted-foreground`}
                   >
                     Không tìm thấy dữ liệu.
                   </TableCell>
@@ -410,24 +430,30 @@ export function DataTable<TData, TValue>({
       )}
 
       {/* 4. PAGINATION */}
-      {!isLoading && data.length > 0 && (
+      {isLoading ? (
+        <TablePaginationSkeleton />
+      ) : (
         <div
           className={`flex flex-col gap-3 py-4 mt-auto border-t border-transparent sm:flex-row sm:items-center sm:justify-between ${isMobile && "justify-end items-center"}`}
         >
           <div className="text-sm text-muted-foreground text-center sm:text-left">
             Hiển thị{" "}
             <span className="font-medium text-foreground">
-              {table.getState().pagination.pageIndex *
-                table.getState().pagination.pageSize +
-                1}
+              {data.length > 0
+                ? table.getState().pagination.pageIndex *
+                    table.getState().pagination.pageSize +
+                  1
+                : 0}
             </span>{" "}
             đến{" "}
             <span className="font-medium text-foreground">
-              {Math.min(
-                (table.getState().pagination.pageIndex + 1) *
-                  table.getState().pagination.pageSize,
-                data.length,
-              )}
+              {data.length > 0
+                ? Math.min(
+                    (table.getState().pagination.pageIndex + 1) *
+                      table.getState().pagination.pageSize,
+                    data.length,
+                  )
+                : 0}
             </span>{" "}
             trong{" "}
             <span className="font-medium text-foreground">{data.length}</span>{" "}
@@ -442,6 +468,7 @@ export function DataTable<TData, TValue>({
               <Select
                 value={table.getState().pagination.pageSize.toString()}
                 onValueChange={(val) => table.setPageSize(Number(val))}
+                disabled={isLoading || data.length <= 0}
               >
                 <SelectTrigger className="h-8 w-[75px] bg-background border-border">
                   <SelectValue />
@@ -452,13 +479,6 @@ export function DataTable<TData, TValue>({
                       {pageSize}
                     </SelectItem>
                   ))}
-
-                  {data.length > 0 &&
-                    ![5, 10, 20, 50].includes(data.length) && (
-                      <SelectItem value={data.length.toString()}>
-                        Tất cả
-                      </SelectItem>
-                    )}
                 </SelectContent>
               </Select>
             </div>
@@ -468,21 +488,27 @@ export function DataTable<TData, TValue>({
                 variant="outline"
                 size="sm"
                 onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
+                disabled={
+                  isLoading || data.length <= 0 || !table.getCanPreviousPage()
+                }
                 className="h-8 px-2 sm:px-3"
               >
                 <ChevronLeft className="w-4 h-4 sm:mr-1" />
                 <span className="hidden sm:inline">Trước</span>
               </Button>
               <div className="text-sm font-medium text-foreground px-1.5 sm:px-2 min-w-[60px] sm:min-w-[80px] text-center">
-                {table.getState().pagination.pageIndex + 1} /{" "}
-                {table.getPageCount()}
+                {data.length > 0
+                  ? table.getState().pagination.pageIndex + 1
+                  : 0}{" "}
+                / {data.length > 0 ? table.getPageCount() : 0}
               </div>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
+                disabled={
+                  isLoading || data.length <= 0 || !table.getCanNextPage()
+                }
                 className="h-8 px-2 sm:px-3"
               >
                 <span className="hidden sm:inline">Sau</span>

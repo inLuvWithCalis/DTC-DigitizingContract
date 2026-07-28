@@ -35,7 +35,7 @@ export default function CategoryListPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [pagination, setPagination] = useState({
     pageIndex: 0,
-    pageSize: 20,
+    pageSize: 10,
   });
   const [loadingId, setLoadingId] = useState<number | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);

@@ -39,6 +39,7 @@ import {
   SummaryCardItem,
   SummaryCards,
 } from "@/components/ui/custom/summary-cards";
+import { PageHeaderSkeleton } from "@/components/ui/custom/table-skeleton";
 import { ProductFormModal } from "./product-form-modal";
 
 function ProductBulkActions({
@@ -460,7 +461,7 @@ export default function ProductListPage() {
           </Button>
         </div>
 
-        <SummaryCards items={summaryItems} />
+        <SummaryCards items={summaryItems} isLoading={isLoading} />
 
         <Card className="border-border shadow-sm bg-card min-h-[500px] flex flex-col gap-0 p-0">
           <CardContent className="p-4 flex flex-col justify-between flex-1 pb-0">

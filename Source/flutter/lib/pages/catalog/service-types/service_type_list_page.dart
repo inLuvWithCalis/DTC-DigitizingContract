@@ -168,7 +168,7 @@ class _ServiceTypeListPageState extends State<ServiceTypeListPage> {
             pageSize: _pageSize,
             totalPages: _totalPages,
             isLoading: _isLoading,
-            searchPlaceholder: "Tên dịch vụ",
+            searchPlaceholder: "Tên dịch vụ...",
             searchValue: _searchTerm,
             getItemId: (item) => item.serviceTypeId,
             onItemClick: (item) {

@@ -1,21 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import Link from "next/link"; // Quan trọng: Dùng Link thay vì thẻ <a>
 import {
-  X,
-  LayoutDashboard,
-  FileSignature,
-  FileText,
-  ShoppingCart,
-  Users,
-  Settings,
   Building2,
-  LogOut,
-  User,
   ChevronLeft,
+  FileText,
+  HeartPulse,
+  LayoutDashboard,
+  LogOut,
   Menu,
+  ScrollText,
+  Settings,
+  ShieldCheck,
+  User,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,217 +27,288 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useSidebar } from "./sidebar-context";
 import { useAuthStore } from "@/hooks/use-auth-store";
+import { authApi } from "@/services/auth-api";
+import { cn } from "@/lib/utils";
+
+const navItems = [
+  {
+    label: "Tổng quan",
+    icon: LayoutDashboard,
+    href: "/dashboard",
+    disabled: false,
+  },
+  {
+    label: "Quản lý tenant",
+    icon: Building2,
+    href: "/tenants",
+    disabled: false,
+  },
+  {
+    label: "Quản trị viên",
+    icon: ShieldCheck,
+    href: "/administrators",
+    disabled: false,
+  },
+  {
+    label: "Giám sát hệ thống",
+    icon: HeartPulse,
+    href: "/system-health",
+    disabled: true,
+  },
+  {
+    label: "Nhật ký hoạt động",
+    icon: ScrollText,
+    href: "/audit-logs",
+    disabled: true,
+  },
+  {
+    label: "Cấu hình",
+    icon: Settings,
+    href: "/settings",
+    disabled: true,
+  },
+];
 
 export function Sidebar() {
   const { isExpanded, setIsExpanded } = useSidebar();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-
   const { user, logout } = useAuthStore();
-
   const router = useRouter();
   const pathname = usePathname();
+
   useEffect(() => {
     setIsMobileOpen(false);
   }, [pathname]);
 
-  const navItems = [
-    { label: "Tổng quan", icon: LayoutDashboard, href: "/dashboard" },
-    { label: "Quản lý tenant", icon: Building2, href: "/tenants" },
-    { label: "Hợp đồng Bán", icon: FileSignature, href: "/dashboard/sales" },
-    { label: "Hợp đồng Mua", icon: ShoppingCart, href: "/dashboard/purchases" },
-    { label: "Đối tác", icon: Users, href: "/dashboard/partners" },
-    { label: "Cấu hình", icon: Settings, href: "/dashboard/settings" },
-  ];
-
-  const handleLogout = () => {
+  const handleLogout = async () => {
     logout();
     router.push("/");
+    try {
+      await authApi.logout();
+    } catch {
+      // Phiên phía client đã được xóa; API có thể không còn session hợp lệ.
+    }
   };
 
-  const renderNavItems = () => (
-    <nav className="flex-1 px-3 py-4 space-y-1.5 flex flex-col items-stretch overflow-y-auto">
-      {navItems.map((item, i) => {
+  const renderNavigation = (mobile = false) => (
+    <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-4">
+      <p
+        className={cn(
+          "mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground",
+          !mobile && !isExpanded && "sr-only",
+        )}
+      >
+        Quản trị hệ thống
+      </p>
+
+      {navItems.map((item) => {
         const Icon = item.icon;
         const isActive =
           item.href === "/dashboard"
             ? pathname === "/dashboard"
-            : pathname?.startsWith(item.href);
+            : pathname.startsWith(item.href);
+        const showLabel = mobile || isExpanded;
+        const commonClassName = cn(
+          "group relative flex min-h-10 items-center rounded-xl text-sm transition-colors",
+          showLabel ? "gap-3 px-3" : "justify-center px-0",
+          item.disabled
+            ? "cursor-not-allowed text-muted-foreground/55"
+            : isActive
+              ? "bg-primary/10 font-semibold text-primary"
+              : "text-muted-foreground hover:bg-accent hover:text-foreground",
+        );
+
+        const content = (
+          <>
+            {isActive && !item.disabled && (
+              <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-primary" />
+            )}
+            <Icon
+              className={cn(
+                "size-5 shrink-0",
+                isActive && !item.disabled
+                  ? "text-primary"
+                  : "text-muted-foreground/75",
+              )}
+            />
+            {showLabel && (
+              <span className="min-w-0 flex-1 truncate">{item.label}</span>
+            )}
+            {showLabel && item.disabled && (
+              <span className="rounded-full border bg-muted/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                Sắp có
+              </span>
+            )}
+          </>
+        );
+
+        if (item.disabled) {
+          return (
+            <div
+              key={item.href}
+              className={commonClassName}
+              aria-disabled="true"
+              title={showLabel ? undefined : `${item.label} — Sắp có`}
+            >
+              {content}
+            </div>
+          );
+        }
 
         return (
           <Link
-            key={i}
+            key={item.href}
             href={item.href}
-            className={`flex items-center py-2.5 rounded-xl transition-all duration-200 group relative ${
-              isExpanded ? "gap-3 px-3" : "justify-center px-0 lg:px-0 px-3" // Mobile luôn có gap và padding
-            } ${
-              isActive
-                ? "bg-primary/10 text-primary font-semibold shadow-sm"
-                : "text-muted-foreground hover:bg-accent hover:text-foreground"
-            } ${isMobileOpen && "justify-start gap-5"}`}
+            className={commonClassName}
+            title={showLabel ? undefined : item.label}
           >
-            {isActive && (
-              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-r-full" />
-            )}
-
-            <Icon
-              className={`h-5 w-5 flex-shrink-0 transition-colors ${
-                isActive
-                  ? "text-primary"
-                  : "text-muted-foreground/70 group-hover:text-foreground"
-              }`}
-            />
-            <span
-              className={`text-sm whitespace-nowrap transition-all duration-300 lg:block ${
-                isExpanded
-                  ? "opacity-100 translate-x-0"
-                  : "lg:opacity-0 lg:-translate-x-2 lg:hidden lg:w-0"
-              } opacity-100 translate-x-0 block`}
-            >
-              {item.label}
-            </span>
+            {content}
           </Link>
         );
       })}
     </nav>
   );
 
-  return (
-    <>
-      {/* ========================================= */}
-      {/* 1. NÚT MỞ MENU TRÊN MOBILE (HAMBURGER)    */}
-      {/* ========================================= */}
-      <button
-        onClick={() => setIsMobileOpen(true)}
-        className="fixed top-3 left-4 z-40 p-2 lg:hidden hover:bg-accent rounded-xl transition-colors text-muted-foreground bg-card shadow-sm border border-border"
-      >
-        <Menu className="h-5 w-5" />
-      </button>
-
-      {/* ========================================= */}
-      {/* 2. SIDEBAR TRÊN DESKTOP (MÀN HÌNH LỚN)    */}
-      {/* ========================================= */}
-      <aside
-        className={`relative hidden lg:flex h-screen bg-card border-r border-border flex-col flex-shrink-0 transition-all duration-300 ease-in-out z-20 ${
-          isExpanded ? "w-64" : "w-20"
-        }`}
-      >
-        <div
-          className={`h-16 border-b border-border p-4 flex items-center transition-all duration-300 ${
-            isExpanded ? "justify-between" : "justify-center"
-          }`}
+  const renderAccountMenu = (mobile = false) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className={cn(
+            "flex w-full items-center rounded-xl p-2 text-left transition-colors hover:bg-accent focus:outline-none",
+            mobile || isExpanded ? "gap-3" : "justify-center",
+          )}
         >
-          {isExpanded && (
-            <div className="flex items-center gap-2.5 overflow-hidden animate-in fade-in duration-300">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm shadow-primary/20">
-                <FileText className="w-4 h-4 text-primary-foreground" />
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-sm font-bold leading-tight text-foreground truncate">
-                  eContract Hub
-                </h1>
-                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider truncate">
-                  Quản lý
-                </p>
-              </div>
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+            {user?.username?.[0]?.toUpperCase() ?? "S"}
+          </div>
+          {(mobile || isExpanded) && (
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold">
+                {user?.fullName || "System Administrator"}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">
+                {user?.username || "sysadmin"}
+              </p>
             </div>
           )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align={mobile || isExpanded ? "end" : "start"}
+        side={mobile ? "top" : "right"}
+        className="w-60 rounded-xl"
+      >
+        <DropdownMenuItem asChild className="cursor-pointer py-2.5">
+          <Link href="/dashboard/profile">
+            <User className="mr-2 size-4 text-muted-foreground" />
+            Hồ sơ cá nhân
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="cursor-pointer py-2.5 text-destructive focus:bg-destructive/10 focus:text-destructive"
+          onClick={handleLogout}
+        >
+          <LogOut className="mr-2 size-4" />
+          Đăng xuất
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  return (
+    <>
+      <button
+        onClick={() => setIsMobileOpen(true)}
+        className="fixed left-4 top-3 z-40 rounded-xl border bg-card p-2 text-muted-foreground shadow-sm transition-colors hover:bg-accent lg:hidden"
+        aria-label="Mở menu"
+      >
+        <Menu className="size-5" />
+      </button>
+
+      <aside
+        className={cn(
+          "relative z-20 hidden h-screen shrink-0 flex-col border-r bg-card transition-[width] duration-300 lg:flex",
+          isExpanded ? "w-64" : "w-20",
+        )}
+      >
+        <div
+          className={cn(
+            "flex h-16 items-center border-b px-4",
+            isExpanded ? "justify-between" : "justify-center",
+          )}
+        >
+          {isExpanded && (
+            <Link href="/dashboard" className="flex min-w-0 items-center gap-2.5">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm shadow-primary/20">
+                <FileText className="size-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold">eContract Hub</p>
+                <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  System Admin
+                </p>
+              </div>
+            </Link>
+          )}
+
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setIsExpanded(!isExpanded)}
-            className="text-muted-foreground hover:text-foreground hover:bg-accent h-8 w-8 rounded-lg flex-shrink-0"
+            className="size-8 shrink-0 rounded-lg text-muted-foreground"
+            aria-label={isExpanded ? "Thu gọn menu" : "Mở rộng menu"}
           >
             <ChevronLeft
-              className={`h-5 w-5 transition-transform duration-300 ${
-                isExpanded ? "" : "rotate-180"
-              }`}
+              className={cn(
+                "size-5 transition-transform",
+                !isExpanded && "rotate-180",
+              )}
             />
           </Button>
         </div>
 
-        {renderNavItems()}
+        {renderNavigation()}
+
+        <div className="border-t p-3">{renderAccountMenu()}</div>
       </aside>
 
-      {/* ========================================= */}
-      {/* 3. SIDEBAR TRÊN MOBILE (MÀN HÌNH NHỎ)     */}
-      {/* ========================================= */}
       {isMobileOpen && (
         <>
-          <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 lg:hidden animate-in fade-in duration-200"
+          <button
+            className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm lg:hidden"
             onClick={() => setIsMobileOpen(false)}
+            aria-label="Đóng menu"
           />
-
-          <aside className="fixed left-0 top-0 h-screen w-[280px] bg-card z-50 flex flex-col animate-in slide-in-from-left duration-300 shadow-2xl lg:hidden">
-            <div className="h-16 border-b border-border p-4 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm shadow-primary/20">
-                  <FileText className="w-4 h-4 text-primary-foreground" />
+          <aside className="fixed inset-y-0 left-0 z-50 flex w-[290px] flex-col bg-card shadow-2xl lg:hidden">
+            <div className="flex h-16 items-center justify-between border-b px-4">
+              <Link
+                href="/dashboard"
+                className="flex min-w-0 items-center gap-2.5"
+              >
+                <div className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+                  <FileText className="size-4" />
                 </div>
                 <div>
-                  <h1 className="text-sm font-bold leading-tight text-foreground">
-                    eContract Hub
-                  </h1>
-                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-                    Quản lý
+                  <p className="text-sm font-bold">eContract Hub</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    System Admin
                   </p>
                 </div>
-              </div>
+              </Link>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => setIsMobileOpen(false)}
-                className="text-muted-foreground hover:text-foreground hover:bg-accent h-8 w-8 rounded-lg flex-shrink-0"
+                aria-label="Đóng menu"
               >
-                <X className="h-5 w-5" />
+                <X className="size-5" />
               </Button>
             </div>
 
-            {renderNavItems()}
+            {renderNavigation(true)}
 
-            <div className="border-t border-border p-4 shrink-0">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-accent transition-colors justify-start focus:outline-none">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-primary to-primary/80 flex items-center justify-center text-sm font-bold flex-shrink-0 text-primary-foreground shadow-sm">
-                      {user?.username?.[0]?.toUpperCase() ?? "U"}
-                    </div>
-                    <div className="flex-1 text-left min-w-0">
-                      <p className="text-sm font-semibold text-foreground truncate">
-                        {user?.username}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {user?.fullName || "Chưa cập nhật"}
-                      </p>
-                    </div>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  side="top"
-                  className="w-64 rounded-xl z-60"
-                >
-                  <DropdownMenuItem asChild className="cursor-pointer py-2.5">
-                    <Link href="/dashboard/profile">
-                      <User className="mr-2 h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">Hồ sơ cá nhân</span>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="cursor-pointer py-2.5">
-                    <Settings className="mr-2 h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">Đổi mật khẩu</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="cursor-pointer py-2.5 text-destructive focus:text-destructive dark:focus:bg-destructive/10 focus:bg-destructive/10"
-                    onClick={handleLogout}
-                  >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span className="font-medium">Đăng xuất</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            <div className="border-t p-3">{renderAccountMenu(true)}</div>
           </aside>
         </>
       )}

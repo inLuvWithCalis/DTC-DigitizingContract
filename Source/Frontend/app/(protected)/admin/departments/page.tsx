@@ -315,9 +315,21 @@ export default function DepartmentListPage() {
               searchKey="departmentName"
               searchPlaceholder="Tìm tên phòng ban..."
               filterSlot={CustomFilters}
-              onSelectMany={(rows) =>
-                toast.info(`Đang gọi API xử lý ${rows.length} dòng...`)
-              }
+              bulkActions={(selectedRows, resetSelection) => (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-8 text-xs shadow-sm"
+                  onClick={() => {
+                    toast.info(
+                      `Đang gọi API xử lý ${selectedRows.length} dòng...`,
+                    );
+                    resetSelection();
+                  }}
+                >
+                  Xử lý hàng loạt
+                </Button>
+              )}
               onRowClick={(row) => handleView(row.departmentId)}
               mobileCardRenderer={(
                 row: Row<DepartmentResponse>,

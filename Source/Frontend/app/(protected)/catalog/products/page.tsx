@@ -92,7 +92,7 @@ function ProductBulkActions({
       isLoading={isLoading}
       menuItems={[
         {
-          label: "Đang kinh doanh",
+          label: "Mở kinh doanh",
           icon: <Unlock className="w-4 h-4" />,
           onClick: () => handleBulkSetStatus(ProductStatus.Active),
         },

@@ -30,9 +30,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, ChevronLeft, ChevronRight, CheckCheck } from "lucide-react";
+import { ChevronLeft, ChevronRight, CheckCheck } from "lucide-react";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { MobileCardWrapper } from "./mobile-card-wrapper";
+import { TableRowSkeleton, MobileCardSkeleton } from "./table-skeleton";
 
 interface MobileCardRenderContext {
   isSelectionMode: boolean;
@@ -46,7 +47,7 @@ interface DataTableProps<TData, TValue> {
   searchPlaceholder?: string;
   filterSlot?: React.ReactNode;
   isLoading?: boolean;
-  onSelectMany?: (selectedRows: TData[]) => void;
+
   bulkActions?: (
     selectedRows: TData[],
     resetSelection: () => void,
@@ -65,7 +66,7 @@ export function DataTable<TData, TValue>({
   searchPlaceholder = "Tìm kiếm...",
   filterSlot,
   isLoading = false,
-  onSelectMany,
+
   bulkActions,
   onRowClick,
   mobileCardRenderer,
@@ -134,7 +135,7 @@ export function DataTable<TData, TValue>({
       </div>
 
       {/* Mobile selection mode toolbar */}
-      {isSelectionMode && (
+      {isMobile && isSelectionMode && (
         <div className="flex items-center justify-between gap-3 mb-3 px-1 animate-in fade-in slide-in-from-top-1 duration-200">
           <div className="flex items-center gap-2">
             <CheckCheck className="w-4 h-4 text-primary" />
@@ -161,6 +162,10 @@ export function DataTable<TData, TValue>({
             >
               Hủy
             </Button>
+            {bulkActions?.(
+              selectedRows.map((row) => row.original),
+              () => table.resetRowSelection(),
+            )}
           </div>
         </div>
       )}
@@ -170,9 +175,7 @@ export function DataTable<TData, TValue>({
         /* ────────────── MOBILE CARD VIEW ────────────── */
         <div className="flex flex-col gap-3">
           {isLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-5 h-5 animate-spin text-primary" />
-            </div>
+            <MobileCardSkeleton count={5} />
           ) : table.getRowModel().rows?.length ? (
             table.getRowModel().rows.map((row) => (
               <MobileCardWrapper
@@ -256,7 +259,7 @@ export function DataTable<TData, TValue>({
           {/* Long-press hint — shown when NOT in selection mode */}
           {!isSelectionMode &&
             table.getRowModel().rows?.length > 0 &&
-            (bulkActions || onSelectMany) && (
+            bulkActions && (
               <p className="text-center text-xs text-muted-foreground/60 mt-1 select-none">
                 Nhấn giữ để chọn nhiều dòng
               </p>
@@ -267,29 +270,113 @@ export function DataTable<TData, TValue>({
         <div className="relative w-full overflow-auto rounded-md border border-border flex-1">
           <Table>
             <TableHeader className="bg-secondary/50">
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow
-                  key={headerGroup.id}
-                  className="hover:bg-transparent border-b-border"
-                >
-                  {headerGroup.headers.map((header) => (
-                    <TableHead
-                      key={header.id}
-                      className="h-11 font-semibold text-muted-foreground"
-                    >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext(),
-                          )}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
+              {table.getHeaderGroups().map((headerGroup) => {
+                const hasSelectColumn = headerGroup.headers.some(
+                  (h) => h.column.id === "select",
+                );
+                const hasSelectedRows = selectedRows.length > 0;
+
+                return (
+                  <TableRow
+                    key={headerGroup.id}
+                    className="hover:bg-transparent border-b-border"
+                  >
+                    {headerGroup.headers.map((header, index) => {
+                      if (hasSelectedRows) {
+                        if (header.column.id === "select") {
+                          return (
+                            <TableHead
+                              key={header.id}
+                              className="h-11 font-semibold text-muted-foreground"
+                            >
+                              {header.isPlaceholder
+                                ? null
+                                : flexRender(
+                                    header.column.columnDef.header,
+                                    header.getContext(),
+                                  )}
+                            </TableHead>
+                          );
+                        }
+
+                        const isOverlayPosition = hasSelectColumn
+                          ? index === 1
+                          : index === 0;
+
+                        if (!isOverlayPosition) return null;
+
+                        const colSpan =
+                          headerGroup.headers.length -
+                          (hasSelectColumn ? 1 : 0);
+
+                        return (
+                          <TableHead
+                            key="selection-header-overlay"
+                            colSpan={colSpan}
+                            className="h-11 font-normal text-foreground py-0"
+                          >
+                            <div className="flex items-center justify-between gap-3 px-1 animate-in fade-in duration-150">
+                              <div className="flex items-center gap-2">
+                                <CheckCheck className="w-4 h-4 text-primary" />
+                                <span className="text-sm font-medium text-foreground">
+                                  Đã chọn{" "}
+                                  <strong className="text-primary">
+                                    {selectedRows.length}
+                                  </strong>{" "}
+                                  dòng
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 text-xs"
+                                  onClick={() =>
+                                    table.toggleAllPageRowsSelected(true)
+                                  }
+                                >
+                                  Chọn tất cả
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 text-xs text-muted-foreground"
+                                  onClick={exitSelectionMode}
+                                >
+                                  Hủy
+                                </Button>
+                                {bulkActions?.(
+                                  selectedRows.map((row) => row.original),
+                                  () => table.resetRowSelection(),
+                                )}
+                              </div>
+                            </div>
+                          </TableHead>
+                        );
+                      }
+
+                      return (
+                        <TableHead
+                          key={header.id}
+                          className="h-11 font-semibold text-muted-foreground"
+                        >
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(
+                                header.column.columnDef.header,
+                                header.getContext(),
+                              )}
+                        </TableHead>
+                      );
+                    })}
+                  </TableRow>
+                );
+              })}
             </TableHeader>
             <TableBody>
-              {table.getRowModel().rows?.length ? (
+              {isLoading ? (
+                <TableRowSkeleton columnCount={columns.length} rowCount={5} />
+              ) : table.getRowModel().rows?.length ? (
                 table.getRowModel().rows.map((row) => (
                   <TableRow
                     key={row.id}
@@ -313,57 +400,12 @@ export function DataTable<TData, TValue>({
                     colSpan={columns.length}
                     className="h-32 text-center text-muted-foreground"
                   >
-                    {isLoading ? (
-                      <Loader2 className="w-5 h-5 animate-spin mx-auto text-primary" />
-                    ) : (
-                      "Không tìm thấy dữ liệu."
-                    )}
+                    Không tìm thấy dữ liệu.
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
-        </div>
-      )}
-
-      {/* 3. BULK ACTION (Xóa nhiều) */}
-      {selectedRows.length > 0 && (bulkActions || onSelectMany) && (
-        <div className="bg-primary/5 border border-primary/20 text-primary px-3 py-2.5 mt-4 rounded-xl flex flex-col gap-3 text-sm shadow-sm animate-in fade-in slide-in-from-bottom-2 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-3">
-          <span>
-            Đã chọn:{" "}
-            <strong className="font-semibold text-lg">
-              {selectedRows.length}
-            </strong>{" "}
-            dòng
-          </span>
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 bg-background border-border flex-1 sm:flex-none"
-              onClick={() => table.resetRowSelection()}
-            >
-              Hủy bỏ
-            </Button>
-            {bulkActions ? (
-              bulkActions(
-                selectedRows.map((row) => row.original),
-                () => table.resetRowSelection(),
-              )
-            ) : (
-              <Button
-                size="sm"
-                variant="destructive"
-                className="h-9 shadow-sm flex-1 sm:flex-none"
-                onClick={() => {
-                  onSelectMany?.(selectedRows.map((row) => row.original));
-                  table.resetRowSelection();
-                }}
-              >
-                Xóa tất cả
-              </Button>
-            )}
-          </div>
         </div>
       )}
 

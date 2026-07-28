@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
+import '../widgets/app_skeleton.dart';
 import '../widgets/app_text_field.dart';
 
-typedef ItemWidgetBuilder<T> = Widget Function(
-  BuildContext context,
-  T item,
-  bool isSelected,
-  VoidCallback onSelectToggle,
-);
+typedef ItemWidgetBuilder<T> =
+    Widget Function(
+      BuildContext context,
+      T item,
+      bool isSelected,
+      VoidCallback onSelectToggle,
+    );
 
-typedef BulkActionsBuilder<T> = Widget Function(
-  List<T> selectedItems,
-  VoidCallback resetSelection,
-);
+typedef BulkActionsBuilder<T> =
+    Widget Function(List<T> selectedItems, VoidCallback resetSelection);
 
 /// Generic Reusable Mobile Data Table / Card View Component cho Flutter.
 /// Phản chiếu tính năng của DataTable (React Table) trên Web nhưng tối ưu hóa cho UX Mobile.
@@ -127,8 +127,8 @@ class _AppMobileDataTableState<T> extends State<AppMobileDataTable<T>> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isAllSelected = widget.items.isNotEmpty &&
-        _selectedIds.length == widget.items.length;
+    final isAllSelected =
+        widget.items.isNotEmpty && _selectedIds.length == widget.items.length;
 
     final clickHandler = widget.onItemClick ?? widget.onRowClick;
 
@@ -142,101 +142,123 @@ class _AppMobileDataTableState<T> extends State<AppMobileDataTable<T>> {
         ],
 
         // --- SEARCH BAR, FILTER BUTTON & ACTION BUTTON ---
-        Row(
-          children: [
-            Expanded(
-              child: AppTextField(
-                controller: _searchController,
-                placeholder: widget.searchPlaceholder,
-                onChanged: (val) {
-                  if (widget.onSearchChange != null) {
-                    widget.onSearchChange!(val);
-                  }
-                },
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear_rounded, size: 20),
-                        onPressed: () {
-                          _searchController.clear();
-                          if (widget.onSearchChange != null) {
-                            widget.onSearchChange!("");
-                          }
-                        },
-                      )
-                    : const Icon(Icons.search_rounded, size: 20),
-              ),
-            ),
-
-            // Filter Toggle Button
-            if (widget.filterBar != null || widget.onFilterToggle != null) ...[
-              const SizedBox(width: 8),
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  IconButton.filledTonal(
-                    style: IconButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      padding: const EdgeInsets.all(14),
-                      backgroundColor: (_isFilterExpanded || widget.activeFilterCount > 0)
-                          ? theme.colorScheme.primary.withValues(alpha: 0.15)
-                          : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                    ),
-                    icon: Icon(
-                      Icons.filter_list_rounded,
-                      color: (_isFilterExpanded || widget.activeFilterCount > 0)
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.onSurface,
-                    ),
-                    onPressed: () {
-                      if (widget.onFilterToggle != null) {
-                        widget.onFilterToggle!();
-                      } else {
-                        setState(() {
-                          _isFilterExpanded = !_isFilterExpanded;
-                        });
-                      }
-                    },
+        if (widget.isLoading)
+          AppSkeletonSearchBar(
+            hasFilter:
+                widget.filterBar != null || widget.onFilterToggle != null,
+            hasAction: widget.actionButton != null,
+          )
+        else
+          Row(
+            children: [
+              Expanded(
+                child: AppTextField(
+                  controller: _searchController,
+                  placeholder: widget.searchPlaceholder,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
                   ),
-                  if (widget.activeFilterCount > 0)
-                    Positioned(
-                      top: -4,
-                      right: -4,
-                      child: Container(
-                        padding: const EdgeInsets.all(5),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary,
-                          shape: BoxShape.circle,
+                  isDense: true,
+                  onChanged: (val) {
+                    if (widget.onSearchChange != null) {
+                      widget.onSearchChange!(val);
+                    }
+                  },
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear_rounded, size: 20),
+                          onPressed: () {
+                            _searchController.clear();
+                            if (widget.onSearchChange != null) {
+                              widget.onSearchChange!("");
+                            }
+                          },
+                        )
+                      : const Icon(Icons.search_rounded, size: 20),
+                ),
+              ),
+
+              // Filter Toggle Button
+              if (widget.filterBar != null ||
+                  widget.onFilterToggle != null) ...[
+                const SizedBox(width: 8),
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    IconButton.filledTonal(
+                      style: IconButton.styleFrom(
+                        minimumSize: const Size(44, 44),
+                        maximumSize: const Size(44, 44),
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        child: Text(
-                          '${widget.activeFilterCount}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
+                        backgroundColor:
+                            (_isFilterExpanded || widget.activeFilterCount > 0)
+                            ? theme.colorScheme.primary.withValues(alpha: 0.15)
+                            : theme.colorScheme.surfaceContainerHighest
+                                  .withValues(alpha: 0.5),
+                      ),
+                      icon: Icon(
+                        Icons.filter_list_rounded,
+                        color:
+                            (_isFilterExpanded || widget.activeFilterCount > 0)
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurface,
+                      ),
+                      onPressed: () {
+                        if (widget.onFilterToggle != null) {
+                          widget.onFilterToggle!();
+                        } else {
+                          setState(() {
+                            _isFilterExpanded = !_isFilterExpanded;
+                          });
+                        }
+                      },
+                    ),
+                    if (widget.activeFilterCount > 0)
+                      Positioned(
+                        top: -4,
+                        right: -4,
+                        child: Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            '${widget.activeFilterCount}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
 
-            if (widget.actionButton != null) ...[
-              const SizedBox(width: 8),
-              widget.actionButton!,
+              if (widget.actionButton != null) ...[
+                const SizedBox(width: 8),
+                widget.actionButton!,
+              ],
             ],
-          ],
-        ),
+          ),
 
         // --- FILTER BAR EXPANDABLE SLOT ---
-        if (widget.filterBar != null && _isFilterExpanded) ...[
+        if (widget.filterBar != null &&
+            _isFilterExpanded &&
+            !widget.isLoading) ...[
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+              color: theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.3,
+              ),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
@@ -249,14 +271,16 @@ class _AppMobileDataTableState<T> extends State<AppMobileDataTable<T>> {
         const SizedBox(height: 12),
 
         // --- BULK ACTION & SELECT ALL BAR ---
-        if (widget.items.isNotEmpty)
+        if (widget.isLoading)
+          const AppSkeletonSelectAllBar()
+        else if (widget.items.isNotEmpty)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: _selectedIds.isNotEmpty
                   ? theme.colorScheme.primary.withValues(alpha: 0.08)
-                  : theme.colorScheme.surfaceContainerHighest
-                      .withValues(alpha: 0.3),
+                  : theme.colorScheme.surfaceContainerHighest.withValues(
+                      alpha: 0.3,
+                    ),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: _selectedIds.isNotEmpty
@@ -285,6 +309,14 @@ class _AppMobileDataTableState<T> extends State<AppMobileDataTable<T>> {
                         : theme.colorScheme.onSurface,
                   ),
                 ),
+                if (_selectedIds.isNotEmpty) ...[
+                  const SizedBox(width: 4),
+                  IconButton(
+                    tooltip: 'Hủy chọn',
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    onPressed: _resetSelection,
+                  ),
+                ],
                 const Spacer(),
                 if (_selectedIds.isNotEmpty && widget.bulkActions != null)
                   widget.bulkActions!(_selectedItems, _resetSelection),
@@ -297,76 +329,93 @@ class _AppMobileDataTableState<T> extends State<AppMobileDataTable<T>> {
         // --- DATA LIST CONTENT ---
         Expanded(
           child: widget.isLoading
-              ? const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(32.0),
-                    child: CircularProgressIndicator(),
+              ? const AppSkeletonList()
+              : widget.items.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.folder_open_rounded,
+                        size: 64,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        widget.emptyMessage,
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.6,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 )
-              : widget.items.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.folder_open_rounded,
-                            size: 64,
-                            color: theme.colorScheme.onSurface
-                                .withValues(alpha: 0.3),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            widget.emptyMessage,
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.6),
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: widget.onRefresh ?? () async {},
-                      child: ListView.separated(
-                        physics: const AlwaysScrollableScrollPhysics(
-                          parent: BouncingScrollPhysics(),
-                        ),
-                        itemCount: widget.items.length,
-                        separatorBuilder: (context, index) =>
-                            const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          final item = widget.items[index];
-                          final id = widget.getItemId(item);
-                          final isSelected = _selectedIds.contains(id);
-
-                          final cardChild = widget.itemBuilder(
-                            context,
-                            item,
-                            isSelected,
-                            () {
-                              setState(() {
-                                if (isSelected) {
-                                  _selectedIds.remove(id);
-                                } else {
-                                  _selectedIds.add(id);
-                                }
-                              });
-                            },
-                          );
-
-                          if (clickHandler != null) {
-                            return InkWell(
-                              onTap: () => clickHandler(item),
-                              borderRadius: BorderRadius.circular(16),
-                              child: cardChild,
-                            );
-                          }
-
-                          return cardChild;
-                        },
-                      ),
+              : RefreshIndicator(
+                  onRefresh: widget.onRefresh ?? () async {},
+                  child: ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
                     ),
+                    itemCount: widget.items.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final item = widget.items[index];
+                      final id = widget.getItemId(item);
+                      final isSelected = _selectedIds.contains(id);
+
+                      final cardChild = widget.itemBuilder(
+                        context,
+                        item,
+                        isSelected,
+                        () {
+                          setState(() {
+                            if (isSelected) {
+                              _selectedIds.remove(id);
+                            } else {
+                              _selectedIds.add(id);
+                            }
+                          });
+                        },
+                      );
+
+                      return InkWell(
+                        onTap: () {
+                          if (_selectedIds.isNotEmpty) {
+                            // Nếu đang ở chế độ chọn nhiều -> Tap để chọn / bỏ chọn
+                            setState(() {
+                              if (isSelected) {
+                                _selectedIds.remove(id);
+                              } else {
+                                _selectedIds.add(id);
+                              }
+                            });
+                          } else if (clickHandler != null) {
+                            // Bình thường -> Gọi handler click item (Ví dụ xem chi tiết)
+                            clickHandler(item);
+                          }
+                        },
+                        onLongPress: () {
+                          // Nhấn và giữ (Long press) -> Kích hoạt chế độ chọn nhiều
+                          setState(() {
+                            if (isSelected) {
+                              _selectedIds.remove(id);
+                            } else {
+                              _selectedIds.add(id);
+                            }
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(16),
+                        child: cardChild,
+                      );
+                    },
+                  ),
+                ),
         ),
 
         // --- PAGINATION FOOTER BAR ---
@@ -404,8 +453,8 @@ class _AppMobileDataTableState<T> extends State<AppMobileDataTable<T>> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.chevron_right_rounded),
-                      onPressed: widget.page < widget.totalPages &&
-                              !widget.isLoading
+                      onPressed:
+                          widget.page < widget.totalPages && !widget.isLoading
                           ? () {
                               if (widget.onPageChange != null) {
                                 widget.onPageChange!(widget.page + 1);

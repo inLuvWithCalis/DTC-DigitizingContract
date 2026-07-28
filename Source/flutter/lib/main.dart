@@ -132,7 +132,7 @@ class _LoginPageState extends State<LoginPage> {
   // --- EFFECTS & LOGIC ---
   void _checkSessionError() {
     if (widget.errorParam == "session_expired") {
-      Future.delayed(const Duration(milliseconds: 100), () {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           AppToast.error(
             context,
@@ -144,6 +144,12 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _checkAlreadyLoggedIn() async {
+    // Nếu vừa bị đá ra do session hết hạn, đừng thử gọi lại getMe()
+    if (widget.errorParam == "session_expired") {
+      setState(() => _isLoading = false);
+      return;
+    }
+
     if (_authStore.isAuthenticated && _authStore.user != null) {
       _navigateToDashboard();
       return;
@@ -152,11 +158,15 @@ class _LoginPageState extends State<LoginPage> {
     try {
       final userData = await AuthApi.getMe();
       _authStore.setUser(userData);
-      _navigateToDashboard();
+      if (mounted) {
+        _navigateToDashboard();
+      }
     } catch (e) {
+      _authStore.clear();
       if (mounted) {
         setState(() => _isLoading = false);
       }
+      ApiClient().clearCookies();
     }
   }
 
@@ -514,12 +524,37 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await dotenv.load(fileName: ".env");
   } catch (_) {}
   await ApiClient().init();
+
+  bool isRedirecting = false;
+  ApiClient.onUnauthorized = () {
+    if (isRedirecting) return;
+    if (navigatorKey.currentContext != null) {
+      final currentRoute = ModalRoute.of(
+        navigatorKey.currentContext!,
+      )?.settings.name;
+      if (currentRoute == '/') return; // đã ở LoginPage rồi, khỏi redirect nữa
+    }
+
+    isRedirecting = true;
+    AuthStore().clear();
+    navigatorKey.currentState?.pushNamedAndRemoveUntil(
+      '/',
+      (route) => false,
+      arguments: 'session_expired',
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      isRedirecting = false;
+    });
+  };
+
   runApp(const MyApp());
 }
 
@@ -529,17 +564,34 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Digitizing Contract',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
       initialRoute: '/',
-      routes: {
-        '/': (context) => const LoginPage(),
-        '/dashboard': (context) => const DashboardPage(),
-        '/catalog/service-types': (context) => const ServiceTypeListPage(),
-        '/catalog/services': (context) => const ServiceListPage(),
+      onGenerateRoute: (settings) {
+        if (settings.name == '/') {
+          final errorParam = settings.arguments as String?;
+          return MaterialPageRoute(
+            builder: (context) => LoginPage(errorParam: errorParam),
+          );
+        }
+        if (settings.name == '/dashboard') {
+          return MaterialPageRoute(builder: (context) => const DashboardPage());
+        }
+        if (settings.name == '/catalog/service-types') {
+          return MaterialPageRoute(
+            builder: (context) => const ServiceTypeListPage(),
+          );
+        }
+        if (settings.name == '/catalog/services') {
+          return MaterialPageRoute(
+            builder: (context) => const ServiceListPage(),
+          );
+        }
+        return null;
       },
     );
   }

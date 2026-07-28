@@ -15,6 +15,8 @@ class AppTextField extends StatelessWidget {
   final bool enableSuggestions;
   final Widget? suffixIcon;
   final TextInputType? keyboardType;
+  final EdgeInsetsGeometry? contentPadding;
+  final bool? isDense;
 
   const AppTextField({
     super.key,
@@ -30,6 +32,8 @@ class AppTextField extends StatelessWidget {
     this.enableSuggestions = true,
     this.suffixIcon,
     this.keyboardType,
+    this.contentPadding,
+    this.isDense,
   });
 
   @override
@@ -47,13 +51,16 @@ class AppTextField extends StatelessWidget {
       autocorrect: autocorrect,
       enableSuggestions: enableSuggestions,
       decoration: InputDecoration(
+        isDense: isDense,
         hintText: placeholder,
         counterText: "", // Ẩn chữ đếm ký tự rườm rà mặc định
         filled: true,
         fillColor: hasError
             ? theme.colorScheme.error.withValues(alpha: 0.05)
             : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        contentPadding:
+            contentPadding ??
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         suffixIcon: suffixIcon,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -68,7 +75,9 @@ class AppTextField extends StatelessWidget {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(
-            color: hasError ? theme.colorScheme.error : theme.colorScheme.primary,
+            color: hasError
+                ? theme.colorScheme.error
+                : theme.colorScheme.primary,
             width: 1.5,
           ),
         ),

@@ -323,9 +323,21 @@ export default function QuotationListPage() {
               searchKey="quotationNo"
               searchPlaceholder="Tìm mã báo giá..."
               filterSlot={CustomFilters}
-              onSelectMany={(rows) =>
-                toast.info(`Đang gọi API xóa ${rows.length} dòng...`)
-              }
+              bulkActions={(selectedRows, resetSelection) => (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-8 text-xs shadow-sm"
+                  onClick={() => {
+                    toast.info(
+                      `Đang gọi API xóa ${selectedRows.length} báo giá...`,
+                    );
+                    resetSelection();
+                  }}
+                >
+                  Xóa tất cả
+                </Button>
+              )}
               onRowClick={(row) => handleView(row.quotationId)}
               mobileCardRenderer={(
                 row: Row<QuotationResponseDto>,

@@ -28,15 +28,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Loader2,
-  CheckCheck,
-  Search,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { CheckCheck, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { MobileCardWrapper } from "./mobile-card-wrapper";
+import { TableRowSkeleton, MobileCardSkeleton } from "./table-skeleton";
 
 interface MobileCardRenderContext {
   isSelectionMode: boolean;
@@ -60,7 +55,7 @@ interface TreeDataTableProps<TData, TValue> {
   searchPlaceholder?: string;
   filterSlot?: React.ReactNode;
   isLoading?: boolean;
-  onSelectMany?: (selectedRows: TData[]) => void;
+
   bulkActions?: (
     selectedRows: TData[],
     resetSelection: () => void,
@@ -86,7 +81,7 @@ export function TreeDataTable<TData, TValue>({
   searchPlaceholder = "Tìm kiếm...",
   filterSlot,
   isLoading = false,
-  onSelectMany,
+
   bulkActions,
   onRowClick,
   mobileCardRenderer,
@@ -207,7 +202,7 @@ export function TreeDataTable<TData, TValue>({
         )}
       </div>
 
-      {isSelectionMode && (
+      {isMobile && isSelectionMode && (
         <div className="flex items-center justify-between gap-3 mb-3 px-1 animate-in fade-in slide-in-from-top-1 duration-200">
           <div className="flex items-center gap-2">
             <CheckCheck className="w-4 h-4 text-primary" />
@@ -226,6 +221,10 @@ export function TreeDataTable<TData, TValue>({
             >
               Hủy
             </Button>
+            {bulkActions?.(
+              selectedRows.map((row) => row.original),
+              () => table.resetRowSelection(),
+            )}
           </div>
         </div>
       )}
@@ -233,9 +232,7 @@ export function TreeDataTable<TData, TValue>({
       {isMobile ? (
         <div className="flex flex-col gap-3">
           {isLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-5 h-5 animate-spin text-primary" />
-            </div>
+            <MobileCardSkeleton count={5} />
           ) : table.getRowModel().rows?.length ? (
             table.getRowModel().rows.map((row) => {
               const actionColumn = row
@@ -343,37 +340,102 @@ export function TreeDataTable<TData, TValue>({
         <div className="relative w-full overflow-auto rounded-md border border-border flex-1">
           <Table>
             <TableHeader className="bg-secondary/50">
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow
-                  key={headerGroup.id}
-                  className="hover:bg-transparent border-b-border"
-                >
-                  {headerGroup.headers.map((header) => (
-                    <TableHead
-                      key={header.id}
-                      className="h-11 font-semibold text-muted-foreground"
-                    >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext(),
-                          )}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
+              {table.getHeaderGroups().map((headerGroup) => {
+                const hasSelectColumn = headerGroup.headers.some(
+                  (h) => h.column.id === "select",
+                );
+                const hasSelectedRows = selectedRows.length > 0;
+
+                return (
+                  <TableRow
+                    key={headerGroup.id}
+                    className="hover:bg-transparent border-b-border"
+                  >
+                    {headerGroup.headers.map((header, index) => {
+                      if (hasSelectedRows) {
+                        if (header.column.id === "select") {
+                          return (
+                            <TableHead
+                              key={header.id}
+                              className="h-11 font-semibold text-muted-foreground"
+                            >
+                              {header.isPlaceholder
+                                ? null
+                                : flexRender(
+                                    header.column.columnDef.header,
+                                    header.getContext(),
+                                  )}
+                            </TableHead>
+                          );
+                        }
+
+                        const isOverlayPosition = hasSelectColumn
+                          ? index === 1
+                          : index === 0;
+
+                        if (!isOverlayPosition) return null;
+
+                        const colSpan =
+                          headerGroup.headers.length -
+                          (hasSelectColumn ? 1 : 0);
+
+                        return (
+                          <TableHead
+                            key="selection-header-overlay"
+                            colSpan={colSpan}
+                            className="h-11 font-normal text-foreground py-0"
+                          >
+                            <div className="flex items-center justify-between gap-3 px-1 animate-in fade-in duration-150">
+                              <div className="flex items-center gap-2">
+                                <CheckCheck className="w-4 h-4 text-primary" />
+                                <span className="text-sm font-medium text-foreground">
+                                  Đã chọn{" "}
+                                  <strong className="text-primary">
+                                    {selectedRows.length}
+                                  </strong>{" "}
+                                  dòng
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 text-xs text-muted-foreground"
+                                  onClick={exitSelectionMode}
+                                >
+                                  Hủy
+                                </Button>
+                                {bulkActions?.(
+                                  selectedRows.map((row) => row.original),
+                                  () => table.resetRowSelection(),
+                                )}
+                              </div>
+                            </div>
+                          </TableHead>
+                        );
+                      }
+
+                      return (
+                        <TableHead
+                          key={header.id}
+                          className="h-11 font-semibold text-muted-foreground"
+                        >
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(
+                                header.column.columnDef.header,
+                                header.getContext(),
+                              )}
+                        </TableHead>
+                      );
+                    })}
+                  </TableRow>
+                );
+              })}
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={columns.length}
-                    className="h-32 text-center text-muted-foreground"
-                  >
-                    <Loader2 className="w-5 h-5 animate-spin mx-auto text-primary" />
-                  </TableCell>
-                </TableRow>
+                <TableRowSkeleton columnCount={columns.length} rowCount={5} />
               ) : table.getRowModel().rows?.length ? (
                 table.getRowModel().rows.map((row) => (
                   <TableRow
@@ -406,47 +468,6 @@ export function TreeDataTable<TData, TValue>({
           </Table>
         </div>
       )}
-
-      {selectedRows.length > 0 && (bulkActions || onSelectMany) && (
-        <div className="bg-primary/5 border border-primary/20 text-primary px-3 py-2.5 mt-4 rounded-xl flex flex-col gap-3 text-sm shadow-sm animate-in fade-in slide-in-from-bottom-2 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-3">
-          <span>
-            Đã chọn:{" "}
-            <strong className="font-semibold text-lg">
-              {selectedRows.length}
-            </strong>{" "}
-            dòng
-          </span>
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 bg-background border-border flex-1 sm:flex-none"
-              onClick={() => table.resetRowSelection()}
-            >
-              Hủy bỏ
-            </Button>
-            {bulkActions ? (
-              bulkActions(
-                selectedRows.map((row) => row.original),
-                () => table.resetRowSelection(),
-              )
-            ) : (
-              <Button
-                size="sm"
-                variant="destructive"
-                className="h-9 shadow-sm flex-1 sm:flex-none"
-                onClick={() => {
-                  onSelectMany?.(selectedRows.map((row) => row.original));
-                  table.resetRowSelection();
-                }}
-              >
-                Xóa tất cả
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
-
       {totalRowsCount > 0 && (
         <div
           className={`flex flex-col gap-3 py-4 mt-auto border-t border-transparent sm:flex-row sm:items-center sm:justify-between ${

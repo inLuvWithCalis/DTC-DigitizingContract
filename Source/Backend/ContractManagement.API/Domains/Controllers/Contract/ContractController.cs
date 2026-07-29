@@ -24,6 +24,84 @@ namespace ContractManagement.Domains.Controllers.Contract
         }
 
         /// <summary>
+        /// Lấy danh sách hợp đồng mà nhân viên đăng nhập đang phụ trách.
+        /// Có tìm kiếm, lọc và phân trang.
+        /// </summary>
+        /// <remarks>
+        /// Ví dụ:
+        /// GET /api/contracts?page=1&amp;pageSize=20&amp;keyword=FPT&amp;status=0&amp;contractType=1
+        /// </remarks>
+        [HttpGet]
+        [ProducesResponseType(
+            typeof(ApiResponse<PagedResult<ContractListItemResponse>>),
+            StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> GetList(
+            [FromQuery] ContractFilterRequest filter)
+        {
+            var employeeId =
+                HttpContext.Session.GetInt32("EmployeeId");
+
+            if (employeeId is null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Bạn chưa đăng nhập hoặc session đã hết hạn.");
+            }
+
+            var result = await _contractService.GetListAsync(
+                filter,
+                employeeId.Value);
+
+            return Ok(
+                ApiResponse<PagedResult<ContractListItemResponse>>.Ok(
+                    result,
+                    "Lấy danh sách hợp đồng thành công."));
+        }
+
+        /// <summary>
+        /// Lấy danh sách hợp đồng gốc đủ điều kiện
+        /// để tạo hợp đồng bảo trì hoặc duy trì.
+        /// </summary>
+        /// <remarks>
+        /// API này chỉ cung cấp dữ liệu cho dropdown/autocomplete.
+        /// Backend vẫn kiểm tra lại hợp đồng nguồn khi tạo Contract Draft.
+        ///
+        /// Ví dụ:
+        /// GET /api/contracts/eligible-parents?customerId=10&amp;targetContractType=2&amp;page=1&amp;pageSize=20
+        /// </remarks>
+        [HttpGet("eligible-parents")]
+        [ProducesResponseType(
+            typeof(ApiResponse<
+                PagedResult<EligibleParentContractResponse>>),
+            StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> GetEligibleParents(
+            [FromQuery] EligibleParentContractFilterRequest filter)
+        {
+            var employeeId =
+                HttpContext.Session.GetInt32("EmployeeId");
+
+            if (employeeId is null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Bạn chưa đăng nhập hoặc session đã hết hạn.");
+            }
+
+            var result =
+                await _contractService.GetEligibleParentsAsync(
+                    filter,
+                    employeeId.Value);
+
+            return Ok(
+                ApiResponse<
+                    PagedResult<EligibleParentContractResponse>>.Ok(
+                        result,
+                        "Lấy danh sách hợp đồng nguồn thành công."));
+        }
+
+        /// <summary>
         /// Tạo một hợp đồng nháp mới.
         /// </summary>
         /// <remarks>

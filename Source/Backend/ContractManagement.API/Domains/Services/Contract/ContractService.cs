@@ -59,6 +59,14 @@ namespace ContractManagement.Domains.Services.Contract
                 filter.PageSize = 100;
             }
 
+            var offset = ((long)filter.Page - 1) * filter.PageSize;
+
+            if (offset > int.MaxValue)
+            {
+                throw new ArgumentException(
+                    "Số trang vượt giới hạn cho phép.");
+            }
+
             if (filter.Status.HasValue
                 && !Enum.IsDefined(filter.Status.Value))
             {
@@ -138,7 +146,7 @@ namespace ContractManagement.Domains.Services.Contract
             var contracts = await query
                 .OrderByDescending(x => x.Contract.CreatedDate)
                 .ThenByDescending(x => x.Contract.ContractId)
-                .Skip((filter.Page - 1) * filter.PageSize)
+                .Skip((int)offset)
                 .Take(filter.PageSize)
                 .Select(x => new ContractListItemResponse
                 {
@@ -240,6 +248,14 @@ namespace ContractManagement.Domains.Services.Contract
                 filter.PageSize = 100;
             }
 
+            var offset = ((long)filter.Page - 1) * filter.PageSize;
+
+            if (offset > int.MaxValue)
+            {
+                throw new ArgumentException(
+                    "Số trang vượt giới hạn cho phép.");
+            }
+
             /*
              * Chỉ hợp đồng cung cấp phần mềm đã hoàn thành
              * mới được làm hợp đồng nguồn.
@@ -271,7 +287,7 @@ namespace ContractManagement.Domains.Services.Contract
             var contracts = await query
                 .OrderByDescending(x => x.CreatedDate)
                 .ThenByDescending(x => x.ContractId)
-                .Skip((filter.Page - 1) * filter.PageSize)
+                .Skip((int)offset)
                 .Take(filter.PageSize)
                 .Select(x => new EligibleParentContractResponse
                 {
@@ -328,7 +344,8 @@ namespace ContractManagement.Domains.Services.Contract
                     await ValidateTemplateAsync(request);
                     await ValidateParentContractAsync(
                         request,
-                        createdEmployeeId); await ValidateCatalogSourcesAsync(request.Items);
+                        createdEmployeeId);
+                    await ValidateCatalogSourcesAsync(request.Items);
 
                     // Lấy điều khoản từ đúng template version đã chọn.
                     var templateTerms = await _dbContext
@@ -581,9 +598,10 @@ namespace ContractManagement.Domains.Services.Contract
                         TermCount = contractTerms.Count,
 
                         // Trả RowVersion để Frontend có thể cập nhật Draft ngay.
-                        ContractRowVersion = EncodeRowVersion(contract.RowVersion),
+                        RowVersion = EncodeRowVersion(contract.RowVersion),
 
-                        VersionRowVersion = EncodeRowVersion(contractVersion.RowVersion)
+                        CurrentVersionRowVersion =
+                            EncodeRowVersion(contractVersion.RowVersion)
                     };
                 }
                 catch

@@ -70,11 +70,11 @@ namespace ContractManagement.API.Domains.DTOs.Responses.Contract
         /// RowVersion của Contract.
         /// Frontend gửi lại giá trị này khi cập nhật Draft.
         /// </summary>
-        public string ContractRowVersion { get; set; } = string.Empty;
+        public string RowVersion { get; set; } = string.Empty;
 
         /// <summary>
         /// RowVersion của Version 1 vừa được tạo.
         /// </summary>
-        public string VersionRowVersion { get; set; } = string.Empty;
+        public string CurrentVersionRowVersion { get; set; } = string.Empty;
     }
 }

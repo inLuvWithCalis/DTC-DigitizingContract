@@ -4,6 +4,7 @@ import '../../../models/catalog/service_type_dto.dart';
 import '../../../services/catalog/service_types_api.dart';
 import '../../../services/catalog/services_api.dart';
 import '../../../utils/app_toast.dart';
+import '../../../widgets/app_bulk_action_button.dart';
 import '../../../widgets/app_mobile_data_table.dart';
 import '../../../widgets/app_skeleton.dart';
 import 'service_form_dialog.dart';
@@ -19,9 +20,10 @@ class _ServiceListPageState extends State<ServiceListPage> {
   List<ServiceResponse> _items = [];
   int _totalCount = 0;
   int _page = 1;
-  final int _pageSize = 10;
-  int _totalPages = 1;
+  static const int _pageSize = 20;
+  bool _hasMore = false;
   bool _isLoading = false;
+  bool _isLoadingMore = false;
   String _searchTerm = '';
 
   // --- FILTER STATES ---
@@ -50,34 +52,34 @@ class _ServiceListPageState extends State<ServiceListPage> {
     } catch (_) {}
   }
 
+  /// Reset về trang 1, xóa danh sách cũ → dùng khi search hoặc filter thay đổi
   Future<void> _fetchServices() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _page = 1;
+      _items = [];
+    });
     try {
-      String? fromStr = _fromDate != null
-          ? "${_fromDate!.year}-${_fromDate!.month.toString().padLeft(2, '0')}-${_fromDate!.day.toString().padLeft(2, '0')}"
-          : null;
-      String? toStr = _toDate != null
-          ? "${_toDate!.year}-${_toDate!.month.toString().padLeft(2, '0')}-${_toDate!.day.toString().padLeft(2, '0')}"
-          : null;
-
       final res = await ServiceApi.getList(
         ServiceFilterParams(
-          page: _page,
+          page: 1,
           pageSize: _pageSize,
           keyword: _searchTerm.isNotEmpty ? _searchTerm : null,
           status: _selectedStatus,
           serviceTypeId: _selectedServiceTypeId,
-          fromDate: fromStr,
-          toDate: toStr,
+          fromDate: _formatDate(_fromDate),
+          toDate: _formatDate(_toDate),
         ),
       );
 
-      setState(() {
-        _items = res.items;
-        _totalCount = res.totalCount;
-        _page = res.page;
-        _totalPages = res.totalPages;
-      });
+      if (mounted) {
+        setState(() {
+          _items = res.items;
+          _totalCount = res.totalCount;
+          _page = res.page;
+          _hasMore = _items.length < _totalCount;
+        });
+      }
     } catch (error) {
       if (mounted) {
         AppToast.error(context, "Lỗi khi tải danh sách dịch vụ");
@@ -87,6 +89,47 @@ class _ServiceListPageState extends State<ServiceListPage> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  /// Load thêm page tiếp theo, gắn vào cuối danh sách hiện tại
+  Future<void> _loadMoreServices() async {
+    if (_isLoadingMore || !_hasMore) return;
+    setState(() => _isLoadingMore = true);
+    try {
+      final nextPage = _page + 1;
+      final res = await ServiceApi.getList(
+        ServiceFilterParams(
+          page: nextPage,
+          pageSize: _pageSize,
+          keyword: _searchTerm.isNotEmpty ? _searchTerm : null,
+          status: _selectedStatus,
+          serviceTypeId: _selectedServiceTypeId,
+          fromDate: _formatDate(_fromDate),
+          toDate: _formatDate(_toDate),
+        ),
+      );
+
+      if (mounted) {
+        setState(() {
+          _items = [..._items, ...res.items];
+          _page = res.page;
+          _hasMore = _items.length < _totalCount;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        AppToast.error(context, "Lỗi khi tải thêm dịch vụ");
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingMore = false);
+      }
+    }
+  }
+
+  String? _formatDate(DateTime? date) {
+    if (date == null) return null;
+    return "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
   }
 
   int get _activeFilterCount {
@@ -104,7 +147,6 @@ class _ServiceListPageState extends State<ServiceListPage> {
       _selectedServiceTypeId = null;
       _fromDate = null;
       _toDate = null;
-      _page = 1;
     });
     _fetchServices();
   }
@@ -222,6 +264,58 @@ class _ServiceListPageState extends State<ServiceListPage> {
     }
   }
 
+  Future<void> _handleBulkSetStatus(
+    List<ServiceResponse> selectedItems,
+    VoidCallback resetSelection,
+    int status,
+  ) async {
+    final label = status == 1 ? 'kích hoạt' : 'tạm dừng';
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          status == 1 ? 'Kích hoạt hàng loạt?' : 'Tạm dừng hàng loạt?',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Bạn có chắc chẫn muốn $label ${selectedItems.length} dịch vụ đã chọn?',
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Hủy bỏ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text('Đồng ý $label'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final ids = selectedItems.map((e) => e.serviceId).toList();
+      await ServiceApi.setBulkStatus(ids, status);
+      if (mounted) {
+        AppToast.success(
+          context,
+          status == 1
+              ? 'Đã kích hoạt ${ids.length} dịch vụ'
+              : 'Đã tạm dừng ${ids.length} dịch vụ',
+        );
+      }
+      resetSelection();
+      _fetchServices();
+    } catch (error) {
+      if (mounted) {
+        AppToast.error(context, 'Không thể cập nhật trạng thái dịch vụ');
+      }
+    }
+  }
+
   int get _activeCount => _items.where((i) => i.status == 1).length;
 
   @override
@@ -246,10 +340,9 @@ class _ServiceListPageState extends State<ServiceListPage> {
           child: AppMobileDataTable<ServiceResponse>(
             items: _items,
             totalCount: _totalCount,
-            page: _page,
-            pageSize: _pageSize,
-            totalPages: _totalPages,
             isLoading: _isLoading,
+            isLoadingMore: _isLoadingMore,
+            hasMore: _hasMore,
             searchPlaceholder: "Tên dịch vụ...",
             searchValue: _searchTerm,
             getItemId: (item) => item.serviceId,
@@ -265,17 +358,11 @@ class _ServiceListPageState extends State<ServiceListPage> {
             onSearchChange: (value) {
               setState(() {
                 _searchTerm = value;
-                _page = 1;
               });
               _fetchServices();
             },
             onRefresh: _fetchServices,
-            onPageChange: (newPage) {
-              setState(() {
-                _page = newPage;
-              });
-              _fetchServices();
-            },
+            onLoadMore: _loadMoreServices,
 
             // --- FILTER BAR EXPANDABLE SLOT ---
             filterBar: Column(
@@ -649,29 +736,41 @@ class _ServiceListPageState extends State<ServiceListPage> {
             ),
 
             // --- BULK ACTIONS ---
-            bulkActions: (selectedItems, resetSelection) => ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red.shade600,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
+            bulkActions: (selectedItems, resetSelection) => AppBulkActionButton(
+              selectedCount: selectedItems.length,
+              actions: [
+                AppBulkActionItem(
+                  title: 'Kích hoạt ${selectedItems.length} dịch vụ',
+                  icon: Icons.check_circle_outline_rounded,
+                  color: const Color(0xFF059669),
+                  onTap: () =>
+                      _handleBulkSetStatus(selectedItems, resetSelection, 1),
                 ),
-              ),
-              icon: const Icon(Icons.delete_outline_rounded, size: 16),
-              label: Text('Xóa (${selectedItems.length})'),
-              onPressed: () => _handleDeleteBulk(selectedItems, resetSelection),
+                AppBulkActionItem(
+                  title: 'Tạm dừng ${selectedItems.length} dịch vụ',
+                  icon: Icons.pause_circle_outline_rounded,
+                  color: theme.colorScheme.primary,
+                  onTap: () =>
+                      _handleBulkSetStatus(selectedItems, resetSelection, 0),
+                ),
+                AppBulkActionItem(
+                  title: 'Xóa ${selectedItems.length} dịch vụ',
+                  icon: Icons.delete_outline_rounded,
+                  color: theme.colorScheme.error,
+                  onTap: () => _handleDeleteBulk(selectedItems, resetSelection),
+                ),
+              ],
             ),
 
             // --- MOBILE ITEM CARD RENDERER ---
             itemBuilder: (context, item, isSelected, onSelectToggle) {
               final isActive = item.status == 1;
 
-              return Container(
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeInOut,
                 decoration: BoxDecoration(
-                  color: isSelected
-                      ? theme.colorScheme.primary.withValues(alpha: 0.05)
-                      : theme.colorScheme.surface,
+                  color: theme.colorScheme.surface,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: isSelected

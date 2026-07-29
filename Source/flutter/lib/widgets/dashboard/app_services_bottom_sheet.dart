@@ -119,7 +119,7 @@ class AppServicesBottomSheet {
                         crossAxisCount: 4,
                         mainAxisSpacing: 16,
                         crossAxisSpacing: 12,
-                        childAspectRatio: 0.82,
+                        childAspectRatio: 0.78,
                         children: [
                           _buildGridItem(
                             context,
@@ -181,7 +181,7 @@ class AppServicesBottomSheet {
                         crossAxisCount: 4,
                         mainAxisSpacing: 16,
                         crossAxisSpacing: 12,
-                        childAspectRatio: 0.82,
+                        childAspectRatio: 0.78,
                         children: [
                           _buildGridItem(
                             context,
@@ -233,7 +233,7 @@ class AppServicesBottomSheet {
                         crossAxisCount: 4,
                         mainAxisSpacing: 16,
                         crossAxisSpacing: 12,
-                        childAspectRatio: 0.82,
+                        childAspectRatio: 0.78,
                         children: [
                           _buildGridItem(
                             context,
@@ -302,24 +302,23 @@ class AppServicesBottomSheet {
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(20),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 54,
-            height: 54,
+            width: 58,
+            height: 58,
             decoration: BoxDecoration(
               color: bgColor,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: color.withValues(alpha: 0.12),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
                 ),
               ],
             ),
@@ -329,12 +328,13 @@ class AppServicesBottomSheet {
           Text(
             title,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: FontWeight.w600,
               color: theme.colorScheme.onSurface,
+              height: 1.2,
             ),
             textAlign: TextAlign.center,
-            maxLines: 1,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
         ],

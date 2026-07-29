@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../models/catalog/service_type_dto.dart';
 import '../../../services/catalog/service_types_api.dart';
 import '../../../utils/app_toast.dart';
+import '../../../widgets/app_bulk_action_button.dart';
 import '../../../widgets/app_mobile_data_table.dart';
 import '../../../widgets/app_skeleton.dart';
 import 'service_type_form_dialog.dart';
@@ -17,9 +18,10 @@ class _ServiceTypeListPageState extends State<ServiceTypeListPage> {
   List<ServiceTypeResponse> _items = [];
   int _totalCount = 0;
   int _page = 1;
-  final int _pageSize = 10;
-  int _totalPages = 1;
+  static const int _pageSize = 20;
+  bool _hasMore = false;
   bool _isLoading = false;
+  bool _isLoadingMore = false;
   String _searchTerm = '';
 
   @override
@@ -28,23 +30,30 @@ class _ServiceTypeListPageState extends State<ServiceTypeListPage> {
     _fetchServiceTypes();
   }
 
+  /// Reset về trang 1, xóa danh sách cũ → dùng khi search thay đổi
   Future<void> _fetchServiceTypes() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _page = 1;
+      _items = [];
+    });
     try {
       final res = await ServiceTypeApi.getList(
         ServiceTypeFilterParams(
-          page: _page,
+          page: 1,
           pageSize: _pageSize,
           keyword: _searchTerm.isNotEmpty ? _searchTerm : null,
         ),
       );
 
-      setState(() {
-        _items = res.items;
-        _totalCount = res.totalCount;
-        _page = res.page;
-        _totalPages = res.totalPages;
-      });
+      if (mounted) {
+        setState(() {
+          _items = res.items;
+          _totalCount = res.totalCount;
+          _page = res.page;
+          _hasMore = _items.length < _totalCount;
+        });
+      }
     } catch (error) {
       if (mounted) {
         AppToast.error(context, "Lỗi khi tải danh sách loại dịch vụ");
@@ -52,6 +61,38 @@ class _ServiceTypeListPageState extends State<ServiceTypeListPage> {
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  /// Load thêm page tiếp theo, gắn vào cuối danh sách hiện tại
+  Future<void> _loadMoreServiceTypes() async {
+    if (_isLoadingMore || !_hasMore) return;
+    setState(() => _isLoadingMore = true);
+    try {
+      final nextPage = _page + 1;
+      final res = await ServiceTypeApi.getList(
+        ServiceTypeFilterParams(
+          page: nextPage,
+          pageSize: _pageSize,
+          keyword: _searchTerm.isNotEmpty ? _searchTerm : null,
+        ),
+      );
+
+      if (mounted) {
+        setState(() {
+          _items = [..._items, ...res.items];
+          _page = res.page;
+          _hasMore = _items.length < _totalCount;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        AppToast.error(context, "Lỗi khi tải thêm loại dịch vụ");
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingMore = false);
       }
     }
   }
@@ -165,10 +206,9 @@ class _ServiceTypeListPageState extends State<ServiceTypeListPage> {
           child: AppMobileDataTable<ServiceTypeResponse>(
             items: _items,
             totalCount: _totalCount,
-            page: _page,
-            pageSize: _pageSize,
-            totalPages: _totalPages,
             isLoading: _isLoading,
+            isLoadingMore: _isLoadingMore,
+            hasMore: _hasMore,
             searchPlaceholder: "Tên dịch vụ...",
             searchValue: _searchTerm,
             getItemId: (item) => item.serviceTypeId,
@@ -183,17 +223,11 @@ class _ServiceTypeListPageState extends State<ServiceTypeListPage> {
             onSearchChange: (value) {
               setState(() {
                 _searchTerm = value;
-                _page = 1;
               });
               _fetchServiceTypes();
             },
             onRefresh: _fetchServiceTypes,
-            onPageChange: (newPage) {
-              setState(() {
-                _page = newPage;
-              });
-              _fetchServiceTypes();
-            },
+            onLoadMore: _loadMoreServiceTypes,
 
             // --- SUMMARY CARDS HEADER ---
             summaryHeader: _isLoading
@@ -322,27 +356,25 @@ class _ServiceTypeListPageState extends State<ServiceTypeListPage> {
             ),
 
             // --- BULK ACTIONS ---
-            bulkActions: (selectedItems, resetSelection) => ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red.shade600,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
+            bulkActions: (selectedItems, resetSelection) => AppBulkActionButton(
+              selectedCount: selectedItems.length,
+              actions: [
+                AppBulkActionItem(
+                  title: 'Xóa ${selectedItems.length} loại dịch vụ',
+                  icon: Icons.delete_outline_rounded,
+                  color: theme.colorScheme.error,
+                  onTap: () => _handleDeleteBulk(selectedItems, resetSelection),
                 ),
-              ),
-              icon: const Icon(Icons.delete_outline_rounded, size: 16),
-              label: Text('Xóa (${selectedItems.length})'),
-              onPressed: () => _handleDeleteBulk(selectedItems, resetSelection),
+              ],
             ),
 
             // --- MOBILE ITEM CARD RENDERER ---
             itemBuilder: (context, item, isSelected, onSelectToggle) {
-              return Container(
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeInOut,
                 decoration: BoxDecoration(
-                  color: isSelected
-                      ? theme.colorScheme.primary.withValues(alpha: 0.05)
-                      : theme.colorScheme.surface,
+                  color: theme.colorScheme.surface,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: isSelected

@@ -49,7 +49,7 @@ abstract class AppColors {
   static const Color darkCardForeground = Color(0xFFE5E8EB);
 
   static const Color darkPrimary = Color(0xFF009AEE);
-  static const Color darkPrimaryForeground = Color(0xFFF8F8F8);
+  static const Color darkPrimaryForeground = Color(0xFF060B0E);
 
   static const Color darkSecondary = Color(0xFF141C21);
   static const Color darkSecondaryForeground = Color(0xFFDBDEE1);

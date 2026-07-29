@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// Reusable AppTextField component giúp tự động thiết lập `maxLength` mặc định (255 ký tự)
-/// và ẩn bộ đếm ký tự (counterText) thừa mà không cần viết lại `maxLength` mỗi lần dùng TextField.
 class AppTextField extends StatelessWidget {
   final TextEditingController? controller;
   final FocusNode? focusNode;
@@ -15,6 +13,8 @@ class AppTextField extends StatelessWidget {
   final bool enableSuggestions;
   final Widget? suffixIcon;
   final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
   final EdgeInsetsGeometry? contentPadding;
   final bool? isDense;
 
@@ -32,6 +32,8 @@ class AppTextField extends StatelessWidget {
     this.enableSuggestions = true,
     this.suffixIcon,
     this.keyboardType,
+    this.textInputAction,
+    this.onSubmitted,
     this.contentPadding,
     this.isDense,
   });
@@ -46,6 +48,8 @@ class AppTextField extends StatelessWidget {
       obscureText: obscureText,
       maxLength: maxLength,
       keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      onSubmitted: onSubmitted,
       onChanged: onChanged,
       onTap: onTap,
       autocorrect: autocorrect,

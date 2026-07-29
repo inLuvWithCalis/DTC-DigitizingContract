@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 class QuickActionData {
@@ -95,49 +96,13 @@ class _AppQuickActionsCardState extends State<AppQuickActionsCard> {
           Positioned(
             bottom:
                 0, // 👈 Đã chỉnh về 0, toàn bộ diện tích nút nằm trong ranh giới Hit-Test của Stack
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () {
-                  setState(() {
-                    _isExpanded = !_isExpanded;
-                  });
-                },
-                borderRadius: BorderRadius.circular(20),
-                child: AnimatedRotation(
-                  turns: _isExpanded ? 0.5 : 0.0,
-                  duration: const Duration(milliseconds: 300),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: _isExpanded
-                          ? theme.colorScheme.onPrimary
-                          : theme.colorScheme.primary,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: _isExpanded
-                              ? Colors.black.withValues(alpha: 0.08)
-                              : theme.colorScheme.primary.withValues(
-                                  alpha: 0.4,
-                                ),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      color: _isExpanded
-                          ? theme.colorScheme.primary
-                          : Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                ),
-              ),
+            child: _ExpandToggleButton(
+              isExpanded: _isExpanded,
+              onTap: () {
+                setState(() {
+                  _isExpanded = !_isExpanded;
+                });
+              },
             ),
           ),
       ],
@@ -196,7 +161,7 @@ class _AppQuickActionsCardState extends State<AppQuickActionsCard> {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.03),
+                      color: Colors.black.withValues(alpha: 0.08),
                       blurRadius: 8,
                       offset: const Offset(0, 3),
                     ),
@@ -243,6 +208,120 @@ class _AppQuickActionsCardState extends State<AppQuickActionsCard> {
             overflow: TextOverflow.ellipsis,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ExpandToggleButton extends StatefulWidget {
+  final bool isExpanded;
+  final VoidCallback onTap;
+
+  const _ExpandToggleButton({required this.isExpanded, required this.onTap});
+
+  @override
+  State<_ExpandToggleButton> createState() => _ExpandToggleButtonState();
+}
+
+class _ExpandToggleButtonState extends State<_ExpandToggleButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _bounceController;
+  late final Animation<double> _bounceAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _bounceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _bounceAnimation = Tween<double>(begin: 0, end: -4).animate(
+      CurvedAnimation(parent: _bounceController, curve: Curves.easeInOut),
+    );
+    _updateBounce();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ExpandToggleButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isExpanded != widget.isExpanded) {
+      _updateBounce();
+    }
+  }
+
+  void _updateBounce() {
+    if (widget.isExpanded) {
+      _bounceController.stop();
+      _bounceController.reverse();
+    } else {
+      _bounceController.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _bounceController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isExpanded = widget.isExpanded;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: widget.onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: AnimatedBuilder(
+          animation: _bounceAnimation,
+          builder: (context, child) {
+            return Transform.translate(
+              offset: Offset(0, _bounceAnimation.value),
+              child: child,
+            );
+          },
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: isExpanded ? math.pi : 0),
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeInOutCubic,
+            builder: (context, angle, child) {
+              return Transform(
+                transform: Matrix4.identity()
+                  ..setEntry(3, 2, 0.0015)
+                  ..rotateX(angle),
+                alignment: Alignment.center,
+                child: child,
+              );
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 350),
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: isExpanded
+                    ? theme.colorScheme.onPrimary
+                    : theme.colorScheme.primary,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: isExpanded
+                        ? theme.colorScheme.primary.withValues(alpha: 1)
+                        : theme.colorScheme.primary.withValues(alpha: 0),
+                    blurRadius: 0,
+                    offset: const Offset(0, 0),
+                  ),
+                ],
+              ),
+              child: Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: isExpanded ? theme.colorScheme.primary : Colors.white,
+                size: 24,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

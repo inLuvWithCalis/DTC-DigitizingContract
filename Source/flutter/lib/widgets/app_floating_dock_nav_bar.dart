@@ -39,7 +39,7 @@ class AppFloatingDockNavBar extends StatelessWidget {
       activeIcon: Icons.analytics_rounded,
     ),
     AppFloatingDockNavItemData(
-      label: 'Khác',
+      label: 'Tất cả',
       icon: Icons.grid_view_outlined,
       activeIcon: Icons.grid_view_rounded,
     ),

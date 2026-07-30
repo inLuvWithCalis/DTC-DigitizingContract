@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../services/auth_api.dart';
 import '../utils/app_toast.dart';
+import '../utils/quick_actions_store.dart';
 import '../widgets/app_quick_actions_card.dart';
 import '../widgets/app_floating_dock_nav_bar.dart';
 import '../widgets/dashboard/app_dashboard_analytics_card.dart';
@@ -23,6 +24,30 @@ class _DashboardPageState extends State<DashboardPage> {
   final AuthStore _authStore = AuthStore();
   int _currentNavIndex = 0;
 
+  List<String> _quickActionIds = QuickActionsStore.defaultIds;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedQuickActions();
+  }
+
+  Future<void> _loadSavedQuickActions() async {
+    final saved = await QuickActionsStore.loadQuickActionIds();
+    if (mounted) {
+      setState(() {
+        _quickActionIds = saved;
+      });
+    }
+  }
+
+  void _updateQuickActionIds(List<String> newIds) {
+    setState(() {
+      _quickActionIds = List.from(newIds);
+    });
+    QuickActionsStore.saveQuickActionIds(newIds);
+  }
+
   Future<void> _handleLogout() async {
     String message = "Đăng xuất thành công!";
     try {
@@ -35,69 +60,112 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  List<QuickActionData> _getAllQuickActions(BuildContext context) {
+  Map<String, QuickActionData> _getQuickActionsCatalog(BuildContext context) {
     final theme = Theme.of(context);
     final primaryColor = theme.colorScheme.primary;
     final onPrimaryColor = theme.colorScheme.onPrimary;
 
-    return [
-      QuickActionData(
+    return {
+      'services': QuickActionData(
+        id: 'services',
         title: "Dịch vụ",
         icon: Icons.miscellaneous_services_outlined,
         color: primaryColor,
         bgColor: onPrimaryColor,
         onTap: () => Navigator.of(context).pushNamed('/catalog/services'),
       ),
-      QuickActionData(
+      'service_types': QuickActionData(
+        id: 'service_types',
         title: "Loại dịch vụ",
         icon: Icons.category_outlined,
         color: primaryColor,
         bgColor: onPrimaryColor,
         onTap: () => Navigator.of(context).pushNamed('/catalog/service-types'),
       ),
-      QuickActionData(
+      'create_contract': QuickActionData(
+        id: 'create_contract',
         title: "Tạo HĐ mới",
         icon: Icons.post_add_rounded,
         color: primaryColor,
         bgColor: onPrimaryColor,
         onTap: () {},
       ),
-      QuickActionData(
+      'approve_contract': QuickActionData(
+        id: 'approve_contract',
         title: "Phê duyệt HĐ",
         icon: Icons.verified_user_outlined,
         color: primaryColor,
         bgColor: onPrimaryColor,
         onTap: () {},
       ),
-      QuickActionData(
+      'price_list': QuickActionData(
+        id: 'price_list',
         title: "Bảng giá",
         icon: Icons.sell_outlined,
         color: primaryColor,
         bgColor: onPrimaryColor,
         onTap: () {},
       ),
-      QuickActionData(
+      'contract_templates': QuickActionData(
+        id: 'contract_templates',
         title: "Mẫu HĐ",
         icon: Icons.description_outlined,
         color: primaryColor,
         bgColor: onPrimaryColor,
         onTap: () {},
       ),
-      QuickActionData(
+      'renew_contract': QuickActionData(
+        id: 'renew_contract',
         title: "Gia hạn HĐ",
         icon: Icons.update_rounded,
         color: primaryColor,
         bgColor: onPrimaryColor,
         onTap: () {},
       ),
-      QuickActionData(
+      'liquidate_contract': QuickActionData(
+        id: 'liquidate_contract',
         title: "Thanh lý",
         icon: Icons.task_alt_rounded,
         color: primaryColor,
         bgColor: onPrimaryColor,
         onTap: () {},
       ),
-    ];
+      'revenue': QuickActionData(
+        id: 'revenue',
+        title: "Doanh thu",
+        icon: Icons.pie_chart_rounded,
+        color: primaryColor,
+        bgColor: onPrimaryColor,
+        onTap: () {},
+      ),
+      'traffic': QuickActionData(
+        id: 'traffic',
+        title: "Lưu lượng",
+        icon: Icons.show_chart_rounded,
+        color: primaryColor,
+        bgColor: onPrimaryColor,
+        onTap: () {},
+      ),
+      'activity_logs': QuickActionData(
+        id: 'activity_logs',
+        title: "Nhật ký",
+        icon: Icons.history_toggle_off_rounded,
+        color: primaryColor,
+        bgColor: onPrimaryColor,
+        onTap: () {},
+      ),
+    };
+  }
+
+  void _openEditQuickActionsBottomSheet(BuildContext context) {
+    AppServicesBottomSheet.show(
+      context,
+      isEditMode: true,
+      selectedIds: _quickActionIds,
+      onSelectedIdsChanged: (newIds) {
+        _updateQuickActionIds(newIds);
+      },
+    );
   }
 
   Widget _buildDashboardOverview(
@@ -171,7 +239,11 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
     ];
 
-    final allQuickActions = _getAllQuickActions(context);
+    final catalog = _getQuickActionsCatalog(context);
+    final activeQuickActions = _quickActionIds
+        .where((id) => catalog.containsKey(id))
+        .map((id) => catalog[id]!)
+        .toList();
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -185,7 +257,16 @@ class _DashboardPageState extends State<DashboardPage> {
           const SizedBox(height: 24),
 
           // --- QUICK ACTIONS REUSABLE COMPONENT ---
-          AppQuickActionsCard(items: allQuickActions),
+          AppQuickActionsCard(
+            items: activeQuickActions,
+            onRemoveItem: (id) {
+              final updated = List<String>.from(_quickActionIds)..remove(id);
+              _updateQuickActionIds(updated);
+            },
+            onOpenAddBottomSheet: () {
+              _openEditQuickActionsBottomSheet(context);
+            },
+          ),
 
           const SizedBox(height: 32),
 
@@ -357,7 +438,14 @@ class _DashboardPageState extends State<DashboardPage> {
         currentIndex: _currentNavIndex,
         onTap: (index) {
           if (index == 4) {
-            AppServicesBottomSheet.show(context);
+            AppServicesBottomSheet.show(
+              context,
+              isEditMode: false,
+              selectedIds: _quickActionIds,
+              onSelectedIdsChanged: (newIds) {
+                _updateQuickActionIds(newIds);
+              },
+            );
           } else {
             setState(() {
               _currentNavIndex = index;

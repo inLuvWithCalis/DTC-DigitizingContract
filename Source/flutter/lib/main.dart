@@ -558,8 +558,9 @@ void main() async {
   runApp(const MyApp());
 }
 
-final ValueNotifier<ThemeMode> themeModeNotifier =
-    ValueNotifier<ThemeMode>(ThemeMode.light);
+final ValueNotifier<ThemeMode> themeModeNotifier = ValueNotifier<ThemeMode>(
+  ThemeMode.light,
+);
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -576,31 +577,33 @@ class MyApp extends StatelessWidget {
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: currentMode,
-      initialRoute: '/',
-      onGenerateRoute: (settings) {
-        if (settings.name == '/') {
-          final errorParam = settings.arguments as String?;
-          return MaterialPageRoute(
-            builder: (context) => LoginPage(errorParam: errorParam),
-          );
-        }
-        if (settings.name == '/dashboard') {
-          return MaterialPageRoute(builder: (context) => const DashboardPage());
-        }
-        if (settings.name == '/catalog/service-types') {
-          return MaterialPageRoute(
-            builder: (context) => const ServiceTypeListPage(),
-          );
-        }
-        if (settings.name == '/catalog/services') {
-          return MaterialPageRoute(
-            builder: (context) => const ServiceListPage(),
-          );
-        }
-        return null;
+          initialRoute: '/',
+          onGenerateRoute: (settings) {
+            if (settings.name == '/') {
+              final errorParam = settings.arguments as String?;
+              return MaterialPageRoute(
+                builder: (context) => LoginPage(errorParam: errorParam),
+              );
+            }
+            if (settings.name == '/dashboard') {
+              return MaterialPageRoute(
+                builder: (context) => const DashboardPage(),
+              );
+            }
+            if (settings.name == '/catalog/service-types') {
+              return MaterialPageRoute(
+                builder: (context) => const ServiceTypeListPage(),
+              );
+            }
+            if (settings.name == '/catalog/services') {
+              return MaterialPageRoute(
+                builder: (context) => const ServiceListPage(),
+              );
+            }
+            return null;
+          },
+        );
       },
     );
-  },
-);
   }
 }

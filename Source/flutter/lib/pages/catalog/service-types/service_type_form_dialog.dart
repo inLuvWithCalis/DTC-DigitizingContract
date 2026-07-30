@@ -156,10 +156,11 @@ class _ServiceTypeFormDialogState extends State<ServiceTypeFormDialog> {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           // Header title bar
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -190,6 +191,7 @@ class _ServiceTypeFormDialogState extends State<ServiceTypeFormDialog> {
             controller: _nameController,
             placeholder: 'Ví dụ: Tư vấn, Triển khai, Hosting...',
             maxLength: 200,
+            readOnly: widget.viewOnly,
             hasError: _nameError != null,
             onChanged: (val) {
               if (_nameError != null) _validate();
@@ -214,6 +216,7 @@ class _ServiceTypeFormDialogState extends State<ServiceTypeFormDialog> {
           AppTextField(
             controller: _langController,
             placeholder: 'Ví dụ: 1 (VN)',
+            readOnly: widget.viewOnly,
             hasError: _langError != null,
             onChanged: (val) {
               if (_langError != null) _validate();
@@ -280,6 +283,7 @@ class _ServiceTypeFormDialogState extends State<ServiceTypeFormDialog> {
           ),
           const SizedBox(height: 12),
         ],
+      ),
       ),
     );
   }

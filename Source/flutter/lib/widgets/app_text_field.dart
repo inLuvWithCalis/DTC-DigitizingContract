@@ -17,6 +17,7 @@ class AppTextField extends StatelessWidget {
   final ValueChanged<String>? onSubmitted;
   final EdgeInsetsGeometry? contentPadding;
   final bool? isDense;
+  final bool readOnly;
 
   const AppTextField({
     super.key,
@@ -36,6 +37,7 @@ class AppTextField extends StatelessWidget {
     this.onSubmitted,
     this.contentPadding,
     this.isDense,
+    this.readOnly = false,
   });
 
   @override
@@ -48,6 +50,7 @@ class AppTextField extends StatelessWidget {
       obscureText: obscureText,
       maxLength: maxLength,
       keyboardType: keyboardType,
+      readOnly: readOnly,
       textInputAction: textInputAction,
       onSubmitted: onSubmitted,
       onChanged: onChanged,

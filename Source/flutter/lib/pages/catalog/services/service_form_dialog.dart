@@ -255,6 +255,7 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
             AppTextField(
               controller: _nameController,
               placeholder: 'Nhập tên dịch vụ...',
+              readOnly: widget.viewOnly,
               hasError: _nameError != null,
               onChanged: (val) {
                 if (_nameError != null) _validate();
@@ -339,6 +340,7 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
                         controller: _priceController,
                         placeholder: '0',
                         keyboardType: TextInputType.number,
+                        readOnly: widget.viewOnly,
                       ),
                     ],
                   ),
@@ -360,6 +362,7 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
                         controller: _setupPriceController,
                         placeholder: '0',
                         keyboardType: TextInputType.number,
+                        readOnly: widget.viewOnly,
                       ),
                     ],
                   ),
@@ -379,6 +382,7 @@ class _ServiceFormDialogState extends State<ServiceFormDialog> {
               controller: _shortDescController,
               placeholder: 'Mô tả tóm tắt dịch vụ...',
               maxLength: 500,
+              readOnly: widget.viewOnly,
             ),
 
             const SizedBox(height: 24),

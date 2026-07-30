@@ -192,7 +192,7 @@ class _ServiceTypeListPageState extends State<ServiceTypeListPage> {
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: const Text('Quản lý Loại dịch vụ'),
-        scrolledUnderElevation: 2,
+        scrolledUnderElevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
@@ -202,7 +202,7 @@ class _ServiceTypeListPageState extends State<ServiceTypeListPage> {
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: AppMobileDataTable<ServiceTypeResponse>(
             items: _items,
             totalCount: _totalCount,
@@ -370,179 +370,144 @@ class _ServiceTypeListPageState extends State<ServiceTypeListPage> {
 
             // --- MOBILE ITEM CARD RENDERER ---
             itemBuilder: (context, item, isSelected, onSelectToggle) {
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeInOut,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isSelected
-                        ? theme.colorScheme.primary.withValues(alpha: 0.5)
-                        : theme.colorScheme.outlineVariant.withValues(
-                            alpha: 0.5,
-                          ),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.02),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(14.0),
-                  child: Column(
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (isSelected)
-                            Checkbox(
-                              value: isSelected,
-                              onChanged: (val) => onSelectToggle(),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'ID #${item.serviceTypeId}',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: theme.colorScheme.primary,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  item.serviceTypeName ?? "Chưa có tên",
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          PopupMenuButton<String>(
-                            icon: const Icon(Icons.more_vert_rounded),
-                            onSelected: (action) {
-                              if (action == 'view') {
-                                ServiceTypeFormDialog.show(
-                                  context,
-                                  item: item,
-                                  viewOnly: true,
-                                  onSuccess: () {},
-                                );
-                              } else if (action == 'edit') {
-                                ServiceTypeFormDialog.show(
-                                  context,
-                                  item: item,
-                                  onSuccess: _fetchServiceTypes,
-                                );
-                              } else if (action == 'delete') {
-                                _handleDeleteSingle(item);
-                              }
-                            },
-                            itemBuilder: (context) => [
-                              const PopupMenuItem(
-                                value: 'view',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.visibility_outlined, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Chi tiết'),
-                                  ],
-                                ),
-                              ),
-                              const PopupMenuItem(
-                                value: 'edit',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.edit_outlined, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Chỉnh sửa'),
-                                  ],
-                                ),
-                              ),
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.delete_outline_rounded,
-                                      size: 18,
-                                      color: Colors.red.shade600,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Xóa loại dịch vụ',
-                                      style: TextStyle(
-                                        color: Colors.red.shade600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceContainerHighest
-                              .withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.description_outlined,
-                                  size: 14,
-                                  color: theme.colorScheme.primary,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  '${item.serviceCount} dịch vụ',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: theme.colorScheme.primary,
-                                  ),
-                                ),
-                              ],
-                            ),
                             Text(
-                              item.langId != null
-                                  ? 'Lang ID #${item.langId}'
-                                  : 'Mặc định',
+                              'ID #${item.serviceTypeId}',
                               style: TextStyle(
-                                fontSize: 12,
-                                color: theme.colorScheme.onSurface.withValues(
-                                  alpha: 0.6,
-                                ),
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              item.serviceTypeName ?? "Chưa có tên",
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ],
                         ),
                       ),
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert_rounded),
+                        onSelected: (action) {
+                          if (action == 'view') {
+                            ServiceTypeFormDialog.show(
+                              context,
+                              item: item,
+                              viewOnly: true,
+                              onSuccess: () {},
+                            );
+                          } else if (action == 'edit') {
+                            ServiceTypeFormDialog.show(
+                              context,
+                              item: item,
+                              onSuccess: _fetchServiceTypes,
+                            );
+                          } else if (action == 'delete') {
+                            _handleDeleteSingle(item);
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'view',
+                            child: Row(
+                              children: [
+                                Icon(Icons.visibility_outlined, size: 18),
+                                SizedBox(width: 8),
+                                Text('Chi tiết'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit_outlined, size: 18),
+                                SizedBox(width: 8),
+                                Text('Chỉnh sửa'),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.delete_outline_rounded,
+                                  size: 18,
+                                  color: Colors.red.shade600,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Xóa loại dịch vụ',
+                                  style: TextStyle(color: Colors.red.shade600),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest
+                          .withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.description_outlined,
+                              size: 14,
+                              color: theme.colorScheme.primary,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '${item.serviceCount} dịch vụ',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          item.langId != null
+                              ? 'Lang ID #${item.langId}'
+                              : 'Mặc định',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.6,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               );
             },
           ),

@@ -468,20 +468,32 @@ class _AppMobileDataTableState<T> extends State<AppMobileDataTable<T>> {
                           duration: const Duration(milliseconds: 220),
                           curve: Curves.easeInOut,
                           decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surface,
                             borderRadius: BorderRadius.circular(16),
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .primary
-                                          .withValues(alpha: 0.15),
-                                      blurRadius: 10,
-                                      spreadRadius: 1,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ]
-                                : [],
+                            border: Border.all(
+                              color: isSelected
+                                  ? Theme.of(
+                                      context,
+                                    ).colorScheme.primary.withValues(alpha: 0.5)
+                                  : Theme.of(context).colorScheme.outlineVariant
+                                        .withValues(alpha: 0.5),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.02),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                              if (isSelected)
+                                BoxShadow(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withValues(alpha: 0.15),
+                                  blurRadius: 10,
+                                  spreadRadius: 1,
+                                  offset: const Offset(0, 4),
+                                ),
+                            ],
                           ),
                           child: InkWell(
                             onTap: () {
@@ -507,7 +519,48 @@ class _AppMobileDataTableState<T> extends State<AppMobileDataTable<T>> {
                               });
                             },
                             borderRadius: BorderRadius.circular(16),
-                            child: cardChild,
+                            child: Padding(
+                              padding: const EdgeInsets.all(14.0),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  AnimatedSize(
+                                    duration: const Duration(milliseconds: 250),
+                                    curve: Curves.ease,
+                                    alignment: Alignment.centerLeft,
+                                    child: isSelected
+                                        ? Padding(
+                                            padding: const EdgeInsets.only(
+                                              right: 12.0,
+                                            ),
+                                            child: Checkbox(
+                                              value: isSelected,
+                                              onChanged: (val) {
+                                                setState(() {
+                                                  if (isSelected) {
+                                                    _selectedIds.remove(id);
+                                                  } else {
+                                                    _selectedIds.add(id);
+                                                  }
+                                                });
+                                              },
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                              ),
+                                              materialTapTargetSize:
+                                                  MaterialTapTargetSize
+                                                      .shrinkWrap,
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                            ),
+                                          )
+                                        : const SizedBox(width: 0, height: 24),
+                                  ),
+                                  Expanded(child: cardChild),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                       );
@@ -525,10 +578,17 @@ class _AppMobileDataTableState<T> extends State<AppMobileDataTable<T>> {
             builder: (context) {
               final headerContainer = Container(
                 key: _headerKey,
-                padding: const EdgeInsets.all(0),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.surface.withValues(
-                    alpha: isDark ? 1.0 : 0.82,
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: isDark ? const [0.95, 1.0] : const [0.3, 1.0],
+                    colors: [
+                      theme.colorScheme.surface.withValues(
+                        alpha: isDark ? 1.0 : 0.97,
+                      ),
+                      theme.colorScheme.surface.withValues(alpha: 0.0),
+                    ],
                   ),
                 ),
                 child: Column(

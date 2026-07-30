@@ -3,6 +3,7 @@ import '../../../models/catalog/service_dto.dart';
 import '../../../models/catalog/service_type_dto.dart';
 import '../../../services/catalog/service_types_api.dart';
 import '../../../services/catalog/services_api.dart';
+import '../../../utils/app_date_utils.dart';
 import '../../../utils/app_toast.dart';
 import '../../../widgets/app_bulk_action_button.dart';
 import '../../../widgets/app_filter_bar.dart';
@@ -68,8 +69,8 @@ class _ServiceListPageState extends State<ServiceListPage> {
           keyword: _searchTerm.isNotEmpty ? _searchTerm : null,
           status: _selectedStatus,
           serviceTypeId: _selectedServiceTypeId,
-          fromDate: _formatDate(_fromDate),
-          toDate: _formatDate(_toDate),
+          fromDate: AppDateUtils.formatToYMD(_fromDate),
+          toDate: AppDateUtils.formatToYMD(_toDate),
         ),
       );
 
@@ -105,8 +106,8 @@ class _ServiceListPageState extends State<ServiceListPage> {
           keyword: _searchTerm.isNotEmpty ? _searchTerm : null,
           status: _selectedStatus,
           serviceTypeId: _selectedServiceTypeId,
-          fromDate: _formatDate(_fromDate),
-          toDate: _formatDate(_toDate),
+          fromDate: AppDateUtils.formatToYMD(_fromDate),
+          toDate: AppDateUtils.formatToYMD(_toDate),
         ),
       );
 
@@ -126,11 +127,6 @@ class _ServiceListPageState extends State<ServiceListPage> {
         setState(() => _isLoadingMore = false);
       }
     }
-  }
-
-  String? _formatDate(DateTime? date) {
-    if (date == null) return null;
-    return "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
   }
 
   int get _activeFilterCount {
@@ -328,7 +324,7 @@ class _ServiceListPageState extends State<ServiceListPage> {
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: const Text('Quản lý Dịch vụ'),
-        scrolledUnderElevation: 2,
+        scrolledUnderElevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
@@ -338,7 +334,7 @@ class _ServiceListPageState extends State<ServiceListPage> {
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: AppMobileDataTable<ServiceResponse>(
             items: _items,
             totalCount: _totalCount,
@@ -604,235 +600,196 @@ class _ServiceListPageState extends State<ServiceListPage> {
               ],
             ),
 
-            // --- MOBILE ITEM CARD RENDERER ---
             itemBuilder: (context, item, isSelected, onSelectToggle) {
               final isActive = item.status == 1;
 
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeInOut,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isSelected
-                        ? theme.colorScheme.primary.withValues(alpha: 0.5)
-                        : theme.colorScheme.outlineVariant.withValues(
-                            alpha: 0.5,
-                          ),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.02),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(14.0),
-                  child: Column(
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (isSelected)
-                            Checkbox(
-                              value: isSelected,
-                              onChanged: (val) => onSelectToggle(),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
                               children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      'ID #${item.serviceId}',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: theme.colorScheme.primary,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: isActive
-                                            ? const Color(
-                                                0xFF059669,
-                                              ).withValues(alpha: 0.1)
-                                            : Colors.grey.withValues(
-                                                alpha: 0.1,
-                                              ),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        getServiceStatusLabel(item.status),
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                          color: isActive
-                                              ? const Color(0xFF059669)
-                                              : Colors.grey.shade700,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
                                 Text(
-                                  item.serviceName ?? "Chưa có tên",
-                                  style: const TextStyle(
-                                    fontSize: 16,
+                                  'ID #${item.serviceId}',
+                                  style: TextStyle(
+                                    fontSize: 11,
                                     fontWeight: FontWeight.bold,
+                                    color: theme.colorScheme.primary,
                                   ),
                                 ),
-                                if (item.serviceTypeName != null) ...[
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    item.serviceTypeName!,
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isActive
+                                        ? const Color(0xFF059669).withValues(alpha: 0.1)
+                                        : Colors.grey.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    getServiceStatusLabel(item.status),
                                     style: TextStyle(
-                                      fontSize: 12,
-                                      color: theme.colorScheme.onSurface
-                                          .withValues(alpha: 0.6),
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: isActive
+                                          ? const Color(0xFF059669)
+                                          : Colors.grey.shade700,
                                     ),
                                   ),
-                                ],
+                                ),
                               ],
                             ),
-                          ),
-                          PopupMenuButton<String>(
-                            icon: const Icon(Icons.more_vert_rounded),
-                            onSelected: (action) {
-                              if (action == 'view') {
-                                ServiceFormDialog.show(
-                                  context,
-                                  item: item,
-                                  viewOnly: true,
-                                  onSuccess: () {},
-                                );
-                              } else if (action == 'edit') {
-                                ServiceFormDialog.show(
-                                  context,
-                                  item: item,
-                                  onSuccess: _fetchServices,
-                                );
-                              } else if (action == 'toggle_status') {
-                                _handleToggleStatus(item);
-                              } else if (action == 'delete') {
-                                _handleDeleteSingle(item);
-                              }
-                            },
-                            itemBuilder: (context) => [
-                              const PopupMenuItem(
-                                value: 'view',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.visibility_outlined, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Chi tiết'),
-                                  ],
-                                ),
+                            const SizedBox(height: 4),
+                            Text(
+                              item.serviceName ?? "Chưa có tên",
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
                               ),
-                              const PopupMenuItem(
-                                value: 'edit',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.edit_outlined, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Chỉnh sửa'),
-                                  ],
-                                ),
-                              ),
-                              PopupMenuItem(
-                                value: 'toggle_status',
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      isActive
-                                          ? Icons.pause_circle_outline_rounded
-                                          : Icons.play_circle_outline_rounded,
-                                      size: 18,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(isActive ? 'Tạm dừng' : 'Kích hoạt'),
-                                  ],
-                                ),
-                              ),
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.delete_outline_rounded,
-                                      size: 18,
-                                      color: Colors.red.shade600,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Xóa dịch vụ',
-                                      style: TextStyle(
-                                        color: Colors.red.shade600,
-                                      ),
-                                    ),
-                                  ],
+                            ),
+                            if (item.serviceTypeName != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                item.serviceTypeName!,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: theme.colorScheme.onSurface
+                                      .withValues(alpha: 0.6),
                                 ),
                               ),
                             ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceContainerHighest
-                              .withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              item.servicePrice != null &&
-                                      item.servicePrice! > 0
-                                  ? 'Giá: ${item.servicePrice!.toStringAsFixed(0)} đ'
-                                  : 'Giá: Chưa cập nhật',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.primary,
-                              ),
-                            ),
-                            Text(
-                              item.dateCreated != null
-                                  ? 'Tạo: ${item.dateCreated!.substring(0, 10)}'
-                                  : 'Tạo: -',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: theme.colorScheme.onSurface.withValues(
-                                  alpha: 0.6,
-                                ),
-                              ),
-                            ),
                           ],
                         ),
                       ),
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert_rounded),
+                        onSelected: (action) {
+                          if (action == 'view') {
+                            ServiceFormDialog.show(
+                              context,
+                              item: item,
+                              viewOnly: true,
+                              onSuccess: () {},
+                            );
+                          } else if (action == 'edit') {
+                            ServiceFormDialog.show(
+                              context,
+                              item: item,
+                              onSuccess: _fetchServices,
+                            );
+                          } else if (action == 'toggle_status') {
+                            _handleToggleStatus(item);
+                          } else if (action == 'delete') {
+                            _handleDeleteSingle(item);
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'view',
+                            child: Row(
+                              children: [
+                                Icon(Icons.visibility_outlined, size: 18),
+                                SizedBox(width: 8),
+                                Text('Chi tiết'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit_outlined, size: 18),
+                                SizedBox(width: 8),
+                                Text('Chỉnh sửa'),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'toggle_status',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  isActive
+                                      ? Icons.pause_circle_outline_rounded
+                                      : Icons.play_circle_outline_rounded,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(isActive ? 'Tạm dừng' : 'Kích hoạt'),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.delete_outline_rounded,
+                                  size: 18,
+                                  color: Colors.red.shade600,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Xóa dịch vụ',
+                                  style: TextStyle(
+                                    color: Colors.red.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest
+                          .withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          item.servicePrice != null && item.servicePrice! > 0
+                              ? 'Giá: ${item.servicePrice!.toStringAsFixed(0)} đ'
+                              : 'Giá: Chưa cập nhật',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                        Text(
+                          item.dateCreated != null
+                              ? 'Tạo: ${item.dateCreated!.substring(0, 10)}'
+                              : 'Tạo: -',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.6,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               );
             },
           ),

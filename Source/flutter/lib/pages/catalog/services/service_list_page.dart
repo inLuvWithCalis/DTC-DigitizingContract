@@ -5,6 +5,7 @@ import '../../../services/catalog/service_types_api.dart';
 import '../../../services/catalog/services_api.dart';
 import '../../../utils/app_toast.dart';
 import '../../../widgets/app_bulk_action_button.dart';
+import '../../../widgets/app_filter_bar.dart';
 import '../../../widgets/app_mobile_data_table.dart';
 import '../../../widgets/app_skeleton.dart';
 import 'service_form_dialog.dart';
@@ -323,6 +324,7 @@ class _ServiceListPageState extends State<ServiceListPage> {
     final theme = Theme.of(context);
 
     return Scaffold(
+      extendBody: true,
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: const Text('Quản lý Dịch vụ'),
@@ -347,6 +349,11 @@ class _ServiceListPageState extends State<ServiceListPage> {
             searchValue: _searchTerm,
             getItemId: (item) => item.serviceId,
             activeFilterCount: _activeFilterCount,
+            onApplyFilter: () {
+              setState(() => _page = 1);
+              _fetchServices();
+            },
+
             onItemClick: (item) {
               ServiceFormDialog.show(
                 context,
@@ -365,251 +372,86 @@ class _ServiceListPageState extends State<ServiceListPage> {
             onLoadMore: _loadMoreServices,
 
             // --- FILTER BAR EXPANDABLE SLOT ---
-            filterBar: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Bộ lọc nâng cao',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                    if (_activeFilterCount > 0)
-                      TextButton.icon(
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(50, 30),
-                        ),
-                        icon: const Icon(Icons.clear_all_rounded, size: 16),
-                        label: const Text(
-                          'Xóa bộ lọc',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                        onPressed: _resetFilters,
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-
-                // Row 1: Filter Trạng thái & Loại dịch vụ
-                Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: theme.colorScheme.outlineVariant.withValues(
-                              alpha: 0.5,
-                            ),
-                          ),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<int?>(
-                            value: _selectedStatus,
-                            isExpanded: true,
-                            hint: const Text(
-                              'Trạng thái',
-                              style: TextStyle(fontSize: 12),
-                            ),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: theme.colorScheme.onSurface,
-                            ),
-                            items: const [
-                              DropdownMenuItem<int?>(
-                                value: null,
-                                child: Text('Tất cả trạng thái'),
-                              ),
-                              DropdownMenuItem<int?>(
-                                value: 1,
-                                child: Text('Đang hoạt động'),
-                              ),
-                              DropdownMenuItem<int?>(
-                                value: 0,
-                                child: Text('Ngừng hoạt động'),
-                              ),
-                            ],
-                            onChanged: (val) {
-                              setState(() {
-                                _selectedStatus = val;
-                                _page = 1;
-                              });
-                              _fetchServices();
-                            },
+            filterBar: StatefulBuilder(
+              builder: (context, setModalState) {
+                return AppFilterBar(
+                  setModalState: setModalState,
+                  activeFilterCount: _activeFilterCount,
+                  onResetFilters: () {
+                    setModalState(() {
+                      _selectedStatus = null;
+                      _selectedServiceTypeId = null;
+                      _fromDate = null;
+                      _toDate = null;
+                    });
+                    _resetFilters();
+                  },
+                  statusValue: _selectedStatus,
+                  onStatusChanged: (val) {
+                    _selectedStatus = val;
+                    setState(() {});
+                  },
+                  fromDate: _fromDate,
+                  onFromDateChanged: (val) {
+                    _fromDate = val;
+                    setState(() {});
+                  },
+                  toDate: _toDate,
+                  onToDateChanged: (val) {
+                    _toDate = val;
+                    setState(() {});
+                  },
+                  customFilters: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: theme.colorScheme.outlineVariant.withValues(
+                            alpha: 0.5,
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: theme.colorScheme.outlineVariant.withValues(
-                              alpha: 0.5,
-                            ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int?>(
+                          value: _selectedServiceTypeId,
+                          isExpanded: true,
+                          hint: const Text(
+                            'Loại dịch vụ',
+                            style: TextStyle(fontSize: 12),
                           ),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<int?>(
-                            value: _selectedServiceTypeId,
-                            isExpanded: true,
-                            hint: const Text(
-                              'Loại dịch vụ',
-                              style: TextStyle(fontSize: 12),
-                            ),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: theme.colorScheme.onSurface,
-                            ),
-                            items: [
-                              const DropdownMenuItem<int?>(
-                                value: null,
-                                child: Text('Tất cả loại DV'),
-                              ),
-                              ..._serviceTypes.map((st) {
-                                return DropdownMenuItem<int?>(
-                                  value: st.serviceTypeId,
-                                  child: Text(
-                                    st.serviceTypeName ??
-                                        'Loại ${st.serviceTypeId}',
-                                  ),
-                                );
-                              }),
-                            ],
-                            onChanged: (val) {
-                              setState(() {
-                                _selectedServiceTypeId = val;
-                                _page = 1;
-                              });
-                              _fetchServices();
-                            },
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: theme.colorScheme.onSurface,
                           ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 8),
-
-                // Row 2: Filter From Date -> To Date
-                Row(
-                  children: [
-                    Expanded(
-                      child: InkWell(
-                        onTap: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: _fromDate ?? DateTime.now(),
-                            firstDate: DateTime(2000),
-                            lastDate: DateTime(2100),
-                          );
-                          if (picked != null) {
-                            setState(() {
-                              _fromDate = picked;
-                              _page = 1;
-                            });
-                            _fetchServices();
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.surface,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: theme.colorScheme.outlineVariant
-                                  .withValues(alpha: 0.5),
+                          items: [
+                            const DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text('Tất cả loại DV'),
                             ),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.calendar_today_rounded,
-                                size: 14,
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
+                            ..._serviceTypes.map((st) {
+                              return DropdownMenuItem<int?>(
+                                value: st.serviceTypeId,
                                 child: Text(
-                                  _fromDate != null
-                                      ? "${_fromDate!.day}/${_fromDate!.month}/${_fromDate!.year}"
-                                      : "Từ ngày",
-                                  style: const TextStyle(fontSize: 12),
+                                  st.serviceTypeName ??
+                                      'Loại ${st.serviceTypeId}',
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: InkWell(
-                        onTap: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: _toDate ?? DateTime.now(),
-                            firstDate: DateTime(2000),
-                            lastDate: DateTime(2100),
-                          );
-                          if (picked != null) {
-                            setState(() {
-                              _toDate = picked;
-                              _page = 1;
+                              );
+                            }),
+                          ],
+                          onChanged: (val) {
+                            setModalState(() {
+                              _selectedServiceTypeId = val;
                             });
-                            _fetchServices();
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.surface,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: theme.colorScheme.outlineVariant
-                                  .withValues(alpha: 0.5),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.calendar_today_rounded,
-                                size: 14,
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  _toDate != null
-                                      ? "${_toDate!.day}/${_toDate!.month}/${_toDate!.year}"
-                                      : "Đến ngày",
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                              ),
-                            ],
-                          ),
+                            setState(() {});
+                          },
                         ),
                       ),
                     ),
                   ],
-                ),
-              ],
+                );
+              },
             ),
 
             // --- SUMMARY CARDS HEADER ---

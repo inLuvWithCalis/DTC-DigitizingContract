@@ -57,25 +57,14 @@ class AppFloatingDockNavBar extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final navItems = items ?? defaultItems;
+    const barRadius = 28.0;
 
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
           decoration: BoxDecoration(
-            color: isDark
-                ? theme.colorScheme.surfaceContainerHighest.withValues(
-                    alpha: 0.65,
-                  )
-                : theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(
-              color: theme.colorScheme.outlineVariant.withValues(
-                alpha: isDark ? 0 : 0.4,
-              ),
-              width: 1,
-            ),
+            borderRadius: BorderRadius.circular(barRadius),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: isDark ? 1 : 0.08),
@@ -85,31 +74,52 @@ class AppFloatingDockNavBar extends StatelessWidget {
               ),
             ],
           ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final itemWidth = constraints.maxWidth / navItems.length;
-              return Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  AnimatedPositioned(
-                    duration: const Duration(milliseconds: 380),
-                    curve: Curves.easeOutCubic,
-                    left: itemWidth * currentIndex,
-                    top: 0,
-                    bottom: 0,
-                    width: itemWidth,
-                    child: _GlassPill(key: ValueKey(currentIndex)),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(barRadius),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? theme.colorScheme.surfaceContainerHighest.withValues(
+                        alpha: 0.65,
+                      )
+                    : theme.colorScheme.surface,
+                border: Border.all(
+                  color: theme.colorScheme.outlineVariant.withValues(
+                    alpha: isDark ? 0 : 0.4,
                   ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  width: 1,
+                ),
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final itemWidth = constraints.maxWidth / navItems.length;
+                  return Stack(
+                    clipBehavior: Clip.none,
                     children: [
-                      for (int i = 0; i < navItems.length; i++)
-                        Expanded(child: _buildNavItem(context, i, navItems[i])),
+                      AnimatedPositioned(
+                        duration: const Duration(milliseconds: 380),
+                        curve: Curves.easeOutCubic,
+                        left: itemWidth * currentIndex,
+                        top: 0,
+                        bottom: 0,
+                        width: itemWidth,
+                        child: _GlassPill(key: ValueKey(currentIndex)),
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          for (int i = 0; i < navItems.length; i++)
+                            Expanded(
+                              child: _buildNavItem(context, i, navItems[i]),
+                            ),
+                        ],
+                      ),
                     ],
-                  ),
-                ],
-              );
-            },
+                  );
+                },
+              ),
+            ),
           ),
         ),
       ),

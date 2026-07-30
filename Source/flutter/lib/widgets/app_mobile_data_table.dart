@@ -51,6 +51,7 @@ class AppMobileDataTable<T> extends StatefulWidget {
   final Widget? filterBar;
   final int activeFilterCount;
   final VoidCallback? onFilterToggle;
+  final VoidCallback? onApplyFilter;
 
   const AppMobileDataTable({
     super.key,
@@ -75,6 +76,7 @@ class AppMobileDataTable<T> extends StatefulWidget {
     this.filterBar,
     this.activeFilterCount = 0,
     this.onFilterToggle,
+    this.onApplyFilter,
   });
 
   @override
@@ -85,7 +87,6 @@ class _AppMobileDataTableState<T> extends State<AppMobileDataTable<T>> {
   final Set<Object> _selectedIds = {};
   late TextEditingController _searchController;
   late String _lastSubmittedSearch;
-  bool _isFilterExpanded = false;
   late ScrollController _scrollController;
   bool _isFetchingMore = false;
 
@@ -194,6 +195,94 @@ class _AppMobileDataTableState<T> extends State<AppMobileDataTable<T>> {
     return widget.items
         .where((item) => _selectedIds.contains(widget.getItemId(item)))
         .toList();
+  }
+
+  void _showFilterModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 12),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Bộ lọc',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: widget.filterBar!,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(context);
+                          },
+                          child: const Text('Đóng'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(context);
+                            if (widget.onApplyFilter != null) {
+                              widget.onApplyFilter!();
+                            } else if (widget.onRefresh != null) {
+                              widget.onRefresh!();
+                            }
+                          },
+                          child: const Text('Áp dụng'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -522,8 +611,7 @@ class _AppMobileDataTableState<T> extends State<AppMobileDataTable<T>> {
                                       borderRadius: BorderRadius.circular(14),
                                     ),
                                     backgroundColor:
-                                        (_isFilterExpanded ||
-                                            widget.activeFilterCount > 0)
+                                        (widget.activeFilterCount > 0)
                                         ? theme.colorScheme.primary.withValues(
                                             alpha: 0.15,
                                           )
@@ -534,19 +622,15 @@ class _AppMobileDataTableState<T> extends State<AppMobileDataTable<T>> {
                                   ),
                                   icon: Icon(
                                     Icons.filter_list_rounded,
-                                    color:
-                                        (_isFilterExpanded ||
-                                            widget.activeFilterCount > 0)
+                                    color: (widget.activeFilterCount > 0)
                                         ? theme.colorScheme.primary
                                         : theme.colorScheme.onSurface,
                                   ),
                                   onPressed: () {
                                     if (widget.onFilterToggle != null) {
                                       widget.onFilterToggle!();
-                                    } else {
-                                      setState(() {
-                                        _isFilterExpanded = !_isFilterExpanded;
-                                      });
+                                    } else if (widget.filterBar != null) {
+                                      _showFilterModal();
                                     }
                                   },
                                 ),
@@ -580,27 +664,6 @@ class _AppMobileDataTableState<T> extends State<AppMobileDataTable<T>> {
                           ],
                         ],
                       ),
-
-                    // --- FILTER BAR EXPANDABLE SLOT ---
-                    if (widget.filterBar != null &&
-                        _isFilterExpanded &&
-                        !widget.isLoading) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceContainerHighest
-                              .withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: theme.colorScheme.outlineVariant.withValues(
-                              alpha: 0.4,
-                            ),
-                          ),
-                        ),
-                        child: widget.filterBar!,
-                      ),
-                    ],
 
                     // --- BULK ACTION & SELECT ALL BAR ---
                     if (widget.isLoading) ...[

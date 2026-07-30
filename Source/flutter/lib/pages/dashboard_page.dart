@@ -298,6 +298,7 @@ class _DashboardPageState extends State<DashboardPage> {
     ];
 
     return Scaffold(
+      extendBody: true,
       backgroundColor: theme.colorScheme.surface,
       endDrawer: AppProfileSidebar(user: user, onLogout: _handleLogout),
       appBar: AppBar(
@@ -348,11 +349,9 @@ class _DashboardPageState extends State<DashboardPage> {
           const SizedBox(width: 8),
         ],
       ),
-      body: SafeArea(
-        child: IndexedStack(
-          index: _currentNavIndex < pages.length ? _currentNavIndex : 0,
-          children: pages,
-        ),
+      body: IndexedStack(
+        index: _currentNavIndex < pages.length ? _currentNavIndex : 0,
+        children: pages,
       ),
       bottomNavigationBar: AppFloatingDockNavBar(
         currentIndex: _currentNavIndex,

@@ -50,7 +50,7 @@ namespace ContractManagement.API.Domains.DTOs.Responses.Contract
         public ContractLanguageMode LanguageMode { get; set; }
 
         /// <summary>
-        /// Nhân viên tạo cũng là người phụ trách ban đầu.
+        /// ID nhân viên phụ trách Contract ngay sau khi tạo.
         /// </summary>
         public int EmployeeId { get; set; }
 

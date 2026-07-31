@@ -21,6 +21,7 @@ namespace ContractManagement.Domains.Services.Contract
     public class ContractService : IContractService
     {
         private const decimal MaxMoney = 9999999999999999.99m;
+        private const byte ActiveEmployeeStatus = 1;
 
         private readonly DbDtctechContext _dbContext;
 
@@ -340,6 +341,14 @@ namespace ContractManagement.Domains.Services.Contract
                 try
                 {
                     await ValidateEmployeeAsync(createdEmployeeId);
+
+                    var responsibleEmployeeId =
+                        request.ResponsibleEmployeeId
+                        ?? createdEmployeeId;
+
+                    await ValidateResponsibleEmployeeAsync(
+                        responsibleEmployeeId);
+
                     await ValidateCustomerAsync(request.CustomerId);
                     await ValidateTemplateAsync(request);
                     await ValidateParentContractAsync(
@@ -374,8 +383,7 @@ namespace ContractManagement.Domains.Services.Contract
                     {
                         CustomerId = request.CustomerId,
 
-                        // Người tạo mặc định là người phụ trách.
-                        EmployeeId = createdEmployeeId,
+                        EmployeeId = responsibleEmployeeId,
                         CreatedEmployeeId = createdEmployeeId,
 
                         ContractType = (byte)request.ContractType,
@@ -591,7 +599,7 @@ namespace ContractManagement.Domains.Services.Contract
                         CurrencyCode = contract.CurrencyCode,
                         LanguageMode = request.LanguageMode,
 
-                        EmployeeId = createdEmployeeId,
+                        EmployeeId = responsibleEmployeeId,
                         CreatedDate = contract.CreatedDate,
 
                         ItemCount = contractItems.Count,
@@ -1692,6 +1700,34 @@ namespace ContractManagement.Domains.Services.Contract
             {
                 throw new KeyNotFoundException(
                     "Không tìm thấy nhân viên tạo hợp đồng.");
+            }
+        }
+
+        private async Task ValidateResponsibleEmployeeAsync(
+            int employeeId)
+        {
+            var employee = await _dbContext.TblEmployees
+                .AsNoTracking()
+                .Where(x => x.EmployeeId == employeeId)
+                .Select(x => new
+                {
+                    x.EmployeeId,
+                    x.Status
+                })
+                .FirstOrDefaultAsync();
+
+            if (employee == null)
+            {
+                throw new KeyNotFoundException(
+                    "Không tìm thấy nhân viên phụ trách hợp đồng.");
+            }
+
+            // Convention hiện tại của EmployeeService:
+            // 1 = Active, 0 = Inactive.
+            if (employee.Status != ActiveEmployeeStatus)
+            {
+                throw new InvalidOperationException(
+                    "Nhân viên phụ trách đang inactive.");
             }
         }
 

@@ -113,7 +113,11 @@ namespace ContractManagement.Domains.Controllers.Contract
         /// - Snapshot Product/Service.
         /// - Snapshot điều khoản từ template.
         /// - Tính tổng tiền.
-        /// - Gán người tạo làm người phụ trách ban đầu.
+        /// - Nếu không truyền ResponsibleEmployeeId,
+        ///   gán người tạo làm người phụ trách.
+        /// - Nếu truyền ResponsibleEmployeeId hợp lệ,
+        ///   gán employee đó làm người phụ trách.
+        /// - CreatedEmployeeId vẫn lưu actor tạo Contract.
         /// </remarks>
         /// <response code="201">
         /// Tạo hợp đồng nháp thành công.

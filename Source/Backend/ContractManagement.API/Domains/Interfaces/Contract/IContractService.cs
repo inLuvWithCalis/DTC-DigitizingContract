@@ -33,6 +33,12 @@ namespace ContractManagement.Domains.Interfaces.Contract
             CreateContractRequest request,
             int createdEmployeeId);
 
+        Task<TransferContractResponsibilityResponse>
+            TransferResponsibilityAsync(
+                int contractId,
+                TransferContractResponsibilityRequest request,
+                int actorEmployeeId);
+
         /// <summary>
         /// Lấy hợp đồng cùng version hiện hành, items và terms.
         /// Chỉ nhân viên đang phụ trách hợp đồng mới được xem.

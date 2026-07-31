@@ -9,11 +9,14 @@ public static class ContractAuditActionTypes
 {
     public const string ContractCreated = "ContractCreated";
     public const string ResponsibleAssigned = "ResponsibleAssigned";
+    public const string ResponsibilityTransferred =
+        "ResponsibilityTransferred";
 }
 
 public static class ContractAuditResults
 {
     public const string Succeeded = "Succeeded";
+    public const string ConcurrencyConflict = "ConcurrencyConflict";
 }
 
 /// <summary>

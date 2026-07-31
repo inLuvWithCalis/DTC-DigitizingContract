@@ -678,6 +678,287 @@ namespace ContractManagement.Domains.Services.Contract
             });
         }
 
+        /// <summary>
+        /// Chuyển giao người phụ trách hiện tại của Contract.
+        /// </summary>
+        public async Task<TransferContractResponsibilityResponse>
+            TransferResponsibilityAsync(
+                int contractId,
+                TransferContractResponsibilityRequest request,
+                int actorEmployeeId)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+
+            if (contractId <= 0)
+            {
+                throw new ArgumentException(
+                    "ContractId phải lớn hơn 0.");
+            }
+
+            if (actorEmployeeId <= 0)
+            {
+                throw new UnauthorizedAccessException(
+                    "Không xác định được nhân viên đăng nhập.");
+            }
+
+            if (request.NewResponsibleEmployeeId <= 0)
+            {
+                throw new ArgumentException(
+                    "NewResponsibleEmployeeId phải lớn hơn 0.");
+            }
+
+            var reason = request.Reason?.Trim();
+
+            if (string.IsNullOrWhiteSpace(reason))
+            {
+                throw new ArgumentException(
+                    "Lý do chuyển giao không được để trống.");
+            }
+
+            if (reason.Length > 1000)
+            {
+                throw new ArgumentException(
+                    "Lý do chuyển giao không được vượt quá 1000 ký tự.");
+            }
+
+            var expectedRowVersion = DecodeRowVersion(
+                request.RowVersion,
+                nameof(request.RowVersion));
+
+            var occurredAt = DateTime.UtcNow;
+            var strategy =
+                _dbContext.Database.CreateExecutionStrategy();
+
+            try
+            {
+                return await strategy.ExecuteAsync(async () =>
+                {
+                    await using var transaction =
+                        await _dbContext.Database
+                            .BeginTransactionAsync();
+
+                    try
+                    {
+                        var actor = await _dbContext.TblEmployees
+                            .AsNoTracking()
+                            .Where(x =>
+                                x.EmployeeId == actorEmployeeId)
+                            .Select(x => new
+                            {
+                                x.EmployeeId,
+                                x.EmployeeType
+                            })
+                            .FirstOrDefaultAsync();
+
+                        if (actor == null)
+                        {
+                            throw new UnauthorizedAccessException(
+                                "Không xác định được nhân viên đăng nhập.");
+                        }
+
+                        var contract =
+                            await _dbContext.TblContracts
+                                .FirstOrDefaultAsync(x =>
+                                    x.ContractId == contractId);
+
+                        if (contract == null)
+                        {
+                            throw new KeyNotFoundException(
+                                "Không tìm thấy hợp đồng.");
+                        }
+
+                        var canTransfer =
+                            contract.EmployeeId == actorEmployeeId
+                            || actor.EmployeeType ==
+                                (byte)EmployeeType.Manager
+                            || actor.EmployeeType ==
+                                (byte)EmployeeType.AdminOfficer;
+
+                        if (!canTransfer)
+                        {
+                            throw new UnauthorizedAccessException(
+                                "Bạn không có quyền chuyển giao " +
+                                "người phụ trách hợp đồng.");
+                        }
+
+                        /*
+                         * Chỉ actor đang có quyền mới được nhận thông tin
+                         * concurrency của Contract.
+                         */
+                        EnsureRowVersionMatches(
+                            contract.RowVersion,
+                            expectedRowVersion,
+                            "Hợp đồng");
+
+                        await ValidateResponsibleEmployeeAsync(
+                            request.NewResponsibleEmployeeId);
+
+                        if (contract.EmployeeId ==
+                            request.NewResponsibleEmployeeId)
+                        {
+                            throw new InvalidOperationException(
+                                "Nhân viên được chọn đang là " +
+                                "người phụ trách hợp đồng.");
+                        }
+
+                        var previousResponsibleEmployeeId =
+                            contract.EmployeeId;
+
+                        _dbContext.Entry(contract)
+                            .Property(x => x.RowVersion)
+                            .OriginalValue = expectedRowVersion;
+
+                        contract.EmployeeId =
+                            request.NewResponsibleEmployeeId;
+                        contract.UpdatedEmployeeId = actorEmployeeId;
+                        contract.UpdateDate = occurredAt;
+
+                        _contractAuditWriter.StageEmployeeAudits(
+                        [
+                            new EmployeeContractAuditWriteRequest(
+                                contract.ContractId,
+                                contract.CurrentVersionId,
+                                actorEmployeeId,
+                                ContractAuditActionTypes
+                                    .ResponsibilityTransferred,
+                                ContractAuditResults.Succeeded,
+                                occurredAt,
+                                PreviousResponsibleEmployeeId:
+                                    previousResponsibleEmployeeId,
+                                NewResponsibleEmployeeId:
+                                    request.NewResponsibleEmployeeId,
+                                Reason: reason)
+                        ]);
+
+                        await _dbContext.SaveChangesAsync();
+                        await transaction.CommitAsync();
+
+                        return
+                            new TransferContractResponsibilityResponse
+                            {
+                                ContractId = contract.ContractId,
+                                PreviousResponsibleEmployeeId =
+                                    previousResponsibleEmployeeId,
+                                ResponsibleEmployeeId =
+                                    contract.EmployeeId,
+                                TransferredByEmployeeId =
+                                    actorEmployeeId,
+                                TransferredAt = occurredAt,
+                                RowVersion =
+                                    EncodeRowVersion(
+                                        contract.RowVersion)
+                            };
+                    }
+                    catch (Exception exception)
+                    {
+                        try
+                        {
+                            await transaction.RollbackAsync();
+                        }
+                        catch
+                        {
+                            // Giữ exception gốc của operation.
+                        }
+
+                        try
+                        {
+                            _dbContext.ChangeTracker.Clear();
+                        }
+                        catch
+                        {
+                            // Giữ exception gốc của operation.
+                        }
+
+                        System.Runtime.ExceptionServices
+                            .ExceptionDispatchInfo
+                            .Capture(exception)
+                            .Throw();
+
+                        throw;
+                    }
+                });
+            }
+            catch (DbUpdateConcurrencyException exception)
+            {
+                /*
+                 * Success transaction đã rollback và tracker đã sạch.
+                 * Failed audit được persist bằng transaction riêng.
+                 */
+                await PersistResponsibilityTransferConflictAuditAsync(
+                    contractId,
+                    actorEmployeeId,
+                    occurredAt);
+
+                throw new DbUpdateConcurrencyException(
+                    "Hợp đồng đã được cập nhật. " +
+                    "Vui lòng tải lại dữ liệu trước khi chuyển giao.",
+                    exception);
+            }
+        }
+
+        private async Task
+            PersistResponsibilityTransferConflictAuditAsync(
+                int contractId,
+                int actorEmployeeId,
+                DateTime occurredAt)
+        {
+            var strategy =
+                _dbContext.Database.CreateExecutionStrategy();
+
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction =
+                    await _dbContext.Database
+                        .BeginTransactionAsync();
+
+                try
+                {
+                    _contractAuditWriter.StageEmployeeAudits(
+                    [
+                        new EmployeeContractAuditWriteRequest(
+                            contractId,
+                            VersionId: null,
+                            actorEmployeeId,
+                            ContractAuditActionTypes
+                                .ResponsibilityTransferred,
+                            ContractAuditResults
+                                .ConcurrencyConflict,
+                            occurredAt)
+                    ]);
+
+                    await _dbContext.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                }
+                catch (Exception exception)
+                {
+                    try
+                    {
+                        await transaction.RollbackAsync();
+                    }
+                    catch
+                    {
+                        // Giữ exception của failed-audit operation.
+                    }
+
+                    try
+                    {
+                        _dbContext.ChangeTracker.Clear();
+                    }
+                    catch
+                    {
+                        // Giữ exception của failed-audit operation.
+                    }
+
+                    System.Runtime.ExceptionServices
+                        .ExceptionDispatchInfo
+                        .Capture(exception)
+                        .Throw();
+
+                    throw;
+                }
+            });
+        }
+
 
         /// <summary>
         /// Lấy chi tiết hợp đồng tại version hiện hành.

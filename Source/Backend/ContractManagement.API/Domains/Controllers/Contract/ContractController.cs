@@ -167,6 +167,59 @@ namespace ContractManagement.Domains.Controllers.Contract
                     "Tạo hợp đồng nháp thành công."));
         }
 
+        /// <summary>
+        /// Chuyển giao người phụ trách hiện tại của Contract.
+        /// </summary>
+        [HttpPost(
+            "{contractId:int}/transfer-responsibility")]
+        [Consumes("application/json")]
+        [Produces("application/json")]
+        [ProducesResponseType(
+            typeof(ApiResponse<
+                TransferContractResponsibilityResponse>),
+            StatusCodes.Status200OK)]
+        [ProducesResponseType(
+            typeof(ValidationProblemDetails),
+            StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> TransferResponsibility(
+            int contractId,
+            [FromBody] TransferContractResponsibilityRequest request)
+        {
+            var employeeId =
+                HttpContext.Session.GetInt32("EmployeeId");
+
+            if (employeeId is null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Bạn chưa đăng nhập hoặc session đã hết hạn.");
+            }
+
+            try
+            {
+                var result =
+                    await _contractService.TransferResponsibilityAsync(
+                        contractId,
+                        request,
+                        employeeId.Value);
+
+                return Ok(
+                    ApiResponse<
+                        TransferContractResponsibilityResponse>.Ok(
+                            result,
+                            "Chuyển giao người phụ trách thành công."));
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    ApiResponse<object>.Fail(exception.Message));
+            }
+        }
+
 
         /// <summary>
         /// Lấy chi tiết hợp đồng cùng version hiện hành,

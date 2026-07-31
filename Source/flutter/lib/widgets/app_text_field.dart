@@ -18,6 +18,7 @@ class AppTextField extends StatelessWidget {
   final EdgeInsetsGeometry? contentPadding;
   final bool? isDense;
   final bool readOnly;
+  final Iterable<String>? autofillHints;
 
   const AppTextField({
     super.key,
@@ -38,6 +39,7 @@ class AppTextField extends StatelessWidget {
     this.contentPadding,
     this.isDense,
     this.readOnly = false,
+    this.autofillHints,
   });
 
   @override
@@ -57,6 +59,7 @@ class AppTextField extends StatelessWidget {
       onTap: onTap,
       autocorrect: autocorrect,
       enableSuggestions: enableSuggestions,
+      autofillHints: autofillHints,
       decoration: InputDecoration(
         isDense: isDense,
         hintText: placeholder,

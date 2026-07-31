@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../main.dart';
 import '../../models/auth_dto.dart';
+import '../../utils/theme_store.dart';
 
 /// Right-to-Left Sidebar (EndDrawer) hiển thị Avatar, Tên người dùng,
 /// Tùy chọn chuyển đổi Dark/Light Mode và Đăng xuất.
@@ -190,6 +191,7 @@ class AppProfileSidebar extends StatelessWidget {
                             themeModeNotifier.value = value
                                 ? ThemeMode.dark
                                 : ThemeMode.light;
+                            ThemeStore.saveThemeMode(value);
                           },
                         ),
                       );

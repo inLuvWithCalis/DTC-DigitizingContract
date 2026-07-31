@@ -1,11 +1,17 @@
 using ContractManagement.API.Common.Enums;
 using ContractManagement.API.Domains.DTOs.Requests.Contract;
 using ContractManagement.Common.Enums;
+using ContractManagement.Domains.Interfaces.Contract;
 using ContractManagement.Domains.Services.Contract;
+using ContractManagement.Infrastructure.MultiTenancy.Enums;
+using ContractManagement.Infrastructure.MultiTenancy.Models;
+using ContractManagement.Infrastructure.MultiTenancy.Services;
 using ContractManagement.Infrastructure.Persistence.Application;
 using ContractManagement.Infrastructure.Persistence.Application.Models;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using System.Net;
 using System.ComponentModel.DataAnnotations;
 
 namespace ContractManagement.Tests.Domains.Services.Contract;
@@ -17,6 +23,8 @@ public class ContractServiceResponsibilityTests
     private const int CustomerId = 301;
     private const int TemplateId = 401;
     private const int TemplateVersionId = 402;
+    private const int TenantId = 601;
+    private const string CorrelationId = "slice-02-test-correlation";
 
     [Fact]
     public async Task CreateAsync_ShouldDefaultResponsibilityToCreator()
@@ -24,16 +32,33 @@ public class ContractServiceResponsibilityTests
         await using var context = CreateContext();
         await SeedCreateDependenciesAsync(context);
 
-        var service = new ContractService(context);
+        var service = CreateService(context);
         var response = await service.CreateAsync(
             CreateRequest(),
             CreatorEmployeeId);
 
         var contract = await context.TblContracts.SingleAsync();
+        var audits = await context.TblContractAudits
+            .OrderBy(audit => audit.ContractAuditId)
+            .ToListAsync();
 
         Assert.Equal(CreatorEmployeeId, response.EmployeeId);
         Assert.Equal(CreatorEmployeeId, contract.EmployeeId);
         Assert.Equal(CreatorEmployeeId, contract.CreatedEmployeeId);
+        Assert.Collection(
+            audits,
+            audit => AssertCreateAudit(
+                audit,
+                ContractAuditActionTypes.ContractCreated,
+                contract,
+                CreatorEmployeeId),
+            audit => AssertCreateAudit(
+                audit,
+                ContractAuditActionTypes.ResponsibleAssigned,
+                contract,
+                CreatorEmployeeId));
+        Assert.Null(audits[1].PreviousResponsibleEmployeeId);
+        Assert.Null(audits[1].Reason);
     }
 
     [Fact]
@@ -47,16 +72,44 @@ public class ContractServiceResponsibilityTests
             status: 1,
             EmployeeType.Technical);
 
-        var service = new ContractService(context);
+        var service = CreateService(context);
         var response = await service.CreateAsync(
             CreateRequest(ResponsibleEmployeeId),
             CreatorEmployeeId);
 
         var contract = await context.TblContracts.SingleAsync();
+        var audits = await context.TblContractAudits
+            .OrderBy(audit => audit.ContractAuditId)
+            .ToListAsync();
 
         Assert.Equal(ResponsibleEmployeeId, response.EmployeeId);
         Assert.Equal(ResponsibleEmployeeId, contract.EmployeeId);
         Assert.Equal(CreatorEmployeeId, contract.CreatedEmployeeId);
+        Assert.Collection(
+            audits,
+            audit => AssertCreateAudit(
+                audit,
+                ContractAuditActionTypes.ContractCreated,
+                contract,
+                ResponsibleEmployeeId),
+            audit => AssertCreateAudit(
+                audit,
+                ContractAuditActionTypes.ResponsibleAssigned,
+                contract,
+                ResponsibleEmployeeId));
+        Assert.All(
+            audits,
+            audit => Assert.Equal(
+                CreatorEmployeeId,
+                audit.ActorEmployeeId));
+        Assert.Null(audits[1].PreviousResponsibleEmployeeId);
+        Assert.Null(audits[1].Reason);
+        Assert.Equal(
+            audits[0].CorrelationId,
+            audits[1].CorrelationId);
+        Assert.Equal(
+            audits[0].OccurredAt,
+            audits[1].OccurredAt);
     }
 
     [Fact]
@@ -65,7 +118,7 @@ public class ContractServiceResponsibilityTests
         await using var context = CreateContext();
         await SeedCreateDependenciesAsync(context);
 
-        var service = new ContractService(context);
+        var service = CreateService(context);
 
         await Assert.ThrowsAsync<KeyNotFoundException>(
             () => service.CreateAsync(
@@ -73,6 +126,7 @@ public class ContractServiceResponsibilityTests
                 CreatorEmployeeId));
 
         Assert.Empty(context.TblContracts);
+        Assert.Empty(context.TblContractAudits);
     }
 
     [Fact]
@@ -86,7 +140,7 @@ public class ContractServiceResponsibilityTests
             status: 0,
             EmployeeType.Marketing);
 
-        var service = new ContractService(context);
+        var service = CreateService(context);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => service.CreateAsync(
@@ -94,6 +148,7 @@ public class ContractServiceResponsibilityTests
                 CreatorEmployeeId));
 
         Assert.Empty(context.TblContracts);
+        Assert.Empty(context.TblContractAudits);
     }
 
     [Theory]
@@ -114,7 +169,7 @@ public class ContractServiceResponsibilityTests
             status: 1,
             employeeType);
 
-        var service = new ContractService(context);
+        var service = CreateService(context);
         var response = await service.CreateAsync(
             CreateRequest(ResponsibleEmployeeId),
             CreatorEmployeeId);
@@ -135,7 +190,7 @@ public class ContractServiceResponsibilityTests
             status: 1,
             EmployeeType.Manager);
 
-        var service = new ContractService(currentTenantContext);
+        var service = CreateService(currentTenantContext);
 
         await Assert.ThrowsAsync<KeyNotFoundException>(
             () => service.CreateAsync(
@@ -143,6 +198,171 @@ public class ContractServiceResponsibilityTests
                 CreatorEmployeeId));
 
         Assert.Empty(currentTenantContext.TblContracts);
+        Assert.Empty(currentTenantContext.TblContractAudits);
+    }
+
+    [Fact]
+    public async Task ContractAudit_ShouldKeepTenantDatabasesIsolated()
+    {
+        await using var firstContext = CreateContext();
+        await SeedCreateDependenciesAsync(firstContext);
+
+        await using var secondContext = CreateContext();
+        await SeedCreateDependenciesAsync(secondContext);
+
+        await CreateService(firstContext, tenantId: 701)
+            .CreateAsync(CreateRequest(), CreatorEmployeeId);
+        await CreateService(secondContext, tenantId: 702)
+            .CreateAsync(CreateRequest(), CreatorEmployeeId);
+
+        var firstAudits =
+            await firstContext.TblContractAudits.ToListAsync();
+        var secondAudits =
+            await secondContext.TblContractAudits.ToListAsync();
+
+        Assert.Equal(2, firstAudits.Count);
+        Assert.Equal(2, secondAudits.Count);
+        Assert.All(
+            firstAudits,
+            audit => Assert.Equal(701, audit.TenantId));
+        Assert.All(
+            secondAudits,
+            audit => Assert.Equal(702, audit.TenantId));
+    }
+
+    [Fact]
+    public async Task CreateAsync_ShouldClearFailedAttemptBeforeNextAttempt()
+    {
+        await using var context = CreateContext();
+        await SeedCreateDependenciesAsync(context);
+
+        var service = CreateService(
+            context,
+            auditWriterDecorator:
+                writer => new ThrowOnceAfterStagingAuditWriter(writer));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.CreateAsync(
+                CreateRequest(),
+                CreatorEmployeeId));
+
+        Assert.Empty(context.ChangeTracker.Entries());
+
+        /*
+         * EF Core InMemory bỏ qua transaction. Xóa các identity rows đã được
+         * lưu trước lỗi để mô phỏng database rollback trước attempt kế tiếp.
+         * Test này chứng minh cleanup của ChangeTracker, không phải SQL retry.
+         */
+        context.TblContractVersions.RemoveRange(
+            await context.TblContractVersions.ToListAsync());
+        context.TblContracts.RemoveRange(
+            await context.TblContracts.ToListAsync());
+        await context.SaveChangesAsync();
+
+        await service.CreateAsync(
+            CreateRequest(),
+            CreatorEmployeeId);
+
+        var contract = await context.TblContracts.SingleAsync();
+        var version = await context.TblContractVersions.SingleAsync();
+        var audits = await context.TblContractAudits.ToListAsync();
+
+        Assert.Equal(contract.ContractId, version.ContractId);
+        Assert.Equal(2, audits.Count);
+        Assert.All(
+            audits,
+            audit =>
+            {
+                Assert.Equal(contract.ContractId, audit.ContractId);
+                Assert.Equal(version.VersionId, audit.VersionId);
+            });
+        Assert.Contains(
+            audits,
+            audit =>
+                audit.ActionType ==
+                ContractAuditActionTypes.ContractCreated);
+        Assert.Contains(
+            audits,
+            audit =>
+                audit.ActionType ==
+                ContractAuditActionTypes.ResponsibleAssigned);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task EmployeeAudit_ShouldRequirePositiveActorEmployeeId(
+        int? actorEmployeeId)
+    {
+        await using var context = CreateContext();
+        context.TblContractAudits.Add(
+            CreateAudit(
+                actorType: ContractAuditActorTypes.Employee,
+                actorEmployeeId));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => context.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task NonEmployeeAudit_ShouldRejectActorEmployeeId()
+    {
+        await using var context = CreateContext();
+        context.TblContractAudits.Add(
+            CreateAudit(
+                actorType: "Customer",
+                actorEmployeeId: CreatorEmployeeId));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => context.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task NonEmployeeAudit_ShouldAllowNullActorEmployeeId()
+    {
+        await using var context = CreateContext();
+        context.TblContractAudits.Add(
+            CreateAudit(
+                actorType: "Customer",
+                actorEmployeeId: null));
+
+        await context.SaveChangesAsync();
+
+        var audit = await context.TblContractAudits.SingleAsync();
+        Assert.Null(audit.ActorEmployeeId);
+    }
+
+    [Fact]
+    public async Task ContractAudit_ShouldRejectModification()
+    {
+        await using var context = CreateContext();
+        var audit = CreateAudit(
+            ContractAuditActorTypes.Employee,
+            CreatorEmployeeId);
+        context.TblContractAudits.Add(audit);
+        await context.SaveChangesAsync();
+
+        audit.Result = "Changed";
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => context.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task ContractAudit_ShouldRejectDeletion()
+    {
+        await using var context = CreateContext();
+        var audit = CreateAudit(
+            ContractAuditActorTypes.Employee,
+            CreatorEmployeeId);
+        context.TblContractAudits.Add(audit);
+        await context.SaveChangesAsync();
+
+        context.TblContractAudits.Remove(audit);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => context.SaveChangesAsync());
     }
 
     [Theory]
@@ -181,6 +401,115 @@ public class ContractServiceResponsibilityTests
                 .Options;
 
         return new DbDtctechContext(options);
+    }
+
+    private static ContractService CreateService(
+        DbDtctechContext context,
+        int tenantId = TenantId,
+        Func<IContractAuditWriter, IContractAuditWriter>?
+            auditWriterDecorator = null)
+    {
+        var currentTenant = new CurrentTenant();
+        currentTenant.Set(new ResolvedTenant(
+            tenantId,
+            $"TENANT-{tenantId}",
+            $"Tenant {tenantId}",
+            TenantDatabaseMode.Dedicated,
+            "InMemory"));
+
+        var httpContext = new DefaultHttpContext
+        {
+            TraceIdentifier = CorrelationId
+        };
+        httpContext.Connection.RemoteIpAddress =
+            IPAddress.Parse("127.0.0.1");
+        httpContext.Request.Headers.UserAgent =
+            "ContractManagement.Tests";
+
+        IContractAuditWriter auditWriter = new ContractAuditWriter(
+            context,
+            currentTenant,
+            new HttpContextAccessor
+            {
+                HttpContext = httpContext
+            });
+
+        if (auditWriterDecorator != null)
+        {
+            auditWriter = auditWriterDecorator(auditWriter);
+        }
+
+        return new ContractService(context, auditWriter);
+    }
+
+    private sealed class ThrowOnceAfterStagingAuditWriter(
+        IContractAuditWriter inner) : IContractAuditWriter
+    {
+        private bool _shouldThrow = true;
+
+        public void StageEmployeeAudits(
+            IReadOnlyCollection<EmployeeContractAuditWriteRequest> requests)
+        {
+            inner.StageEmployeeAudits(requests);
+
+            if (!_shouldThrow)
+            {
+                return;
+            }
+
+            _shouldThrow = false;
+
+            throw new InvalidOperationException(
+                "Simulated failure after audit staging.");
+        }
+    }
+
+    private static void AssertCreateAudit(
+        TblContractAudit audit,
+        string expectedAction,
+        TblContract contract,
+        int expectedResponsibleEmployeeId)
+    {
+        Assert.Equal(TenantId, audit.TenantId);
+        Assert.Equal(contract.ContractId, audit.ContractId);
+        Assert.Equal(contract.CurrentVersionId, audit.VersionId);
+        Assert.Equal(
+            ContractAuditActorTypes.Employee,
+            audit.ActorType);
+        Assert.Equal(CreatorEmployeeId, audit.ActorEmployeeId);
+        Assert.Equal(expectedAction, audit.ActionType);
+        Assert.Equal(ContractAuditResults.Succeeded, audit.Result);
+        Assert.Null(audit.PreviousContractStatus);
+        Assert.Equal(contract.Status, audit.NewContractStatus);
+        Assert.Equal(
+            expectedResponsibleEmployeeId,
+            audit.NewResponsibleEmployeeId);
+        Assert.Equal(contract.CreatedDate, audit.OccurredAt);
+        Assert.Equal(CorrelationId, audit.CorrelationId);
+        Assert.Equal("127.0.0.1", audit.IpAddress);
+        Assert.Equal(
+            "ContractManagement.Tests",
+            audit.UserAgent);
+    }
+
+    private static TblContractAudit CreateAudit(
+        string actorType,
+        int? actorEmployeeId)
+    {
+        return new TblContractAudit
+        {
+            TenantId = TenantId,
+            ContractId = 1,
+            VersionId = 1,
+            ActorType = actorType,
+            ActorEmployeeId = actorEmployeeId,
+            ActionType = ContractAuditActionTypes.ContractCreated,
+            Result = ContractAuditResults.Succeeded,
+            NewContractStatus = (byte)ContractStatus.Draft,
+            NewResponsibleEmployeeId = CreatorEmployeeId,
+            OccurredAt = DateTime.UtcNow,
+            CorrelationId = CorrelationId
+        };
     }
 
     private static async Task SeedCreateDependenciesAsync(

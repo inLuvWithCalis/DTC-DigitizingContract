@@ -24,10 +24,14 @@ namespace ContractManagement.Domains.Services.Contract
         private const byte ActiveEmployeeStatus = 1;
 
         private readonly DbDtctechContext _dbContext;
+        private readonly IContractAuditWriter _contractAuditWriter;
 
-        public ContractService(DbDtctechContext dbContext)
+        public ContractService(
+            DbDtctechContext dbContext,
+            IContractAuditWriter contractAuditWriter)
         {
             _dbContext = dbContext;
+            _contractAuditWriter = contractAuditWriter;
         }
 
         /// <summary>
@@ -573,6 +577,33 @@ namespace ContractManagement.Domains.Services.Contract
 
                     contract.TotalAmount = totalAmount;
 
+                    _contractAuditWriter.StageEmployeeAudits(
+                    [
+                        new EmployeeContractAuditWriteRequest(
+                            contract.ContractId,
+                            contractVersion.VersionId,
+                            createdEmployeeId,
+                            ContractAuditActionTypes.ContractCreated,
+                            ContractAuditResults.Succeeded,
+                            now,
+                            NewContractStatus: contract.Status,
+                            NewResponsibleEmployeeId:
+                                responsibleEmployeeId),
+
+                        new EmployeeContractAuditWriteRequest(
+                            contract.ContractId,
+                            contractVersion.VersionId,
+                            createdEmployeeId,
+                            ContractAuditActionTypes.ResponsibleAssigned,
+                            ContractAuditResults.Succeeded,
+                            now,
+                            NewContractStatus: contract.Status,
+                            PreviousResponsibleEmployeeId: null,
+                            NewResponsibleEmployeeId:
+                                responsibleEmployeeId,
+                            Reason: null)
+                    ]);
+
                     await _dbContext.SaveChangesAsync();
 
                     // Chỉ commit khi toàn bộ Contract, Version, Item và Term thành công.
@@ -612,10 +643,36 @@ namespace ContractManagement.Domains.Services.Contract
                             EncodeRowVersion(contractVersion.RowVersion)
                     };
                 }
-                catch
+                catch (Exception exception)
                 {
-                    // Không để lại dữ liệu dở dang nếu bất kỳ bước nào thất bại.
-                    await transaction.RollbackAsync();
+                    /*
+                     * Execution strategy có thể chạy lại delegate với cùng
+                     * DbContext. Rollback database không tự xóa tracked state,
+                     * nên phải dọn toàn bộ attempt thất bại trước khi retry.
+                     * Rollback/cleanup không được che mất exception gốc.
+                     */
+                    try
+                    {
+                        await transaction.RollbackAsync();
+                    }
+                    catch
+                    {
+                        // Giữ exception gốc của operation.
+                    }
+
+                    try
+                    {
+                        _dbContext.ChangeTracker.Clear();
+                    }
+                    catch
+                    {
+                        // Giữ exception gốc của operation.
+                    }
+
+                    System.Runtime.ExceptionServices.ExceptionDispatchInfo
+                        .Capture(exception)
+                        .Throw();
+
                     throw;
                 }
             });

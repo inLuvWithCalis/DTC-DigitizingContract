@@ -26,6 +26,8 @@ public partial class DbDtctechContext : DbContext
 
     public virtual DbSet<TblContract> TblContracts { get; set; }
 
+    public virtual DbSet<TblContractAudit> TblContractAudits { get; set; }
+
     public virtual DbSet<TblContractAppendix> TblContractAppendices { get; set; }
 
     public virtual DbSet<TblContractAttachment> TblContractAttachments { get; set; }
@@ -318,6 +320,101 @@ public partial class DbDtctechContext : DbContext
             entity.Property(e => e.RowVersion)
                 .IsRowVersion()
                 .IsConcurrencyToken();
+        });
+
+        modelBuilder.Entity<TblContractAudit>(entity =>
+        {
+            entity.HasKey(e => e.ContractAuditId)
+                .HasName("PK_tbl_ContractAudit");
+
+            entity.ToTable("tbl_ContractAudit", table =>
+            {
+                table.HasTrigger(
+                    "TR_tbl_ContractAudit_AppendOnly");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractAudit_TenantId",
+                    "[TenantId] > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractAudit_ContractId",
+                    "[ContractId] > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractAudit_VersionId",
+                    "[VersionId] IS NULL OR [VersionId] > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractAudit_ActorType",
+                    "LEN(LTRIM(RTRIM([ActorType]))) > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractAudit_Actor",
+                    "([ActorType] = 'Employee' " +
+                    "AND [ActorEmployeeId] > 0) OR " +
+                    "([ActorType] <> 'Employee' " +
+                    "AND [ActorEmployeeId] IS NULL)");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractAudit_ActionType",
+                    "LEN(LTRIM(RTRIM([ActionType]))) > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractAudit_Result",
+                    "LEN(LTRIM(RTRIM([Result]))) > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractAudit_PreviousResponsibleEmployeeId",
+                    "[PreviousResponsibleEmployeeId] IS NULL " +
+                    "OR [PreviousResponsibleEmployeeId] > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractAudit_NewResponsibleEmployeeId",
+                    "[NewResponsibleEmployeeId] IS NULL " +
+                    "OR [NewResponsibleEmployeeId] > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractAudit_CorrelationId",
+                    "LEN(LTRIM(RTRIM([CorrelationId]))) > 0");
+            });
+
+            entity.HasIndex(e => new
+                {
+                    e.TenantId,
+                    e.ContractId,
+                    e.OccurredAt
+                })
+                .HasDatabaseName(
+                    "IX_tbl_ContractAudit_TenantId_ContractId_OccurredAt");
+
+            entity.Property(e => e.ActorType)
+                .HasMaxLength(32)
+                .IsUnicode(false);
+
+            entity.Property(e => e.ActionType)
+                .HasMaxLength(64)
+                .IsUnicode(false);
+
+            entity.Property(e => e.Result)
+                .HasMaxLength(32)
+                .IsUnicode(false);
+
+            entity.Property(e => e.Reason)
+                .HasMaxLength(1000);
+
+            entity.Property(e => e.OccurredAt)
+                .HasColumnType("datetime2");
+
+            entity.Property(e => e.IpAddress)
+                .HasMaxLength(45)
+                .IsUnicode(false);
+
+            entity.Property(e => e.UserAgent)
+                .HasMaxLength(1024);
+
+            entity.Property(e => e.CorrelationId)
+                .HasMaxLength(100)
+                .IsUnicode(false);
         });
 
         modelBuilder.Entity<TblContractAppendix>(entity =>

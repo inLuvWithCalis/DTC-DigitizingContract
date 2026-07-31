@@ -34,6 +34,16 @@ import {
 import { productApi } from "@/services/catalog/products-api";
 import { serviceApi } from "@/services/catalog/services-api";
 
+import { customerApi, CustomerResponse } from "@/services/customers-api";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Clock } from "lucide-react";
+
 import {
   ContractDetailResponse,
   ContractStatus,
@@ -46,15 +56,28 @@ import { formatDate } from "@/lib/format-date";
 export function ContractOverview({
   contract,
   setContract,
+  onOpenTransferModal,
 }: {
   contract: ContractDetailResponse;
   setContract: React.Dispatch<
     React.SetStateAction<ContractDetailResponse | null>
   >;
+  onOpenTransferModal?: () => void;
 }) {
   const isEditable =
     contract.status === ContractStatus.Draft ||
     contract.status === ContractStatus.Negotiating;
+
+  const [customers, setCustomers] = useState<CustomerResponse[]>([]);
+
+  useEffect(() => {
+    if (isEditable) {
+      customerApi
+        .getList({ page: 1, pageSize: 100 })
+        .then((res) => setCustomers(res.items || []))
+        .catch((err) => console.error(err));
+    }
+  }, [isEditable]);
 
   const [catalogItems, setCatalogItems] = useState<any[]>([]);
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
@@ -257,16 +280,89 @@ export function ContractOverview({
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <InfoCard
-              icon={<Users className="size-4" />}
-              label="Khách hàng"
-              value={contract.customer?.customerFullName}
-            />
+            {isEditable ? (
+              <div className="rounded-xl border bg-muted/30 p-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                  <Users className="size-4" /> Khách hàng
+                </div>
+                <Select
+                  value={String(contract.customer?.customerId || "")}
+                  onValueChange={(val) => {
+                    const found = customers.find(
+                      (c) => c.customerId === Number(val),
+                    );
+                    if (found) {
+                      setContract((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              customer: {
+                                ...prev.customer,
+                                customerId: found.customerId,
+                                customerCode: found.customerCode,
+                                customerFullName: found.customerFullName,
+                                customerCompany: found.customerCompany,
+                              },
+                            }
+                          : prev,
+                      );
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-full h-9 bg-background">
+                    <SelectValue placeholder="Chọn khách hàng" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {customers.map((c) => (
+                      <SelectItem
+                        key={c.customerId}
+                        value={String(c.customerId)}
+                      >
+                        {c.customerCompany || c.customerFullName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <InfoCard
+                icon={<Users className="size-4" />}
+                label="Khách hàng"
+                value={
+                  contract.customer?.customerCompany ||
+                  contract.customer?.customerFullName
+                }
+              />
+            )}
+
+            <div className="rounded-xl border bg-muted/30 p-4 flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Clock className="size-4" /> Người phụ trách
+                </div>
+                {onOpenTransferModal && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs text-primary hover:bg-primary/10"
+                    onClick={onOpenTransferModal}
+                  >
+                    Chuyển giao
+                  </Button>
+                )}
+              </div>
+              <div className="mt-2 font-semibold text-foreground">
+                {contract.responsibleEmployee?.employeeFullName || "Chưa gán"}
+              </div>
+            </div>
+
             <InfoCard
               icon={<FileSignature className="size-4" />}
               label="Loại hợp đồng"
               value={getContractTypeLabel(contract.contractType)}
             />
+
+            {/* SỬA NGÀY THÁNG */}
 
             {/* SỬA NGÀY THÁNG */}
             <div className="rounded-xl border bg-muted/30 p-4">
@@ -297,16 +393,6 @@ export function ContractOverview({
                 </div>
               )}
             </div>
-
-            <InfoCard
-              icon={<WalletCards className="size-4" />}
-              label="Giá trị hợp đồng (Tạm tính)"
-              value={
-                <span className="text-primary">
-                  {formatCurrency(contract.totalAmount)}
-                </span>
-              }
-            />
           </div>
 
           <Separator />

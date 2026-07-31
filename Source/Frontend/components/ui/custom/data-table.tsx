@@ -145,6 +145,15 @@ export function DataTable<TData, TValue>({
     table.resetRowSelection();
   }, [table]);
 
+  const handleRowClick = (rowData: TData) => {
+    if (!onRowClick) return;
+    const selection = window.getSelection()?.toString();
+    if (selection && selection.trim().length > 0) {
+      return;
+    }
+    onRowClick(rowData);
+  };
+
   return (
     <div className="flex flex-col h-full w-full flex-1">
       {(!!filterSlot || !!searchKey) && (
@@ -454,7 +463,7 @@ export function DataTable<TData, TValue>({
                     key={row.id}
                     data-state={row.getIsSelected() && "selected"}
                     className="hover:bg-secondary/40 border-b-border transition-colors cursor-pointer"
-                    onClick={() => onRowClick && onRowClick(row.original)}
+                    onClick={() => handleRowClick(row.original)}
                   >
                     {row.getVisibleCells().map((cell) => (
                       <TableCell key={cell.id} className="py-3">

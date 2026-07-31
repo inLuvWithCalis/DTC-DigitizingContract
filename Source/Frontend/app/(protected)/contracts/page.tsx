@@ -1,15 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ColumnDef, Row } from "@tanstack/react-table";
+import { ColumnDef, PaginationState, Row } from "@tanstack/react-table";
 import {
   CalendarDays,
   CheckCircle2,
   Clock,
   Eye,
   FileSignature,
-  FileText,
   Link2,
   Plus,
   Users,
@@ -20,49 +19,35 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { DataTable } from "@/components/ui/custom/data-table";
+import { DataTable } from "@/components/ui/custom/data-table-server";
 import { SelectFilter } from "@/components/ui/custom/select-filter";
 import { SplitActionMenu } from "@/components/ui/custom/split-action-menu";
 import {
   SummaryCardItem,
   SummaryCards,
 } from "@/components/ui/custom/summary-cards";
-import { PageHeaderSkeleton } from "@/components/ui/custom/table-skeleton";
 import { formatCurrency } from "@/lib/format-currency";
 import {
-  CONTRACT_STATUS_LABELS,
-  CONTRACT_STATUS_OPTIONS,
-  CONTRACT_TYPE_LABELS,
-  ContractMock,
+  contractApi,
+  ContractFilterRequest,
+  ContractListItemResponse,
   ContractStatus,
-  mockContracts,
-} from "@/services/contracts-mock";
-
-const statusClasses: Record<ContractStatus, string> = {
-  Draft:
-    "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20",
-  Negotiating:
-    "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20",
-  Approved:
-    "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20",
-  Signed:
-    "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20",
-  Closing:
-    "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20",
-  Closed:
-    "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20",
-};
+  ContractType,
+  getContractStatusLabel,
+  getContractTypeLabel,
+  statusClasses,
+} from "@/services/contract-api";
 
 function ContractStatusBadge({ status }: { status: ContractStatus }) {
   return (
-    <Badge variant="outline" className={statusClasses[status]}>
-      {CONTRACT_STATUS_LABELS[status]}
+    <Badge variant="outline" className={statusClasses[status] || ""}>
+      {getContractStatusLabel(status)}
     </Badge>
   );
 }
 
-function formatShortDate(value: string) {
+function formatShortDate(value?: string | null) {
+  if (!value) return "Chưa cập nhật";
   return new Date(value).toLocaleDateString("vi-VN", {
     day: "2-digit",
     month: "2-digit",
@@ -70,22 +55,78 @@ function formatShortDate(value: string) {
   });
 }
 
+const STATUS_FILTER_OPTIONS = [
+  { value: "All", label: "Tất cả trạng thái" },
+  { value: String(ContractStatus.Draft), label: getContractStatusLabel(ContractStatus.Draft) },
+  { value: String(ContractStatus.Negotiating), label: getContractStatusLabel(ContractStatus.Negotiating) },
+  { value: String(ContractStatus.PendingApproval), label: getContractStatusLabel(ContractStatus.PendingApproval) },
+  { value: String(ContractStatus.PendingSignature), label: getContractStatusLabel(ContractStatus.PendingSignature) },
+  { value: String(ContractStatus.Signed), label: getContractStatusLabel(ContractStatus.Signed) },
+  { value: String(ContractStatus.Completed), label: getContractStatusLabel(ContractStatus.Completed) },
+  { value: String(ContractStatus.Cancelled), label: getContractStatusLabel(ContractStatus.Cancelled) },
+  { value: String(ContractStatus.Rejected), label: getContractStatusLabel(ContractStatus.Rejected) },
+];
+
+const CONTRACT_TYPE_FILTER_OPTIONS = [
+  { value: "All", label: "Tất cả loại HĐ" },
+  { value: String(ContractType.SoftwareSupply), label: getContractTypeLabel(ContractType.SoftwareSupply) },
+  { value: String(ContractType.SoftwareMaintenance), label: getContractTypeLabel(ContractType.SoftwareMaintenance) },
+  { value: String(ContractType.SoftwareUpkeep), label: getContractTypeLabel(ContractType.SoftwareUpkeep) },
+];
+
 export default function ContractListPage() {
   const router = useRouter();
-  const [filterStatus, setFilterStatus] = useState("All");
+
+  const [data, setData] = useState<ContractListItemResponse[]>([]);
+  const [rowCount, setRowCount] = useState<number>(0);
+  const [pageCount, setPageCount] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [loadingId, setLoadingId] = useState<number | null>(null);
 
-  const filteredContracts = useMemo(() => {
-    if (filterStatus === "All") return mockContracts;
-    return mockContracts.filter((contract) => contract.status === filterStatus);
-  }, [filterStatus]);
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 10,
+  });
+  const [searchValue, setSearchValue] = useState<string>("");
+  const [filterStatus, setFilterStatus] = useState<string>("All");
+  const [filterContractType, setFilterContractType] = useState<string>("All");
+
+  const fetchContracts = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const params: ContractFilterRequest = {
+        page: pagination.pageIndex + 1,
+        pageSize: pagination.pageSize,
+        keyword: searchValue || undefined,
+        status: filterStatus !== "All" ? (Number(filterStatus) as ContractStatus) : undefined,
+        contractType: filterContractType !== "All" ? (Number(filterContractType) as ContractType) : undefined,
+      };
+      const res = await contractApi.getList(params);
+      if (res) {
+        setData(res.items || []);
+        setRowCount(res.totalCount || 0);
+        setPageCount(res.totalPages || Math.ceil((res.totalCount || 0) / pagination.pageSize));
+      }
+    } catch (error) {
+      console.error("Lỗi khi tải danh sách hợp đồng:", error);
+      setData([]);
+      setRowCount(0);
+      setPageCount(0);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [pagination.pageIndex, pagination.pageSize, searchValue, filterStatus, filterContractType]);
+
+  useEffect(() => {
+    fetchContracts();
+  }, [fetchContracts]);
 
   const handleView = (id: number) => {
     setLoadingId(id);
     router.push(`/contracts/${id}`);
   };
 
-  const columns = useMemo<ColumnDef<ContractMock>[]>(
+  const columns = useMemo<ColumnDef<ContractListItemResponse>[]>(
     () => [
       {
         id: "select",
@@ -120,36 +161,36 @@ export default function ContractListPage() {
         enableSorting: false,
       },
       {
-        accessorKey: "contractNo",
+        accessorKey: "contractCode",
         header: "Mã hợp đồng",
         cell: ({ row }) => (
           <div className="flex flex-col pl-1">
             <span className="font-semibold text-foreground">
-              {row.original.contractNo}
+              {row.original.contractCode || "Chưa cấp mã"}
             </span>
             <span className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
               <CalendarDays className="h-3 w-3" />
-              {formatShortDate(row.original.createdAt)}
+              {formatShortDate(row.original.createdDate)}
             </span>
           </div>
         ),
       },
       {
-        accessorKey: "title",
+        accessorKey: "contractName",
         header: "Thông tin hợp đồng",
         cell: ({ row }) => (
           <div className="max-w-[320px]">
             <p className="truncate font-medium text-foreground">
-              {row.original.title}
+              {row.original.contractName}
             </p>
             <p className="mt-1 truncate text-xs text-muted-foreground">
-              {CONTRACT_TYPE_LABELS[row.original.type]}
+              {getContractTypeLabel(row.original.contractType)}
             </p>
           </div>
         ),
       },
       {
-        accessorKey: "customerCompany",
+        accessorKey: "customerName",
         header: "Khách hàng",
         cell: ({ row }) => (
           <div className="flex items-center gap-2">
@@ -158,36 +199,23 @@ export default function ContractListPage() {
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">
-                {row.original.customerName}
+                {row.original.customerName || row.original.customerCompany || "Chưa cập nhật"}
               </p>
-              <p className="truncate text-xs text-muted-foreground">
-                {row.original.customerCompany}
-              </p>
+              {row.original.customerCompany && (
+                <p className="truncate text-xs text-muted-foreground">
+                  {row.original.customerCompany}
+                </p>
+              )}
             </div>
           </div>
         ),
       },
       {
-        accessorKey: "value",
+        accessorKey: "totalAmount",
         header: () => <div className="text-right">Giá trị</div>,
         cell: ({ row }) => (
           <div className="text-right font-semibold text-primary">
-            {formatCurrency(row.original.value)}
-          </div>
-        ),
-      },
-      {
-        accessorKey: "paymentProgress",
-        header: "Thanh toán",
-        cell: ({ row }) => (
-          <div className="min-w-[130px]">
-            <div className="mb-1 flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Tiến độ</span>
-              <span className="font-medium">
-                {row.original.paymentProgress}%
-              </span>
-            </div>
-            <Progress value={row.original.paymentProgress} className="h-2" />
+            {formatCurrency(row.original.totalAmount)}
           </div>
         ),
       },
@@ -209,14 +237,14 @@ export default function ContractListPage() {
             <SplitActionMenu
               primaryLabel="Chi tiết"
               primaryIcon={<Eye className="h-4 w-4" />}
-              onPrimaryClick={() => handleView(item.id)}
-              isLoading={loadingId === item.id}
+              onPrimaryClick={() => handleView(item.contractId)}
+              isLoading={loadingId === item.contractId}
               menuItems={[
                 {
-                  label: "Copy link khách xem",
+                  label: "Sao chép mã hợp đồng",
                   icon: <Link2 className="h-4 w-4" />,
                   onClick: () =>
-                    navigator.clipboard?.writeText(item.publicLink),
+                    navigator.clipboard?.writeText(item.contractCode || ""),
                 },
               ]}
             />
@@ -227,40 +255,48 @@ export default function ContractListPage() {
     [loadingId],
   );
 
-  const totalValue = mockContracts.reduce(
-    (sum, contract) => sum + contract.value,
-    0,
+  const totalValue = useMemo(
+    () => data.reduce((sum, contract) => sum + (contract.totalAmount || 0), 0),
+    [data],
   );
-  const closingCount = mockContracts.filter(
-    (contract) => contract.status === "Closing",
-  ).length;
-  const signedCount = mockContracts.filter((contract) =>
-    ["Signed", "Closing", "Closed"].includes(contract.status),
-  ).length;
+
+  const signedCount = useMemo(
+    () =>
+      data.filter((c) =>
+        [ContractStatus.Signed, ContractStatus.Completed].includes(c.status),
+      ).length,
+    [data],
+  );
+
+  const negotiatingCount = useMemo(
+    () =>
+      data.filter((c) => c.status === ContractStatus.Negotiating).length,
+    [data],
+  );
 
   const summaryItems: SummaryCardItem[] = [
     {
       title: "Tổng hợp đồng",
-      value: mockContracts.length,
+      value: rowCount,
       icon: <FileSignature className="h-6 w-6" />,
       iconWrapperClassName: "bg-primary/10 text-primary",
     },
     {
-      title: "Đã ký điện tử",
+      title: "Đã ký kết",
       value: signedCount,
       icon: <CheckCircle2 className="h-6 w-6" />,
       iconWrapperClassName:
         "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500",
     },
     {
-      title: "Cần hoàn thiện hồ sơ",
-      value: closingCount,
+      title: "Đang đàm phán",
+      value: negotiatingCount,
       icon: <Clock className="h-6 w-6" />,
       iconWrapperClassName:
         "bg-amber-500/10 text-amber-600 dark:text-amber-500",
     },
     {
-      title: "Tổng giá trị",
+      title: "Tổng giá trị (trang)",
       value: formatCurrency(totalValue),
       icon: <WalletCards className="h-6 w-6" />,
       iconWrapperClassName: "bg-blue-500/10 text-blue-600 dark:text-blue-500",
@@ -269,12 +305,26 @@ export default function ContractListPage() {
   ];
 
   const filters = (
-    <SelectFilter
-      value={filterStatus}
-      onChange={setFilterStatus}
-      options={CONTRACT_STATUS_OPTIONS}
-      placeholder="Trạng thái"
-    />
+    <>
+      <SelectFilter
+        value={filterStatus}
+        onChange={(val) => {
+          setFilterStatus(val);
+          setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+        }}
+        options={STATUS_FILTER_OPTIONS}
+        placeholder="Trạng thái"
+      />
+      <SelectFilter
+        value={filterContractType}
+        onChange={(val) => {
+          setFilterContractType(val);
+          setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+        }}
+        options={CONTRACT_TYPE_FILTER_OPTIONS}
+        placeholder="Loại hợp đồng"
+      />
+    </>
   );
 
   return (
@@ -288,8 +338,7 @@ export default function ContractListPage() {
               Danh sách Hợp đồng
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Mock UI theo dõi vòng đời hợp đồng: nháp, đàm phán, ký điện tử và
-              hoàn thiện hồ sơ.
+              Quản lý và theo dõi vòng đời hợp đồng: nháp, đàm phán, trình duyệt, ký và hoàn thành.
             </p>
           </div>
           <Button
@@ -306,12 +355,21 @@ export default function ContractListPage() {
           <CardContent className="p-4 flex flex-col justify-between flex-1 pb-0">
             <DataTable
               columns={columns}
-              data={filteredContracts}
-              searchKey="contractNo"
-              searchPlaceholder="Tìm mã hợp đồng..."
+              data={data}
+              pageCount={pageCount}
+              rowCount={rowCount}
+              pagination={pagination}
+              onPaginationChange={setPagination}
+              searchValue={searchValue}
+              onSearchChange={(val) => {
+                setSearchValue(val);
+                setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+              }}
+              searchPlaceholder="Tìm mã hoặc tên hợp đồng..."
               filterSlot={filters}
-              onRowClick={(row) => handleView(row.id)}
-              mobileCardRenderer={(row: Row<ContractMock>, { isSelected }) => {
+              isLoading={isLoading}
+              onRowClick={(row) => handleView(row.contractId)}
+              mobileCardRenderer={(row: Row<ContractListItemResponse>, { isSelected, actionCell }) => {
                 const item = row.original;
                 return (
                   <div
@@ -324,10 +382,10 @@ export default function ContractListPage() {
                     <div className="mb-3 flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="font-semibold text-foreground">
-                          {item.contractNo}
+                          {item.contractCode || "Chưa cấp mã"}
                         </p>
                         <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                          {item.title}
+                          {item.contractName}
                         </p>
                       </div>
                       <ContractStatusBadge status={item.status} />
@@ -339,28 +397,17 @@ export default function ContractListPage() {
                           Khách hàng
                         </p>
                         <p className="truncate font-medium">
-                          {item.customerCompany}
+                          {item.customerName || item.customerCompany || "Chưa cập nhật"}
                         </p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Giá trị</p>
                         <p className="truncate font-semibold text-primary">
-                          {formatCurrency(item.value)}
+                          {formatCurrency(item.totalAmount)}
                         </p>
                       </div>
                     </div>
-
-                    <div className="mt-3">
-                      <div className="mb-1 flex justify-between text-xs">
-                        <span className="text-muted-foreground">
-                          Thanh toán
-                        </span>
-                        <span className="font-medium">
-                          {item.paymentProgress}%
-                        </span>
-                      </div>
-                      <Progress value={item.paymentProgress} className="h-2" />
-                    </div>
+                    {actionCell}
                   </div>
                 );
               }}

@@ -50,7 +50,9 @@ export function ConfirmDialog({
             {icon}
             {title}
           </DialogTitle>
-          <DialogDescription className="pt-2">{description}</DialogDescription>
+          <DialogDescription asChild className="pt-2">
+            <div>{description}</div>
+          </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2 sm:gap-2 mt-4">
           <Button variant="outline" onClick={onClose} disabled={isLoading}>

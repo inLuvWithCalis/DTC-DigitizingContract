@@ -60,9 +60,24 @@ function getPaginationRange(currentPage: number, totalPages: number) {
     return [1, 2, 3, 4, "...", totalPages];
   }
   if (currentPage >= totalPages - 2) {
-    return [1, "...", totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    return [
+      1,
+      "...",
+      totalPages - 3,
+      totalPages - 2,
+      totalPages - 1,
+      totalPages,
+    ];
   }
-  return [1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages];
+  return [
+    1,
+    "...",
+    currentPage - 1,
+    currentPage,
+    currentPage + 1,
+    "...",
+    totalPages,
+  ];
 }
 
 interface DataTableProps<TData, TValue> {
@@ -167,6 +182,15 @@ export function DataTable<TData, TValue>({
   const exitSelectionMode = useCallback(() => {
     table.resetRowSelection();
   }, [table]);
+
+  const handleRowClick = (rowData: TData) => {
+    if (!onRowClick) return;
+    const selection = window.getSelection()?.toString();
+    if (selection && selection.trim().length > 0) {
+      return;
+    }
+    onRowClick(rowData);
+  };
 
   return (
     <div className="flex flex-col h-full w-full flex-1">
@@ -470,7 +494,7 @@ export function DataTable<TData, TValue>({
                     key={row.id}
                     data-state={row.getIsSelected() && "selected"}
                     className="hover:bg-secondary/40 border-b-border transition-colors cursor-pointer"
-                    onClick={() => onRowClick && onRowClick(row.original)}
+                    onClick={() => handleRowClick(row.original)}
                   >
                     {row.getVisibleCells().map((cell) => (
                       <TableCell key={cell.id} className="py-3">
@@ -623,9 +647,7 @@ export function DataTable<TData, TValue>({
                 variant="outline"
                 size="icon"
                 onClick={() => table.nextPage()}
-                disabled={
-                  isLoading || rowCount <= 0 || !table.getCanNextPage()
-                }
+                disabled={isLoading || rowCount <= 0 || !table.getCanNextPage()}
                 className="h-8 w-8"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -637,9 +659,7 @@ export function DataTable<TData, TValue>({
                 onClick={() =>
                   table.setPageIndex(Math.max(0, table.getPageCount() - 1))
                 }
-                disabled={
-                  isLoading || rowCount <= 0 || !table.getCanNextPage()
-                }
+                disabled={isLoading || rowCount <= 0 || !table.getCanNextPage()}
                 className="h-8 w-8"
               >
                 <ChevronsRight className="w-4 h-4" />

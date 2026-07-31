@@ -32,6 +32,10 @@ export function MobileCardWrapper<TData>({
       e.preventDefault();
       return;
     }
+    const selection = window.getSelection()?.toString();
+    if (selection && selection.trim().length > 0) {
+      return;
+    }
     if (isSelectionMode) {
       e.preventDefault();
       onTapInSelectionMode();

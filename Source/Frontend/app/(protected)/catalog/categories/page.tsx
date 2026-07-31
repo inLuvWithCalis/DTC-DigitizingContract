@@ -20,10 +20,11 @@ import { toast } from "sonner";
 import { ColumnDef } from "@tanstack/react-table";
 
 import { categoryApi, CategoryResponse } from "@/services/catalog/category-api";
-import { TreeDataTable } from "@/components/ui/custom/data-tree-table"; // Import component mới
+import { TreeDataTable } from "@/components/ui/custom/data-tree-table";
 import { ConfirmDialog } from "@/components/ui/custom/confirm-dialog";
 import { SplitActionMenu } from "@/components/ui/custom/split-action-menu";
 import { CategoryFormModal } from "./category-form-modal";
+import { showConfirmToast } from "@/components/ui/custom/confirm-toast";
 
 export type CategoryTreeNode = CategoryResponse;
 
@@ -34,7 +35,7 @@ export default function CategoryListPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [pagination, setPagination] = useState({
     pageIndex: 0,
-    pageSize: 20,
+    pageSize: 10,
   });
   const [loadingId, setLoadingId] = useState<number | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -274,33 +275,46 @@ export default function CategoryListPage() {
                 setSearchTerm(val);
                 setPagination((prev) => ({ ...prev, pageIndex: 0 }));
               }}
-              onSelectMany={async (selectedItems) => {
-                if (
-                  !confirm(
-                    `Bạn có chắc chắn muốn xóa ${selectedItems.length} danh mục đã chọn?`,
-                  )
-                )
-                  return;
-                setIsDeleting(true);
-                try {
-                  await Promise.all(
-                    selectedItems.map((item) =>
-                      categoryApi.delete(item.categoryId),
-                    ),
-                  );
-                  toast.success(
-                    `Đã xóa ${selectedItems.length} danh mục thành công`,
-                  );
-                  fetchData();
-                } catch (error: any) {
-                  toast.error(
-                    "Có lỗi khi xóa một số danh mục (có thể đang có sản phẩm hoặc danh mục con sử dụng)",
-                  );
-                  fetchData();
-                } finally {
-                  setIsDeleting(false);
-                }
-              }}
+              bulkActions={(selectedItems, resetSelection) => (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-8 text-xs shadow-sm"
+                  disabled={isDeleting}
+                  onClick={() => {
+                    showConfirmToast({
+                      title: "Xác nhận xóa danh mục",
+                      description: `Bạn có chắc chắn muốn xóa ${selectedItems.length} danh mục đã chọn?`,
+                      confirmLabel: "Xóa",
+                      cancelLabel: "Hủy",
+                      onConfirm: async () => {
+                        setIsDeleting(true);
+                        try {
+                          await Promise.all(
+                            selectedItems.map((item) =>
+                              categoryApi.delete(item.categoryId),
+                            ),
+                          );
+                          toast.success(
+                            `Đã xóa ${selectedItems.length} danh mục thành công`,
+                          );
+                          resetSelection();
+                          fetchData();
+                        } catch (error: any) {
+                          toast.error(
+                            "Có lỗi khi xóa một số danh mục (có thể đang có sản phẩm hoặc danh mục con sử dụng)",
+                          );
+                          fetchData();
+                        } finally {
+                          setIsDeleting(false);
+                        }
+                      },
+                    });
+                  }}
+                >
+                  {isDeleting ? "Đang xóa..." : "Xóa tất cả"}
+                </Button>
+              )}
               searchPlaceholder="Tìm tên danh mục..."
               mobileCardRenderer={(row, { isSelected, actionCell }) => {
                 const item = row.original;

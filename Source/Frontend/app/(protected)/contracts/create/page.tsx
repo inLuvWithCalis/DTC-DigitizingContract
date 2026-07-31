@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -10,14 +10,18 @@ import {
   FileSignature,
   FileText,
   Package,
-  Plus,
   Save,
   ShieldCheck,
   Sparkles,
-  Users,
   WalletCards,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  LayoutTemplate,
 } from "lucide-react";
 import { toast } from "sonner";
+
+// Các import UI component
 import { Header } from "@/components/ui/custom/header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -35,84 +39,164 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { formatCurrency } from "@/lib/format-currency";
-import { CONTRACT_TYPE_LABELS, ContractType } from "@/services/contracts-mock";
+import { DateRangeFilter } from "@/components/ui/custom/date-range-filter";
+import { format } from "date-fns";
+
+import {
+  ContractType,
+  ContractLanguageMode,
+  ContractItemType,
+  CreateContractRequest,
+  CreateContractItemRequest,
+  contractApi,
+  getContractTypeLabel,
+  getContractLanguageModeLabel,
+} from "@/services/contract-api";
+import { customerApi, CustomerResponse } from "@/services/customers-api";
+import { productApi } from "@/services/catalog/products-api";
+import { serviceApi } from "@/services/catalog/services-api";
 
 const steps = [
-  { title: "Khách hàng", description: "Chọn bên mua" },
+  { title: "Khách hàng & Mẫu", description: "Thiết lập cơ bản" },
   { title: "Sản phẩm", description: "Chọn phạm vi" },
   { title: "Điều khoản", description: "Soạn nội dung" },
   { title: "Xem trước", description: "Kiểm tra nháp" },
 ];
 
-const customers = [
-  {
-    id: "1",
-    name: "Nguyễn Văn A",
-    company: "Công ty TNHH ABC",
-    email: "contact@abc.vn",
-  },
-  {
-    id: "2",
-    name: "Phạm Văn D",
-    company: "MNO Company",
-    email: "admin@mno.vn",
-  },
-  {
-    id: "3",
-    name: "Hoàng Văn E",
-    company: "PQR Company",
-    email: "business@pqr.vn",
-  },
+type CatalogItem = {
+  id: string; // "p-{id}" or "s-{id}"
+  originalId: number;
+  itemName: string;
+  itemType: ContractItemType;
+  unitPrice: number;
+  quantity: number;
+  discountPercent: number;
+  vatPercent: number;
+};
+
+const contractTypeOptions = [
+  ContractType.SoftwareSupply,
+  ContractType.SoftwareMaintenance,
+  ContractType.SoftwareUpkeep,
 ];
 
-const catalogItems = [
-  {
-    id: "software-platform",
-    name: "Nền tảng quản lý hợp đồng điện tử",
-    type: "Sản phẩm",
-    price: 350000000,
-  },
-  {
-    id: "otp-signing",
-    name: "Module ký điện tử OTP",
-    type: "Dịch vụ",
-    price: 65000000,
-  },
-  {
-    id: "implementation",
-    name: "Dịch vụ triển khai & đào tạo",
-    type: "Dịch vụ",
-    price: 35000000,
-  },
-  {
-    id: "maintenance",
-    name: "Gói bảo trì phần mềm 12 tháng",
-    type: "Dịch vụ",
-    price: 85000000,
-  },
+// --- MOCK TEMPLATES (Sẽ thay bằng API Fetch sau) ---
+const mockTemplates = [
+  { versionId: 1, name: "Hợp đồng phần mềm tiêu chuẩn (v1.0)" },
+  { versionId: 2, name: "Hợp đồng dịch vụ bảo trì (v2.1)" },
+  { versionId: 3, name: "Hợp đồng triển khai Enterprise (v1.5)" },
 ];
 
-const contractTypeOptions: ContractType[] = [
-  "Software",
-  "Maintenance",
-  "Appendix",
-  "Liquidation",
-];
+const formatCurrency = (amount: number) => {
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+  }).format(amount);
+};
 
 export default function CreateContractPage() {
   const router = useRouter();
+
+  // -- STATES --
   const [currentStep, setCurrentStep] = useState(0);
-  const [customerId, setCustomerId] = useState("");
-  const [contractType, setContractType] = useState<ContractType>("Software");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [customers, setCustomers] = useState<CustomerResponse[]>([]);
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
+
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
+  const [isLoadingCatalog, setIsLoadingCatalog] = useState(true);
+
+  // Fetch data
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [customerRes, productRes, serviceRes] = await Promise.all([
+          customerApi.getList({ page: 1, pageSize: 100 }),
+          productApi.getList({ page: 1, pageSize: 100 }),
+          serviceApi.getList({ page: 1, pageSize: 100 }),
+        ]);
+
+        setCustomers(customerRes.items);
+
+        const mappedProducts: CatalogItem[] = productRes.items.map((p) => ({
+          id: `p-${p.productId}`,
+          originalId: p.productId,
+          itemName: p.productName || "Sản phẩm không tên",
+          itemType: ContractItemType.Product,
+          unitPrice: p.productPrice || 0,
+          quantity: 1,
+          discountPercent: 0,
+          vatPercent: 10,
+        }));
+
+        const mappedServices: CatalogItem[] = serviceRes.items.map((s) => ({
+          id: `s-${s.serviceId}`,
+          originalId: s.serviceId,
+          itemName: s.serviceName || "Dịch vụ không tên",
+          itemType: ContractItemType.Service,
+          unitPrice: s.servicePrice || 0,
+          quantity: 1,
+          discountPercent: 0,
+          vatPercent: 10,
+        }));
+
+        setCatalogItems([...mappedProducts, ...mappedServices]);
+      } catch (err) {
+        console.error("Failed to fetch data:", err);
+      } finally {
+        setIsLoadingCustomers(false);
+        setIsLoadingCatalog(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  // Step 1: Customer & Basic Info
+  const [customerId, setCustomerId] = useState<string>("");
+  const [contractType, setContractType] = useState<ContractType>(
+    ContractType.SoftwareSupply,
+  );
+  const [templateVersionId, setTemplateVersionId] = useState<string>("");
+  const [languageMode, setLanguageMode] = useState<ContractLanguageMode>(
+    ContractLanguageMode.Vietnamese,
+  );
   const [contractTitle, setContractTitle] = useState(
     "Triển khai hệ thống quản lý hợp đồng điện tử",
   );
-  const [quotationNo, setQuotationNo] = useState("BG-2026-025");
-  const [selectedItems, setSelectedItems] = useState<string[]>([
-    "software-platform",
-    "implementation",
-  ]);
+
+  // Step 2: Items, Filter & Pagination
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [itemFilter, setItemFilter] = useState<"all" | "product" | "service">(
+    "all",
+  );
+  const [catalogPage, setCatalogPage] = useState(1);
+  const catalogPageSize = 5;
+
+  useEffect(() => {
+    setCatalogPage(1);
+  }, [itemFilter]);
+
+  const filteredCatalog = useMemo(() => {
+    if (itemFilter === "product")
+      return catalogItems.filter(
+        (i) => i.itemType === ContractItemType.Product,
+      );
+    if (itemFilter === "service")
+      return catalogItems.filter(
+        (i) => i.itemType === ContractItemType.Service,
+      );
+    return catalogItems;
+  }, [catalogItems, itemFilter]);
+
+  const catalogTotalPages = Math.ceil(filteredCatalog.length / catalogPageSize);
+
+  const paginatedCatalog = useMemo(() => {
+    const startIndex = (catalogPage - 1) * catalogPageSize;
+    return filteredCatalog.slice(startIndex, startIndex + catalogPageSize);
+  }, [filteredCatalog, catalogPage]);
+
+  // Step 3: Terms & Dates
   const [effectiveDate, setEffectiveDate] = useState("2026-08-01");
   const [expiredDate, setExpiredDate] = useState("2027-08-01");
   const [paymentTerms, setPaymentTerms] = useState(
@@ -122,25 +206,41 @@ export default function CreateContractPage() {
     "Hai bên thống nhất lịch nghiệm thu theo từng giai đoạn triển khai. Các yêu cầu hỗ trợ ngoài phạm vi sẽ được ghi nhận bằng phụ lục.",
   );
 
-  const selectedCustomer = customers.find((item) => item.id === customerId);
+  // -- COMPUTED VALUES --
+  const selectedCustomer = customers.find(
+    (item) => item.customerId === Number(customerId),
+  );
+  const selectedTemplate = mockTemplates.find(
+    (item) => item.versionId === Number(templateVersionId),
+  );
+
   const selectedCatalogItems = catalogItems.filter((item) =>
     selectedItems.includes(item.id),
   );
+
   const totalValue = selectedCatalogItems.reduce(
-    (sum, item) => sum + item.price,
+    (sum, item) => sum + item.unitPrice * item.quantity,
     0,
   );
+
   const progressValue = ((currentStep + 1) / steps.length) * 100;
 
-  const canGoNext = useMemo(() => {
-    if (currentStep === 0) return !!customerId && !!contractTitle.trim();
-    if (currentStep === 1) return selectedItems.length > 0;
-    if (currentStep === 2)
+  const isStepCompleted = (stepIdx: number) => {
+    if (stepIdx === 0)
+      return !!customerId && !!templateVersionId && !!contractTitle.trim();
+    if (stepIdx === 1) return selectedItems.length > 0;
+    if (stepIdx === 2)
       return !!effectiveDate && !!expiredDate && !!paymentTerms.trim();
-    return true;
+    return false;
+  };
+
+  const canGoNext = useMemo(() => {
+    if (currentStep === 3) return true;
+    return isStepCompleted(currentStep);
   }, [
     currentStep,
     customerId,
+    templateVersionId,
     contractTitle,
     selectedItems.length,
     effectiveDate,
@@ -154,11 +254,105 @@ export default function CreateContractPage() {
     );
   };
 
-  const handleCreateMock = () => {
-    toast.success(
-      "Đã tạo hợp đồng nháp mock. Chờ backend POST API để lưu thật.",
+  const updateQuantity = (id: string, quantity: number) => {
+    setCatalogItems((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, quantity: Math.max(1, quantity) } : item,
+      ),
     );
-    router.push("/contracts");
+  };
+
+  // -- SUBMIT ACTION --
+  const handleSubmit = async () => {
+    // 1. Validate Step 0: Khách hàng & Mẫu
+    if (!customerId) {
+      toast.error("Vui lòng chọn khách hàng / đối tác.");
+      setCurrentStep(0);
+      return;
+    }
+    if (!contractTitle.trim()) {
+      toast.error("Vui lòng nhập tên hợp đồng.");
+      setCurrentStep(0);
+      return;
+    }
+    if (!templateVersionId) {
+      toast.error("Vui lòng chọn template hợp đồng.");
+      setCurrentStep(0);
+      return;
+    }
+
+    // 2. Validate Step 1: Sản phẩm
+    if (selectedItems.length === 0) {
+      toast.error("Vui lòng chọn ít nhất 1 sản phẩm hoặc dịch vụ.");
+      setCurrentStep(1);
+      return;
+    }
+
+    // 3. Validate Step 2: Điều khoản
+    if (!effectiveDate || !expiredDate) {
+      toast.error("Vui lòng chọn thời hạn hiệu lực của hợp đồng.");
+      setCurrentStep(2);
+      return;
+    }
+    if (!paymentTerms.trim()) {
+      toast.error("Vui lòng nhập điều khoản thanh toán.");
+      setCurrentStep(2);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const itemsPayload: CreateContractItemRequest[] =
+        selectedCatalogItems.map((item, index) => ({
+          itemType: item.itemType,
+          sourceProductId:
+            item.itemType === ContractItemType.Product ? item.originalId : null,
+          sourceServiceId:
+            item.itemType === ContractItemType.Service ? item.originalId : null,
+          itemName: item.itemName,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          discountPercent: item.discountPercent,
+          vatPercent: item.vatPercent,
+          displayOrder: index + 1,
+        }));
+
+      const payload: CreateContractRequest = {
+        customerId: Number(customerId),
+        contractType: contractType,
+        templateVersionId: Number(templateVersionId), // Truyền chính xác Template ID đã chọn
+        contractName: contractTitle.trim(),
+        effectiveDate: effectiveDate
+          ? new Date(effectiveDate).toISOString()
+          : null,
+        expireDate: expiredDate ? new Date(expiredDate).toISOString() : null,
+        currencyCode: "VND",
+        languageMode: languageMode,
+        items: itemsPayload,
+      };
+
+      const response = await contractApi.create(payload);
+
+      toast.success(`Tạo hợp đồng thành công! Mã HĐ: ${response.contractCode}`);
+      router.push("/contracts");
+    } catch (error: any) {
+      const data = error?.response?.data;
+      let errorMessage = "Đã xảy ra lỗi khi tạo hợp đồng.";
+
+      if (data) {
+        if (data.errors) {
+          errorMessage = Object.values(data.errors).flat().join(", ");
+        } else if (typeof data === "string") {
+          errorMessage = data;
+        } else {
+          errorMessage = data.message || data.title || errorMessage;
+        }
+      }
+
+      toast.error(errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -173,27 +367,21 @@ export default function CreateContractPage() {
               className="-ml-3 mb-2 text-muted-foreground"
               onClick={() => router.push("/contracts")}
             >
-              <ArrowLeft className="size-4" />
+              <ArrowLeft className="size-4 mr-2" />
               Quay lại danh sách
             </Button>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-bold tracking-tight text-foreground">
                 Tạo hợp đồng nháp
               </h1>
-              <Badge variant="secondary" className="gap-1.5">
-                <Sparkles className="size-3.5" />
-                Mock UI
-              </Badge>
             </div>
             <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-              Wizard mô phỏng luồng tạo hợp đồng từ khách hàng, sản phẩm/dịch vụ
-              và điều khoản. Khi có POST API, phần submit sẽ được nối vào
-              backend.
+              Luồng khởi tạo hợp đồng trực tiếp nối API.
             </p>
           </div>
         </div>
 
-        <Card className="shadow-sm">
+        <Card className="shadow-sm py-0">
           <CardContent className="p-4 md:p-6">
             <div className="mb-4 flex items-center justify-between gap-4">
               <div>
@@ -213,12 +401,14 @@ export default function CreateContractPage() {
 
             <div className="mt-5 grid gap-3 md:grid-cols-4">
               {steps.map((step, index) => (
-                <div
+                <button
+                  type="button"
                   key={step.title}
-                  className={`rounded-xl border p-3 ${
+                  onClick={() => setCurrentStep(index)}
+                  className={`rounded-xl border p-3 cursor-pointer hover:border-primary/50 transition-colors text-left ${
                     index === currentStep
                       ? "border-primary bg-primary/5"
-                      : index < currentStep
+                      : isStepCompleted(index)
                         ? "border-emerald-200 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/20"
                         : "bg-muted/30"
                   }`}
@@ -226,12 +416,12 @@ export default function CreateContractPage() {
                   <div className="flex items-center gap-2">
                     <div
                       className={`flex size-7 items-center justify-center rounded-full text-xs font-semibold ${
-                        index <= currentStep
+                        isStepCompleted(index) || index === currentStep
                           ? "bg-primary text-primary-foreground"
                           : "bg-muted text-muted-foreground"
                       }`}
                     >
-                      {index < currentStep ? (
+                      {isStepCompleted(index) ? (
                         <CheckCircle2 className="size-4" />
                       ) : (
                         index + 1
@@ -244,7 +434,7 @@ export default function CreateContractPage() {
                       </p>
                     </div>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           </CardContent>
@@ -254,25 +444,39 @@ export default function CreateContractPage() {
           <Card className="shadow-sm">
             <CardHeader>
               <CardTitle>
-                {currentStep === 0 && "Thông tin khách hàng"}
+                {currentStep === 0 && "Thiết lập cơ bản"}
                 {currentStep === 1 && "Sản phẩm / dịch vụ trong hợp đồng"}
                 {currentStep === 2 && "Điều khoản & thời hạn"}
                 {currentStep === 3 && "Xem trước hợp đồng nháp"}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* STEP 1: CUSTOMER & TEMPLATE */}
               {currentStep === 0 && (
                 <div className="grid gap-5 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>Khách hàng / đối tác</Label>
+                    <Label>
+                      Khách hàng / đối tác{" "}
+                      <span className="text-red-500">*</span>
+                    </Label>
                     <Select value={customerId} onValueChange={setCustomerId}>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Chọn khách hàng" />
+                        <SelectValue
+                          placeholder={
+                            isLoadingCustomers
+                              ? "Đang tải..."
+                              : "Chọn khách hàng"
+                          }
+                        />
                       </SelectTrigger>
                       <SelectContent>
                         {customers.map((customer) => (
-                          <SelectItem key={customer.id} value={customer.id}>
-                            {customer.company} · {customer.name}
+                          <SelectItem
+                            key={customer.customerId}
+                            value={String(customer.customerId)}
+                          >
+                            {customer.customerCompany ||
+                              customer.customerFullName}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -282,9 +486,9 @@ export default function CreateContractPage() {
                   <div className="space-y-2">
                     <Label>Loại hợp đồng</Label>
                     <Select
-                      value={contractType}
+                      value={String(contractType)}
                       onValueChange={(value) =>
-                        setContractType(value as ContractType)
+                        setContractType(Number(value) as ContractType)
                       }
                     >
                       <SelectTrigger className="w-full">
@@ -292,8 +496,8 @@ export default function CreateContractPage() {
                       </SelectTrigger>
                       <SelectContent>
                         {contractTypeOptions.map((type) => (
-                          <SelectItem key={type} value={type}>
-                            {CONTRACT_TYPE_LABELS[type]}
+                          <SelectItem key={type} value={String(type)}>
+                            {getContractTypeLabel(type)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -301,7 +505,9 @@ export default function CreateContractPage() {
                   </div>
 
                   <div className="space-y-2 md:col-span-2">
-                    <Label>Tên hợp đồng</Label>
+                    <Label>
+                      Tên hợp đồng <span className="text-red-500">*</span>
+                    </Label>
                     <Input
                       value={contractTitle}
                       onChange={(event) => setContractTitle(event.target.value)}
@@ -310,86 +516,266 @@ export default function CreateContractPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Báo giá liên quan</Label>
-                    <Input
-                      value={quotationNo}
-                      onChange={(event) => setQuotationNo(event.target.value)}
-                      placeholder="Ví dụ: BG-2026-025"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {currentStep === 1 && (
-                <div className="space-y-3">
-                  {catalogItems.map((item) => {
-                    const selected = selectedItems.includes(item.id);
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => toggleCatalogItem(item.id)}
-                        className={`w-full rounded-xl border p-4 text-left transition-colors hover:bg-accent ${
-                          selected
-                            ? "border-primary bg-primary/5"
-                            : "bg-background"
-                        }`}
-                      >
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <div className="flex items-start gap-3">
-                            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                              <Package className="size-5" />
-                            </div>
-                            <div>
-                              <p className="font-semibold">{item.name}</p>
-                              <p className="mt-1 text-sm text-muted-foreground">
-                                {item.type}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span className="font-semibold text-primary">
-                              {formatCurrency(item.price)}
-                            </span>
-                            {selected && (
-                              <Badge className="gap-1">
-                                <CheckCircle2 className="size-3.5" />
-                                Đã chọn
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {currentStep === 2 && (
-                <div className="space-y-5">
-                  <div className="grid gap-5 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Ngày hiệu lực</Label>
-                      <Input
-                        type="date"
-                        value={effectiveDate}
-                        onChange={(event) =>
-                          setEffectiveDate(event.target.value)
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Ngày hết hạn / kết thúc bảo hành</Label>
-                      <Input
-                        type="date"
-                        value={expiredDate}
-                        onChange={(event) => setExpiredDate(event.target.value)}
-                      />
-                    </div>
+                    <Label>
+                      Template hợp đồng <span className="text-red-500">*</span>
+                    </Label>
+                    <Select
+                      value={templateVersionId}
+                      onValueChange={setTemplateVersionId}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Chọn mẫu template..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {mockTemplates.map((tpl) => (
+                          <SelectItem
+                            key={tpl.versionId}
+                            value={String(tpl.versionId)}
+                          >
+                            {tpl.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Điều khoản thanh toán</Label>
+                    <Label>Ngôn ngữ hợp đồng</Label>
+                    <Select
+                      value={String(languageMode)}
+                      onValueChange={(value) =>
+                        setLanguageMode(Number(value) as ContractLanguageMode)
+                      }
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem
+                          value={String(ContractLanguageMode.Vietnamese)}
+                        >
+                          {getContractLanguageModeLabel(
+                            ContractLanguageMode.Vietnamese,
+                          )}
+                        </SelectItem>
+                        <SelectItem
+                          value={String(ContractLanguageMode.Bilingual)}
+                        >
+                          {getContractLanguageModeLabel(
+                            ContractLanguageMode.Bilingual,
+                          )}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 2: ITEMS, FILTER, PAGINATION */}
+              {currentStep === 1 && (
+                <div className="space-y-4">
+                  {/* Filter Tabs */}
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b pb-2">
+                    <div className="flex bg-muted p-1 rounded-lg">
+                      <button
+                        onClick={() => setItemFilter("all")}
+                        className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                          itemFilter === "all"
+                            ? "bg-background shadow-sm text-foreground"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        Tất cả
+                      </button>
+                      <button
+                        onClick={() => setItemFilter("product")}
+                        className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                          itemFilter === "product"
+                            ? "bg-background shadow-sm text-foreground"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        Sản phẩm
+                      </button>
+                      <button
+                        onClick={() => setItemFilter("service")}
+                        className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                          itemFilter === "service"
+                            ? "bg-background shadow-sm text-foreground"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        Dịch vụ
+                      </button>
+                    </div>
+                    <div className="text-sm font-medium text-muted-foreground px-1">
+                      Đã chọn:{" "}
+                      <span className="text-primary font-bold">
+                        {selectedItems.length}
+                      </span>
+                    </div>
+                  </div>
+
+                  {isLoadingCatalog && (
+                    <div className="py-8 text-center text-sm text-muted-foreground flex flex-col items-center justify-center gap-2">
+                      <Loader2 className="size-5 animate-spin text-primary" />
+                      Đang tải danh sách...
+                    </div>
+                  )}
+
+                  {!isLoadingCatalog && paginatedCatalog.length === 0 && (
+                    <div className="py-8 text-center text-sm text-muted-foreground bg-muted/30 rounded-xl border border-dashed">
+                      Không tìm thấy{" "}
+                      {itemFilter === "product"
+                        ? "sản phẩm"
+                        : itemFilter === "service"
+                          ? "dịch vụ"
+                          : "sản phẩm/dịch vụ"}{" "}
+                      nào.
+                    </div>
+                  )}
+
+                  {/* Danh sách Paginated */}
+                  <div className="space-y-3">
+                    {paginatedCatalog.map((item) => {
+                      const selected = selectedItems.includes(item.id);
+                      return (
+                        <div
+                          key={item.id}
+                          className={`w-full rounded-xl border p-4 text-left transition-colors ${
+                            selected
+                              ? "border-primary bg-primary/5"
+                              : "bg-background hover:bg-accent"
+                          }`}
+                        >
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <button
+                              type="button"
+                              className="flex items-start gap-3 flex-1 cursor-pointer text-left"
+                              onClick={() => toggleCatalogItem(item.id)}
+                            >
+                              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                                <Package className="size-5" />
+                              </div>
+                              <div>
+                                <p className="font-semibold">{item.itemName}</p>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                  Phân loại:{" "}
+                                  {item.itemType === ContractItemType.Product
+                                    ? "Sản phẩm"
+                                    : "Dịch vụ"}
+                                </p>
+                              </div>
+                            </button>
+                            <div className="flex items-center gap-3">
+                              {selected && (
+                                <div className="flex items-center gap-2 mr-2">
+                                  <span className="text-xs font-medium text-muted-foreground">
+                                    SL:
+                                  </span>
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    maxLength={9}
+                                    value={item.quantity}
+                                    onChange={(e) =>
+                                      updateQuantity(
+                                        item.id,
+                                        Number(e.target.value),
+                                      )
+                                    }
+                                    className="w-32 h-8 text-center"
+                                  />
+                                </div>
+                              )}
+                              <span className="font-semibold text-primary">
+                                {formatCurrency(item.unitPrice * item.quantity)}
+                              </span>
+                              <button
+                                type="button"
+                                className="cursor-pointer ml-1"
+                                onClick={() => toggleCatalogItem(item.id)}
+                              >
+                                {selected ? (
+                                  <Badge className="gap-1">
+                                    <CheckCircle2 className="size-3.5" />
+                                    Đã chọn
+                                  </Badge>
+                                ) : (
+                                  <span className="h-6 px-3 border rounded-full text-xs font-medium flex items-center justify-center text-muted-foreground hover:bg-muted">
+                                    Chọn
+                                  </span>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Pagination Controls */}
+                  {catalogTotalPages > 1 && (
+                    <div className="flex items-center justify-between pt-4">
+                      <p className="text-sm text-muted-foreground">
+                        Trang {catalogPage} / {catalogTotalPages}
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setCatalogPage((p) => Math.max(1, p - 1))
+                          }
+                          disabled={catalogPage === 1}
+                        >
+                          <ChevronLeft className="size-4 mr-1" /> Trước
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setCatalogPage((p) =>
+                              Math.min(catalogTotalPages, p + 1),
+                            )
+                          }
+                          disabled={catalogPage === catalogTotalPages}
+                        >
+                          Sau <ChevronRight className="size-4 ml-1" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* STEP 3: TERMS & DATES */}
+              {currentStep === 2 && (
+                <div className="space-y-5">
+                  <div className="space-y-2">
+                    <Label>Thời hạn hiệu lực</Label>
+                    <DateRangeFilter
+                      dateRange={{
+                        from: effectiveDate
+                          ? new Date(effectiveDate)
+                          : undefined,
+                        to: expiredDate ? new Date(expiredDate) : undefined,
+                      }}
+                      onChange={(range) => {
+                        setEffectiveDate(
+                          range.from ? format(range.from, "yyyy-MM-dd") : "",
+                        );
+                        setExpiredDate(
+                          range.to ? format(range.to, "yyyy-MM-dd") : "",
+                        );
+                      }}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>
+                      Điều khoản thanh toán (Lưu sau bằng Draft Update)
+                    </Label>
                     <Textarea
                       value={paymentTerms}
                       onChange={(event) => setPaymentTerms(event.target.value)}
@@ -408,16 +794,15 @@ export default function CreateContractPage() {
                 </div>
               )}
 
+              {/* STEP 4: PREVIEW */}
               {currentStep === 3 && (
                 <div className="space-y-5">
                   <Alert>
                     <FileSignature className="size-4" />
-                    <AlertTitle>
-                      Hợp đồng sẽ được tạo ở trạng thái Bản nháp
-                    </AlertTitle>
+                    <AlertTitle>Sẵn sàng khởi tạo</AlertTitle>
                     <AlertDescription>
-                      Đây là bản xem trước mock. Dữ liệu chưa được lưu xuống
-                      backend cho tới khi có POST API hợp đồng.
+                      Dữ liệu sẽ được gửi tới backend để tạo Hợp đồng mới dựa
+                      trên Template đã chọn.
                     </AlertDescription>
                   </Alert>
 
@@ -440,18 +825,18 @@ export default function CreateContractPage() {
                           Khách hàng
                         </p>
                         <p className="font-semibold">
-                          {selectedCustomer?.company || "Chưa chọn"}
+                          {selectedCustomer?.customerCompany || "Chưa chọn"}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          {selectedCustomer?.name}
+                          {selectedCustomer?.customerFullName}
                         </p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">
-                          Loại hợp đồng
+                          Mẫu hợp đồng
                         </p>
-                        <p className="font-semibold">
-                          {CONTRACT_TYPE_LABELS[contractType]}
+                        <p className="font-semibold text-blue-600">
+                          {selectedTemplate?.name || "Chưa chọn template"}
                         </p>
                       </div>
                       <div>
@@ -476,7 +861,7 @@ export default function CreateContractPage() {
 
                     <div>
                       <p className="mb-2 text-sm font-semibold">
-                        Sản phẩm / dịch vụ
+                        Sản phẩm / dịch vụ ({selectedCatalogItems.length})
                       </p>
                       <div className="space-y-2">
                         {selectedCatalogItems.map((item) => (
@@ -484,9 +869,9 @@ export default function CreateContractPage() {
                             key={item.id}
                             className="flex items-center justify-between rounded-lg bg-background p-3 text-sm"
                           >
-                            <span>{item.name}</span>
+                            <span>{item.itemName}</span>
                             <span className="font-medium">
-                              {formatCurrency(item.price)}
+                              {formatCurrency(item.unitPrice)}
                             </span>
                           </div>
                         ))}
@@ -501,12 +886,12 @@ export default function CreateContractPage() {
               <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <Button
                   variant="outline"
-                  disabled={currentStep === 0}
+                  disabled={currentStep === 0 || isSubmitting}
                   onClick={() =>
                     setCurrentStep((step) => Math.max(step - 1, 0))
                   }
                 >
-                  <ArrowLeft className="size-4" />
+                  <ArrowLeft className="size-4 mr-2" />
                   Quay lại
                 </Button>
 
@@ -520,12 +905,16 @@ export default function CreateContractPage() {
                     }
                   >
                     Tiếp tục
-                    <ArrowRight className="size-4" />
+                    <ArrowRight className="size-4 ml-2" />
                   </Button>
                 ) : (
-                  <Button onClick={handleCreateMock}>
-                    <Save className="size-4" />
-                    Tạo hợp đồng nháp mock
+                  <Button onClick={handleSubmit} disabled={isSubmitting}>
+                    {isSubmitting ? (
+                      <Loader2 className="size-4 mr-2 animate-spin" />
+                    ) : (
+                      <Save className="size-4 mr-2" />
+                    )}
+                    {isSubmitting ? "Đang lưu..." : "Lưu bản nháp"}
                   </Button>
                 )}
               </div>
@@ -544,24 +933,25 @@ export default function CreateContractPage() {
                   </div>
                   <div>
                     <p className="text-sm font-medium">
-                      {selectedCustomer?.company || "Chưa chọn khách hàng"}
+                      {selectedCustomer?.customerCompany ||
+                        "Chưa chọn khách hàng"}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {selectedCustomer?.email || "Chọn khách ở bước 1"}
+                      {selectedCustomer?.customerEmail || "Chọn khách ở bước 1"}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-3">
                   <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                    <FileText className="size-4" />
+                    <LayoutTemplate className="size-4" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium">
-                      {CONTRACT_TYPE_LABELS[contractType]}
+                    <p className="text-sm font-medium line-clamp-1">
+                      {selectedTemplate?.name || "Chưa chọn Template"}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {quotationNo || "Chưa liên kết báo giá"}
+                      {getContractTypeLabel(contractType)}
                     </p>
                   </div>
                 </div>
@@ -579,19 +969,6 @@ export default function CreateContractPage() {
                     </p>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-dashed shadow-sm">
-              <CardContent className="p-6">
-                <div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <ShieldCheck className="size-5" />
-                </div>
-                <h3 className="font-semibold">Gắn API sau</h3>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  Khi backend có endpoint tạo hợp đồng, phần dữ liệu trên form
-                  này có thể map thành payload cho `POST /api/contracts`.
-                </p>
               </CardContent>
             </Card>
           </div>

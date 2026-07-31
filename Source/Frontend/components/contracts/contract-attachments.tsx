@@ -1,6 +1,13 @@
 "use client";
 
-import { ChangeEvent, DragEvent, useRef, useState } from "react";
+import {
+  ChangeEvent,
+  DragEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   CheckCircle2,
   Download,
@@ -29,6 +36,7 @@ import {
 } from "@/components/ui/select";
 import {
   CONTRACT_DOCUMENT_TYPES,
+  ContractAttachmentResponse,
   ContractDocumentType,
   contractAttachmentsApi,
 } from "@/services/contract-attachments-api";
@@ -88,6 +96,26 @@ function documentTypeLabel(value: ContractDocumentType) {
   );
 }
 
+function mapAttachment(
+  attachment: ContractAttachmentResponse,
+): ContractAttachmentItem {
+  return {
+    id: attachment.attachmentId,
+    name:
+      attachment.contractFileName ||
+      `Tài liệu #${attachment.attachmentId}`,
+    documentType: attachment.documentType,
+    documentTypeName:
+      documentTypeLabel(attachment.documentType) ||
+      attachment.documentTypeName,
+    uploadedAt: attachment.uploadDate,
+    uploadedBy: attachment.uploadEmployeeId
+      ? `Nhân viên #${attachment.uploadEmployeeId}`
+      : undefined,
+    downloadUrl: attachment.contractFilePath,
+  };
+}
+
 export function ContractAttachments({
   contractId,
   initialAttachments = [],
@@ -97,14 +125,40 @@ export function ContractAttachments({
   const [attachments, setAttachments] =
     useState<ContractAttachmentItem[]>(initialAttachments);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [documentType, setDocumentType] =
-    useState<ContractDocumentType>(99);
+  const [documentType, setDocumentType] = useState<ContractDocumentType>(99);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [isLoadingAttachments, setIsLoadingAttachments] = useState(!mockMode);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const loadAttachments = useCallback(async () => {
+    if (mockMode) return;
+
+    setIsLoadingAttachments(true);
+    setLoadError(null);
+
+    try {
+      const response = await contractAttachmentsApi.getAll(contractId);
+      setAttachments(response.map(mapAttachment));
+    } catch {
+      setLoadError("Không thể tải danh sách chứng từ.");
+    } finally {
+      setIsLoadingAttachments(false);
+    }
+  }, [contractId, mockMode]);
+
+  useEffect(() => {
+    void loadAttachments();
+  }, [loadAttachments]);
 
   const validateAndSelectFile = (file?: File) => {
     if (!file) return;
+
+    if (file.size === 0) {
+      toast.error("File đang trống (0 byte). Vui lòng chọn file có nội dung.");
+      return;
+    }
 
     const extension = getExtension(file.name);
     if (!ACCEPTED_EXTENSIONS.includes(extension)) {
@@ -214,7 +268,7 @@ export function ContractAttachments({
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
       <Card className="overflow-hidden">
-        <CardHeader className="border-b bg-muted/20">
+        <CardHeader className="border-b">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <CardTitle className="flex items-center gap-2">
@@ -226,23 +280,52 @@ export function ContractAttachments({
               </p>
             </div>
             {mockMode && (
-              <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
+              <Badge
+                variant="outline"
+                className="border-amber-200 bg-amber-50 text-amber-700"
+              >
                 Chế độ xem thử
               </Badge>
             )}
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          {attachments.length === 0 ? (
+          {isLoadingAttachments ? (
+            <div className="flex items-center justify-center gap-2 px-6 py-16 text-sm text-muted-foreground">
+              <Loader2 className="size-5 animate-spin text-primary" />
+              Đang tải danh sách chứng từ...
+            </div>
+          ) : loadError ? (
+            <div className="px-6 py-16 text-center">
+              <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+                <FileText className="size-7" />
+              </div>
+              <p className="mt-4 font-semibold">Không thể tải chứng từ</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {loadError}
+              </p>
+              <Button
+                variant="outline"
+                className="mt-5"
+                onClick={() => void loadAttachments()}
+              >
+                Thử lại
+              </Button>
+            </div>
+          ) : attachments.length === 0 ? (
             <div className="px-6 py-16 text-center">
               <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                 <FileText className="size-7" />
               </div>
               <p className="mt-4 font-semibold">Chưa có tài liệu đính kèm</p>
               <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-                Thêm hợp đồng đã ký, biên bản nghiệm thu, hóa đơn hoặc tài liệu liên quan.
+                Thêm hợp đồng đã ký, biên bản nghiệm thu, hóa đơn hoặc tài liệu
+                liên quan.
               </p>
-              <Button className="mt-5" onClick={() => inputRef.current?.click()}>
+              <Button
+                className="mt-5"
+                onClick={() => inputRef.current?.click()}
+              >
                 <Plus className="size-4" />
                 Chọn file đầu tiên
               </Button>
@@ -261,18 +344,25 @@ export function ContractAttachments({
                         <FileIcon className="size-5" />
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate font-medium" title={attachment.name}>
+                        <p
+                          className="truncate font-medium"
+                          title={attachment.name}
+                        >
                           {attachment.name}
                         </p>
                         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                           <span>{formatFileSize(attachment.size)}</span>
                           <span>•</span>
-                          <span>{attachment.uploadedBy || "Không rõ người tải"}</span>
+                          <span>
+                            {attachment.uploadedBy || "Không rõ người tải"}
+                          </span>
                           {attachment.uploadedAt && (
                             <>
                               <span>•</span>
                               <span>
-                                {new Date(attachment.uploadedAt).toLocaleString("vi-VN")}
+                                {new Date(attachment.uploadedAt).toLocaleString(
+                                  "vi-VN",
+                                )}
                               </span>
                             </>
                           )}
@@ -352,9 +442,7 @@ export function ContractAttachments({
             <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
               <UploadCloud className="size-6" />
             </div>
-            <p className="mt-3 text-sm font-semibold">
-              Kéo thả file vào đây
-            </p>
+            <p className="mt-3 text-sm font-semibold">Kéo thả file vào đây</p>
             <p className="mt-1 text-xs text-muted-foreground">
               hoặc bấm để chọn từ máy tính
             </p>
@@ -370,7 +458,9 @@ export function ContractAttachments({
                   <CheckCircle2 className="size-4" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{selectedFile.name}</p>
+                  <p className="truncate text-sm font-medium">
+                    {selectedFile.name}
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     {formatFileSize(selectedFile.size)}
                   </p>
@@ -423,10 +513,27 @@ export function ContractAttachments({
           </Button>
 
           <p className="text-center text-xs leading-5 text-muted-foreground">
-            File được phân loại để dễ theo dõi tiến độ hoàn thiện hồ sơ hợp đồng.
+            File được phân loại để dễ theo dõi tiến độ hoàn thiện hồ sơ hợp
+            đồng.
           </p>
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// --- ContractDocuments: wrapper dùng cho tab "Chứng từ" ---
+import { ContractDetailResponse } from "@/services/contract-api";
+
+export function ContractDocuments({
+  contract,
+}: {
+  contract: ContractDetailResponse;
+}) {
+  return (
+    <ContractAttachments
+      contractId={contract.contractId}
+      mockMode={false}
+    />
   );
 }

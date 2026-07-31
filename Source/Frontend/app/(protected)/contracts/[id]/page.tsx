@@ -1,478 +1,98 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
-  CalendarDays,
-  CheckCircle2,
   Clock,
-  Copy,
   DatabaseZap,
-  FileCheck2,
   FileSignature,
   FileText,
-  Link2,
+  Loader2,
   MessageSquareText,
-  Phone,
-  ReceiptText,
-  ShieldCheck,
-  Truck,
+  Save,
+  Send,
   Users,
   WalletCards,
 } from "lucide-react";
-import {
-  ContractAttachmentItem,
-  ContractAttachments,
-} from "@/components/contracts/contract-attachments";
+
 import { Header } from "@/components/ui/custom/header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatCurrency } from "@/lib/format-currency";
+
 import {
-  CONTRACT_STATUS_LABELS,
-  CONTRACT_TYPE_LABELS,
-  ContractMock,
+  contractApi,
+  ContractDetailResponse,
   ContractStatus,
-  mockContracts,
-} from "@/services/contracts-mock";
+  UpdateContractDraftRequest,
+} from "@/services/contract-api";
+import { toast } from "sonner";
 
-const statusClasses: Record<ContractStatus, string> = {
-  Draft:
-    "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20",
-  Negotiating:
-    "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20",
-  Approved:
-    "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20",
-  Signed:
-    "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20",
-  Closing:
-    "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20",
-  Closed:
-    "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20",
-};
-
-function ContractStatusBadge({ status }: { status: ContractStatus }) {
-  return (
-    <Badge variant="outline" className={statusClasses[status]}>
-      {CONTRACT_STATUS_LABELS[status]}
-    </Badge>
-  );
-}
-
-function formatShortDate(value: string) {
-  return new Date(value).toLocaleDateString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
-function InfoCard({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-xl border bg-muted/30 p-4">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        {icon}
-        {label}
-      </div>
-      <div className="mt-2 font-semibold text-foreground">{value}</div>
-    </div>
-  );
-}
-
-function ContractOverview({ contract }: { contract: ContractMock }) {
-  return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-      <Card>
-        <CardHeader>
-          <CardTitle>Tổng quan hợp đồng</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <p className="leading-7 text-muted-foreground">{contract.summary}</p>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <InfoCard
-              icon={<Users className="size-4" />}
-              label="Khách hàng"
-              value={
-                <div>
-                  <p>{contract.customerName}</p>
-                  <p className="text-sm font-normal text-muted-foreground">
-                    {contract.customerCompany}
-                  </p>
-                </div>
-              }
-            />
-            <InfoCard
-              icon={<FileSignature className="size-4" />}
-              label="Loại hợp đồng"
-              value={CONTRACT_TYPE_LABELS[contract.type]}
-            />
-            <InfoCard
-              icon={<CalendarDays className="size-4" />}
-              label="Hiệu lực"
-              value={`${formatShortDate(contract.effectiveDate)} - ${formatShortDate(
-                contract.expiredDate,
-              )}`}
-            />
-            <InfoCard
-              icon={<WalletCards className="size-4" />}
-              label="Giá trị hợp đồng"
-              value={<span className="text-primary">{formatCurrency(contract.value)}</span>}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Thanh toán</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-2 flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Tiến độ thanh toán</span>
-              <span className="font-semibold">{contract.paymentProgress}%</span>
-            </div>
-            <Progress value={contract.paymentProgress} className="h-2" />
-            <p className="mt-3 text-sm text-muted-foreground">
-              Điều kiện đóng hợp đồng yêu cầu khách thanh toán đủ 100%.
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Bản cứng</CardTitle>
-          </CardHeader>
-          <CardContent className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Truck className="size-5" />
-            </div>
-            <div>
-              <p className="font-semibold">{contract.hardCopyStatus}</p>
-              <p className="text-sm text-muted-foreground">
-                Theo dõi gửi/nhận bản cứng với khách hàng.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-function ContractTerms() {
-  const hardTerms = [
-    "Không chuyển giao, sao chép hoặc triển khai phần mềm sang server khác khi chưa có chấp thuận.",
-    "Thông tin sản phẩm, phạm vi triển khai và chi phí theo phụ lục/báo giá đã thống nhất.",
-    "Bảo hành/bảo trì miễn phí 12 tháng kể từ ngày nghiệm thu.",
-  ];
-  const softTerms = [
-    "Thời gian hỗ trợ kỹ thuật ngoài giờ.",
-    "Mốc nghiệm thu từng giai đoạn.",
-    "Điều kiện thanh toán theo từng đợt.",
-  ];
-
-  return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ShieldCheck className="size-5 text-primary" />
-            Điều khoản cứng
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {hardTerms.map((term) => (
-            <div key={term} className="rounded-xl border bg-muted/30 p-4">
-              <p className="text-sm leading-6">{term}</p>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MessageSquareText className="size-5 text-primary" />
-            Điều khoản có thể đàm phán
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {softTerms.map((term) => (
-            <div key={term} className="rounded-xl border bg-muted/30 p-4">
-              <p className="text-sm leading-6">{term}</p>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function ContractNegotiation({ contract }: { contract: ContractMock }) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <CardTitle>Lịch sử đàm phán / comment</CardTitle>
-        <Button variant="outline" size="sm">
-          <MessageSquareText className="size-4" />
-          Thêm ghi chú mock
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {contract.comments.length === 0 ? (
-          <div className="rounded-xl border border-dashed p-8 text-center">
-            <MessageSquareText className="mx-auto mb-3 size-8 text-muted-foreground" />
-            <p className="font-medium">Chưa có comment đàm phán</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Sau này có thể gắn API revision/comment của hợp đồng tại đây.
-            </p>
-          </div>
-        ) : (
-          contract.comments.map((comment) => (
-            <div key={comment.id} className="rounded-xl border p-4">
-              <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="font-semibold">{comment.author}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {comment.role}
-                  </p>
-                </div>
-                <span className="text-xs text-muted-foreground">
-                  {new Date(comment.createdAt).toLocaleString("vi-VN")}
-                </span>
-              </div>
-              <p className="text-sm leading-6 text-muted-foreground">
-                {comment.content}
-              </p>
-            </div>
-          ))
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function ContractSignature({ contract }: { contract: ContractMock }) {
-  return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Phone className="size-5 text-primary" />
-            Ký điện tử bằng OTP
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Alert>
-            <ShieldCheck className="size-4" />
-            <AlertTitle>Mock UI chờ API ký số</AlertTitle>
-            <AlertDescription>
-              Luồng thật cần API gửi OTP và xác nhận chữ ký cho khách hàng và
-              đại diện nhà cung cấp.
-            </AlertDescription>
-          </Alert>
-
-          <div className="grid gap-3">
-            <div className="rounded-xl border p-4">
-              <p className="font-medium">Khách hàng</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                OTP gửi tới số điện thoại đại diện bên mua.
-              </p>
-            </div>
-            <div className="rounded-xl border p-4">
-              <p className="font-medium">Nhà cung cấp</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                OTP gửi tới số điện thoại đại diện pháp luật nội bộ.
-              </p>
-            </div>
-          </div>
-
-          <Button disabled className="w-full">
-            Gửi OTP ký hợp đồng
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Link khách hàng xem hợp đồng</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-xl border bg-muted/30 p-4">
-            <p className="break-all font-mono text-sm text-muted-foreground">
-              {contract.publicLink}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => navigator.clipboard?.writeText(contract.publicLink)}
-            >
-              <Copy className="size-4" />
-              Copy link
-            </Button>
-            <Button disabled>
-              <Link2 className="size-4" />
-              Gửi cho khách
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function ContractDocuments({ contract }: { contract: ContractMock }) {
-  const documentTypeMap: Record<
-    string,
-    { value: ContractAttachmentItem["documentType"]; label: string }
-  > = {
-    Acceptance: { value: 1, label: "Biên bản nghiệm thu" },
-    Handover: { value: 2, label: "Biên bản bàn giao" },
-    Liquidation: { value: 3, label: "Biên bản thanh lý" },
-    Invoice: { value: 4, label: "Hóa đơn VAT" },
-    Guarantee: { value: 5, label: "Bảo lãnh ngân hàng" },
-    "Signed Contract": { value: 6, label: "Bản scan đã ký" },
-  };
-
-  const attachments: ContractAttachmentItem[] = contract.documents.map(
-    (document) => {
-      const documentType = documentTypeMap[document.type] || {
-        value: 99,
-        label: "Tài liệu khác",
-      };
-
-      return {
-        id: document.id,
-        name: document.name,
-        documentType: documentType.value,
-        documentTypeName: documentType.label,
-        uploadedAt: document.uploadedAt,
-        uploadedBy: document.owner,
-      };
-    },
-  );
-
-  return (
-    <ContractAttachments
-      contractId={contract.id}
-      initialAttachments={attachments}
-      mockMode
-    />
-  );
-}
-
-function ContractClosing({ contract }: { contract: ContractMock }) {
-  const checks = [
-    {
-      label: "Hai bên đã ký điện tử",
-      completed: ["Signed", "Closing", "Closed"].includes(contract.status),
-      icon: <FileSignature className="size-4" />,
-    },
-    {
-      label: "Đã gửi/nhận bản cứng",
-      completed: contract.hardCopyStatus === "Đã nhận",
-      icon: <Truck className="size-4" />,
-    },
-    {
-      label: "Đã upload biên bản nghiệm thu/bàn giao",
-      completed: contract.documents.some(
-        (document) =>
-          ["Acceptance", "Handover"].includes(document.type) &&
-          document.status === "Completed",
-      ),
-      icon: <FileCheck2 className="size-4" />,
-    },
-    {
-      label: "Đã upload hóa đơn/chứng từ kế toán",
-      completed: contract.documents.some(
-        (document) =>
-          ["Invoice", "Guarantee"].includes(document.type) &&
-          document.status === "Completed",
-      ),
-      icon: <ReceiptText className="size-4" />,
-    },
-    {
-      label: "Khách hàng đã thanh toán 100%",
-      completed: contract.paymentProgress === 100,
-      icon: <WalletCards className="size-4" />,
-    },
-  ];
-  const completedCount = checks.filter((check) => check.completed).length;
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Checklist đóng hợp đồng</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-5">
-        <div>
-          <div className="mb-2 flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Hoàn tất</span>
-            <span className="font-semibold">
-              {completedCount}/{checks.length}
-            </span>
-          </div>
-          <Progress value={(completedCount / checks.length) * 100} />
-        </div>
-
-        <div className="space-y-3">
-          {checks.map((check) => (
-            <div
-              key={check.label}
-              className="flex items-center gap-3 rounded-xl border p-4"
-            >
-              <div
-                className={`flex size-9 items-center justify-center rounded-full ${
-                  check.completed
-                    ? "bg-emerald-500/10 text-emerald-600"
-                    : "bg-muted text-muted-foreground"
-                }`}
-              >
-                {check.completed ? (
-                  <CheckCircle2 className="size-4" />
-                ) : (
-                  check.icon
-                )}
-              </div>
-              <p className="text-sm font-medium">{check.label}</p>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
+import {
+  ContractStatusBadge,
+  InfoCard,
+} from "@/components/contracts/contract-helpers";
+import { ContractOverview } from "@/components/contracts/contract-overview";
+import { ContractTerms } from "@/components/contracts/contract-terms";
+import { ContractNegotiation } from "@/components/contracts/contract-negotiation";
+import { ContractSignature } from "@/components/contracts/contract-signature";
+import { ContractDocuments } from "@/components/contracts/contract-attachments";
+import { ContractClosing } from "@/components/contracts/contract-closing";
 
 export default function ContractDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const contract = useMemo(
-    () =>
-      mockContracts.find(
-        (item) => item.id === Number(params.id),
-      ) || null,
-    [params.id],
-  );
 
-  if (!contract) {
+  const [contract, setContract] = useState<ContractDetailResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isStartingNegotiation, setIsStartingNegotiation] = useState(false);
+  const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
+
+  // Gọi API lấy dữ liệu hợp đồng
+  useEffect(() => {
+    if (!params.id) return;
+
+    const fetchContractDetail = async () => {
+      try {
+        setIsLoading(true);
+        // Do API trả về theo cấu trúc { data: { ... } }, interceptor thường tự unwrap
+        // Nếu không, bạn lấy res.data hoặc res.data.data tùy theo config của bạn
+        const res: any = await contractApi.getDetail(Number(params.id));
+
+        // Gán dữ liệu (Phụ thuộc vào cấu trúc BaseResponse của bạn)
+        const contractData = res.data ? res.data : res;
+        setContract(contractData);
+      } catch (err: any) {
+        console.error("Lỗi lấy chi tiết hợp đồng:", err);
+        setError("Không thể lấy dữ liệu hợp đồng. Vui lòng thử lại sau.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchContractDetail();
+  }, [params.id]);
+
+  if (isLoading) {
+    return (
+      <>
+        <Header />
+        <div className="flex h-[50vh] items-center justify-center">
+          <div className="flex flex-col items-center gap-2 text-muted-foreground">
+            <Loader2 className="size-8 animate-spin text-primary" />
+            <p>Đang tải chi tiết hợp đồng...</p>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if (error || !contract) {
     return (
       <>
         <Header />
@@ -480,17 +100,147 @@ export default function ContractDetailPage() {
           <Alert variant="destructive">
             <AlertTitle>Không tìm thấy hợp đồng</AlertTitle>
             <AlertDescription>
-              Hợp đồng mock này không tồn tại.{" "}
-              <Link href="/contracts" className="underline">
+              {error || "Hợp đồng này không tồn tại hoặc đã bị xóa."}{" "}
+              <Link href="/contracts" className="underline font-semibold">
                 Quay lại danh sách
               </Link>
-              .
             </AlertDescription>
           </Alert>
         </div>
       </>
     );
   }
+
+  const handleUpdateDraft = async () => {
+    if (!contract || !contract.currentVersion) return;
+
+    for (const item of contract.currentVersion.items) {
+      if (!item.quantity || item.quantity <= 0) {
+        toast.error(
+          "Vui lòng nhập số lượng hợp lệ cho tất cả sản phẩm/dịch vụ.",
+        );
+        return;
+      }
+    }
+
+    setIsUpdating(true);
+    try {
+      // Map payload chuẩn hóa theo UpdateContractDraftRequest
+      const payload: UpdateContractDraftRequest = {
+        rowVersion: contract.rowVersion,
+        currentVersionId: contract.currentVersion.versionId,
+        currentVersionRowVersion: contract.currentVersion.rowVersion,
+        customerId: contract.customer.customerId,
+        contractName: contract.contractName,
+        contractNameEn: contract.contractNameEn,
+        effectiveDate: contract.effectiveDate,
+        expireDate: contract.expireDate,
+        currencyCode: contract.currencyCode,
+
+        // Map Items (Bao gồm Id và rowVersion)
+        items: contract.currentVersion.items.map((item) => ({
+          contractItemId: item.contractItemId < 0 ? null : item.contractItemId,
+          rowVersion: item.contractItemId < 0 ? null : item.rowVersion,
+          itemType: item.itemType,
+          sourceProductId: item.sourceProductId,
+          sourceServiceId: item.sourceServiceId,
+          itemCode: item.itemCode,
+          itemName: item.itemName,
+          itemNameEn: item.itemNameEn,
+          itemDescription: item.itemDescription,
+          itemDescriptionEn: item.itemDescriptionEn,
+          unitName: item.unitName,
+          unitNameEn: item.unitNameEn,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          discountPercent: item.discountPercent,
+          vatPercent: item.vatPercent,
+          displayOrder: item.displayOrder,
+        })),
+
+        // Map Terms (Bao gồm Id và rowVersion)
+        terms: contract.currentVersion.terms.map((term) => ({
+          termId: term.termId < 0 ? null : term.termId,
+          rowVersion: term.termId < 0 ? null : term.rowVersion,
+          termCode: term.termCode,
+          termTitle: term.termTitle,
+          termTitleEn: term.termTitleEn,
+          termContent: term.termContent,
+          termContentEn: term.termContentEn,
+          isNegotiable: term.isNegotiable,
+          displayOrder: term.displayOrder,
+        })),
+      };
+
+      const res: any = await contractApi.updateDraft(
+        contract.contractId,
+        payload,
+      );
+      const updatedData = res.data ? res.data : res;
+
+      setContract(updatedData); // Cập nhật lại UI với data mới
+      toast.success("Cập nhật bản nháp thành công!");
+    } catch (err: any) {
+      console.error("Lỗi cập nhật bản nháp:", err);
+      toast.error("Cập nhật bản nháp thất bại. Vui lòng thử lại.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleStartNegotiation = async () => {
+    if (!contract) return;
+
+    setIsStartingNegotiation(true);
+    try {
+      const res: any = await contractApi.startNegotiation(contract.contractId, {
+        rowVersion: contract.rowVersion,
+      });
+      const updatedData = res.data ? res.data : res;
+      setContract(updatedData);
+      toast.success("Hợp đồng đã chuyển sang trạng thái Đàm phán!");
+    } catch (err: any) {
+      console.error("Lỗi bắt đầu đàm phán:", err);
+      const errorData = err?.response?.data;
+      const message = errorData?.errors
+        ? Object.values(errorData.errors).flat().join("; ")
+        : errorData?.title || "Không thể bắt đầu đàm phán. Vui lòng thử lại.";
+      toast.error(message);
+    } finally {
+      setIsStartingNegotiation(false);
+    }
+  };
+
+  const handleSubmitApproval = async () => {
+    if (!contract || !contract.currentVersion) return;
+
+    setIsSubmittingApproval(true);
+    try {
+      const payload = {
+        rowVersion: contract.rowVersion,
+        currentVersionId: contract.currentVersion.versionId,
+        currentVersionRowVersion: contract.currentVersion.rowVersion,
+        workflowId: null,
+      };
+      await contractApi.submitApproval(contract.contractId, payload);
+
+      const detailRes: ContractDetailResponse = await contractApi.getDetail(
+        contract.contractId,
+      );
+      setContract(detailRes);
+
+      toast.success("Hợp đồng đã được gửi duyệt!");
+    } catch (err: any) {
+      console.error("Lỗi gửi duyệt hợp đồng:", err);
+      const errorData = err?.response?.data;
+      const message = errorData?.errors
+        ? Object.values(errorData.errors).flat().join("; ")
+        : errorData?.title || "Không thể gửi duyệt. Vui lòng thử lại.";
+      toast.error(message);
+    } finally {
+      setIsSubmittingApproval(false);
+    }
+  };
 
   return (
     <>
@@ -504,29 +254,73 @@ export default function ContractDetailPage() {
               className="-ml-3 mb-2 text-muted-foreground"
               onClick={() => router.push("/contracts")}
             >
-              <ArrowLeft className="size-4" />
+              <ArrowLeft className="size-4 mr-2" />
               Quay lại danh sách
             </Button>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                {contract.contractNo}
+                {contract.contractCode}
               </h1>
               <ContractStatusBadge status={contract.status} />
             </div>
             <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-              {contract.title}
+              {contract.contractName}
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline">
-              <DatabaseZap className="size-4" />
+            {(contract.status === ContractStatus.Draft ||
+              contract.status === ContractStatus.Negotiating) && (
+              <Button
+                variant="outline"
+                onClick={handleUpdateDraft}
+                disabled={isUpdating}
+                className="bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 border-blue-200"
+              >
+                {isUpdating ? (
+                  <Loader2 className="size-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="size-4 mr-2" />
+                )}
+                Lưu thay đổi
+              </Button>
+            )}
+            {contract.status === ContractStatus.Draft && (
+              <Button
+                onClick={handleStartNegotiation}
+                disabled={isStartingNegotiation}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                {isStartingNegotiation ? (
+                  <Loader2 className="size-4 mr-2 animate-spin" />
+                ) : (
+                  <MessageSquareText className="size-4 mr-2" />
+                )}
+                Bắt đầu đàm phán
+              </Button>
+            )}
+            {contract.status === ContractStatus.Negotiating && (
+              <Button
+                onClick={handleSubmitApproval}
+                disabled={isSubmittingApproval}
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+              >
+                {isSubmittingApproval ? (
+                  <Loader2 className="size-4 mr-2 animate-spin" />
+                ) : (
+                  <Send className="size-4 mr-2" />
+                )}
+                Gửi duyệt
+              </Button>
+            )}
+            {/* <Button variant="outline">
+              <DatabaseZap className="size-4 mr-2" />
               Tạo từ báo giá
             </Button>
             <Button>
-              <FileSignature className="size-4" />
+              <FileSignature className="size-4 mr-2" />
               Gửi ký OTP
-            </Button>
+            </Button> */}
           </div>
         </div>
 
@@ -534,22 +328,29 @@ export default function ContractDetailPage() {
           <InfoCard
             icon={<Users className="size-4" />}
             label="Khách hàng"
-            value={contract.customerCompany}
+            value={
+              contract.customer?.customerCompany ||
+              contract.customer?.customerFullName
+            }
           />
           <InfoCard
             icon={<FileText className="size-4" />}
             label="Báo giá liên quan"
-            value={contract.quotationNo || "Chưa liên kết"}
+            value={"Chưa liên kết"}
           />
           <InfoCard
             icon={<WalletCards className="size-4" />}
             label="Giá trị"
-            value={<span className="text-primary">{formatCurrency(contract.value)}</span>}
+            value={
+              <span className="text-primary">
+                {formatCurrency(contract.totalAmount)}
+              </span>
+            }
           />
           <InfoCard
             icon={<Clock className="size-4" />}
             label="Người phụ trách"
-            value={contract.ownerName}
+            value={contract.responsibleEmployee?.employeeFullName}
           />
         </div>
 
@@ -564,11 +365,11 @@ export default function ContractDetailPage() {
           </TabsList>
 
           <TabsContent value="overview">
-            <ContractOverview contract={contract} />
+            <ContractOverview contract={contract} setContract={setContract} />
           </TabsContent>
 
           <TabsContent value="terms">
-            <ContractTerms />
+            <ContractTerms contract={contract} setContract={setContract} />
           </TabsContent>
 
           <TabsContent value="negotiation">
@@ -587,12 +388,6 @@ export default function ContractDetailPage() {
             <ContractClosing contract={contract} />
           </TabsContent>
         </Tabs>
-
-        <Separator />
-        <p className="text-center text-xs text-muted-foreground">
-          Đây là mock UI để chờ backend Contract API. Các nút thao tác chính
-          hiện chỉ mô phỏng luồng nghiệp vụ.
-        </p>
       </div>
     </>
   );

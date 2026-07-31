@@ -1,0 +1,372 @@
+import axiosClient from "@/lib/axios-interceptor";
+
+export enum ContractType {
+  SoftwareSupply = 1,
+  SoftwareMaintenance = 2,
+  SoftwareUpkeep = 3,
+}
+
+export const getContractTypeLabel = (type?: ContractType) => {
+  switch (type) {
+    case ContractType.SoftwareSupply:
+      return "Cung cấp phần mềm";
+    case ContractType.SoftwareMaintenance:
+      return "Bảo trì phần mềm";
+    case ContractType.SoftwareUpkeep:
+      return "Duy trì phần mềm";
+    default:
+      return "Chưa cập nhật";
+  }
+};
+
+export enum ContractLanguageMode {
+  Vietnamese = 1,
+  Bilingual = 2,
+}
+
+export const getContractLanguageModeLabel = (mode?: ContractLanguageMode) => {
+  switch (mode) {
+    case ContractLanguageMode.Vietnamese:
+      return "Tiếng Việt";
+    case ContractLanguageMode.Bilingual:
+      return "Song ngữ";
+    default:
+      return "Chưa cập nhật";
+  }
+};
+
+export enum ContractItemType {
+  Product = 1,
+  Service = 2,
+}
+
+export const getContractItemTypeLabel = (type?: ContractItemType) => {
+  switch (type) {
+    case ContractItemType.Product:
+      return "Sản phẩm";
+    case ContractItemType.Service:
+      return "Dịch vụ";
+    default:
+      return "Chưa cập nhật";
+  }
+};
+
+export enum ContractStatus {
+  Draft = 0,
+  Negotiating = 1,
+  PendingApproval = 2,
+  PendingSignature = 3,
+  Signed = 4,
+  Completed = 5,
+  Cancelled = 6,
+  Rejected = 7,
+}
+
+export const getContractStatusLabel = (status?: ContractStatus) => {
+  switch (status) {
+    case ContractStatus.Draft:
+      return "Nháp";
+    case ContractStatus.Negotiating:
+      return "Đang đàm phán";
+    case ContractStatus.PendingApproval:
+      return "Chờ duyệt";
+    case ContractStatus.PendingSignature:
+      return "Chờ ký";
+    case ContractStatus.Signed:
+      return "Đã ký";
+    case ContractStatus.Completed:
+      return "Hoàn thành";
+    case ContractStatus.Cancelled:
+      return "Đã hủy";
+    case ContractStatus.Rejected:
+      return "Từ chối";
+    default:
+      return "Chưa cập nhật";
+  }
+};
+
+export enum ApprovalRequestStatus {
+  Pending = 0,
+  Approved = 1,
+  Returned = 2,
+  Rejected = 3,
+  Withdrawn = 4,
+}
+
+export const getApprovalRequestStatusLabel = (
+  status?: ApprovalRequestStatus,
+) => {
+  switch (status) {
+    case ApprovalRequestStatus.Pending:
+      return "Chờ xử lý";
+    case ApprovalRequestStatus.Approved:
+      return "Đã duyệt";
+    case ApprovalRequestStatus.Returned:
+      return "Yêu cầu sửa lại";
+    case ApprovalRequestStatus.Rejected:
+      return "Từ chối";
+    case ApprovalRequestStatus.Withdrawn:
+      return "Đã rút";
+    default:
+      return "Chưa cập nhật";
+  }
+};
+
+export const statusClasses: Record<number, string> = {
+  [ContractStatus.Draft]:
+    "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20",
+  [ContractStatus.Negotiating]:
+    "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20",
+  [ContractStatus.PendingApproval]:
+    "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20",
+  [ContractStatus.PendingSignature]:
+    "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20",
+  [ContractStatus.Signed]:
+    "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20",
+  [ContractStatus.Completed]:
+    "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20",
+  [ContractStatus.Cancelled]:
+    "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20",
+  [ContractStatus.Rejected]:
+    "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20",
+};
+
+export interface CreateContractItemRequest {
+  itemType: ContractItemType;
+  sourceProductId?: number | null;
+  sourceServiceId?: number | null;
+  itemCode?: string | null;
+  itemName: string;
+  itemNameEn?: string | null;
+  itemDescription?: string | null;
+  itemDescriptionEn?: string | null;
+  unitName?: string | null;
+  unitNameEn?: string | null;
+  quantity: number;
+  unitPrice: number;
+  discountPercent: number;
+  vatPercent: number;
+  displayOrder: number;
+}
+
+export interface UpdateContractItemRequest extends CreateContractItemRequest {
+  contractItemId?: number | null;
+  rowVersion?: string | null;
+}
+
+export interface CreateContractRequest {
+  customerId: number;
+  contractType: ContractType;
+  templateVersionId: number;
+  parentContractId?: number | null;
+  contractName: string;
+  contractNameEn?: string | null;
+  effectiveDate?: string | null;
+  expireDate?: string | null;
+  currencyCode: string;
+  languageMode: ContractLanguageMode;
+  items: CreateContractItemRequest[];
+}
+
+export interface UpdateContractTermRequest {
+  termId?: number | null;
+  rowVersion?: string | null;
+  termCode: string;
+  termTitle: string;
+  termTitleEn?: string | null;
+  termContent?: string | null;
+  termContentEn?: string | null;
+  isNegotiable: boolean;
+  displayOrder: number;
+}
+
+export interface UpdateContractDraftRequest {
+  rowVersion: string;
+  currentVersionId: number;
+  currentVersionRowVersion: string;
+  customerId: number;
+  contractName: string;
+  contractNameEn?: string | null;
+  effectiveDate?: string | null;
+  expireDate?: string | null;
+  currencyCode: string;
+  items: UpdateContractItemRequest[];
+  terms: UpdateContractTermRequest[];
+}
+
+export interface StartContractNegotiationRequest {
+  rowVersion: string;
+}
+
+export interface SubmitContractForApprovalRequest {
+  rowVersion: string;
+  currentVersionId: number;
+  currentVersionRowVersion: string;
+  workflowId?: number | null;
+}
+
+export interface ContractItemDetailResponse {
+  contractItemId: number;
+  itemType: ContractItemType;
+  sourceProductId?: number | null;
+  sourceServiceId?: number | null;
+  itemCode?: string | null;
+  itemName: string;
+  itemNameEn?: string | null;
+  itemDescription?: string | null;
+  itemDescriptionEn?: string | null;
+  unitName?: string | null;
+  unitNameEn?: string | null;
+  quantity: number;
+  unitPrice: number;
+  lineSubtotal: number;
+  discountPercent: number;
+  discountAmount: number;
+  vatPercent: number;
+  vatAmount: number;
+  lineTotal: number;
+  displayOrder: number;
+  rowVersion: string;
+}
+
+export interface ContractTermDetailResponse {
+  termId: number;
+  sourceTemplateTermId?: number | null;
+  termCode: string;
+  termTitle: string;
+  termTitleEn?: string | null;
+  termContent?: string | null;
+  termContentEn?: string | null;
+  isNegotiable: boolean;
+  displayOrder: number;
+  rowVersion: string;
+}
+
+export interface ContractVersionDetailResponse {
+  versionId: number;
+  versionNo: number;
+  sourceVersionId?: number | null;
+  templateVersionId?: number | null;
+  changeNote?: string | null;
+  snapshotHash?: string | null;
+  isLocked: boolean;
+  lockedDate?: string | null;
+  lockedByEmployeeId?: number | null;
+  createdEmployeeId: number;
+  createdDate: string;
+  rowVersion: string;
+  items: ContractItemDetailResponse[];
+  terms: ContractTermDetailResponse[];
+}
+
+export interface ContractCustomerSummaryResponse {
+  customerId: number;
+  customerCode?: string | null;
+  customerFullName?: string | null;
+  customerCompany?: string | null;
+  customerTaxCode?: string | null;
+  customerEmail?: string | null;
+  customerMobile?: string | null;
+  customerAddress?: string | null;
+}
+
+export interface ContractEmployeeSummaryResponse {
+  employeeId: number;
+  employeeCode?: string | null;
+  employeeFullName?: string | null;
+  employeeEmail?: string | null;
+  employeeMobile?: string | null;
+}
+
+export interface ContractDetailResponse {
+  contractId: number;
+  contractCode?: string | null;
+  contractName: string;
+  contractNameEn?: string | null;
+  contractType: ContractType;
+  templateVersionId?: number | null;
+  parentContractId?: number | null;
+  status: ContractStatus;
+  signDate?: string | null;
+  effectiveDate?: string | null;
+  expireDate?: string | null;
+  totalAmount: number;
+  currencyCode: string;
+  languageMode: ContractLanguageMode;
+  isLegacy: boolean;
+  createdEmployeeId: number;
+  createdDate: string;
+  updatedDate?: string | null;
+  rowVersion: string;
+  customer: ContractCustomerSummaryResponse;
+  responsibleEmployee: ContractEmployeeSummaryResponse;
+  currentVersion: ContractVersionDetailResponse;
+}
+
+export interface CreateContractResponse {
+  contractId: number;
+  contractCode: string;
+  contractName: string;
+  status: ContractStatus;
+  currentVersionId: number;
+  versionNo: number;
+  customerId: number;
+  contractType: ContractType;
+  templateVersionId: number;
+  totalAmount: number;
+  currencyCode: string;
+  languageMode: ContractLanguageMode;
+  employeeId: number;
+  createdDate: string;
+  itemCount: number;
+  termCount: number;
+}
+
+export interface SubmitContractForApprovalResponse {
+  approvalRequestId: number;
+  contractId: number;
+  versionId: number;
+  contractStatus: ContractStatus;
+  approvalStatus: ApprovalRequestStatus;
+  submittedDate: string;
+  snapshotHash: string;
+  contractRowVersion: string;
+  versionRowVersion: string;
+}
+
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+const BASE_URL = "/contracts";
+
+export const contractApi = {
+  getDetail: (id: number) => {
+    return axiosClient.get<any, ContractDetailResponse>(`${BASE_URL}/${id}`);
+  },
+  create: (data: CreateContractRequest) => {
+    return axiosClient.post<any, CreateContractResponse>(BASE_URL, data);
+  },
+  updateDraft: (id: number, data: UpdateContractDraftRequest) => {
+    return axiosClient.put<any, ContractDetailResponse>(
+      `${BASE_URL}/${id}/draft`,
+      data,
+    );
+  },
+  startNegotiation: (id: number, data: StartContractNegotiationRequest) => {
+    return axiosClient.post<any, ContractDetailResponse>(
+      `${BASE_URL}/${id}/start-negotiation`,
+      data,
+    );
+  },
+  submitApproval: (id: number, data: SubmitContractForApprovalRequest) => {
+    return axiosClient.post<any, SubmitContractForApprovalResponse>(
+      `${BASE_URL}/${id}/submit-approval`,
+      data,
+    );
+  },
+};

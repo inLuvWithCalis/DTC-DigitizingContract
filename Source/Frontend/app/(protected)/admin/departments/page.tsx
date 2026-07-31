@@ -33,6 +33,7 @@ import {
   SummaryCardItem,
   SummaryCards,
 } from "@/components/ui/custom/summary-cards";
+import { PageHeaderSkeleton } from "@/components/ui/custom/table-skeleton";
 
 export default function DepartmentListPage() {
   const router = useRouter();
@@ -143,7 +144,8 @@ export default function DepartmentListPage() {
       {
         accessorKey: "departmentCode",
         header: ({ column }) => (
-          <div
+          <button
+            type="button"
             className="flex items-center gap-1.5 select-none cursor-pointer group"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
           >
@@ -154,7 +156,7 @@ export default function DepartmentListPage() {
             }[column.getIsSorted() as string] ?? (
               <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
             )}
-          </div>
+          </button>
         ),
         cell: ({ row }) => (
           <div className="flex flex-col pl-1">
@@ -303,7 +305,7 @@ export default function DepartmentListPage() {
           </Button>
         </div>
 
-        <SummaryCards items={summaryItems} />
+        <SummaryCards items={summaryItems} isLoading={isLoading} />
 
         <Card className="border-border shadow-sm bg-card min-h-[500px] flex flex-col gap-0 p-0">
           <CardContent className="p-4 flex flex-col justify-between flex-1 pb-0">
@@ -314,9 +316,21 @@ export default function DepartmentListPage() {
               searchKey="departmentName"
               searchPlaceholder="Tìm tên phòng ban..."
               filterSlot={CustomFilters}
-              onSelectMany={(rows) =>
-                toast.info(`Đang gọi API xử lý ${rows.length} dòng...`)
-              }
+              bulkActions={(selectedRows, resetSelection) => (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-8 text-xs shadow-sm"
+                  onClick={() => {
+                    toast.info(
+                      `Đang gọi API xử lý ${selectedRows.length} dòng...`,
+                    );
+                    resetSelection();
+                  }}
+                >
+                  Xử lý hàng loạt
+                </Button>
+              )}
               onRowClick={(row) => handleView(row.departmentId)}
               mobileCardRenderer={(
                 row: Row<DepartmentResponse>,

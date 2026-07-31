@@ -29,19 +29,40 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Loader2,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  MoreHorizontal,
   CheckCheck,
   Search,
 } from "lucide-react";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { MobileCardWrapper } from "./mobile-card-wrapper";
+import {
+  TableRowSkeleton,
+  MobileCardSkeleton,
+  TableHeaderSkeleton,
+  TablePaginationSkeleton,
+} from "./table-skeleton";
 
 interface MobileCardRenderContext {
   isSelectionMode: boolean;
   isSelected: boolean;
   actionCell: React.ReactNode;
+}
+
+function getPaginationRange(currentPage: number, totalPages: number) {
+  if (totalPages <= 5) {
+    return Array.from({ length: Math.max(1, totalPages) }, (_, i) => i + 1);
+  }
+  if (currentPage <= 3) {
+    return [1, 2, 3, 4, "...", totalPages];
+  }
+  if (currentPage >= totalPages - 2) {
+    return [1, "...", totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  }
+  return [1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages];
 }
 
 interface DataTableProps<TData, TValue> {
@@ -58,7 +79,7 @@ interface DataTableProps<TData, TValue> {
   searchPlaceholder?: string;
   filterSlot?: React.ReactNode;
   isLoading?: boolean;
-  onSelectMany?: (selectedRows: TData[]) => void;
+
   bulkActions?: (
     selectedRows: TData[],
     resetSelection: () => void,
@@ -84,7 +105,7 @@ export function DataTable<TData, TValue>({
   searchPlaceholder = "Tìm kiếm...",
   filterSlot,
   isLoading = false,
-  onSelectMany,
+
   bulkActions,
   onRowClick,
   mobileCardRenderer,
@@ -149,51 +170,53 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="flex flex-col h-full w-full flex-1">
-      <div className="flex flex-col gap-3 w-full mb-4 md:flex-row md:items-center md:justify-between md:gap-4">
-        <div className="flex flex-wrap items-center gap-2 md:gap-3">
-          {filterSlot && (
-            <>
-              <span className="text-sm font-medium text-muted-foreground hidden md:block">
-                Bộ lọc:
-              </span>
-              {filterSlot}
-            </>
+      {(!!filterSlot || !!onSearchChange) && (
+        <div className="flex flex-col gap-3 w-full mb-4 md:flex-row md:items-center md:justify-between md:gap-4">
+          <div className="flex flex-wrap items-center gap-2 md:gap-3">
+            {filterSlot && (
+              <>
+                <span className="text-sm font-medium text-muted-foreground hidden md:block">
+                  Bộ lọc:
+                </span>
+                {filterSlot}
+              </>
+            )}
+          </div>
+
+          {onSearchChange && (
+            <div className="relative w-full md:w-96 flex items-center">
+              <Input
+                placeholder={searchPlaceholder}
+                value={localSearch}
+                onChange={(event) => setLocalSearch(event.target.value)}
+                onClear={() => {
+                  setLocalSearch("");
+                  triggerSearch("");
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    triggerSearch();
+                  }
+                }}
+                className="h-9 bg-background pr-9"
+              />
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="ml-2"
+                onClick={() => triggerSearch()}
+              >
+                <Search className="w-4 h-4" />
+              </Button>
+            </div>
           )}
         </div>
+      )}
 
-        {onSearchChange && (
-          <div className="relative w-full md:w-96 flex items-center">
-            <Input
-              placeholder={searchPlaceholder}
-              value={localSearch}
-              onChange={(event) => setLocalSearch(event.target.value)}
-              onClear={() => {
-                setLocalSearch("");
-                triggerSearch("");
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  triggerSearch();
-                }
-              }}
-              className="h-9 bg-background pr-9"
-            />
-
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="ml-2"
-              onClick={() => triggerSearch()}
-            >
-              <Search className="w-4 h-4" />
-            </Button>
-          </div>
-        )}
-      </div>
-
-      {isSelectionMode && (
+      {isMobile && isSelectionMode && (
         <div className="flex items-center justify-between gap-3 mb-3 px-1 animate-in fade-in slide-in-from-top-1 duration-200">
           <div className="flex items-center gap-2">
             <CheckCheck className="w-4 h-4 text-primary" />
@@ -220,6 +243,10 @@ export function DataTable<TData, TValue>({
             >
               Hủy
             </Button>
+            {bulkActions?.(
+              selectedRows.map((row) => row.original),
+              () => table.resetRowSelection(),
+            )}
           </div>
         </div>
       )}
@@ -228,9 +255,7 @@ export function DataTable<TData, TValue>({
         /* ────────────── MOBILE CARD VIEW ────────────── */
         <div className="flex flex-col gap-3">
           {isLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-5 h-5 animate-spin text-primary" />
-            </div>
+            <MobileCardSkeleton count={pagination?.pageSize || 4} />
           ) : table.getRowModel().rows?.length ? (
             table.getRowModel().rows.map((row) => {
               // TỰ ĐỘNG TÌM VÀ RENDER CỘT ACTION
@@ -319,7 +344,7 @@ export function DataTable<TData, TValue>({
 
           {!isSelectionMode &&
             table.getRowModel().rows?.length > 0 &&
-            (bulkActions || onSelectMany) && (
+            bulkActions && (
               <p className="text-center text-xs text-muted-foreground/60 mt-1 select-none">
                 Nhấn giữ để chọn nhiều dòng
               </p>
@@ -327,32 +352,119 @@ export function DataTable<TData, TValue>({
         </div>
       ) : (
         /* ────────────── DESKTOP TABLE VIEW ────────────── */
-        <div className="relative w-full overflow-auto rounded-md border border-border flex-1">
+        <div
+          className={`relative w-full overflow-auto rounded-md border border-border flex-1 ${
+            table.getState().pagination.pageSize <= 5
+              ? "min-h-108.5"
+              : "min-h-full"
+          }`}
+        >
           <Table>
-            <TableHeader className="bg-secondary/50">
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow
-                  key={headerGroup.id}
-                  className="hover:bg-transparent border-b-border"
-                >
-                  {headerGroup.headers.map((header) => (
-                    <TableHead
-                      key={header.id}
-                      className="h-11 font-semibold text-muted-foreground"
+            {isLoading ? (
+              <TableHeaderSkeleton columnCount={columns.length} />
+            ) : (
+              <TableHeader className="bg-secondary/50">
+                {table.getHeaderGroups().map((headerGroup) => {
+                  const hasSelectColumn = headerGroup.headers.some(
+                    (h) => h.column.id === "select",
+                  );
+                  const hasSelectedRows = selectedRows.length > 0;
+
+                  return (
+                    <TableRow
+                      key={headerGroup.id}
+                      className="hover:bg-transparent border-b-border"
                     >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext(),
-                          )}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
+                      {headerGroup.headers.map((header, index) => {
+                        if (hasSelectedRows) {
+                          if (header.column.id === "select") {
+                            return (
+                              <TableHead
+                                key={header.id}
+                                className="h-11 font-semibold text-muted-foreground"
+                              >
+                                {header.isPlaceholder
+                                  ? null
+                                  : flexRender(
+                                      header.column.columnDef.header,
+                                      header.getContext(),
+                                    )}
+                              </TableHead>
+                            );
+                          }
+
+                          const isOverlayPosition = hasSelectColumn
+                            ? index === 1
+                            : index === 0;
+
+                          if (!isOverlayPosition) return null;
+
+                          const colSpan =
+                            headerGroup.headers.length -
+                            (hasSelectColumn ? 1 : 0);
+
+                          return (
+                            <TableHead
+                              key="selection-header-overlay"
+                              colSpan={colSpan}
+                              className="h-11 font-normal text-foreground py-0"
+                            >
+                              <div className="flex items-center justify-between gap-3 px-1 animate-in fade-in duration-150">
+                                <div className="flex items-center gap-2">
+                                  <CheckCheck className="w-4 h-4 text-primary" />
+                                  <span className="text-sm font-medium text-foreground">
+                                    Đã chọn{" "}
+                                    <strong className="text-primary">
+                                      {selectedRows.length}
+                                    </strong>{" "}
+                                    dòng
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 text-xs text-muted-foreground"
+                                    onClick={exitSelectionMode}
+                                  >
+                                    Hủy
+                                  </Button>
+                                  {bulkActions?.(
+                                    selectedRows.map((row) => row.original),
+                                    () => table.resetRowSelection(),
+                                  )}
+                                </div>
+                              </div>
+                            </TableHead>
+                          );
+                        }
+
+                        return (
+                          <TableHead
+                            key={header.id}
+                            className="h-11 font-semibold text-muted-foreground"
+                          >
+                            {header.isPlaceholder
+                              ? null
+                              : flexRender(
+                                  header.column.columnDef.header,
+                                  header.getContext(),
+                                )}
+                          </TableHead>
+                        );
+                      })}
+                    </TableRow>
+                  );
+                })}
+              </TableHeader>
+            )}
             <TableBody>
-              {table.getRowModel().rows?.length ? (
+              {isLoading ? (
+                <TableRowSkeleton
+                  columnCount={columns.length}
+                  rowCount={pagination?.pageSize || 5}
+                />
+              ) : table.getRowModel().rows?.length ? (
                 table.getRowModel().rows.map((row) => (
                   <TableRow
                     key={row.id}
@@ -374,13 +486,13 @@ export function DataTable<TData, TValue>({
                 <TableRow>
                   <TableCell
                     colSpan={columns.length}
-                    className="h-32 text-center text-muted-foreground"
+                    className={`${
+                      table.getState().pagination.pageSize <= 5
+                        ? "h-86"
+                        : "h-172"
+                    } text-center text-muted-foreground`}
                   >
-                    {isLoading ? (
-                      <Loader2 className="w-5 h-5 animate-spin mx-auto text-primary" />
-                    ) : (
-                      "Không tìm thấy dữ liệu."
-                    )}
+                    Không tìm thấy dữ liệu.
                   </TableCell>
                 </TableRow>
               )}
@@ -389,47 +501,9 @@ export function DataTable<TData, TValue>({
         </div>
       )}
 
-      {selectedRows.length > 0 && (bulkActions || onSelectMany) && (
-        <div className="bg-primary/5 border border-primary/20 text-primary px-3 py-2.5 mt-4 rounded-xl flex flex-col gap-3 text-sm shadow-sm animate-in fade-in slide-in-from-bottom-2 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-3">
-          <span>
-            Đã chọn:{" "}
-            <strong className="font-semibold text-lg">
-              {selectedRows.length}
-            </strong>{" "}
-            dòng
-          </span>
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 bg-background border-border flex-1 sm:flex-none"
-              onClick={() => table.resetRowSelection()}
-            >
-              Hủy bỏ
-            </Button>
-            {bulkActions ? (
-              bulkActions(
-                selectedRows.map((row) => row.original),
-                () => table.resetRowSelection(),
-              )
-            ) : (
-              <Button
-                size="sm"
-                variant="destructive"
-                className="h-9 shadow-sm flex-1 sm:flex-none"
-                onClick={() => {
-                  onSelectMany?.(selectedRows.map((row) => row.original));
-                  table.resetRowSelection();
-                }}
-              >
-                Xóa tất cả
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {rowCount > 0 && (
+      {isLoading ? (
+        <TablePaginationSkeleton />
+      ) : (
         <div
           className={`flex flex-col gap-3 py-4 mt-auto border-t border-transparent sm:flex-row sm:items-center sm:justify-between ${
             isMobile && "justify-end items-center"
@@ -438,17 +512,21 @@ export function DataTable<TData, TValue>({
           <div className="text-sm text-muted-foreground text-center sm:text-left">
             Hiển thị{" "}
             <span className="font-medium text-foreground">
-              {table.getState().pagination.pageIndex *
-                table.getState().pagination.pageSize +
-                1}
+              {rowCount > 0
+                ? table.getState().pagination.pageIndex *
+                    table.getState().pagination.pageSize +
+                  1
+                : 0}
             </span>{" "}
             đến{" "}
             <span className="font-medium text-foreground">
-              {Math.min(
-                (table.getState().pagination.pageIndex + 1) *
-                  table.getState().pagination.pageSize,
-                rowCount,
-              )}
+              {rowCount > 0
+                ? Math.min(
+                    (table.getState().pagination.pageIndex + 1) *
+                      table.getState().pagination.pageSize,
+                    rowCount,
+                  )
+                : 0}
             </span>{" "}
             trong{" "}
             <span className="font-medium text-foreground">{rowCount}</span> kết
@@ -463,6 +541,7 @@ export function DataTable<TData, TValue>({
               <Select
                 value={table.getState().pagination.pageSize.toString()}
                 onValueChange={(val) => table.setPageSize(Number(val))}
+                disabled={isLoading || rowCount <= 0}
               >
                 <SelectTrigger className="h-8 w-[75px] bg-background border-border">
                   <SelectValue />
@@ -480,30 +559,91 @@ export function DataTable<TData, TValue>({
               </Select>
             </div>
 
-            <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="flex items-center gap-1">
               <Button
                 variant="outline"
-                size="sm"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-                className="h-8 px-2 sm:px-3"
+                size="icon"
+                onClick={() => table.setPageIndex(0)}
+                disabled={
+                  isLoading || rowCount <= 0 || !table.getCanPreviousPage()
+                }
+                className="h-8 w-8"
               >
-                <ChevronLeft className="w-4 h-4 sm:mr-1" />
-                <span className="hidden sm:inline">Trước</span>
+                <ChevronsLeft className="w-4 h-4" />
+                <span className="sr-only">Trang đầu</span>
               </Button>
-              <div className="text-sm font-medium text-foreground px-1.5 sm:px-2 min-w-[60px] sm:min-w-[80px] text-center">
-                {table.getState().pagination.pageIndex + 1} /{" "}
-                {table.getPageCount()}
-              </div>
               <Button
                 variant="outline"
-                size="sm"
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-                className="h-8 px-2 sm:px-3"
+                size="icon"
+                onClick={() => table.previousPage()}
+                disabled={
+                  isLoading || rowCount <= 0 || !table.getCanPreviousPage()
+                }
+                className="h-8 w-8"
               >
-                <span className="hidden sm:inline">Sau</span>
-                <ChevronRight className="w-4 h-4 sm:ml-1" />
+                <ChevronLeft className="w-4 h-4" />
+                <span className="sr-only">Trang trước</span>
+              </Button>
+
+              {getPaginationRange(
+                rowCount > 0 ? table.getState().pagination.pageIndex + 1 : 1,
+                rowCount > 0 ? table.getPageCount() : 1,
+              ).map((page, idx) => {
+                if (page === "...") {
+                  return (
+                    <span
+                      key={`gap-${idx}`}
+                      className="flex h-8 w-6 items-center justify-center text-xs text-muted-foreground select-none"
+                    >
+                      <MoreHorizontal className="h-3.5 w-3.5" />
+                    </span>
+                  );
+                }
+
+                const pageNum = page as number;
+                const isCurrent =
+                  rowCount > 0 &&
+                  pageNum === table.getState().pagination.pageIndex + 1;
+
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={isCurrent ? "default" : "outline"}
+                    size="icon"
+                    onClick={() => table.setPageIndex(pageNum - 1)}
+                    disabled={isLoading || rowCount <= 0}
+                    className="h-8 w-8 text-xs font-medium"
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => table.nextPage()}
+                disabled={
+                  isLoading || rowCount <= 0 || !table.getCanNextPage()
+                }
+                className="h-8 w-8"
+              >
+                <ChevronRight className="w-4 h-4" />
+                <span className="sr-only">Trang sau</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() =>
+                  table.setPageIndex(Math.max(0, table.getPageCount() - 1))
+                }
+                disabled={
+                  isLoading || rowCount <= 0 || !table.getCanNextPage()
+                }
+                className="h-8 w-8"
+              >
+                <ChevronsRight className="w-4 h-4" />
+                <span className="sr-only">Trang cuối</span>
               </Button>
             </div>
           </div>

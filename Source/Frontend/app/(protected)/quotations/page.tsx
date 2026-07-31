@@ -34,6 +34,7 @@ import {
   SummaryCardItem,
   SummaryCards,
 } from "@/components/ui/custom/summary-cards";
+import { PageHeaderSkeleton } from "@/components/ui/custom/table-skeleton";
 
 export default function QuotationListPage() {
   const router = useRouter();
@@ -133,7 +134,8 @@ export default function QuotationListPage() {
       {
         accessorKey: "quotationNo",
         header: ({ column }) => (
-          <div
+          <button
+            type="button"
             className="flex items-center gap-1.5 select-none cursor-pointer group"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
           >
@@ -144,7 +146,7 @@ export default function QuotationListPage() {
             }[column.getIsSorted() as string] ?? (
               <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
             )}
-          </div>
+          </button>
         ),
         cell: ({ row }) => (
           <div className="flex flex-col pl-1">
@@ -182,7 +184,8 @@ export default function QuotationListPage() {
       {
         accessorKey: "totalAmount",
         header: ({ column }) => (
-          <div
+          <button
+            type="button"
             className="flex items-center justify-end gap-1.5 select-none cursor-pointer group"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
           >
@@ -193,7 +196,7 @@ export default function QuotationListPage() {
             }[column.getIsSorted() as string] ?? (
               <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
             )}
-          </div>
+          </button>
         ),
         cell: ({ row }) => (
           <div className="text-right font-semibold text-primary">
@@ -311,7 +314,7 @@ export default function QuotationListPage() {
             <FileText className="w-4 h-4 mr-2" /> Tạo báo giá mới
           </Button>
         </div>
-        <SummaryCards items={summaryItems} />
+        <SummaryCards items={summaryItems} isLoading={isLoading} />
         <Card className="border-border shadow-sm bg-card min-h-[500px] flex flex-col gap-0 p-0">
           <CardContent className="p-4 flex flex-col justify-between flex-1 pb-0">
             <DataTable
@@ -321,9 +324,21 @@ export default function QuotationListPage() {
               searchKey="quotationNo"
               searchPlaceholder="Tìm mã báo giá..."
               filterSlot={CustomFilters}
-              onSelectMany={(rows) =>
-                toast.info(`Đang gọi API xóa ${rows.length} dòng...`)
-              }
+              bulkActions={(selectedRows, resetSelection) => (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-8 text-xs shadow-sm"
+                  onClick={() => {
+                    toast.info(
+                      `Đang gọi API xóa ${selectedRows.length} báo giá...`,
+                    );
+                    resetSelection();
+                  }}
+                >
+                  Xóa tất cả
+                </Button>
+              )}
               onRowClick={(row) => handleView(row.quotationId)}
               mobileCardRenderer={(
                 row: Row<QuotationResponseDto>,

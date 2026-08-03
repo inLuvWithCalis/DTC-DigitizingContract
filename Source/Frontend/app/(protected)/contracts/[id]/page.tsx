@@ -41,6 +41,7 @@ import { ContractNegotiation } from "@/components/contracts/contract-negotiation
 import { ContractSignature } from "@/components/contracts/contract-signature";
 import { ContractDocuments } from "@/components/contracts/contract-attachments";
 import { ContractClosing } from "@/components/contracts/contract-closing";
+import { TransferResponsibilityModal } from "@/components/contracts/transfer-responsibility-modal";
 
 export default function ContractDetailPage() {
   const params = useParams<{ id: string }>();
@@ -52,6 +53,7 @@ export default function ContractDetailPage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isStartingNegotiation, setIsStartingNegotiation] = useState(false);
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
   // Gọi API lấy dữ liệu hợp đồng
   useEffect(() => {
@@ -347,11 +349,25 @@ export default function ContractDetailPage() {
               </span>
             }
           />
-          <InfoCard
-            icon={<Clock className="size-4" />}
-            label="Người phụ trách"
-            value={contract.responsibleEmployee?.employeeFullName}
-          />
+          <div className="rounded-xl border bg-muted/30 p-4 flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Clock className="size-4" />
+                Người phụ trách
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs text-primary hover:bg-primary/10"
+                onClick={() => setIsTransferModalOpen(true)}
+              >
+                Chuyển giao
+              </Button>
+            </div>
+            <div className="mt-2 font-semibold text-foreground">
+              {contract.responsibleEmployee?.employeeFullName || "Chưa gán"}
+            </div>
+          </div>
         </div>
 
         <Tabs defaultValue="overview" className="space-y-4">
@@ -365,7 +381,11 @@ export default function ContractDetailPage() {
           </TabsList>
 
           <TabsContent value="overview">
-            <ContractOverview contract={contract} setContract={setContract} />
+            <ContractOverview
+              contract={contract}
+              setContract={setContract}
+              onOpenTransferModal={() => setIsTransferModalOpen(true)}
+            />
           </TabsContent>
 
           <TabsContent value="terms">
@@ -388,6 +408,16 @@ export default function ContractDetailPage() {
             <ContractClosing contract={contract} />
           </TabsContent>
         </Tabs>
+
+        <TransferResponsibilityModal
+          isOpen={isTransferModalOpen}
+          onClose={() => setIsTransferModalOpen(false)}
+          contractId={contract.contractId}
+          rowVersion={contract.rowVersion}
+          currentEmployeeId={contract.responsibleEmployee?.employeeId}
+          currentEmployeeName={contract.responsibleEmployee?.employeeFullName}
+          onSuccess={(updated) => setContract(updated)}
+        />
       </div>
     </>
   );

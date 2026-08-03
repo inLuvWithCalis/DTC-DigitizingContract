@@ -48,11 +48,13 @@ import {
   ContractItemType,
   CreateContractRequest,
   CreateContractItemRequest,
+  EligibleParentContractResponse,
   contractApi,
   getContractTypeLabel,
   getContractLanguageModeLabel,
 } from "@/services/contract-api";
 import { customerApi, CustomerResponse } from "@/services/customers-api";
+import { employeeApi, EmployeeResponse } from "@/services/employees-api";
 import { productApi } from "@/services/catalog/products-api";
 import { serviceApi } from "@/services/catalog/services-api";
 import {
@@ -102,6 +104,9 @@ export default function CreateContractPage() {
   const [customers, setCustomers] = useState<CustomerResponse[]>([]);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
 
+  const [employees, setEmployees] = useState<EmployeeResponse[]>([]);
+  const [isLoadingEmployees, setIsLoadingEmployees] = useState(true);
+
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
   const [isLoadingCatalog, setIsLoadingCatalog] = useState(true);
 
@@ -109,13 +114,16 @@ export default function CreateContractPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [customerRes, productRes, serviceRes] = await Promise.all([
-          customerApi.getList({ page: 1, pageSize: 100 }),
-          productApi.getList({ page: 1, pageSize: 100 }),
-          serviceApi.getList({ page: 1, pageSize: 100 }),
-        ]);
+        const [customerRes, productRes, serviceRes, employeeRes] =
+          await Promise.all([
+            customerApi.getList({ page: 1, pageSize: 100 }),
+            productApi.getList({ page: 1, pageSize: 100 }),
+            serviceApi.getList({ page: 1, pageSize: 100 }),
+            employeeApi.getList({ page: 1, pageSize: 100 }),
+          ]);
 
         setCustomers(customerRes.items);
+        setEmployees(employeeRes.items || []);
 
         const mappedProducts: CatalogItem[] = productRes.items.map((p) => ({
           id: `p-${p.productId}`,
@@ -144,6 +152,7 @@ export default function CreateContractPage() {
         console.error("Failed to fetch data:", err);
       } finally {
         setIsLoadingCustomers(false);
+        setIsLoadingEmployees(false);
         setIsLoadingCatalog(false);
       }
     };
@@ -152,9 +161,17 @@ export default function CreateContractPage() {
 
   // Step 1: Customer & Basic Info
   const [customerId, setCustomerId] = useState<string>("");
+  const [responsibleEmployeeId, setResponsibleEmployeeId] =
+    useState<string>("");
   const [contractType, setContractType] = useState<ContractType>(
     ContractType.SoftwareSupply,
   );
+  const [parentContractId, setParentContractId] = useState<string>("");
+  const [eligibleParents, setEligibleParents] = useState<
+    EligibleParentContractResponse[]
+  >([]);
+  const [isLoadingEligibleParents, setIsLoadingEligibleParents] =
+    useState<boolean>(false);
   const [templateVersionId, setTemplateVersionId] = useState<string>("");
   const [languageMode, setLanguageMode] = useState<ContractLanguageMode>(
     ContractLanguageMode.Vietnamese,
@@ -163,6 +180,37 @@ export default function CreateContractPage() {
     "Triển khai hệ thống quản lý hợp đồng điện tử",
   );
   const [draftTerms, setDraftTerms] = useState<MockContractTerm[]>([]);
+
+  // Fetch eligible parent contracts when customer or contractType changes
+  useEffect(() => {
+    if (
+      (contractType === ContractType.SoftwareMaintenance ||
+        contractType === ContractType.SoftwareUpkeep) &&
+      customerId
+    ) {
+      const fetchEligibleParents = async () => {
+        setIsLoadingEligibleParents(true);
+        try {
+          const res = await contractApi.getEligibleParents({
+            customerId: Number(customerId),
+            targetContractType: contractType,
+            page: 1,
+            pageSize: 100,
+          });
+          setEligibleParents(res.items || []);
+        } catch (error) {
+          console.error("Lỗi khi tải danh sách hợp đồng nguồn:", error);
+          setEligibleParents([]);
+        } finally {
+          setIsLoadingEligibleParents(false);
+        }
+      };
+      fetchEligibleParents();
+    } else {
+      setEligibleParents([]);
+      setParentContractId("");
+    }
+  }, [customerId, contractType]);
 
   // Step 2: Items, Filter & Pagination
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
@@ -202,6 +250,12 @@ export default function CreateContractPage() {
   const selectedCustomer = customers.find(
     (item) => item.customerId === Number(customerId),
   );
+  const selectedEmployee = employees.find(
+    (item) => item.employeeId === Number(responsibleEmployeeId),
+  );
+  const selectedParentContract = eligibleParents.find(
+    (item) => item.contractId === Number(parentContractId),
+  );
   const selectedTemplate = mockContractTemplates.find(
     (item) => item.versionId === Number(templateVersionId),
   );
@@ -218,8 +272,18 @@ export default function CreateContractPage() {
   const progressValue = ((currentStep + 1) / steps.length) * 100;
 
   const isStepCompleted = (stepIdx: number) => {
-    if (stepIdx === 0)
-      return !!customerId && !!templateVersionId && !!contractTitle.trim();
+    if (stepIdx === 0) {
+      const isParentRequired =
+        contractType === ContractType.SoftwareMaintenance ||
+        contractType === ContractType.SoftwareUpkeep;
+      return (
+        !!customerId &&
+        !!responsibleEmployeeId &&
+        !!templateVersionId &&
+        !!contractTitle.trim() &&
+        (!isParentRequired || !!parentContractId)
+      );
+    }
     if (stepIdx === 1) return selectedItems.length > 0;
     if (stepIdx === 2)
       return (
@@ -239,6 +303,9 @@ export default function CreateContractPage() {
   }, [
     currentStep,
     customerId,
+    responsibleEmployeeId,
+    contractType,
+    parentContractId,
     templateVersionId,
     contractTitle,
     selectedItems.length,
@@ -250,6 +317,7 @@ export default function CreateContractPage() {
   const handleContractTypeChange = (value: string) => {
     const nextType = Number(value) as ContractType;
     setContractType(nextType);
+    setParentContractId("");
 
     if (selectedTemplate?.contractType !== nextType) {
       setTemplateVersionId("");
@@ -286,6 +354,22 @@ export default function CreateContractPage() {
     // 1. Validate Step 0: Khách hàng & Mẫu
     if (!customerId) {
       toast.error("Vui lòng chọn khách hàng / đối tác.");
+      setCurrentStep(0);
+      return;
+    }
+    if (!responsibleEmployeeId) {
+      toast.error("Vui lòng chọn nhân viên phụ trách.");
+      setCurrentStep(0);
+      return;
+    }
+    if (
+      (contractType === ContractType.SoftwareMaintenance ||
+        contractType === ContractType.SoftwareUpkeep) &&
+      !parentContractId
+    ) {
+      toast.error(
+        "Vui lòng chọn hợp đồng nguồn (hợp đồng cung cấp phần mềm gốc).",
+      );
       setCurrentStep(0);
       return;
     }
@@ -347,8 +431,13 @@ export default function CreateContractPage() {
 
       const payload: CreateContractRequest = {
         customerId: Number(customerId),
+        responsibleEmployeeId: Number(responsibleEmployeeId),
         contractType: contractType,
-        templateVersionId: Number(templateVersionId), // Truyền chính xác Template ID đã chọn
+        templateVersionId: Number(templateVersionId),
+        parentContractId:
+          contractType !== ContractType.SoftwareSupply && parentContractId
+            ? Number(parentContractId)
+            : null,
         contractName: contractTitle.trim(),
         effectiveDate: effectiveDate
           ? new Date(effectiveDate).toISOString()
@@ -487,7 +576,13 @@ export default function CreateContractPage() {
                       Khách hàng / đối tác{" "}
                       <span className="text-red-500">*</span>
                     </Label>
-                    <Select value={customerId} onValueChange={setCustomerId}>
+                    <Select
+                      value={customerId}
+                      onValueChange={(val) => {
+                        setCustomerId(val);
+                        setParentContractId("");
+                      }}
+                    >
                       <SelectTrigger className="w-full">
                         <SelectValue
                           placeholder={
@@ -512,7 +607,40 @@ export default function CreateContractPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Loại hợp đồng</Label>
+                    <Label>
+                      Nhân viên phụ trách{" "}
+                      <span className="text-red-500">*</span>
+                    </Label>
+                    <Select
+                      value={responsibleEmployeeId}
+                      onValueChange={setResponsibleEmployeeId}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue
+                          placeholder={
+                            isLoadingEmployees
+                              ? "Đang tải nhân viên..."
+                              : "Chọn nhân viên phụ trách"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {employees.map((emp) => (
+                          <SelectItem
+                            key={emp.employeeId}
+                            value={String(emp.employeeId)}
+                          >
+                            {emp.employeeCode} - {emp.employeeFullName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>
+                      Loại hợp đồng <span className="text-red-500">*</span>
+                    </Label>
                     <Select
                       value={String(contractType)}
                       onValueChange={handleContractTypeChange}
@@ -529,6 +657,65 @@ export default function CreateContractPage() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* SELECT HỢP ĐỒNG NGUỒN (CHỈ DÀNH CHO BẢO TRÌ HOẶC DUY TRÌ) */}
+                  {contractType !== ContractType.SoftwareSupply && (
+                    <div className="space-y-2">
+                      <Label>
+                        Hợp đồng nguồn (HĐ gốc){" "}
+                        <span className="text-red-500">*</span>
+                      </Label>
+                      <Select
+                        value={parentContractId}
+                        onValueChange={setParentContractId}
+                        disabled={!customerId || isLoadingEligibleParents}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue
+                            placeholder={
+                              !customerId
+                                ? "Vui lòng chọn khách hàng trước"
+                                : isLoadingEligibleParents
+                                  ? "Đang tải hợp đồng nguồn..."
+                                  : eligibleParents.length === 0
+                                    ? "Không tìm thấy HĐ gốc phù hợp"
+                                    : "Chọn hợp đồng gốc..."
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {eligibleParents.map((parent) => (
+                            <SelectItem
+                              key={parent.contractId}
+                              value={String(parent.contractId)}
+                            >
+                              {parent.contractCode
+                                ? `${parent.contractCode} - ${parent.contractName}`
+                                : parent.contractName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {contractType !== ContractType.SoftwareSupply &&
+                    customerId &&
+                    !isLoadingEligibleParents &&
+                    eligibleParents.length === 0 && (
+                      <div className="md:col-span-2">
+                        <Alert variant="destructive">
+                          <AlertTitle>
+                            Không có hợp đồng nguồn phù hợp
+                          </AlertTitle>
+                          <AlertDescription>
+                            Khách hàng đã chọn hiện chưa có hợp đồng cung cấp
+                            phần mềm gốc nào ở trạng thái đủ điều kiện để tạo
+                            hợp đồng bảo trì hoặc duy trì.
+                          </AlertDescription>
+                        </Alert>
+                      </div>
+                    )}
 
                   <div className="space-y-2 md:col-span-2">
                     <Label>
@@ -906,6 +1093,30 @@ export default function CreateContractPage() {
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">
+                          Nhân viên phụ trách
+                        </p>
+                        <p className="font-semibold">
+                          {selectedEmployee?.employeeFullName || "Chưa chọn"}
+                        </p>
+                        {selectedEmployee?.employeeCode && (
+                          <p className="text-sm text-muted-foreground">
+                            Mã NV: {selectedEmployee.employeeCode}
+                          </p>
+                        )}
+                      </div>
+                      {selectedParentContract && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">
+                            Hợp đồng nguồn
+                          </p>
+                          <p className="font-semibold text-amber-600">
+                            {selectedParentContract.contractCode ||
+                              selectedParentContract.contractName}
+                          </p>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-xs text-muted-foreground">
                           Mẫu hợp đồng
                         </p>
                         <p className="font-semibold text-blue-600">
@@ -944,7 +1155,11 @@ export default function CreateContractPage() {
                           >
                             <span>{item.itemName}</span>
                             <span className="font-medium">
-                              {formatCurrency(item.unitPrice)}
+                              {formatCurrency(item.unitPrice * item.quantity)}
+                              <span className="text-xs text-muted-foreground ml-1.5 font-normal">
+                                ({formatCurrency(item.unitPrice)} x{" "}
+                                {item.quantity})
+                              </span>
                             </span>
                           </div>
                         ))}

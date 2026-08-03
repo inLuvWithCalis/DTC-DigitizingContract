@@ -64,7 +64,7 @@ const ConfirmToast = ({
   return (
     <div
       ref={ref}
-      className="flex flex-col gap-3 w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 p-4 rounded-lg shadow-lg z-[9999]"
+      className="pointer-events-auto flex flex-col gap-3 w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 p-4 rounded-lg shadow-lg z-[9999]"
     >
       <div className="flex flex-col gap-1">
         <h3 className="font-semibold text-sm text-zinc-900 dark:text-zinc-50">

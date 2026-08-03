@@ -112,6 +112,40 @@ export const getApprovalRequestStatusLabel = (
   }
 };
 
+export enum DocumentType {
+  QuotationFile = 0,
+  AcceptanceRecord = 1,
+  HandoverRecord = 2,
+  LiquidationRecord = 3,
+  VATInvoice = 4,
+  BankGuarantee = 5,
+  SignedScanCopy = 6,
+  Other = 99,
+}
+
+export const getDocumentTypeLabel = (type?: DocumentType | number) => {
+  switch (type) {
+    case DocumentType.QuotationFile:
+      return "File báo giá";
+    case DocumentType.AcceptanceRecord:
+      return "Biên bản nghiệm thu";
+    case DocumentType.HandoverRecord:
+      return "Biên bản bàn giao";
+    case DocumentType.LiquidationRecord:
+      return "Biên bản thanh lý";
+    case DocumentType.VATInvoice:
+      return "Hóa đơn VAT";
+    case DocumentType.BankGuarantee:
+      return "Bảo lãnh ngân hàng";
+    case DocumentType.SignedScanCopy:
+      return "Bản scan đã ký";
+    case DocumentType.Other:
+      return "Tài liệu khác";
+    default:
+      return "Khác";
+  }
+};
+
 export const statusClasses: Record<number, string> = {
   [ContractStatus.Draft]:
     "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20",
@@ -156,6 +190,7 @@ export interface UpdateContractItemRequest extends CreateContractItemRequest {
 
 export interface CreateContractRequest {
   customerId: number;
+  responsibleEmployeeId?: number | null;
   contractType: ContractType;
   templateVersionId: number;
   parentContractId?: number | null;
@@ -320,6 +355,8 @@ export interface CreateContractResponse {
   createdDate: string;
   itemCount: number;
   termCount: number;
+  rowVersion: string;
+  currentVersionRowVersion: string;
 }
 
 export interface SubmitContractForApprovalResponse {
@@ -334,6 +371,71 @@ export interface SubmitContractForApprovalResponse {
   versionRowVersion: string;
 }
 
+export interface ContractFilterRequest {
+  page?: number;
+  pageSize?: number;
+  keyword?: string | null;
+  status?: ContractStatus | null;
+  contractType?: ContractType | null;
+  customerId?: number | null;
+}
+
+export interface ContractListItemResponse {
+  contractId: number;
+  contractCode?: string | null;
+  contractName: string;
+  contractType: ContractType;
+  status: ContractStatus;
+  customerId: number;
+  customerCode?: string | null;
+  customerName?: string | null;
+  customerCompany?: string | null;
+  responsibleEmployeeId: number;
+  responsibleEmployeeName?: string | null;
+  currentVersionId?: number | null;
+  currentVersionNo?: number | null;
+  isCurrentVersionLocked: boolean;
+  totalAmount: number;
+  currencyCode: string;
+  effectiveDate?: string | null;
+  expireDate?: string | null;
+  createdDate: string;
+  updatedDate?: string | null;
+}
+
+export interface EligibleParentContractFilterRequest {
+  page?: number;
+  pageSize?: number;
+  keyword?: string | null;
+  customerId: number;
+  targetContractType: ContractType;
+}
+
+export interface EligibleParentContractResponse {
+  contractId: number;
+  contractCode?: string | null;
+  contractName: string;
+  contractType: ContractType;
+  status: ContractStatus;
+  effectiveDate?: string | null;
+  expireDate?: string | null;
+}
+
+export interface TransferContractResponsibilityRequest {
+  newResponsibleEmployeeId: number;
+  reason: string;
+  rowVersion: string;
+}
+
+export interface TransferContractResponsibilityResponse {
+  contractId: number;
+  previousResponsibleEmployeeId: number;
+  responsibleEmployeeId: number;
+  transferredByEmployeeId: number;
+  transferredAt: string;
+  rowVersion: string;
+}
+
 export interface PagedResult<T> {
   items: T[];
   totalCount: number;
@@ -345,11 +447,32 @@ export interface PagedResult<T> {
 const BASE_URL = "/contracts";
 
 export const contractApi = {
+  getList: (params: ContractFilterRequest) => {
+    return axiosClient.get<any, PagedResult<ContractListItemResponse>>(
+      BASE_URL,
+      { params },
+    );
+  },
+  getEligibleParents: (params: EligibleParentContractFilterRequest) => {
+    return axiosClient.get<any, PagedResult<EligibleParentContractResponse>>(
+      `${BASE_URL}/eligible-parents`,
+      { params },
+    );
+  },
   getDetail: (id: number) => {
     return axiosClient.get<any, ContractDetailResponse>(`${BASE_URL}/${id}`);
   },
   create: (data: CreateContractRequest) => {
     return axiosClient.post<any, CreateContractResponse>(BASE_URL, data);
+  },
+  transferResponsibility: (
+    id: number,
+    data: TransferContractResponsibilityRequest,
+  ) => {
+    return axiosClient.post<any, TransferContractResponsibilityResponse>(
+      `${BASE_URL}/${id}/transfer-responsibility`,
+      data,
+    );
   },
   updateDraft: (id: number, data: UpdateContractDraftRequest) => {
     return axiosClient.put<any, ContractDetailResponse>(

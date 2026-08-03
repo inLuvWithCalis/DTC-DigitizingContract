@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../main.dart';
+import '../utils/auth_store.dart';
 import '../services/auth_api.dart';
 import '../utils/app_toast.dart';
 import '../utils/quick_actions_store.dart';

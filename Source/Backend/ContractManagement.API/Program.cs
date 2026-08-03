@@ -33,6 +33,7 @@ var builder = WebApplication.CreateBuilder(args);
  * Đăng ký Controller cho Web API.
  */
 builder.Services.AddControllers();
+builder.Services.AddHttpContextAccessor();
 
 builder.Services
     .AddReverseProxy()
@@ -213,6 +214,10 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IContractService,
     ContractService>();
+
+builder.Services.AddScoped<
+    IContractAuditWriter,
+    ContractAuditWriter>();
 
 #endregion
 

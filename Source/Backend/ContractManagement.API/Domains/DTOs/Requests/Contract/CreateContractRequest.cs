@@ -11,6 +11,13 @@ namespace ContractManagement.API.Domains.DTOs.Requests.Contract
         [Range(1, int.MaxValue)]
         public int CustomerId { get; set; }
 
+        /// <summary>
+        /// Nhân viên phụ trách Contract ngay khi tạo.
+        /// Nếu không truyền, người tạo Contract sẽ là người phụ trách.
+        /// </summary>
+        [Range(1, int.MaxValue)]
+        public int? ResponsibleEmployeeId { get; set; }
+
         [EnumDataType(typeof(ContractType))]
         public ContractType ContractType { get; set; }
 

@@ -34,6 +34,7 @@ import {
   SummaryCardItem,
   SummaryCards,
 } from "@/components/ui/custom/summary-cards";
+import { PageHeaderSkeleton } from "@/components/ui/custom/table-skeleton";
 
 export default function QuotationListPage() {
   const router = useRouter();
@@ -313,7 +314,7 @@ export default function QuotationListPage() {
             <FileText className="w-4 h-4 mr-2" /> Tạo báo giá mới
           </Button>
         </div>
-        <SummaryCards items={summaryItems} />
+        <SummaryCards items={summaryItems} isLoading={isLoading} />
         <Card className="border-border shadow-sm bg-card min-h-[500px] flex flex-col gap-0 p-0">
           <CardContent className="p-4 flex flex-col justify-between flex-1 pb-0">
             <DataTable
@@ -323,9 +324,21 @@ export default function QuotationListPage() {
               searchKey="quotationNo"
               searchPlaceholder="Tìm mã báo giá..."
               filterSlot={CustomFilters}
-              onSelectMany={(rows) =>
-                toast.info(`Đang gọi API xóa ${rows.length} dòng...`)
-              }
+              bulkActions={(selectedRows, resetSelection) => (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-8 text-xs shadow-sm"
+                  onClick={() => {
+                    toast.info(
+                      `Đang gọi API xóa ${selectedRows.length} báo giá...`,
+                    );
+                    resetSelection();
+                  }}
+                >
+                  Xóa tất cả
+                </Button>
+              )}
               onRowClick={(row) => handleView(row.quotationId)}
               mobileCardRenderer={(
                 row: Row<QuotationResponseDto>,

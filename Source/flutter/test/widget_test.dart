@@ -18,7 +18,8 @@ void main() {
   testWidgets('LoginPage smoke test', (WidgetTester tester) async {
     // Build our app and trigger a frame.
     await tester.pumpWidget(const MyApp());
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
 
     // Verify that the login page renders
     expect(find.text('Đăng nhập'), findsWidgets);

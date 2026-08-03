@@ -46,6 +46,12 @@ export default function ProtectedLayout({
       <Sidebar />
       <main className="grow flex flex-col overflow-hidden relative z-10">
         {children}
+        <footer className="border-t border-border py-2.5 px-6 text-xs text-muted-foreground bg-card/50 backdrop-blur-sm shrink-0 flex items-center justify-between z-20">
+          <div>Copyright &copy; 2026 DTC.,Ltd. All rights reserved.</div>
+          <div className="flex items-center gap-4">
+            <span className="hidden sm:inline">Version 1.0.0</span>
+          </div>
+        </footer>
       </main>
     </div>
   );

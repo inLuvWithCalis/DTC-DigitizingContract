@@ -417,6 +417,112 @@ namespace ContractManagement.Migrations
                     b.ToTable("tbl_ContractAttachment", (string)null);
                 });
 
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAudit", b =>
+                {
+                    b.Property<int>("ContractAuditId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ContractAuditId"));
+
+                    b.Property<string>("ActionType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<int?>("ActorEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ActorType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<int>("ContractId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CorrelationId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(45)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(45)");
+
+                    b.Property<byte?>("NewContractStatus")
+                        .HasColumnType("tinyint");
+
+                    b.Property<int?>("NewResponsibleEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<byte?>("PreviousContractStatus")
+                        .HasColumnType("tinyint");
+
+                    b.Property<int?>("PreviousResponsibleEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Result")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
+                    b.Property<int?>("VersionId")
+                        .HasColumnType("int");
+
+                    b.HasKey("ContractAuditId")
+                        .HasName("PK_tbl_ContractAudit");
+
+                    b.HasIndex("TenantId", "ContractId", "OccurredAt")
+                        .HasDatabaseName("IX_tbl_ContractAudit_TenantId_ContractId_OccurredAt");
+
+                    b.ToTable("tbl_ContractAudit", null, t =>
+                        {
+                            t.HasTrigger("TR_tbl_ContractAudit_AppendOnly");
+
+                            t.HasCheckConstraint("CK_tbl_ContractAudit_ActionType", "LEN(LTRIM(RTRIM([ActionType]))) > 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractAudit_Actor", "([ActorType] = 'Employee' AND [ActorEmployeeId] > 0) OR ([ActorType] <> 'Employee' AND [ActorEmployeeId] IS NULL)");
+
+                            t.HasCheckConstraint("CK_tbl_ContractAudit_ActorType", "LEN(LTRIM(RTRIM([ActorType]))) > 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractAudit_ContractId", "[ContractId] > 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractAudit_CorrelationId", "LEN(LTRIM(RTRIM([CorrelationId]))) > 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractAudit_NewResponsibleEmployeeId", "[NewResponsibleEmployeeId] IS NULL OR [NewResponsibleEmployeeId] > 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractAudit_PreviousResponsibleEmployeeId", "[PreviousResponsibleEmployeeId] IS NULL OR [PreviousResponsibleEmployeeId] > 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractAudit_Result", "LEN(LTRIM(RTRIM([Result]))) > 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractAudit_TenantId", "[TenantId] > 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractAudit_VersionId", "[VersionId] IS NULL OR [VersionId] > 0");
+                        });
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
             modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractItem", b =>
                 {
                     b.Property<int>("ContractItemId")

@@ -4,8 +4,6 @@ namespace ContractManagement.API.Domains.DTOs.Responses.Contract
 {
     /// <summary>
     /// Kết quả trả về sau khi tạo thành công hợp đồng nháp.
-    ///
-    /// Chi tiết đầy đủ sẽ được lấy bằng API Get Contract By Id sau này.
     /// </summary>
     public class CreateContractResponse
     {
@@ -15,7 +13,7 @@ namespace ContractManagement.API.Domains.DTOs.Responses.Contract
         public int ContractId { get; set; }
 
         /// <summary>
-        /// Mã hợp đồng do backend sinh.
+        /// Mã hợp đồng do Backend sinh.
         /// </summary>
         public string ContractCode { get; set; } = string.Empty;
 
@@ -43,8 +41,7 @@ namespace ContractManagement.API.Domains.DTOs.Responses.Contract
         public int TemplateVersionId { get; set; }
 
         /// <summary>
-        /// Tổng tiền sau chiết khấu và VAT,
-        /// được backend tính từ toàn bộ ContractItem.
+        /// Tổng tiền do Backend tính từ toàn bộ ContractItem.
         /// </summary>
         public decimal TotalAmount { get; set; }
 
@@ -53,7 +50,7 @@ namespace ContractManagement.API.Domains.DTOs.Responses.Contract
         public ContractLanguageMode LanguageMode { get; set; }
 
         /// <summary>
-        /// Nhân viên tạo đồng thời là người phụ trách ban đầu.
+        /// ID nhân viên phụ trách Contract ngay sau khi tạo.
         /// </summary>
         public int EmployeeId { get; set; }
 
@@ -65,8 +62,19 @@ namespace ContractManagement.API.Domains.DTOs.Responses.Contract
         public int ItemCount { get; set; }
 
         /// <summary>
-        /// Số điều khoản được snapshot từ template.
+        /// Số điều khoản đã được snapshot từ template.
         /// </summary>
         public int TermCount { get; set; }
+
+        /// <summary>
+        /// RowVersion của Contract.
+        /// Frontend gửi lại giá trị này khi cập nhật Draft.
+        /// </summary>
+        public string RowVersion { get; set; } = string.Empty;
+
+        /// <summary>
+        /// RowVersion của Version 1 vừa được tạo.
+        /// </summary>
+        public string CurrentVersionRowVersion { get; set; } = string.Empty;
     }
 }

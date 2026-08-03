@@ -23,6 +23,9 @@ class ApiClient {
 
   static const String _sessionCookieKey = 'app_session_cookies';
 
+  /// Callback toàn cục khi nhận phản hồi 401 Unauthorized (hết hạn session)
+  static VoidCallback? onUnauthorized;
+
   String _baseUrl = AppConfig.apiBaseUrl;
   final Map<String, String> _cookies = {};
   bool _isInitialized = false;
@@ -127,7 +130,11 @@ class ApiClient {
     return headers;
   }
 
-  dynamic _processResponse(http.Response response, Uri url, String method) {
+  Future<dynamic> _processResponse(
+    http.Response response,
+    Uri url,
+    String method,
+  ) async {
     _updateCookies(response);
 
     dynamic body;
@@ -168,11 +175,27 @@ class ApiClient {
       );
     }
 
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      await clearCookies();
+      if (onUnauthorized != null) {
+        onUnauthorized!();
+      }
+    }
+
     throw ApiException(
       statusCode: response.statusCode,
       message: errorMessage,
       data: body,
     );
+  }
+
+  Future<void> _handleException(Object e) async {
+    if (e is SocketException || e is http.ClientException) {
+      await clearCookies();
+      if (onUnauthorized != null) {
+        onUnauthorized!();
+      }
+    }
   }
 
   Future<dynamic> get(String endpoint, {Map<String, String>? headers}) async {
@@ -186,11 +209,12 @@ class ApiClient {
 
     try {
       final response = await http.get(url, headers: builtHeaders);
-      return _processResponse(response, url, 'GET');
+      return await _processResponse(response, url, 'GET');
     } catch (e) {
       if (kDebugMode) {
         debugPrint('⚠️ [HTTP Exception] GET $url -> $e');
       }
+      await _handleException(e);
       rethrow;
     }
   }
@@ -218,11 +242,12 @@ class ApiClient {
         headers: builtHeaders,
         body: jsonBody,
       );
-      return _processResponse(response, url, 'POST');
+      return await _processResponse(response, url, 'POST');
     } catch (e) {
       if (kDebugMode) {
         debugPrint('⚠️ [HTTP Exception] POST $url -> $e');
       }
+      await _handleException(e);
       rethrow;
     }
   }
@@ -250,11 +275,12 @@ class ApiClient {
         headers: builtHeaders,
         body: jsonBody,
       );
-      return _processResponse(response, url, 'PUT');
+      return await _processResponse(response, url, 'PUT');
     } catch (e) {
       if (kDebugMode) {
         debugPrint('⚠️ [HTTP Exception] PUT $url -> $e');
       }
+      await _handleException(e);
       rethrow;
     }
   }
@@ -272,15 +298,13 @@ class ApiClient {
     }
 
     try {
-      final response = await http.delete(
-        url,
-        headers: builtHeaders,
-      );
-      return _processResponse(response, url, 'DELETE');
+      final response = await http.delete(url, headers: builtHeaders);
+      return await _processResponse(response, url, 'DELETE');
     } catch (e) {
       if (kDebugMode) {
         debugPrint('⚠️ [HTTP Exception] DELETE $url -> $e');
       }
+      await _handleException(e);
       rethrow;
     }
   }
@@ -308,11 +332,12 @@ class ApiClient {
         headers: builtHeaders,
         body: jsonBody,
       );
-      return _processResponse(response, url, 'PATCH');
+      return await _processResponse(response, url, 'PATCH');
     } catch (e) {
       if (kDebugMode) {
         debugPrint('⚠️ [HTTP Exception] PATCH $url -> $e');
       }
+      await _handleException(e);
       rethrow;
     }
   }

@@ -1,4 +1,5 @@
-﻿using ContractManagement.API.Domains.DTOs.Requests.Contract;
+﻿using ContractManagement.API.Common.Responses;
+using ContractManagement.API.Domains.DTOs.Requests.Contract;
 using ContractManagement.API.Domains.DTOs.Responses.Contract;
 
 namespace ContractManagement.Domains.Interfaces.Contract
@@ -9,6 +10,22 @@ namespace ContractManagement.Domains.Interfaces.Contract
     public interface IContractService
     {
         /// <summary>
+        /// Lấy danh sách hợp đồng mà nhân viên đang phụ trách.
+        /// </summary>
+        Task<PagedResult<ContractListItemResponse>> GetListAsync(
+            ContractFilterRequest filter,
+            int employeeId);
+
+        /// <summary>
+        /// Lấy các hợp đồng gốc đủ điều kiện cho dropdown
+        /// khi tạo hợp đồng bảo trì hoặc duy trì.
+        /// </summary>
+        Task<PagedResult<EligibleParentContractResponse>>
+            GetEligibleParentsAsync(
+                EligibleParentContractFilterRequest filter,
+                int employeeId);
+
+        /// <summary>
         /// Tạo hợp đồng Draft cùng Version 1,
         /// item snapshot và term snapshot.
         /// </summary>
@@ -16,9 +33,14 @@ namespace ContractManagement.Domains.Interfaces.Contract
             CreateContractRequest request,
             int createdEmployeeId);
 
+        Task<TransferContractResponsibilityResponse>
+            TransferResponsibilityAsync(
+                int contractId,
+                TransferContractResponsibilityRequest request,
+                int actorEmployeeId);
+
         /// <summary>
         /// Lấy hợp đồng cùng version hiện hành, items và terms.
-        ///
         /// Chỉ nhân viên đang phụ trách hợp đồng mới được xem.
         /// </summary>
         Task<ContractDetailResponse> GetDetailAsync(

@@ -58,4 +58,9 @@ class ServiceApi {
   static Future<void> deleteBulk(List<int> ids) async {
     await Future.wait(ids.map((id) => delete(id)));
   }
+
+  /// Cập nhật trạng thái hàng loạt (enable/disable)
+  static Future<void> setBulkStatus(List<int> ids, int status) async {
+    await Future.wait(ids.map((id) => setStatus(id, status)));
+  }
 }

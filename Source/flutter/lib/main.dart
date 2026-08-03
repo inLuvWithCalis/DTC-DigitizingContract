@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'models/auth_dto.dart';
 import 'pages/catalog/services/service_list_page.dart';
@@ -8,6 +9,7 @@ import 'services/api_client.dart';
 import 'services/auth_api.dart';
 import 'theme/app_theme.dart';
 import 'utils/app_toast.dart';
+import 'utils/theme_store.dart';
 import 'widgets/app_text_field.dart';
 
 class AuthStore {
@@ -132,7 +134,7 @@ class _LoginPageState extends State<LoginPage> {
   // --- EFFECTS & LOGIC ---
   void _checkSessionError() {
     if (widget.errorParam == "session_expired") {
-      Future.delayed(const Duration(milliseconds: 100), () {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           AppToast.error(
             context,
@@ -144,6 +146,12 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _checkAlreadyLoggedIn() async {
+    // Nếu vừa bị đá ra do session hết hạn, đừng thử gọi lại getMe()
+    if (widget.errorParam == "session_expired") {
+      setState(() => _isLoading = false);
+      return;
+    }
+
     if (_authStore.isAuthenticated && _authStore.user != null) {
       _navigateToDashboard();
       return;
@@ -152,11 +160,15 @@ class _LoginPageState extends State<LoginPage> {
     try {
       final userData = await AuthApi.getMe();
       _authStore.setUser(userData);
-      _navigateToDashboard();
+      if (mounted) {
+        _navigateToDashboard();
+      }
     } catch (e) {
+      _authStore.clear();
       if (mounted) {
         setState(() => _isLoading = false);
       }
+      ApiClient().clearCookies();
     }
   }
 
@@ -179,6 +191,7 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
+    TextInput.finishAutofillContext();
     setState(() => _isSubmitting = true);
 
     try {
@@ -301,115 +314,141 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 40),
 
-                      // --- FORM SECTION ---
-                      // Input 1: Mã công ty
-                      _buildLabel('Mã công ty'),
-                      const SizedBox(height: 8),
-                      AppTextField(
-                        controller: _tenantController,
-                        focusNode: _tenantFocusNode,
-                        maxLength: 50,
-                        placeholder: 'Nhập mã công ty',
-                        hasError: _tenantError != null && _tenantTouched,
-                        onChanged: (val) {
-                          if (_tenantTouched) {
-                            setState(
-                              () => _tenantError = _validateTenantCode(val),
-                            );
-                          }
-                        },
-                      ),
-                      if (_tenantError != null && _tenantTouched)
-                        _buildErrorText(_tenantError!),
-
-                      const SizedBox(height: 16),
-
-                      _buildLabel('Tên tài khoản'),
-                      const SizedBox(height: 8),
-                      AppTextField(
-                        controller: _emailController,
-                        focusNode: _emailFocusNode,
-                        placeholder: 'Nhập tên đăng nhập',
-                        hasError: _emailError != null && _emailTouched,
-                        autocorrect: false,
-                        enableSuggestions: false,
-                        onChanged: (val) {
-                          if (_emailTouched) {
-                            setState(() => _emailError = _validateEmail(val));
-                          }
-                        },
-                      ),
-                      if (_emailError != null && _emailTouched)
-                        _buildErrorText(_emailError!),
-
-                      const SizedBox(height: 16),
-
-                      // Input 3: Mật khẩu + Toggle Visibility
-                      _buildLabel('Mật khẩu'),
-                      const SizedBox(height: 8),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: AppTextField(
-                              controller: _passwordController,
-                              focusNode: _passwordFocusNode,
-                              obscureText: !_showPassword,
-                              maxLength: 64,
-                              placeholder: '••••••••',
-                              hasError:
-                                  _passwordError != null && _passwordTouched,
+                      // --- FORM SECTION WITH AUTOFILL ---
+                      AutofillGroup(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Input 1: Mã công ty
+                            _buildLabel('Mã công ty'),
+                            const SizedBox(height: 8),
+                            AppTextField(
+                              controller: _tenantController,
+                              focusNode: _tenantFocusNode,
+                              maxLength: 50,
+                              placeholder: 'Nhập mã công ty',
+                              hasError: _tenantError != null && _tenantTouched,
+                              autofillHints: const [
+                                AutofillHints.organizationName,
+                              ],
                               onChanged: (val) {
-                                if (_passwordTouched) {
+                                if (_tenantTouched) {
                                   setState(
                                     () =>
-                                        _passwordError = _validatePassword(val),
+                                        _tenantError = _validateTenantCode(val),
                                   );
                                 }
                               },
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          InkWell(
-                            onTap: () =>
-                                setState(() => _showPassword = !_showPassword),
-                            borderRadius: BorderRadius.circular(16),
-                            child: Container(
-                              height: 56,
-                              width: 56,
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.surfaceContainerHighest
-                                    .withValues(alpha: 0.3),
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Icon(
-                                _showPassword
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined,
-                                color: theme.colorScheme.onSurfaceVariant,
-                                size: 22,
-                              ),
+                            if (_tenantError != null && _tenantTouched)
+                              _buildErrorText(_tenantError!),
+
+                            const SizedBox(height: 16),
+
+                            _buildLabel('Tên tài khoản'),
+                            const SizedBox(height: 8),
+                            AppTextField(
+                              controller: _emailController,
+                              focusNode: _emailFocusNode,
+                              placeholder: 'Nhập tên đăng nhập',
+                              hasError: _emailError != null && _emailTouched,
+                              autocorrect: false,
+                              enableSuggestions: false,
+                              autofillHints: const [
+                                AutofillHints.username,
+                                AutofillHints.email,
+                              ],
+                              onChanged: (val) {
+                                if (_emailTouched) {
+                                  setState(
+                                    () => _emailError = _validateEmail(val),
+                                  );
+                                }
+                              },
                             ),
-                          ),
-                        ],
-                      ),
-                      if (_passwordError != null && _passwordTouched)
-                        _buildErrorText(_passwordError!)
-                      else
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: () {},
-                            child: Text(
-                              'Quên mật khẩu?',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.primary,
-                              ),
+                            if (_emailError != null && _emailTouched)
+                              _buildErrorText(_emailError!),
+
+                            const SizedBox(height: 16),
+
+                            // Input 3: Mật khẩu + Toggle Visibility
+                            _buildLabel('Mật khẩu'),
+                            const SizedBox(height: 8),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: AppTextField(
+                                    controller: _passwordController,
+                                    focusNode: _passwordFocusNode,
+                                    obscureText: !_showPassword,
+                                    maxLength: 64,
+                                    placeholder: '••••••••',
+                                    hasError:
+                                        _passwordError != null &&
+                                        _passwordTouched,
+                                    textInputAction: TextInputAction.done,
+                                    autofillHints: const [
+                                      AutofillHints.password,
+                                    ],
+                                    onSubmitted: (_) => _handleEmailSignIn(),
+                                    onChanged: (val) {
+                                      if (_passwordTouched) {
+                                        setState(
+                                          () => _passwordError =
+                                              _validatePassword(val),
+                                        );
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                InkWell(
+                                  onTap: () => setState(
+                                    () => _showPassword = !_showPassword,
+                                  ),
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Container(
+                                    height: 56,
+                                    width: 56,
+                                    decoration: BoxDecoration(
+                                      color: theme
+                                          .colorScheme
+                                          .surfaceContainerHighest
+                                          .withValues(alpha: 0.3),
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: Icon(
+                                      _showPassword
+                                          ? Icons.visibility_off_outlined
+                                          : Icons.visibility_outlined,
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                      size: 22,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
+                            if (_passwordError != null && _passwordTouched)
+                              _buildErrorText(_passwordError!)
+                            else
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: () {},
+                                  child: Text(
+                                    'Quên mật khẩu?',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
+                      ),
 
                       const SizedBox(height: 32),
 
@@ -514,32 +553,86 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await dotenv.load(fileName: ".env");
   } catch (_) {}
   await ApiClient().init();
+  await ThemeStore.initTheme(themeModeNotifier);
+
+  bool isRedirecting = false;
+  ApiClient.onUnauthorized = () {
+    if (isRedirecting) return;
+    if (navigatorKey.currentContext != null) {
+      final currentRoute = ModalRoute.of(
+        navigatorKey.currentContext!,
+      )?.settings.name;
+      if (currentRoute == '/') return; // đã ở LoginPage rồi, khỏi redirect nữa
+    }
+
+    isRedirecting = true;
+    AuthStore().clear();
+    navigatorKey.currentState?.pushNamedAndRemoveUntil(
+      '/',
+      (route) => false,
+      arguments: 'session_expired',
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      isRedirecting = false;
+    });
+  };
+
   runApp(const MyApp());
 }
+
+final ValueNotifier<ThemeMode> themeModeNotifier = ValueNotifier<ThemeMode>(
+  ThemeMode.light,
+);
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Digitizing Contract',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system,
-      initialRoute: '/',
-      routes: {
-        '/': (context) => const LoginPage(),
-        '/dashboard': (context) => const DashboardPage(),
-        '/catalog/service-types': (context) => const ServiceTypeListPage(),
-        '/catalog/services': (context) => const ServiceListPage(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeModeNotifier,
+      builder: (context, currentMode, child) {
+        return MaterialApp(
+          navigatorKey: navigatorKey,
+          title: 'Digitizing Contract',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: currentMode,
+          initialRoute: '/',
+          onGenerateRoute: (settings) {
+            if (settings.name == '/') {
+              final errorParam = settings.arguments as String?;
+              return MaterialPageRoute(
+                builder: (context) => LoginPage(errorParam: errorParam),
+              );
+            }
+            if (settings.name == '/dashboard') {
+              return MaterialPageRoute(
+                builder: (context) => const DashboardPage(),
+              );
+            }
+            if (settings.name == '/catalog/service-types') {
+              return MaterialPageRoute(
+                builder: (context) => const ServiceTypeListPage(),
+              );
+            }
+            if (settings.name == '/catalog/services') {
+              return MaterialPageRoute(
+                builder: (context) => const ServiceListPage(),
+              );
+            }
+            return null;
+          },
+        );
       },
     );
   }

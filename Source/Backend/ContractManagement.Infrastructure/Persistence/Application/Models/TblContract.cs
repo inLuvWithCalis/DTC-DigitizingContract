@@ -11,8 +11,10 @@ public partial class TblContract
     public int CustomerId { get; set; }
 
     /// <summary>
-    /// Nhân viên đang phụ trách hợp đồng.
-    /// Khi tạo: EmployeeId = CreatedEmployeeId.
+    /// EmployeeId là nhân viên đang phụ trách Contract.
+    /// Khi tạo Contract, giá trị này mặc định là CreatedEmployeeId nhưng có thể
+    /// là một employee active khác được chọn hợp lệ.
+    /// CreatedEmployeeId vẫn lưu actor đã tạo Contract.
     /// </summary>
     public int EmployeeId { get; set; }
 

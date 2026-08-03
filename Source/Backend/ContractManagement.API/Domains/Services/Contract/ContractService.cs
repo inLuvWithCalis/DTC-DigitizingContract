@@ -1,4 +1,5 @@
 ﻿using ContractManagement.API.Common.Enums;
+using ContractManagement.API.Common.Responses;
 using ContractManagement.API.Domains.DTOs.Requests.Contract;
 using ContractManagement.API.Domains.DTOs.Responses.Contract;
 using ContractManagement.API.Domains.Policies.Contract;
@@ -20,12 +21,298 @@ namespace ContractManagement.Domains.Services.Contract
     public class ContractService : IContractService
     {
         private const decimal MaxMoney = 9999999999999999.99m;
+        private const byte ActiveEmployeeStatus = 1;
 
         private readonly DbDtctechContext _dbContext;
+        private readonly IContractAuditWriter _contractAuditWriter;
 
-        public ContractService(DbDtctechContext dbContext)
+        public ContractService(
+            DbDtctechContext dbContext,
+            IContractAuditWriter contractAuditWriter)
         {
             _dbContext = dbContext;
+            _contractAuditWriter = contractAuditWriter;
+        }
+
+        /// <summary>
+        /// Lấy danh sách hợp đồng mà nhân viên đăng nhập đang phụ trách.
+        /// API danh sách chỉ trả dữ liệu tóm tắt để Frontend tải nhanh.
+        /// </summary>
+        public async Task<PagedResult<ContractListItemResponse>> GetListAsync(
+            ContractFilterRequest filter,
+            int employeeId)
+        {
+            if (employeeId <= 0)
+            {
+                throw new UnauthorizedAccessException(
+                    "Không xác định được nhân viên đang đăng nhập.");
+            }
+
+            if (filter.Page <= 0)
+            {
+                filter.Page = 1;
+            }
+
+            if (filter.PageSize <= 0)
+            {
+                filter.PageSize = 20;
+            }
+
+            // Không cho một request tải quá nhiều bản ghi.
+            if (filter.PageSize > 100)
+            {
+                filter.PageSize = 100;
+            }
+
+            var offset = ((long)filter.Page - 1) * filter.PageSize;
+
+            if (offset > int.MaxValue)
+            {
+                throw new ArgumentException(
+                    "Số trang vượt giới hạn cho phép.");
+            }
+
+            if (filter.Status.HasValue
+                && !Enum.IsDefined(filter.Status.Value))
+            {
+                throw new ArgumentException(
+                    "Trạng thái hợp đồng không hợp lệ.");
+            }
+
+            if (filter.ContractType.HasValue
+                && !Enum.IsDefined(filter.ContractType.Value))
+            {
+                throw new ArgumentException(
+                    "Loại hợp đồng không hợp lệ.");
+            }
+
+            /*
+             * Join Customer và Employee vì màn hình danh sách
+             * cần tên khách hàng và tên người phụ trách.
+             */
+            var query =
+                from contract in _dbContext.TblContracts.AsNoTracking()
+
+                join customer in _dbContext.TblCustomers.AsNoTracking()
+                    on contract.CustomerId equals customer.CustomerId
+
+                join employee in _dbContext.TblEmployees.AsNoTracking()
+                    on contract.EmployeeId equals employee.EmployeeId
+
+                // Hiện chưa có RBAC nên nhân viên chỉ xem hợp đồng của mình.
+                where contract.EmployeeId == employeeId
+
+                select new
+                {
+                    Contract = contract,
+                    Customer = customer,
+                    Employee = employee
+                };
+
+            if (!string.IsNullOrWhiteSpace(filter.Keyword))
+            {
+                var keyword = filter.Keyword.Trim();
+
+                query = query.Where(x =>
+                    (x.Contract.ContractCode != null
+                        && x.Contract.ContractCode.Contains(keyword))
+                    || x.Contract.ContractName.Contains(keyword)
+                    || (x.Contract.ContractNameEn != null
+                        && x.Contract.ContractNameEn.Contains(keyword))
+                    || (x.Customer.CustomerCode != null
+                        && x.Customer.CustomerCode.Contains(keyword))
+                    || (x.Customer.CustomerFullName != null
+                        && x.Customer.CustomerFullName.Contains(keyword))
+                    || (x.Customer.CustomerCompany != null
+                        && x.Customer.CustomerCompany.Contains(keyword)));
+            }
+
+            if (filter.Status.HasValue)
+            {
+                query = query.Where(x =>
+                    x.Contract.Status == (byte)filter.Status.Value);
+            }
+
+            if (filter.ContractType.HasValue)
+            {
+                query = query.Where(x =>
+                    x.Contract.ContractType ==
+                    (byte)filter.ContractType.Value);
+            }
+
+            if (filter.CustomerId.HasValue)
+            {
+                query = query.Where(x =>
+                    x.Contract.CustomerId == filter.CustomerId.Value);
+            }
+
+            var totalCount = await query.CountAsync();
+
+            var contracts = await query
+                .OrderByDescending(x => x.Contract.CreatedDate)
+                .ThenByDescending(x => x.Contract.ContractId)
+                .Skip((int)offset)
+                .Take(filter.PageSize)
+                .Select(x => new ContractListItemResponse
+                {
+                    ContractId = x.Contract.ContractId,
+                    ContractCode = x.Contract.ContractCode,
+                    ContractName = x.Contract.ContractName,
+                    ContractType =
+                        (ContractType)x.Contract.ContractType,
+                    Status =
+                        (ContractStatus)x.Contract.Status,
+
+                    CustomerId = x.Customer.CustomerId,
+                    CustomerCode = x.Customer.CustomerCode,
+                    CustomerName = x.Customer.CustomerFullName,
+                    CustomerCompany = x.Customer.CustomerCompany,
+
+                    ResponsibleEmployeeId = x.Employee.EmployeeId,
+                    ResponsibleEmployeeName =
+                        x.Employee.EmployeeFullName,
+
+                    CurrentVersionId = x.Contract.CurrentVersionId,
+
+                    CurrentVersionNo = _dbContext.TblContractVersions
+                        .Where(version =>
+                            version.VersionId ==
+                            x.Contract.CurrentVersionId)
+                        .Select(version => (int?)version.VersionNo)
+                        .FirstOrDefault(),
+
+                    IsCurrentVersionLocked =
+                        _dbContext.TblContractVersions
+                            .Where(version =>
+                                version.VersionId ==
+                                x.Contract.CurrentVersionId)
+                            .Select(version => version.IsLocked)
+                            .FirstOrDefault(),
+
+                    TotalAmount = x.Contract.TotalAmount,
+                    CurrencyCode = x.Contract.CurrencyCode,
+                    EffectiveDate = x.Contract.EffectiveDate,
+                    ExpireDate = x.Contract.ExpireDate,
+                    CreatedDate = x.Contract.CreatedDate,
+                    UpdatedDate = x.Contract.UpdateDate
+                })
+                .ToListAsync();
+
+            return new PagedResult<ContractListItemResponse>
+            {
+                Items = contracts,
+                TotalCount = totalCount,
+                Page = filter.Page,
+                PageSize = filter.PageSize
+            };
+        }
+
+        /// <summary>
+        /// Tìm hợp đồng cung cấp phần mềm đã Completed
+        /// để làm hợp đồng gốc cho bảo trì hoặc duy trì.
+        /// </summary>
+        public async Task<PagedResult<EligibleParentContractResponse>>
+            GetEligibleParentsAsync(
+                EligibleParentContractFilterRequest filter,
+                int employeeId)
+        {
+            if (employeeId <= 0)
+            {
+                throw new UnauthorizedAccessException(
+                    "Không xác định được nhân viên đang đăng nhập.");
+            }
+
+            if (filter.CustomerId <= 0)
+            {
+                throw new ArgumentException(
+                    "CustomerId phải lớn hơn 0.");
+            }
+
+            // API này chỉ dùng khi tạo hợp đồng bảo trì hoặc duy trì.
+            if (filter.TargetContractType !=
+                    ContractType.SoftwareMaintenance
+                && filter.TargetContractType !=
+                    ContractType.SoftwareUpkeep)
+            {
+                throw new ArgumentException(
+                    "TargetContractType phải là hợp đồng bảo trì hoặc duy trì.");
+            }
+
+            if (filter.Page <= 0)
+            {
+                filter.Page = 1;
+            }
+
+            if (filter.PageSize <= 0)
+            {
+                filter.PageSize = 20;
+            }
+
+            if (filter.PageSize > 100)
+            {
+                filter.PageSize = 100;
+            }
+
+            var offset = ((long)filter.Page - 1) * filter.PageSize;
+
+            if (offset > int.MaxValue)
+            {
+                throw new ArgumentException(
+                    "Số trang vượt giới hạn cho phép.");
+            }
+
+            /*
+             * Chỉ hợp đồng cung cấp phần mềm đã hoàn thành
+             * mới được làm hợp đồng nguồn.
+             */
+            var query = _dbContext.TblContracts
+                .AsNoTracking()
+                .Where(x =>
+                    x.EmployeeId == employeeId
+                    && x.CustomerId == filter.CustomerId
+                    && x.ContractType ==
+                        (byte)ContractType.SoftwareSupply
+                    && x.Status ==
+                        (byte)ContractStatus.Completed);
+
+            if (!string.IsNullOrWhiteSpace(filter.Keyword))
+            {
+                var keyword = filter.Keyword.Trim();
+
+                query = query.Where(x =>
+                    (x.ContractCode != null
+                        && x.ContractCode.Contains(keyword))
+                    || x.ContractName.Contains(keyword)
+                    || (x.ContractNameEn != null
+                        && x.ContractNameEn.Contains(keyword)));
+            }
+
+            var totalCount = await query.CountAsync();
+
+            var contracts = await query
+                .OrderByDescending(x => x.CreatedDate)
+                .ThenByDescending(x => x.ContractId)
+                .Skip((int)offset)
+                .Take(filter.PageSize)
+                .Select(x => new EligibleParentContractResponse
+                {
+                    ContractId = x.ContractId,
+                    ContractCode = x.ContractCode,
+                    ContractName = x.ContractName,
+                    ContractType = (ContractType)x.ContractType,
+                    Status = (ContractStatus)x.Status,
+                    EffectiveDate = x.EffectiveDate,
+                    ExpireDate = x.ExpireDate
+                })
+                .ToListAsync();
+
+            return new PagedResult<EligibleParentContractResponse>
+            {
+                Items = contracts,
+                TotalCount = totalCount,
+                Page = filter.Page,
+                PageSize = filter.PageSize
+            };
         }
 
         /// <summary>
@@ -58,9 +345,19 @@ namespace ContractManagement.Domains.Services.Contract
                 try
                 {
                     await ValidateEmployeeAsync(createdEmployeeId);
+
+                    var responsibleEmployeeId =
+                        request.ResponsibleEmployeeId
+                        ?? createdEmployeeId;
+
+                    await ValidateResponsibleEmployeeAsync(
+                        responsibleEmployeeId);
+
                     await ValidateCustomerAsync(request.CustomerId);
                     await ValidateTemplateAsync(request);
-                    await ValidateParentContractAsync(request);
+                    await ValidateParentContractAsync(
+                        request,
+                        createdEmployeeId);
                     await ValidateCatalogSourcesAsync(request.Items);
 
                     // Lấy điều khoản từ đúng template version đã chọn.
@@ -90,8 +387,7 @@ namespace ContractManagement.Domains.Services.Contract
                     {
                         CustomerId = request.CustomerId,
 
-                        // Người tạo mặc định là người phụ trách.
-                        EmployeeId = createdEmployeeId,
+                        EmployeeId = responsibleEmployeeId,
                         CreatedEmployeeId = createdEmployeeId,
 
                         ContractType = (byte)request.ContractType,
@@ -281,6 +577,33 @@ namespace ContractManagement.Domains.Services.Contract
 
                     contract.TotalAmount = totalAmount;
 
+                    _contractAuditWriter.StageEmployeeAudits(
+                    [
+                        new EmployeeContractAuditWriteRequest(
+                            contract.ContractId,
+                            contractVersion.VersionId,
+                            createdEmployeeId,
+                            ContractAuditActionTypes.ContractCreated,
+                            ContractAuditResults.Succeeded,
+                            now,
+                            NewContractStatus: contract.Status,
+                            NewResponsibleEmployeeId:
+                                responsibleEmployeeId),
+
+                        new EmployeeContractAuditWriteRequest(
+                            contract.ContractId,
+                            contractVersion.VersionId,
+                            createdEmployeeId,
+                            ContractAuditActionTypes.ResponsibleAssigned,
+                            ContractAuditResults.Succeeded,
+                            now,
+                            NewContractStatus: contract.Status,
+                            PreviousResponsibleEmployeeId: null,
+                            NewResponsibleEmployeeId:
+                                responsibleEmployeeId,
+                            Reason: null)
+                    ]);
+
                     await _dbContext.SaveChangesAsync();
 
                     // Chỉ commit khi toàn bộ Contract, Version, Item và Term thành công.
@@ -307,17 +630,330 @@ namespace ContractManagement.Domains.Services.Contract
                         CurrencyCode = contract.CurrencyCode,
                         LanguageMode = request.LanguageMode,
 
-                        EmployeeId = createdEmployeeId,
+                        EmployeeId = responsibleEmployeeId,
                         CreatedDate = contract.CreatedDate,
 
                         ItemCount = contractItems.Count,
-                        TermCount = contractTerms.Count
+                        TermCount = contractTerms.Count,
+
+                        // Trả RowVersion để Frontend có thể cập nhật Draft ngay.
+                        RowVersion = EncodeRowVersion(contract.RowVersion),
+
+                        CurrentVersionRowVersion =
+                            EncodeRowVersion(contractVersion.RowVersion)
                     };
                 }
-                catch
+                catch (Exception exception)
                 {
-                    // Không để lại dữ liệu dở dang nếu bất kỳ bước nào thất bại.
-                    await transaction.RollbackAsync();
+                    /*
+                     * Execution strategy có thể chạy lại delegate với cùng
+                     * DbContext. Rollback database không tự xóa tracked state,
+                     * nên phải dọn toàn bộ attempt thất bại trước khi retry.
+                     * Rollback/cleanup không được che mất exception gốc.
+                     */
+                    try
+                    {
+                        await transaction.RollbackAsync();
+                    }
+                    catch
+                    {
+                        // Giữ exception gốc của operation.
+                    }
+
+                    try
+                    {
+                        _dbContext.ChangeTracker.Clear();
+                    }
+                    catch
+                    {
+                        // Giữ exception gốc của operation.
+                    }
+
+                    System.Runtime.ExceptionServices.ExceptionDispatchInfo
+                        .Capture(exception)
+                        .Throw();
+
+                    throw;
+                }
+            });
+        }
+
+        /// <summary>
+        /// Chuyển giao người phụ trách hiện tại của Contract.
+        /// </summary>
+        public async Task<TransferContractResponsibilityResponse>
+            TransferResponsibilityAsync(
+                int contractId,
+                TransferContractResponsibilityRequest request,
+                int actorEmployeeId)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+
+            if (contractId <= 0)
+            {
+                throw new ArgumentException(
+                    "ContractId phải lớn hơn 0.");
+            }
+
+            if (actorEmployeeId <= 0)
+            {
+                throw new UnauthorizedAccessException(
+                    "Không xác định được nhân viên đăng nhập.");
+            }
+
+            if (request.NewResponsibleEmployeeId <= 0)
+            {
+                throw new ArgumentException(
+                    "NewResponsibleEmployeeId phải lớn hơn 0.");
+            }
+
+            var reason = request.Reason?.Trim();
+
+            if (string.IsNullOrWhiteSpace(reason))
+            {
+                throw new ArgumentException(
+                    "Lý do chuyển giao không được để trống.");
+            }
+
+            if (reason.Length > 1000)
+            {
+                throw new ArgumentException(
+                    "Lý do chuyển giao không được vượt quá 1000 ký tự.");
+            }
+
+            var expectedRowVersion = DecodeRowVersion(
+                request.RowVersion,
+                nameof(request.RowVersion));
+
+            var occurredAt = DateTime.UtcNow;
+            var strategy =
+                _dbContext.Database.CreateExecutionStrategy();
+
+            try
+            {
+                return await strategy.ExecuteAsync(async () =>
+                {
+                    await using var transaction =
+                        await _dbContext.Database
+                            .BeginTransactionAsync();
+
+                    try
+                    {
+                        var actor = await _dbContext.TblEmployees
+                            .AsNoTracking()
+                            .Where(x =>
+                                x.EmployeeId == actorEmployeeId)
+                            .Select(x => new
+                            {
+                                x.EmployeeId,
+                                x.EmployeeType
+                            })
+                            .FirstOrDefaultAsync();
+
+                        if (actor == null)
+                        {
+                            throw new UnauthorizedAccessException(
+                                "Không xác định được nhân viên đăng nhập.");
+                        }
+
+                        var contract =
+                            await _dbContext.TblContracts
+                                .FirstOrDefaultAsync(x =>
+                                    x.ContractId == contractId);
+
+                        if (contract == null)
+                        {
+                            throw new KeyNotFoundException(
+                                "Không tìm thấy hợp đồng.");
+                        }
+
+                        var canTransfer =
+                            contract.EmployeeId == actorEmployeeId
+                            || actor.EmployeeType ==
+                                (byte)EmployeeType.Manager
+                            || actor.EmployeeType ==
+                                (byte)EmployeeType.AdminOfficer;
+
+                        if (!canTransfer)
+                        {
+                            throw new UnauthorizedAccessException(
+                                "Bạn không có quyền chuyển giao " +
+                                "người phụ trách hợp đồng.");
+                        }
+
+                        /*
+                         * Chỉ actor đang có quyền mới được nhận thông tin
+                         * concurrency của Contract.
+                         */
+                        EnsureRowVersionMatches(
+                            contract.RowVersion,
+                            expectedRowVersion,
+                            "Hợp đồng");
+
+                        await ValidateResponsibleEmployeeAsync(
+                            request.NewResponsibleEmployeeId);
+
+                        if (contract.EmployeeId ==
+                            request.NewResponsibleEmployeeId)
+                        {
+                            throw new InvalidOperationException(
+                                "Nhân viên được chọn đang là " +
+                                "người phụ trách hợp đồng.");
+                        }
+
+                        var previousResponsibleEmployeeId =
+                            contract.EmployeeId;
+
+                        _dbContext.Entry(contract)
+                            .Property(x => x.RowVersion)
+                            .OriginalValue = expectedRowVersion;
+
+                        contract.EmployeeId =
+                            request.NewResponsibleEmployeeId;
+                        contract.UpdatedEmployeeId = actorEmployeeId;
+                        contract.UpdateDate = occurredAt;
+
+                        _contractAuditWriter.StageEmployeeAudits(
+                        [
+                            new EmployeeContractAuditWriteRequest(
+                                contract.ContractId,
+                                contract.CurrentVersionId,
+                                actorEmployeeId,
+                                ContractAuditActionTypes
+                                    .ResponsibilityTransferred,
+                                ContractAuditResults.Succeeded,
+                                occurredAt,
+                                PreviousResponsibleEmployeeId:
+                                    previousResponsibleEmployeeId,
+                                NewResponsibleEmployeeId:
+                                    request.NewResponsibleEmployeeId,
+                                Reason: reason)
+                        ]);
+
+                        await _dbContext.SaveChangesAsync();
+                        await transaction.CommitAsync();
+
+                        return
+                            new TransferContractResponsibilityResponse
+                            {
+                                ContractId = contract.ContractId,
+                                PreviousResponsibleEmployeeId =
+                                    previousResponsibleEmployeeId,
+                                ResponsibleEmployeeId =
+                                    contract.EmployeeId,
+                                TransferredByEmployeeId =
+                                    actorEmployeeId,
+                                TransferredAt = occurredAt,
+                                RowVersion =
+                                    EncodeRowVersion(
+                                        contract.RowVersion)
+                            };
+                    }
+                    catch (Exception exception)
+                    {
+                        try
+                        {
+                            await transaction.RollbackAsync();
+                        }
+                        catch
+                        {
+                            // Giữ exception gốc của operation.
+                        }
+
+                        try
+                        {
+                            _dbContext.ChangeTracker.Clear();
+                        }
+                        catch
+                        {
+                            // Giữ exception gốc của operation.
+                        }
+
+                        System.Runtime.ExceptionServices
+                            .ExceptionDispatchInfo
+                            .Capture(exception)
+                            .Throw();
+
+                        throw;
+                    }
+                });
+            }
+            catch (DbUpdateConcurrencyException exception)
+            {
+                /*
+                 * Success transaction đã rollback và tracker đã sạch.
+                 * Failed audit được persist bằng transaction riêng.
+                 */
+                await PersistResponsibilityTransferConflictAuditAsync(
+                    contractId,
+                    actorEmployeeId,
+                    occurredAt);
+
+                throw new DbUpdateConcurrencyException(
+                    "Hợp đồng đã được cập nhật. " +
+                    "Vui lòng tải lại dữ liệu trước khi chuyển giao.",
+                    exception);
+            }
+        }
+
+        private async Task
+            PersistResponsibilityTransferConflictAuditAsync(
+                int contractId,
+                int actorEmployeeId,
+                DateTime occurredAt)
+        {
+            var strategy =
+                _dbContext.Database.CreateExecutionStrategy();
+
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction =
+                    await _dbContext.Database
+                        .BeginTransactionAsync();
+
+                try
+                {
+                    _contractAuditWriter.StageEmployeeAudits(
+                    [
+                        new EmployeeContractAuditWriteRequest(
+                            contractId,
+                            VersionId: null,
+                            actorEmployeeId,
+                            ContractAuditActionTypes
+                                .ResponsibilityTransferred,
+                            ContractAuditResults
+                                .ConcurrencyConflict,
+                            occurredAt)
+                    ]);
+
+                    await _dbContext.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                }
+                catch (Exception exception)
+                {
+                    try
+                    {
+                        await transaction.RollbackAsync();
+                    }
+                    catch
+                    {
+                        // Giữ exception của failed-audit operation.
+                    }
+
+                    try
+                    {
+                        _dbContext.ChangeTracker.Clear();
+                    }
+                    catch
+                    {
+                        // Giữ exception của failed-audit operation.
+                    }
+
+                    System.Runtime.ExceptionServices
+                        .ExceptionDispatchInfo
+                        .Capture(exception)
+                        .Throw();
+
                     throw;
                 }
             });
@@ -1405,6 +2041,34 @@ namespace ContractManagement.Domains.Services.Contract
             }
         }
 
+        private async Task ValidateResponsibleEmployeeAsync(
+            int employeeId)
+        {
+            var employee = await _dbContext.TblEmployees
+                .AsNoTracking()
+                .Where(x => x.EmployeeId == employeeId)
+                .Select(x => new
+                {
+                    x.EmployeeId,
+                    x.Status
+                })
+                .FirstOrDefaultAsync();
+
+            if (employee == null)
+            {
+                throw new KeyNotFoundException(
+                    "Không tìm thấy nhân viên phụ trách hợp đồng.");
+            }
+
+            // Convention hiện tại của EmployeeService:
+            // 1 = Active, 0 = Inactive.
+            if (employee.Status != ActiveEmployeeStatus)
+            {
+                throw new InvalidOperationException(
+                    "Nhân viên phụ trách đang inactive.");
+            }
+        }
+
         private async Task ValidateCustomerAsync(int customerId)
         {
             var customer = await _dbContext.TblCustomers
@@ -1501,7 +2165,8 @@ namespace ContractManagement.Domains.Services.Contract
         }
 
         private async Task ValidateParentContractAsync(
-            CreateContractRequest request)
+            CreateContractRequest request,
+            int employeeId)
         {
             if (!request.ParentContractId.HasValue)
             {
@@ -1516,7 +2181,9 @@ namespace ContractManagement.Domains.Services.Contract
                 .Select(x => new
                 {
                     x.CustomerId,
-                    x.ContractType
+                    x.EmployeeId,
+                    x.ContractType,
+                    x.Status
                 })
                 .FirstOrDefaultAsync();
 
@@ -1524,6 +2191,13 @@ namespace ContractManagement.Domains.Services.Contract
             {
                 throw new KeyNotFoundException(
                     "Không tìm thấy hợp đồng nguồn.");
+            }
+
+            // Người dùng chỉ được chọn hợp đồng mình có quyền xem.
+            if (parentContract.EmployeeId != employeeId)
+            {
+                throw new KeyNotFoundException(
+                    "Không tìm thấy hợp đồng nguồn hoặc bạn không có quyền xem.");
             }
 
             if (parentContract.CustomerId != request.CustomerId)
@@ -1537,6 +2211,14 @@ namespace ContractManagement.Domains.Services.Contract
             {
                 throw new InvalidOperationException(
                     "Hợp đồng nguồn phải là hợp đồng cung cấp phần mềm.");
+            }
+
+            // Đã ký nhưng chưa hoàn thành vẫn chưa đủ điều kiện.
+            if (parentContract.Status !=
+                (byte)ContractStatus.Completed)
+            {
+                throw new InvalidOperationException(
+                    "Hợp đồng nguồn phải ở trạng thái Completed.");
             }
         }
 
@@ -1912,7 +2594,8 @@ namespace ContractManagement.Domains.Services.Contract
                 .Select(x => new
                 {
                     x.CustomerId,
-                    x.ContractType
+                    x.ContractType,
+                    x.Status
                 })
                 .FirstOrDefaultAsync();
 
@@ -1933,6 +2616,14 @@ namespace ContractManagement.Domains.Services.Contract
             {
                 throw new InvalidOperationException(
                     "Hợp đồng nguồn phải là hợp đồng cung cấp phần mềm.");
+            }
+
+            // Khi sửa Draft cũng phải giữ đúng rule chỉ nhận Completed.
+            if (parent.Status !=
+                (byte)ContractStatus.Completed)
+            {
+                throw new InvalidOperationException(
+                    "Hợp đồng nguồn phải ở trạng thái Completed.");
             }
         }
 

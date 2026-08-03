@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// Reusable AppTextField component giúp tự động thiết lập `maxLength` mặc định (255 ký tự)
-/// và ẩn bộ đếm ký tự (counterText) thừa mà không cần viết lại `maxLength` mỗi lần dùng TextField.
 class AppTextField extends StatelessWidget {
   final TextEditingController? controller;
   final FocusNode? focusNode;
@@ -15,6 +13,12 @@ class AppTextField extends StatelessWidget {
   final bool enableSuggestions;
   final Widget? suffixIcon;
   final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
+  final EdgeInsetsGeometry? contentPadding;
+  final bool? isDense;
+  final bool readOnly;
+  final Iterable<String>? autofillHints;
 
   const AppTextField({
     super.key,
@@ -30,6 +34,12 @@ class AppTextField extends StatelessWidget {
     this.enableSuggestions = true,
     this.suffixIcon,
     this.keyboardType,
+    this.textInputAction,
+    this.onSubmitted,
+    this.contentPadding,
+    this.isDense,
+    this.readOnly = false,
+    this.autofillHints,
   });
 
   @override
@@ -42,18 +52,25 @@ class AppTextField extends StatelessWidget {
       obscureText: obscureText,
       maxLength: maxLength,
       keyboardType: keyboardType,
+      readOnly: readOnly,
+      textInputAction: textInputAction,
+      onSubmitted: onSubmitted,
       onChanged: onChanged,
       onTap: onTap,
       autocorrect: autocorrect,
       enableSuggestions: enableSuggestions,
+      autofillHints: autofillHints,
       decoration: InputDecoration(
+        isDense: isDense,
         hintText: placeholder,
         counterText: "", // Ẩn chữ đếm ký tự rườm rà mặc định
         filled: true,
         fillColor: hasError
             ? theme.colorScheme.error.withValues(alpha: 0.05)
             : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        contentPadding:
+            contentPadding ??
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         suffixIcon: suffixIcon,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -68,7 +85,9 @@ class AppTextField extends StatelessWidget {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(
-            color: hasError ? theme.colorScheme.error : theme.colorScheme.primary,
+            color: hasError
+                ? theme.colorScheme.error
+                : theme.colorScheme.primary,
             width: 1.5,
           ),
         ),

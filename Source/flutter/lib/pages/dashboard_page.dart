@@ -389,15 +389,16 @@ class _DashboardPageState extends State<DashboardPage> {
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
                 color: theme.colorScheme.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(
-                Icons.description_rounded,
-                color: theme.colorScheme.primary,
-                size: 20,
+              child: Image.asset(
+                'assets/logo_light.png',
+                width: 32,
+                height: 32,
+                fit: BoxFit.contain,
               ),
             ),
             const SizedBox(width: 10),

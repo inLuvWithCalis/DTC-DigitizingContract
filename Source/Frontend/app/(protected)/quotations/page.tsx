@@ -342,7 +342,7 @@ export default function QuotationListPage() {
               onRowClick={(row) => handleView(row.quotationId)}
               mobileCardRenderer={(
                 row: Row<QuotationResponseDto>,
-                { isSelected },
+                { isSelected, actionCell },
               ) => {
                 const item = row.original;
                 return (
@@ -381,6 +381,7 @@ export default function QuotationListPage() {
                         {formatCurrency(item.totalAmount)}
                       </span>
                     </div>
+                    {actionCell}
                   </div>
                 );
               }}

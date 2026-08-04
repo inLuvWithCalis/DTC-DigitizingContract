@@ -103,10 +103,10 @@ export default function PublicContractView() {
   };
 
   return (
-    <div className="h-screen overflow-y-auto bg-gray-50 py-8 pb-32">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="h-screen overflow-y-auto bg-gray-50 px-3 py-4 pb-24 sm:px-6 sm:py-8 sm:pb-32">
+      <div className="mx-auto max-w-4xl space-y-4 sm:space-y-6">
         {/* HEADER HỢP ĐỒNG */}
-        <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 text-center relative overflow-hidden">
+        <div className="relative overflow-hidden rounded-xl border border-gray-100 bg-white p-4 text-center shadow-sm sm:p-8">
           <div className="absolute top-0 left-0 w-full h-2 bg-blue-600"></div>
           <h1 className="text-2xl font-bold text-gray-900 uppercase">
             Hợp đồng Cung cấp Phần mềm
@@ -131,9 +131,9 @@ export default function PublicContractView() {
           {terms.map((term) => (
             <div
               key={term.id}
-              className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 transition-all hover:shadow-md"
+              className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-all hover:shadow-md sm:p-6"
             >
-              <div className="flex justify-between items-start mb-4">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h3 className="font-bold text-gray-900">{term.titleVn}</h3>
                   <h4 className="text-sm font-medium text-gray-500 italic">
@@ -219,7 +219,7 @@ export default function PublicContractView() {
 
         {/* BOTTOM ACTION BAR */}
         {!isSigned && (
-          <div className="bottom-4 mt-8 bg-white p-4 rounded-2xl shadow-lg border border-gray-200 flex justify-between items-center z-10">
+          <div className="bottom-4 z-10 mt-8 flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-lg sm:flex-row sm:items-center sm:justify-between">
             <div className="text-sm">
               <p className="font-semibold text-gray-900">
                 Bạn đã đọc kỹ và đồng ý với các điều khoản?
@@ -230,7 +230,7 @@ export default function PublicContractView() {
             </div>
             <button
               onClick={() => setIsOtpOpen(true)}
-              className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-sm transition-transform active:scale-95"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-6 py-3 font-bold text-white shadow-sm transition-transform hover:bg-green-700 active:scale-95 sm:w-auto sm:px-8"
             >
               <FileSignature className="w-5 h-5" /> KÝ ĐIỆN TỬ
             </button>

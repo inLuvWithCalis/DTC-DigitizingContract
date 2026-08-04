@@ -967,7 +967,88 @@ export default function TenantsPage() {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto">
+                <div className="divide-y md:hidden">
+                  {filteredTenants.map((tenant) => {
+                    const percent = storagePercent(tenant);
+                    return (
+                      <div
+                        key={tenant.tenantId}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openTenantDetail(tenant)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            openTenantDetail(tenant);
+                          }
+                        }}
+                        className="block w-full space-y-4 p-4 text-left transition-colors hover:bg-muted/40 active:bg-muted"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border bg-primary/5 text-sm font-bold text-primary">
+                              {tenant.tenantName.charAt(0)}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate font-medium">{tenant.tenantName}</p>
+                              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                {tenant.tenantCode} · {tenant.plan}
+                              </p>
+                            </div>
+                          </div>
+                          <TenantStatusBadge status={tenant.status} />
+                        </div>
+
+                        <div className="rounded-lg border bg-muted/20 p-3">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <Database className="size-4 shrink-0 text-muted-foreground" />
+                            <span className="truncate font-mono text-xs">
+                              {tenant.databaseName}
+                            </span>
+                          </div>
+                          <div className="mt-2 flex items-center justify-between gap-3">
+                            <DatabaseHealthLabel health={tenant.databaseHealth} />
+                            <span className="text-xs text-muted-foreground">
+                              {formatStorage(tenant.storageUsedMb)} · {percent}%
+                            </span>
+                          </div>
+                          <Progress
+                            value={percent}
+                            className={cn(
+                              "mt-2 h-1.5",
+                              percent >= 85 && "[&>div]:bg-amber-500",
+                            )}
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <p className="text-xs text-muted-foreground">Người dùng</p>
+                            <p className="mt-1 font-medium">
+                              {tenant.activeUsers}/{tenant.totalUsers} hoạt động
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">Hoạt động gần nhất</p>
+                            <p className="mt-1 font-medium">{tenant.lastActivityAt}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {filteredTenants.length === 0 && (
+                    <div className="flex min-h-56 flex-col items-center justify-center p-6 text-center">
+                      <Search className="size-6 text-muted-foreground" />
+                      <p className="mt-3 font-medium">Không tìm thấy tenant</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Thử thay đổi từ khóa hoặc bộ lọc trạng thái.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="hidden overflow-x-auto md:block">
                   <Table className="min-w-[1080px]">
                     <TableHeader>
                       <TableRow className="bg-muted/40 hover:bg-muted/40">

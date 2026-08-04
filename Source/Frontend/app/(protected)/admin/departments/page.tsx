@@ -334,7 +334,7 @@ export default function DepartmentListPage() {
               onRowClick={(row) => handleView(row.departmentId)}
               mobileCardRenderer={(
                 row: Row<DepartmentResponse>,
-                { isSelected },
+                { isSelected, actionCell },
               ) => {
                 const item = row.original;
                 const statusStr = item.status === 1 ? "Active" : "Inactive";
@@ -370,6 +370,7 @@ export default function DepartmentListPage() {
                         </span>
                       </div>
                     </div>
+                    {actionCell}
                   </div>
                 );
               }}

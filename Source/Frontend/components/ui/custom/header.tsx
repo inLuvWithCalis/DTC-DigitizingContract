@@ -32,13 +32,13 @@ export function Header({ title }: { title?: string }) {
 
   return (
     <header className="bg-card/80 backdrop-blur-md border-b border-border sticky top-0 z-30 flex-shrink-0 transition-all">
-      <div className="px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div className="flex h-16 items-center justify-between px-3 sm:px-6 lg:px-8">
         <div className="hidden md:block">
           <h2 className="text-lg font-semibold text-foreground tracking-tight">
             {title}
           </h2>
         </div>
-        <div className="flex items-center gap-3 ml-auto">
+        <div className="ml-auto flex items-center gap-2 sm:gap-3">
           <ThemeToggle />
           <button className="relative p-2 hover:bg-accent rounded-full transition-colors text-muted-foreground hover:text-foreground">
             <Bell className="w-5 h-5" />

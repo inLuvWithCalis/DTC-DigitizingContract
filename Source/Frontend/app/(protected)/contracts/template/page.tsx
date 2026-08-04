@@ -117,13 +117,13 @@ export default function TemplateManagementPage() {
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
+    <div className="mx-auto max-w-6xl space-y-4 p-3 sm:space-y-6 sm:p-6">
       {/* ========================================== */}
       {/* GIAO DIỆN DANH SÁCH TEMPLATE               */}
       {/* ========================================== */}
       {viewState === "list" && (
         <div className="space-y-6 animate-in fade-in duration-300">
-          <div className="flex justify-between items-center bg-blue-50 p-6 rounded-xl border border-blue-100">
+          <div className="flex flex-col gap-4 rounded-xl border border-blue-100 bg-blue-50 p-4 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h1 className="text-2xl font-bold text-blue-900 flex items-center gap-2">
                 <FileText className="w-6 h-6" /> Quản lý Template Hợp đồng
@@ -134,7 +134,7 @@ export default function TemplateManagementPage() {
                 mềm) cho khách hàng.
               </p>
             </div>
-            <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm flex items-center gap-2">
+            <button className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 sm:w-fit">
               <Plus className="w-4 h-4" /> Tạo Template mới
             </button>
           </div>
@@ -156,7 +156,7 @@ export default function TemplateManagementPage() {
                 <p className="text-sm text-gray-500 line-clamp-2 mb-4 h-10">
                   {tpl.description}
                 </p>
-                <div className="flex items-center justify-between border-t pt-4">
+                <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
                   <span className="text-xs text-gray-400">
                     Cập nhật: {tpl.lastModified}
                   </span>
@@ -184,23 +184,23 @@ export default function TemplateManagementPage() {
       {viewState === "edit" && editingTemplate && (
         <div className="space-y-6 animate-in slide-in-from-right-8 duration-300">
           {/* Action Bar */}
-          <div className="sticky top-0 z-10 bg-white border-b pb-4 pt-2 flex justify-between items-center">
+          <div className="sticky top-0 z-10 flex flex-col gap-3 border-b bg-white pb-4 pt-2 sm:flex-row sm:items-center sm:justify-between">
             <button
               onClick={handleBack}
               className="flex items-center gap-2 text-gray-600 hover:text-gray-900 font-medium"
             >
               <ArrowLeft className="w-4 h-4" /> Quay lại
             </button>
-            <div className="flex gap-3">
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:gap-3">
               <button
                 onClick={handleAddTerm}
-                className="px-4 py-2 border border-blue-200 text-blue-700 bg-blue-50 rounded-lg font-medium hover:bg-blue-100 flex items-center gap-2"
+                className="flex items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 sm:px-4 sm:text-base"
               >
                 <Plus className="w-4 h-4" /> Thêm Điều khoản
               </button>
               <button
                 onClick={handleSave}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 flex items-center gap-2 shadow-sm"
+                className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 sm:px-4 sm:text-base"
               >
                 <Save className="w-4 h-4" /> Lưu Template
               </button>
@@ -252,17 +252,17 @@ export default function TemplateManagementPage() {
             {editingTemplate.terms.map((term: any, index: number) => (
               <div
                 key={term.id}
-                className="bg-white border border-gray-200 rounded-xl shadow-sm flex overflow-hidden group"
+                className="group flex overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm"
               >
                 {/* Drag Handle (Trực quan) */}
-                <div className="w-10 bg-gray-50 border-r flex items-center justify-center cursor-move text-gray-400 group-hover:bg-gray-100 transition-colors">
+                <div className="hidden w-10 cursor-move items-center justify-center border-r bg-gray-50 text-gray-400 transition-colors group-hover:bg-gray-100 sm:flex">
                   <GripVertical className="w-5 h-5" />
                 </div>
 
-                <div className="flex-1 p-5 space-y-5">
+                <div className="min-w-0 flex-1 space-y-5 p-4 sm:p-5">
                   {/* Header của một Điều khoản: Tùy chọn Cứng/Mềm & Xóa */}
-                  <div className="flex justify-between items-center border-b pb-3">
-                    <div className="flex items-center gap-3">
+                  <div className="flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                       <span className="font-bold bg-gray-100 text-gray-700 px-3 py-1 rounded">
                         Mục {index + 1}
                       </span>
@@ -276,7 +276,7 @@ export default function TemplateManagementPage() {
                             !term.isHardTerm,
                           )
                         }
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-bold transition-colors ${
+                        className={`flex w-fit max-w-full items-center gap-2 rounded-full px-3 py-1.5 text-left text-xs font-bold transition-colors sm:text-sm ${
                           term.isHardTerm
                             ? "bg-red-50 text-red-700 border border-red-200"
                             : "bg-green-50 text-green-700 border border-green-200"
@@ -303,7 +303,7 @@ export default function TemplateManagementPage() {
                   </div>
 
                   {/* Form Tiêu đề (Song ngữ) */}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
                       <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">
                         Tiêu đề (Tiếng Việt)
@@ -333,7 +333,7 @@ export default function TemplateManagementPage() {
                   </div>
 
                   {/* Form Nội dung (Song ngữ) */}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
                       <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">
                         Nội dung (Tiếng Việt)

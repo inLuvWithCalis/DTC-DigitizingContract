@@ -245,7 +245,7 @@ export default function DashboardPage() {
 
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(380px,0.75fr)]">
             <Card className="shadow-sm">
-              <CardHeader className="flex flex-row items-start justify-between border-b">
+              <CardHeader className="flex flex-col gap-3 border-b sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <CardTitle>Tăng trưởng tenant</CardTitle>
                   <p className="mt-1 text-sm text-muted-foreground">
@@ -347,7 +347,7 @@ export default function DashboardPage() {
 
           <div className="grid gap-6 xl:grid-cols-2">
             <Card className="shadow-sm">
-              <CardHeader className="flex flex-row items-center justify-between border-b">
+              <CardHeader className="flex flex-col gap-3 border-b sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <CardTitle>Sức khỏe hệ thống</CardTitle>
                   <p className="mt-1 text-sm text-muted-foreground">
@@ -406,7 +406,7 @@ export default function DashboardPage() {
             </Card>
 
             <Card className="shadow-sm">
-              <CardHeader className="flex flex-row items-center justify-between border-b">
+              <CardHeader className="flex flex-col gap-3 border-b sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <CardTitle>Sử dụng dung lượng</CardTitle>
                   <p className="mt-1 text-sm text-muted-foreground">

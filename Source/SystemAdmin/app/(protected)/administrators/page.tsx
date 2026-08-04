@@ -244,7 +244,7 @@ function AdministratorDetailSheet({
 
         <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-6 p-6">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="rounded-xl border bg-muted/20 p-4">
                 <Activity className="size-4 text-muted-foreground" />
                 <p className="mt-3 text-xl font-semibold">
@@ -671,7 +671,73 @@ export default function AdministratorsPage() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="divide-y md:hidden">
+              {filteredAccounts.map((account) => (
+                <div
+                  key={account.systemAdminId}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openDetail(account)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      openDetail(account);
+                    }
+                  }}
+                  className="block w-full space-y-4 p-4 text-left transition-colors hover:bg-muted/40 active:bg-muted"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border bg-primary/5 text-xs font-bold text-primary">
+                        {getInitials(account.fullName)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{account.fullName}</p>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          @{account.username} · {account.email}
+                        </p>
+                      </div>
+                    </div>
+                    <AccountStatusBadge status={account.status} />
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <RoleBadge role={account.role} />
+                    <span className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+                      {account.permissions.length} quyền
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 border-t pt-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground">Đăng nhập gần nhất</p>
+                      <p className="mt-1 truncate font-medium">{account.lastLoginAt}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {account.lastLoginIp}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">Số phiên</p>
+                      <p className="mt-1 font-medium">
+                        {account.loginCount.toLocaleString("vi-VN")}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {filteredAccounts.length === 0 && (
+                <div className="flex min-h-56 flex-col items-center justify-center p-6 text-center">
+                  <Search className="size-6 text-muted-foreground" />
+                  <p className="mt-3 font-medium">Không tìm thấy quản trị viên</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Thử thay đổi từ khóa hoặc bộ lọc.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
               <Table className="min-w-[1020px]">
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">

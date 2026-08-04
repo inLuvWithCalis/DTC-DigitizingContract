@@ -89,7 +89,7 @@ export default function DashboardPage() {
     <>
       <Header title="Dashboard" />
       <div className="grow overflow-y-auto">
-        <div className="px-6 lg:px-10 py-8 animate-in fade-in slide-in-from-bottom-4 duration-700 fill-mode-both">
+        <div className="px-3 py-5 sm:px-6 sm:py-8 lg:px-10 animate-in fade-in slide-in-from-bottom-4 duration-700 fill-mode-both">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-foreground mb-1.5 tracking-tight">
               Xin chào, Quản trị viên
@@ -179,9 +179,9 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={i}
-                    className="group flex items-start justify-between relative transition-transform duration-200 hover:translate-x-1"
+                    className="group relative flex flex-col gap-2 transition-transform duration-200 hover:translate-x-1 sm:flex-row sm:items-start sm:justify-between"
                   >
-                    <div className="flex gap-4 items-start">
+                    <div className="flex min-w-0 items-start gap-3 sm:gap-4">
                       <div
                         className={`mt-0.5 w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${activity.iconBg}`}
                       >
@@ -189,7 +189,7 @@ export default function DashboardPage() {
                           className={`w-5 h-5 ${activity.iconColor}`}
                         />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-foreground font-semibold text-sm mb-0.5 group-hover:text-primary transition-colors">
                           {activity.action}
                         </p>
@@ -198,7 +198,7 @@ export default function DashboardPage() {
                         </p>
                       </div>
                     </div>
-                    <span className="text-xs font-medium text-muted-foreground whitespace-nowrap ml-4 bg-muted/50 px-2.5 py-1 rounded-full">
+                    <span className="ml-[52px] w-fit rounded-full bg-muted/50 px-2.5 py-1 text-xs font-medium text-muted-foreground sm:ml-4 sm:whitespace-nowrap">
                       {activity.time}
                     </span>
                   </div>

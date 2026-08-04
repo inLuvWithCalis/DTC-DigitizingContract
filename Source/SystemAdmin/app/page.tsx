@@ -168,7 +168,7 @@ export default function LoginPage() {
         </div>
         <div className="w-full max-w-md">
           <Card className="rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] border-border overflow-hidden">
-            <CardHeader className="p-8 pb-0 sm:p-10 sm:pb-0 space-y-8">
+            <CardHeader className="space-y-8 p-5 pb-0 sm:p-10 sm:pb-0">
               <div className="lg:hidden">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-md">
@@ -189,7 +189,7 @@ export default function LoginPage() {
                 </CardDescription>
               </div>
             </CardHeader>
-            <CardContent className="p-8 sm:p-10">
+            <CardContent className="p-5 sm:p-10">
               <form onSubmit={handleEmailSignIn} className="space-y-5">
                 <div className="space-y-2">
                   <Label
@@ -303,7 +303,7 @@ export default function LoginPage() {
               </form>
             </CardContent>
 
-            <CardFooter className="p-8 pt-0 sm:p-10 sm:pt-0">
+            <CardFooter className="p-5 pt-0 sm:p-10 sm:pt-0">
               <div className="w-full pt-6 border-t border-border">
                 <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
                   <ShieldCheck className="w-4 h-4 text-emerald-500" />

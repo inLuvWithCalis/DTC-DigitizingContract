@@ -66,7 +66,7 @@ export default function SystemAdminProfilePage() {
       <Header title="Hồ sơ cá nhân" />
 
       <div className="grow overflow-y-auto">
-        <div className="mx-auto w-full max-w-5xl px-6 py-8 lg:px-10">
+        <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-10">
           <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-sm font-medium text-primary">

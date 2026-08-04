@@ -43,7 +43,7 @@ export default function ProtectedLayout({
   return (
     <div className="flex flex-row h-screen w-screen overflow-hidden bg-background">
       <Sidebar />
-      <main className="grow flex flex-col overflow-hidden relative z-10">
+      <main className="relative z-10 flex min-w-0 grow flex-col overflow-hidden">
         {children}
       </main>
     </div>

@@ -107,13 +107,13 @@ export function ContractTerms({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+      <CardHeader className="flex flex-col gap-3 space-y-0 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle className="flex items-center gap-2">
           <ShieldCheck className="size-5 text-primary" />
           Chi tiết các Điều khoản
         </CardTitle>
         {isEditable && (
-          <Button variant="outline" size="sm" onClick={handleAddTerm}>
+          <Button className="w-full sm:w-auto" variant="outline" size="sm" onClick={handleAddTerm}>
             <Plus className="size-4 mr-2" />
             Thêm Điều khoản
           </Button>
@@ -123,10 +123,10 @@ export function ContractTerms({
         {paginatedTerms.map((term) => (
           <div
             key={term.termId}
-            className="rounded-xl border bg-muted/10 p-5 space-y-3 relative group"
+            className="group relative space-y-3 rounded-xl border bg-muted/10 p-4 sm:p-5"
           >
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
                 <span className="text-xs font-bold text-muted-foreground uppercase bg-muted px-2 py-1 rounded">
                   Mục {term.displayOrder}: {term.termCode}
                 </span>
@@ -141,7 +141,7 @@ export function ContractTerms({
                         !term.isNegotiable,
                       )
                     }
-                    className={`text-xs font-bold px-3 py-1 rounded-full border transition-colors flex gap-2 ${
+                    className={`flex max-w-full gap-2 rounded-full border px-3 py-1 text-left text-xs font-bold transition-colors ${
                       term.isNegotiable
                         ? "bg-green-50 text-green-700 border-green-200"
                         : "bg-red-50 text-red-700 border-red-200"

@@ -9,7 +9,6 @@ import 'theme/app_theme.dart';
 import 'utils/auth_store.dart';
 import 'utils/theme_store.dart';
 
-
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../main.dart';
+import '../utils/theme_store.dart';
 import '../services/api_client.dart';
 import '../services/auth_api.dart';
 import '../utils/app_toast.dart';
@@ -464,91 +466,126 @@ class _LoginPageState extends State<LoginPage> {
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
       body: SafeArea(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Stack(
           children: [
-            const Spacer(),
-            // Logo Placeholder
-            Center(
-              child: Image.asset(
-                'assets/images/logo.png',
-                width: 120,
-                height: 120,
-                fit: BoxFit.contain,
-              ),
-            ),
-            const SizedBox(height: 32),
-            Text(
-              'eContract',
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: theme.colorScheme.onSurface,
-                letterSpacing: -0.5,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Số hóa hợp đồng thông minh',
-              style: TextStyle(
-                fontSize: 16,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-              ),
-            ),
-            const Spacer(),
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Spacer(),
+                // Logo Placeholder
+                Center(
+                  child: Image.asset(
+                    'assets/logo_light.png',
+                    width: 120,
+                    height: 120,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+                const SizedBox(height: 32),
+                Text(
+                  'eContract',
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: theme.colorScheme.onSurface,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Số hóa hợp đồng thông minh',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
+                const Spacer(),
 
-            // Bottom Action Area
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 32.0,
-                vertical: 48.0,
-              ),
-              child: _isLoading
-                  ? Column(
-                      children: [
-                        SizedBox(
-                          width: 200,
-                          child: LinearProgressIndicator(
-                            color: theme.colorScheme.primary,
-                            backgroundColor:
-                                theme.colorScheme.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(8),
-                            minHeight: 6,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Đang tải dữ liệu...',
-                          style: TextStyle(
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.6,
+                // Bottom Action Area
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32.0,
+                    vertical: 48.0,
+                  ),
+                  child: _isLoading
+                      ? Column(
+                          children: [
+                            SizedBox(
+                              width: 200,
+                              child: LinearProgressIndicator(
+                                color: theme.colorScheme.primary,
+                                backgroundColor:
+                                    theme.colorScheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(8),
+                                minHeight: 6,
+                              ),
                             ),
-                            fontSize: 14,
+                            const SizedBox(height: 16),
+                            Text(
+                              'Đang tải dữ liệu...',
+                              style: TextStyle(
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.6,
+                                ),
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        )
+                      : SizedBox(
+                          width: double.infinity,
+                          height: 56,
+                          child: ElevatedButton(
+                            onPressed: _showLoginBottomSheet,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: theme.colorScheme.primary,
+                              foregroundColor: theme.colorScheme.onPrimary,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: const Text(
+                              "Đăng nhập ngay",
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
                         ),
-                      ],
-                    )
-                  : SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: ElevatedButton(
-                        onPressed: _showLoginBottomSheet,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: theme.colorScheme.primary,
-                          foregroundColor: theme.colorScheme.onPrimary,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          elevation: 2,
-                        ),
-                        child: const Text(
-                          "Đăng nhập ngay",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                ),
+              ],
+            ),
+            Positioned(
+              top: 16,
+              right: 16,
+              child: ValueListenableBuilder<ThemeMode>(
+                valueListenable: themeModeNotifier,
+                builder: (context, currentMode, child) {
+                  final isDark = currentMode == ThemeMode.dark;
+                  return IconButton(
+                    style: IconButton.styleFrom(
+                      backgroundColor: theme.colorScheme.surfaceContainerHighest
+                          .withValues(alpha: 0.5),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
+                    icon: Icon(
+                      isDark
+                          ? Icons.light_mode_rounded
+                          : Icons.dark_mode_rounded,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                    onPressed: () {
+                      final newMode = isDark ? ThemeMode.light : ThemeMode.dark;
+                      themeModeNotifier.value = newMode;
+                      ThemeStore.saveThemeMode(!isDark);
+                    },
+                    tooltip: 'Đổi giao diện',
+                  );
+                },
+              ),
             ),
           ],
         ),

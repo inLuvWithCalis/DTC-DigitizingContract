@@ -66,7 +66,7 @@ flutter:
 
   assets:
     - .env
-    - assets/images/
+    - assets/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
@@ -97,12 +97,23 @@ flutter:
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "assets/images/logo.png"
+  image_path: "assets/logo_light.png"
   min_sdk_android: 21
 
 flutter_native_splash:
-  color: "#ffffff"
-  image: "assets/images/splash.png"
+  # Cấu hình cho iOS và các bản Android cũ (dưới Android 12)
+  color: "#FFFFFF" # Màu nền chế độ sáng
+  color_dark: "#000000" # Màu nền chế độ tối
+  image: "assets/logo_light.png" # Logo chế độ sáng
+  image_dark: "assets/logo_dark.png" # Logo chế độ tối
+  branding: "assets/branding_light.png" # Chữ/logo nhỏ dưới đáy (sáng)
+  branding_dark: "assets/branding_dark.png" # (tối)
+
+  # Cấu hình ĐẶC BIỆT cho Android 12+ (API 31+)
   android_12:
-    image: "assets/images/splash.png"
-    icon_background_color: "#ffffff"
+    color: "#FFFFFF" # Màu nền Android 12+ (sáng)
+    color_dark: "#000000" # Màu nền Android 12+ (tối)
+    image: "assets/logo_android12_light.png" # Logo dành riêng cho Android 12 (sáng)
+    image_dark: "assets/logo_android12_dark.png" # Logo dành riêng cho Android 12 (tối)
+    branding: "assets/branding_light_android12.png"
+    branding_dark: "assets/branding_dark_android12.png"

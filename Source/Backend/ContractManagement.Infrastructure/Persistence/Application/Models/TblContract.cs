@@ -45,6 +45,14 @@ public partial class TblContract
     /// </summary>
     public int? CurrentVersionId { get; set; }
 
+    /// <summary>
+    /// Logical pointers for the currently selected public verification context.
+    /// They are protected by Contract.RowVersion and deliberately have no physical FK.
+    /// </summary>
+    public int? CurrentVerificationPhoneId { get; set; }
+
+    public int? CurrentCustomerAccessLinkId { get; set; }
+
     public string? ContractCode { get; set; }
 
     public string ContractName { get; set; } = null!;

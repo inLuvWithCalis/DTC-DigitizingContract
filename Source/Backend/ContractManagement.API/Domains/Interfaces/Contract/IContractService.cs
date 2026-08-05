@@ -1,6 +1,8 @@
 ﻿using ContractManagement.API.Common.Responses;
 using ContractManagement.API.Domains.DTOs.Requests.Contract;
 using ContractManagement.API.Domains.DTOs.Responses.Contract;
+using ContractManagement.API.Domains.DTOs.Requests.Public;
+using ContractManagement.API.Domains.DTOs.Responses.Public;
 
 namespace ContractManagement.Domains.Interfaces.Contract
 {
@@ -38,6 +40,38 @@ namespace ContractManagement.Domains.Interfaces.Contract
                 int contractId,
                 TransferContractResponsibilityRequest request,
                 int actorEmployeeId);
+
+        Task<IReadOnlyList<ContractCustomerVerificationPhoneResponse>>
+            GetCustomerVerificationPhonesAsync(
+                int contractId,
+                int employeeId);
+
+        Task<ContractCustomerVerificationPhoneResponse>
+            UpdateCustomerVerificationPhoneAsync(
+                int contractId,
+                UpdateContractCustomerVerificationPhoneRequest request,
+                int employeeId);
+
+        Task<ContractCustomerAccessLinkResponse>
+            CreateCustomerAccessLinkAsync(
+                int contractId,
+                CreateContractCustomerAccessLinkRequest request,
+                int employeeId,
+                string publicBaseUrl);
+
+        Task<ContractCustomerAccessLinkResponse>
+            ReplaceCustomerAccessLinkAsync(
+                int contractId,
+                int linkId,
+                ReplaceContractCustomerAccessLinkRequest request,
+                int employeeId,
+                string publicBaseUrl);
+
+        Task RevokeCustomerAccessLinkAsync(
+            int contractId,
+            int linkId,
+            RevokeContractCustomerAccessLinkRequest request,
+            int employeeId);
 
         /// <summary>
         /// Lấy hợp đồng cùng version hiện hành, items và terms.
@@ -105,6 +139,13 @@ namespace ContractManagement.Domains.Interfaces.Contract
                 int commentId,
                 UpdateContractNegotiationCommentStateRequest request,
                 int employeeId);
+
+        Task<CustomerPublicNegotiationCommentResponse>
+            CreateCustomerCommentAsync(
+                int contractId,
+                int versionId,
+                int customerAccessSessionId,
+                CreateCustomerNegotiationCommentRequest request);
 
         Task<IReadOnlyList<ContractVersionHistoryResponse>>
             GetVersionHistoryAsync(

@@ -1,0 +1,245 @@
+using ContractManagement.API.Common.Enums;
+using ContractManagement.API.Domains.CustomerAccess;
+using ContractManagement.API.Domains.DTOs.Requests.Contract;
+using ContractManagement.API.Domains.DTOs.Requests.Public;
+using ContractManagement.Domains.Interfaces.Contract;
+using ContractManagement.Domains.Services.Contract;
+using ContractManagement.Infrastructure.MultiTenancy.Enums;
+using ContractManagement.Infrastructure.MultiTenancy.Models;
+using ContractManagement.Infrastructure.MultiTenancy.Services;
+using ContractManagement.Infrastructure.Persistence.Application;
+using ContractManagement.Infrastructure.Persistence.Application.Models;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Options;
+
+namespace ContractManagement.Tests.Domains.Services.Contract;
+
+public sealed class ContractServiceSlice06Tests
+{
+    private const int TenantId = 906;
+    private const int ContractId = 600;
+    private const int VersionId = 601;
+    private const int EmployeeId = 602;
+    private const int CustomerId = 603;
+    private const int TermId = 604;
+
+    [Fact]
+    public async Task DraftToNegotiating_OtpCustomerCommentAndNewRound_ShouldRevokeOldAccess()
+    {
+        await using var context = CreateContext();
+        await SeedAsync(context);
+        var (contractService, customerAccess, cryptography) = CreateServices(context);
+        var rowVersion = Convert.ToBase64String(InitialRowVersion());
+
+        var phone = await contractService.UpdateCustomerVerificationPhoneAsync(
+            ContractId,
+            new UpdateContractCustomerVerificationPhoneRequest
+            {
+                PhoneSource = "CustomerMobile",
+                Reason = "Customer selected mobile",
+                RowVersion = rowVersion
+            },
+            EmployeeId);
+        Assert.Equal("********5678", phone.MaskedPhoneNumber);
+
+        var link = await contractService.CreateCustomerAccessLinkAsync(
+            ContractId,
+            new CreateContractCustomerAccessLinkRequest { RowVersion = rowVersion },
+            EmployeeId,
+            "https://public.example.test");
+        Assert.Equal("PendingActivation", link.State);
+
+        var pendingToken = new Uri(link.PublicUrl).Segments.Last().Trim('/');
+        var pending = await customerAccess.RequestOtpAsync(pendingToken, "+84912345678");
+        Assert.NotEmpty(pending.PublicChallengeId);
+        Assert.Empty(context.TblContractCustomerOtpChallenges);
+
+        await contractService.StartNegotiationAsync(
+            ContractId,
+            new StartContractNegotiationRequest { RowVersion = rowVersion },
+            EmployeeId);
+
+        var challengeResponse = await customerAccess.RequestOtpAsync(
+            pendingToken,
+            "+84912345678");
+        var outbox = await context.TblContractCustomerOtpDeliveryOutbox.SingleAsync();
+        var message = cryptography.DecryptDeliveryPayload(outbox.EncryptedPayload);
+        var issue = await customerAccess.VerifyOtpAsync(
+            pendingToken,
+            challengeResponse.PublicChallengeId,
+            message.Otp);
+
+        var shared = await customerAccess.GetSharedAsync(issue.SessionSecret);
+        Assert.Single(shared.Terms);
+        Assert.Empty(shared.Comments);
+
+        var comment = await customerAccess.CreateCommentAsync(
+            issue.SessionSecret,
+            new CreateCustomerNegotiationCommentRequest
+            {
+                TermId = TermId,
+                Content = "Please clarify the term."
+            });
+        Assert.Equal("Customer", comment.Source);
+        Assert.Equal("Open", comment.LifecycleState);
+
+        var persisted = await context.TblContractNegotiationComments.SingleAsync();
+        Assert.Null(persisted.RecordedByEmployeeId);
+        Assert.NotNull(persisted.CustomerAccessSessionId);
+        Assert.Contains(context.TblContractAudits, x =>
+            x.ActionType == ContractAuditActionTypes.CustomerCommentCreated
+            && x.ActorType == ContractAuditActorTypes.Customer);
+
+        var round = await contractService.CreateNegotiationRoundAsync(
+            ContractId,
+            new CreateContractNegotiationRoundRequest
+            {
+                CurrentVersionId = VersionId,
+                RowVersion = rowVersion,
+                CurrentVersionRowVersion = rowVersion,
+                ChangeNote = "Customer negotiation round two"
+            },
+            EmployeeId);
+
+        Assert.NotEqual(VersionId, round.CurrentVersion.VersionId);
+        Assert.Null((await context.TblContracts.SingleAsync()).CurrentCustomerAccessLinkId);
+        Assert.NotNull((await context.TblContractCustomerAccessLinks.SingleAsync()).RevokedAt);
+        Assert.NotNull((await context.TblContractCustomerAccessSessions.SingleAsync()).RevokedAt);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => customerAccess.GetSharedAsync(issue.SessionSecret));
+    }
+
+    private static DbDtctechContext CreateContext()
+    {
+        var options = new DbContextOptionsBuilder<DbDtctechContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .ConfigureWarnings(warnings => warnings.Ignore(
+                InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+        return new DbDtctechContext(options);
+    }
+
+    private static (ContractService ContractService,
+        CustomerContractAccessService CustomerAccess,
+        CustomerAccessCryptography Cryptography) CreateServices(DbDtctechContext context)
+    {
+        var tenant = new CurrentTenant();
+        tenant.Set(new ResolvedTenant(
+            TenantId,
+            "tenant-906",
+            "Tenant 906",
+            TenantDatabaseMode.Dedicated,
+            "InMemory"));
+        var audit = new ContractAuditWriter(
+            context,
+            tenant,
+            new HttpContextAccessor
+            {
+                HttpContext = new DefaultHttpContext { TraceIdentifier = "slice-06" }
+            });
+        var options = Options.Create(new CustomerOtpOptions
+        {
+            HashKey = Convert.ToBase64String(Enumerable.Repeat((byte)1, 32).ToArray()),
+            EncryptionKey = Convert.ToBase64String(Enumerable.Repeat((byte)2, 32).ToArray())
+        });
+        var cryptography = new CustomerAccessCryptography(options);
+        var contractService = new ContractService(context, audit, tenant, cryptography);
+        return (
+            contractService,
+            new CustomerContractAccessService(
+                context,
+                tenant,
+                cryptography,
+                contractService,
+                audit),
+            cryptography);
+    }
+
+    private static async Task SeedAsync(DbDtctechContext context)
+    {
+        context.TblEmployees.Add(new TblEmployee
+        {
+            EmployeeId = EmployeeId,
+            EmployeeAccount = "slice06-owner",
+            EmployeeFullName = "Slice 06 owner",
+            EmployeeType = (byte)EmployeeType.Sale,
+            Status = 1
+        });
+        context.TblCustomers.Add(new TblCustomer
+        {
+            CustomerId = CustomerId,
+            CustomerFullName = "Slice 06 customer",
+            CustomerMobile = "+84912345678",
+            Status = 1
+        });
+        context.TblContracts.Add(new TblContract
+        {
+            ContractId = ContractId,
+            CustomerId = CustomerId,
+            EmployeeId = EmployeeId,
+            ContractType = 1,
+            CurrentVersionId = VersionId,
+            ContractCode = "HD-S06",
+            ContractName = "Slice 06",
+            Status = (byte)ContractStatus.Draft,
+            CurrencyCode = "VND",
+            LanguageMode = 1,
+            CreatedEmployeeId = EmployeeId,
+            CreatedDate = DateTime.UtcNow,
+            RowVersion = InitialRowVersion()
+        });
+        context.TblContractVersions.Add(new TblContractVersion
+        {
+            VersionId = VersionId,
+            ContractId = ContractId,
+            VersionNo = 1,
+            CurrencyCode = "VND",
+            IsLocked = false,
+            CreatedEmployeeId = EmployeeId,
+            CreatedDate = DateTime.UtcNow,
+            RowVersion = InitialRowVersion()
+        });
+        context.TblContractItems.Add(new TblContractItem
+        {
+            ContractItemId = 605,
+            ContractId = ContractId,
+            VersionId = VersionId,
+            ItemType = 1,
+            ItemName = "Slice 06 item",
+            Quantity = 1,
+            UnitPrice = 100,
+            LineSubtotal = 100,
+            DiscountMode = 0,
+            DiscountPercent = 0,
+            FixedDiscountAmount = 0,
+            DiscountAmount = 0,
+            IsTaxable = false,
+            VatPercent = 0,
+            VatAmount = 0,
+            LineTotal = 100,
+            DisplayOrder = 1,
+            CreatedEmployeeId = EmployeeId,
+            CreatedDate = DateTime.UtcNow,
+            RowVersion = InitialRowVersion()
+        });
+        context.TblContractTerms.Add(new TblContractTerm
+        {
+            TermId = TermId,
+            ContractId = ContractId,
+            VersionId = VersionId,
+            TermCode = "NEGOTIABLE",
+            TermTitle = "Negotiable term",
+            IsNegotiable = true,
+            DisplayOrder = 1,
+            CreatedEmployeeId = EmployeeId,
+            CreatedDate = DateTime.UtcNow,
+            RowVersion = InitialRowVersion()
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+    }
+
+    private static byte[] InitialRowVersion() => [1, 2, 3, 4, 5, 6, 7, 8];
+}

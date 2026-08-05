@@ -14,7 +14,11 @@ public partial class TblContractNegotiationCommentEvent
     /// </summary>
     public byte EventType { get; set; }
 
-    public int EmployeeId { get; set; }
+    public string ActorType { get; set; } = null!;
+
+    public int? EmployeeId { get; set; }
+
+    public int? CustomerAccessSessionId { get; set; }
 
     public DateTime OccurredAt { get; set; }
 

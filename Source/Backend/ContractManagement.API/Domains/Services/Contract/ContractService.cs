@@ -13,13 +13,15 @@ using System.Data;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using ContractManagement.API.Domains.CustomerAccess;
+using ContractManagement.Infrastructure.MultiTenancy.Interfaces;
 
 namespace ContractManagement.Domains.Services.Contract
 {
     /// <summary>
     /// Service xử lý nghiệp vụ chính của hợp đồng.
     /// </summary>
-    public class ContractService : IContractService
+    public partial class ContractService : IContractService
     {
         private const decimal MaxMoney = 9999999999999999.99m;
         private const byte ActiveEmployeeStatus = 1;
@@ -27,6 +29,8 @@ namespace ContractManagement.Domains.Services.Contract
 
         private readonly DbDtctechContext _dbContext;
         private readonly IContractAuditWriter _contractAuditWriter;
+        private readonly ICurrentTenant? _currentTenant;
+        private readonly CustomerAccessCryptography? _customerAccessCryptography;
 
         public ContractService(
             DbDtctechContext dbContext,
@@ -34,6 +38,18 @@ namespace ContractManagement.Domains.Services.Contract
         {
             _dbContext = dbContext;
             _contractAuditWriter = contractAuditWriter;
+        }
+
+        public ContractService(
+            DbDtctechContext dbContext,
+            IContractAuditWriter contractAuditWriter,
+            ICurrentTenant currentTenant,
+            CustomerAccessCryptography customerAccessCryptography)
+        {
+            _dbContext = dbContext;
+            _contractAuditWriter = contractAuditWriter;
+            _currentTenant = currentTenant;
+            _customerAccessCryptography = customerAccessCryptography;
         }
 
         /// <summary>
@@ -1728,11 +1744,37 @@ namespace ContractManagement.Domains.Services.Contract
                     .Property(x => x.RowVersion)
                     .OriginalValue = expectedRowVersion;
 
+                var now = DateTime.UtcNow;
                 contract.Status =
                     (byte)ContractStatus.Negotiating;
 
                 contract.UpdatedEmployeeId = employeeId;
-                contract.UpdateDate = DateTime.UtcNow;
+                contract.UpdateDate = now;
+
+                if (contract.CurrentCustomerAccessLinkId.HasValue)
+                {
+                    var pendingLink = await _dbContext.TblContractCustomerAccessLinks
+                        .SingleOrDefaultAsync(x =>
+                            x.CustomerAccessLinkId == contract.CurrentCustomerAccessLinkId.Value
+                            && x.ContractId == contract.ContractId);
+                    if (pendingLink is not null
+                        && !pendingLink.RevokedAt.HasValue
+                        && pendingLink.ExpiresAt > now
+                        && !pendingLink.ActivatedAt.HasValue)
+                    {
+                        pendingLink.ActivatedAt = now;
+                        _contractAuditWriter.StageEmployeeAudits(
+                        [
+                            new EmployeeContractAuditWriteRequest(
+                                contract.ContractId,
+                                pendingLink.VersionId,
+                                employeeId,
+                                ContractAuditActionTypes.CustomerAccessLinkActivated,
+                                ContractAuditResults.Succeeded,
+                                now)
+                        ]);
+                    }
+                }
 
                 await _dbContext.SaveChangesAsync();
             }
@@ -1999,6 +2041,27 @@ namespace ContractManagement.Domains.Services.Contract
                     contract.UpdatedEmployeeId = employeeId;
                     contract.UpdateDate = now;
 
+                    if (contract.CurrentCustomerAccessLinkId.HasValue)
+                    {
+                        var sourceLinkId = contract.CurrentCustomerAccessLinkId.Value;
+                        await RevokeCustomerLinkStateAsync(
+                            sourceLinkId,
+                            employeeId,
+                            now,
+                            "New negotiation round");
+                        contract.CurrentCustomerAccessLinkId = null;
+                        _contractAuditWriter.StageEmployeeAudits(
+                        [
+                            new EmployeeContractAuditWriteRequest(
+                                contract.ContractId,
+                                sourceVersion.VersionId,
+                                employeeId,
+                                ContractAuditActionTypes.CustomerAccessLinkInvalidated,
+                                ContractAuditResults.Succeeded,
+                                now)
+                        ]);
+                    }
+
                     _contractAuditWriter.StageEmployeeAudits(
                     [
                         new EmployeeContractAuditWriteRequest(
@@ -2203,6 +2266,7 @@ namespace ContractManagement.Domains.Services.Contract
                                 EventType =
                                     (byte)ContractNegotiationCommentEventType
                                         .Created,
+                                ActorType = ContractAuditActorTypes.Employee,
                                 EmployeeId = employeeId,
                                 OccurredAt = now
                             };
@@ -2564,6 +2628,7 @@ namespace ContractManagement.Domains.Services.Contract
                         {
                             CommentId = comment.CommentId,
                             EventType = (byte)eventType,
+                            ActorType = ContractAuditActorTypes.Employee,
                             EmployeeId = employeeId,
                             OccurredAt = now
                         });
@@ -2733,7 +2798,7 @@ namespace ContractManagement.Domains.Services.Contract
                 Content = comment.Content,
                 Source = comment.Source,
                 ExternalFeedback = comment.ExternalFeedback,
-                RecordedByEmployeeId = comment.RecordedByEmployeeId,
+                RecordedByEmployeeId = comment.RecordedByEmployeeId ?? 0,
                 State = (ContractNegotiationCommentState)comment.State,
                 CreatedDate = comment.CreatedDate,
                 UpdatedDate = comment.UpdatedDate,
@@ -2747,7 +2812,7 @@ namespace ContractManagement.Domains.Services.Contract
                         CommentId = x.CommentId,
                         EventType =
                             (ContractNegotiationCommentEventType)x.EventType,
-                        EmployeeId = x.EmployeeId,
+                        EmployeeId = x.EmployeeId ?? 0,
                         OccurredAt = x.OccurredAt
                     })
                     .ToList()

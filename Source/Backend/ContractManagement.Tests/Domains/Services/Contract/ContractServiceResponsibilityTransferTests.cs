@@ -736,6 +736,10 @@ public class ContractServiceResponsibilityTransferTests
     private sealed class ThrowAfterStagingAuditWriter(
         IContractAuditWriter inner) : IContractAuditWriter
     {
+        public void StageAudits(
+            IReadOnlyCollection<ContractAuditWriteRequest> requests) =>
+            inner.StageAudits(requests);
+
         public void StageEmployeeAudits(
             IReadOnlyCollection<EmployeeContractAuditWriteRequest> requests)
         {

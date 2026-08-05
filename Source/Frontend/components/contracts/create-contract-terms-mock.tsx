@@ -96,7 +96,6 @@ export function CreateContractTermsMock({
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <p className="font-semibold">Bộ điều khoản từ template</p>
-            <Badge variant="secondary">Dữ liệu mock</Badge>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">{templateName}</p>
         </div>
@@ -202,11 +201,7 @@ export function CreateContractTermsMock({
                 type="button"
                 className="flex w-fit items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
                 onClick={() =>
-                  updateTerm(
-                    term.id,
-                    "isNegotiable",
-                    !term.isNegotiable,
-                  )
+                  updateTerm(term.id, "isNegotiable", !term.isNegotiable)
                 }
               >
                 {term.isNegotiable ? (

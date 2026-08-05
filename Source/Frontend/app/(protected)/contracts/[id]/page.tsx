@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Clock,
+  FileSignature,
   FileText,
   Loader2,
   MessageSquareText,
@@ -27,6 +28,7 @@ import {
   ContractItemDiscountMode,
   ContractLanguageMode,
   ContractStatus,
+  getContractTypeLabel,
   UpdateContractDraftRequest,
 } from "@/services/contract-api";
 import { roundContractMoney } from "@/lib/contract-finance";
@@ -491,7 +493,7 @@ export default function ContractDetailPage() {
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-5">
           <InfoCard
             icon={<Users className="size-4" />}
             label="Khách hàng"
@@ -499,6 +501,11 @@ export default function ContractDetailPage() {
               contract.customer?.customerCompany ||
               contract.customer?.customerFullName
             }
+          />
+          <InfoCard
+            icon={<FileSignature className="size-4" />}
+            label="Loại hợp đồng"
+            value={getContractTypeLabel(contract.contractType)}
           />
           <InfoCard
             icon={<FileText className="size-4" />}

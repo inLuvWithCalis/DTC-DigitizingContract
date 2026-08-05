@@ -333,7 +333,7 @@ export function ContractOverview({
                 onChange={(e) =>
                   handleRootChange("contractName", e.target.value)
                 }
-                className="font-semibold text-lg"
+                className="text-lg"
               />
             ) : (
               <p className="text-lg font-semibold">{contract.contractName}</p>
@@ -364,7 +364,7 @@ export function ContractOverview({
           <div className="grid gap-4 sm:grid-cols-2">
             {isEditable ? (
               <div className="rounded-xl border bg-muted/30 p-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2 font-semibold">
                   <Users className="size-4" /> Khách hàng
                 </div>
                 <Select
@@ -417,38 +417,9 @@ export function ContractOverview({
               />
             )}
 
-            <div className="rounded-xl border bg-muted/30 p-4 flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Clock className="size-4" /> Người phụ trách
-                </div>
-                {onOpenTransferModal && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-2 text-xs text-primary hover:bg-primary/10"
-                    onClick={onOpenTransferModal}
-                  >
-                    Chuyển giao
-                  </Button>
-                )}
-              </div>
-              <div className="mt-2 font-semibold text-foreground">
-                {contract.responsibleEmployee?.employeeFullName || "Chưa gán"}
-              </div>
-            </div>
-
-            <InfoCard
-              icon={<FileSignature className="size-4" />}
-              label="Loại hợp đồng"
-              value={getContractTypeLabel(contract.contractType)}
-            />
-
-            {/* SỬA NGÀY THÁNG */}
-
             {/* SỬA NGÀY THÁNG */}
             <div className="rounded-xl border bg-muted/30 p-4">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2 font-semibold">
                 <CalendarDays className="size-4" /> Hiệu lực
               </div>
               {isEditable ? (
@@ -604,184 +575,199 @@ export function ContractOverview({
                     </div>
 
                     {isEditable ? (
-                      <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
-                        {contract.languageMode ===
-                          ContractLanguageMode.Bilingual && (
-                          <div className="space-y-1.5 sm:col-span-2 xl:col-span-5">
-                            <span className="text-xs font-medium text-muted-foreground">
-                              Tên sản phẩm / dịch vụ tiếng Anh
-                            </span>
-                            <Input
-                              value={item.itemNameEn || ""}
-                              onChange={(e) =>
-                                handleItemChange(
-                                  item.contractItemId,
-                                  "itemNameEn",
-                                  e.target.value,
-                                )
-                              }
-                              placeholder="Enter the English item name..."
-                            />
-                          </div>
-                        )}
-                        <div className="space-y-1.5">
-                          <span className="text-xs font-medium text-muted-foreground">
-                            Số lượng
-                          </span>
-                          <IntegerInput
-                            min={1}
-                            value={item.quantity}
-                            onValueChange={(value) =>
-                              handleItemChange(
-                                item.contractItemId,
-                                "quantity",
-                                value,
-                              )
-                            }
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <span className="text-xs font-medium text-muted-foreground">
-                            Đơn giá
-                          </span>
-                          <DecimalInput
-                            min={0}
-                            value={item.unitPrice}
-                            onValueChange={(value) =>
-                              handleItemChange(
-                                item.contractItemId,
-                                "unitPrice",
-                                value,
-                              )
-                            }
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <span className="text-xs font-medium text-muted-foreground">
-                            Chiết khấu
-                          </span>
-                          <Select
-                            value={String(item.discountMode)}
-                            onValueChange={(value) =>
-                              handleItemPatch(item.contractItemId, {
-                                discountMode: Number(
-                                  value,
-                                ) as ContractItemDiscountMode,
-                                discountPercent: 0,
-                                fixedDiscountAmount: 0,
-                              })
-                            }
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem
-                                value={String(ContractItemDiscountMode.None)}
-                              >
-                                Không chiết khấu
-                              </SelectItem>
-                              <SelectItem
-                                value={String(
-                                  ContractItemDiscountMode.Percentage,
-                                )}
-                              >
-                                Theo phần trăm
-                              </SelectItem>
-                              <SelectItem
-                                value={String(
-                                  ContractItemDiscountMode.FixedAmount,
-                                )}
-                              >
-                                Số tiền cố định
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        {item.discountMode ===
-                          ContractItemDiscountMode.Percentage && (
+                      <>
+                        <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
+                          {contract.languageMode ===
+                            ContractLanguageMode.Bilingual && (
+                            <div className="space-y-1.5 sm:col-span-2 xl:col-span-5">
+                              <span className="text-xs font-medium text-muted-foreground">
+                                Tên sản phẩm / dịch vụ tiếng Anh
+                              </span>
+                              <Input
+                                value={item.itemNameEn || ""}
+                                onChange={(e) =>
+                                  handleItemChange(
+                                    item.contractItemId,
+                                    "itemNameEn",
+                                    e.target.value,
+                                  )
+                                }
+                                placeholder="Enter the English item name..."
+                              />
+                            </div>
+                          )}
                           <div className="space-y-1.5">
                             <span className="text-xs font-medium text-muted-foreground">
-                              Mức giảm (%)
+                              Số lượng
                             </span>
-                            <DecimalInput
-                              min={0}
-                              max={100}
-                              value={item.discountPercent}
+                            <IntegerInput
+                              min={1}
+                              value={item.quantity}
                               onValueChange={(value) =>
                                 handleItemChange(
                                   item.contractItemId,
-                                  "discountPercent",
+                                  "quantity",
                                   value,
                                 )
                               }
                             />
                           </div>
-                        )}
-
-                        {item.discountMode ===
-                          ContractItemDiscountMode.FixedAmount && (
                           <div className="space-y-1.5">
                             <span className="text-xs font-medium text-muted-foreground">
-                              Số tiền giảm
+                              Đơn giá
                             </span>
                             <DecimalInput
                               min={0}
-                              value={item.fixedDiscountAmount}
+                              value={item.unitPrice}
                               onValueChange={(value) =>
                                 handleItemChange(
                                   item.contractItemId,
-                                  "fixedDiscountAmount",
+                                  "unitPrice",
                                   value,
                                 )
                               }
                             />
                           </div>
-                        )}
-
-                        <div className="space-y-1.5">
-                          <span className="text-xs font-medium text-muted-foreground">
-                            Thuế VAT
-                          </span>
-                          <div className="flex h-9 items-center justify-between rounded-md border px-3">
-                            <span className="text-sm">
-                              {item.isTaxable ? "Có thuế" : "Không thuế"}
+                          <div className="space-y-1.5">
+                            <span className="text-xs font-medium text-muted-foreground">
+                              Chiết khấu
                             </span>
-                            <Switch
-                              checked={item.isTaxable}
-                              onCheckedChange={(checked) =>
+                            <Select
+                              value={String(item.discountMode)}
+                              onValueChange={(value) =>
                                 handleItemPatch(item.contractItemId, {
-                                  isTaxable: checked,
-                                  vatPercent: checked
-                                    ? item.vatPercent || 10
-                                    : 0,
+                                  discountMode: Number(
+                                    value,
+                                  ) as ContractItemDiscountMode,
+                                  discountPercent: 0,
+                                  fixedDiscountAmount: 0,
                                 })
                               }
-                            />
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem
+                                  value={String(ContractItemDiscountMode.None)}
+                                >
+                                  Không chiết khấu
+                                </SelectItem>
+                                <SelectItem
+                                  value={String(
+                                    ContractItemDiscountMode.Percentage,
+                                  )}
+                                >
+                                  Theo phần trăm
+                                </SelectItem>
+                                <SelectItem
+                                  value={String(
+                                    ContractItemDiscountMode.FixedAmount,
+                                  )}
+                                >
+                                  Số tiền cố định
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
                           </div>
-                        </div>
 
-                        {item.isTaxable && (
+                          {item.discountMode !==
+                            ContractItemDiscountMode.Percentage &&
+                            item.discountMode !==
+                              ContractItemDiscountMode.FixedAmount && (
+                              <div className="space-y-1.5">
+                                <span className="text-xs font-medium text-muted-foreground">
+                                  Số tiền giảm
+                                </span>
+                                <Input disabled defaultValue={0} />
+                              </div>
+                            )}
+
+                          {item.discountMode ===
+                            ContractItemDiscountMode.Percentage && (
+                            <div className="space-y-1.5">
+                              <span className="text-xs font-medium text-muted-foreground">
+                                Số tiền giảm (%)
+                              </span>
+                              <DecimalInput
+                                min={0}
+                                max={100}
+                                value={item.discountPercent}
+                                onValueChange={(value) =>
+                                  handleItemChange(
+                                    item.contractItemId,
+                                    "discountPercent",
+                                    value,
+                                  )
+                                }
+                              />
+                            </div>
+                          )}
+
+                          {item.discountMode ===
+                            ContractItemDiscountMode.FixedAmount && (
+                            <div className="space-y-1.5">
+                              <span className="text-xs font-medium text-muted-foreground">
+                                Số tiền giảm ({contract.currencyCode})
+                              </span>
+                              <DecimalInput
+                                min={0}
+                                value={item.fixedDiscountAmount}
+                                onValueChange={(value) =>
+                                  handleItemChange(
+                                    item.contractItemId,
+                                    "fixedDiscountAmount",
+                                    value,
+                                  )
+                                }
+                              />
+                            </div>
+                          )}
+                        </div>
+                        <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
                           <div className="space-y-1.5">
                             <span className="text-xs font-medium text-muted-foreground">
-                              Thuế suất (%)
+                              Thuế VAT
                             </span>
-                            <DecimalInput
-                              min={0}
-                              max={100}
-                              value={item.vatPercent}
-                              onValueChange={(value) =>
-                                handleItemChange(
-                                  item.contractItemId,
-                                  "vatPercent",
-                                  value,
-                                )
-                              }
-                            />
+                            <div className="flex h-9 items-center justify-between rounded-md border px-3">
+                              <span className="text-sm">
+                                {item.isTaxable ? "Có thuế" : "Không thuế"}
+                              </span>
+                              <Switch
+                                checked={item.isTaxable}
+                                onCheckedChange={(checked) =>
+                                  handleItemPatch(item.contractItemId, {
+                                    isTaxable: checked,
+                                    vatPercent: checked
+                                      ? item.vatPercent || 10
+                                      : 0,
+                                  })
+                                }
+                              />
+                            </div>
                           </div>
-                        )}
-                      </div>
+
+                          {item.isTaxable && (
+                            <div className="space-y-1.5">
+                              <span className="text-xs font-medium text-muted-foreground">
+                                Thuế suất (%)
+                              </span>
+                              <DecimalInput
+                                min={0}
+                                max={100}
+                                value={item.vatPercent}
+                                onValueChange={(value) =>
+                                  handleItemChange(
+                                    item.contractItemId,
+                                    "vatPercent",
+                                    value,
+                                  )
+                                }
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </>
                     ) : (
                       <div className="grid gap-3 p-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
                         <div>

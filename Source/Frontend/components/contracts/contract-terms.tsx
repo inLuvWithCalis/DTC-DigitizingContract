@@ -152,7 +152,12 @@ export function ContractTerms({
           Chi tiết các Điều khoản
         </CardTitle>
         {isEditable && (
-          <Button className="w-full sm:w-auto" variant="outline" size="sm" onClick={handleAddTerm}>
+          <Button
+            className="w-full sm:w-auto"
+            variant="outline"
+            size="sm"
+            onClick={handleAddTerm}
+          >
             <Plus className="size-4 mr-2" />
             Thêm Điều khoản
           </Button>
@@ -180,7 +185,7 @@ export function ContractTerms({
                         !term.isNegotiable,
                       )
                     }
-                    className={`flex max-w-full gap-2 rounded-full border px-3 py-1 text-left text-xs font-bold transition-colors ${
+                    className={`flex max-w-full gap-2 rounded-full border px-3 py-1 text-left text-xs font-bold transition-colors cursor-pointer ${
                       term.isNegotiable
                         ? "bg-green-50 text-green-700 border-green-200"
                         : "bg-red-50 text-red-700 border-red-200"
@@ -188,8 +193,8 @@ export function ContractTerms({
                   >
                     <ArrowRightLeftIcon className="size-4" />
                     {term.isNegotiable
-                      ? "Điều khoản Mềm (Cho đàm phán)"
-                      : "Điều khoản Cứng (Cố định)"}
+                      ? "Trạng thái: Cho phép đàm phán"
+                      : "Trạng thái: Cố định"}
                   </button>
                 ) : (
                   <span
@@ -339,9 +344,7 @@ export function ContractTerms({
             <Button
               variant="outline"
               size="sm"
-              onClick={() =>
-                setCurrentPage((p) => Math.min(totalPages, p + 1))
-              }
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
             >
               Sau <ChevronRight className="size-4 ml-1" />

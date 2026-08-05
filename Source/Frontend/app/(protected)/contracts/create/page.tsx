@@ -1734,7 +1734,6 @@ export default function CreateContractPage() {
                         <p className="text-sm font-semibold">
                           Điều khoản hợp đồng ({draftTerms.length})
                         </p>
-                        <Badge variant="secondary">Dữ liệu mock</Badge>
                       </div>
                       <div className="space-y-2">
                         {draftTerms.map((term) => (

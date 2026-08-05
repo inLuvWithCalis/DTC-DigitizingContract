@@ -66,6 +66,57 @@ namespace ContractManagement.Domains.Interfaces.Contract
                 CreateContractNegotiationRoundRequest request,
                 int employeeId);
 
+        Task<ContractNegotiationCommentResponse>
+            CreateExternalFeedbackAsync(
+                int contractId,
+                CreateContractNegotiationCommentRequest request,
+                int employeeId);
+
+        Task<ContractNegotiationCommentResponse>
+            RecordExternalFeedbackAsync(
+                int contractId,
+                CreateContractNegotiationCommentRequest request,
+                int employeeId);
+
+        Task<ContractNegotiationCommentResponse>
+            ResolveCommentAsync(
+                int contractId,
+                int commentId,
+                UpdateContractNegotiationCommentStateRequest request,
+                int employeeId);
+
+        Task<ContractNegotiationCommentResponse>
+            ResolveNegotiationCommentAsync(
+                int contractId,
+                int commentId,
+                UpdateContractNegotiationCommentStateRequest request,
+                int employeeId);
+
+        Task<ContractNegotiationCommentResponse>
+            ReopenCommentAsync(
+                int contractId,
+                int commentId,
+                UpdateContractNegotiationCommentStateRequest request,
+                int employeeId);
+
+        Task<ContractNegotiationCommentResponse>
+            ReopenNegotiationCommentAsync(
+                int contractId,
+                int commentId,
+                UpdateContractNegotiationCommentStateRequest request,
+                int employeeId);
+
+        Task<IReadOnlyList<ContractVersionHistoryResponse>>
+            GetVersionHistoryAsync(
+                int contractId,
+                int employeeId);
+
+        Task<ContractVersionDetailResponse>
+            GetVersionDetailAsync(
+                int contractId,
+                int versionId,
+                int employeeId);
+
         Task<SubmitContractForApprovalResponse> SubmitForApprovalAsync(
             int contractId,
             SubmitContractForApprovalRequest request,

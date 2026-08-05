@@ -46,5 +46,11 @@
         public List<ContractItemDetailResponse> Items { get; set; } = [];
 
         public List<ContractTermDetailResponse> Terms { get; set; } = [];
+
+        /// <summary>
+        /// Comments thuộc đúng version này, theo thứ tự thời gian tạo.
+        /// Client tự dựng cây reply bằng ParentCommentId.
+        /// </summary>
+        public List<ContractNegotiationCommentResponse> Comments { get; set; } = [];
     }
 }

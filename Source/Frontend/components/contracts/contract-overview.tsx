@@ -26,6 +26,8 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { formatCurrency } from "@/lib/format-currency";
 import { DateRangeFilter } from "@/components/ui/custom/date-range-filter";
+import { DecimalInput } from "@/components/ui/custom/decimal-input";
+import { IntegerInput } from "@/components/ui/custom/integer-input";
 import {
   Dialog,
   DialogContent,
@@ -108,14 +110,14 @@ export function ContractOverview({
     ) > 0.009 ||
       Math.abs(
         draftFinancialTotals.totalDiscount -
-          persistedFinancialTotals.totalDiscount,
+        persistedFinancialTotals.totalDiscount,
       ) > 0.009 ||
       Math.abs(
         draftFinancialTotals.totalVat - persistedFinancialTotals.totalVat,
       ) > 0.009 ||
       Math.abs(
         draftFinancialTotals.totalPayment -
-          persistedFinancialTotals.totalPayment,
+        persistedFinancialTotals.totalPayment,
       ) > 0.009);
 
   const financialTotals = isEditable
@@ -305,28 +307,6 @@ export function ContractOverview({
     handleItemPatch(itemId, { [field]: value });
   };
 
-  const handlePercentageFocus = (
-    event: React.FocusEvent<HTMLInputElement>,
-  ) => {
-    if (Number(event.currentTarget.value) === 0) {
-      event.currentTarget.select();
-    }
-  };
-
-  const handlePercentageBlur = (
-    event: React.FocusEvent<HTMLInputElement>,
-    itemId: number,
-    field: "discountPercent" | "vatPercent",
-  ) => {
-    const parsedValue = Number(event.currentTarget.value);
-    const normalizedValue = Number.isFinite(parsedValue)
-      ? Math.min(100, Math.max(0, parsedValue))
-      : 0;
-
-    event.currentTarget.value = String(normalizedValue);
-    handleItemChange(itemId, field, normalizedValue);
-  };
-
   const handleRemoveItem = (contractItemId: number) => {
     setContract((prev) => {
       if (!prev || !prev.currentVersion) return prev;
@@ -402,15 +382,15 @@ export function ContractOverview({
                       setContract((prev) =>
                         prev
                           ? {
-                              ...prev,
-                              customer: {
-                                ...prev.customer,
-                                customerId: found.customerId,
-                                customerCode: found.customerCode,
-                                customerFullName: found.customerFullName,
-                                customerCompany: found.customerCompany,
-                              },
-                            }
+                            ...prev,
+                            customer: {
+                              ...prev.customer,
+                              customerId: found.customerId,
+                              customerCode: found.customerCode,
+                              customerFullName: found.customerFullName,
+                              customerCompany: found.customerCompany,
+                            },
+                          }
                           : prev,
                       );
                     }
@@ -594,11 +574,11 @@ export function ContractOverview({
                 const amounts = isEditable
                   ? calculateContractItemAmounts(item, contract.currencyCode)
                   : {
-                      lineSubtotal: item.lineSubtotal,
-                      discountAmount: item.discountAmount,
-                      vatAmount: item.vatAmount,
-                      lineTotal: item.lineTotal,
-                    };
+                    lineSubtotal: item.lineSubtotal,
+                    discountAmount: item.discountAmount,
+                    vatAmount: item.vatAmount,
+                    lineTotal: item.lineTotal,
+                  };
 
                 return (
                   <div
@@ -632,37 +612,35 @@ export function ContractOverview({
                       <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-5">
                         {contract.languageMode ===
                           ContractLanguageMode.Bilingual && (
-                          <div className="space-y-1.5 sm:col-span-2 xl:col-span-5">
-                            <span className="text-xs font-medium text-muted-foreground">
-                              Tên sản phẩm / dịch vụ tiếng Anh
-                            </span>
-                            <Input
-                              value={item.itemNameEn || ""}
-                              onChange={(e) =>
-                                handleItemChange(
-                                  item.contractItemId,
-                                  "itemNameEn",
-                                  e.target.value,
-                                )
-                              }
-                              placeholder="Enter the English item name..."
-                            />
-                          </div>
-                        )}
+                            <div className="space-y-1.5 sm:col-span-2 xl:col-span-5">
+                              <span className="text-xs font-medium text-muted-foreground">
+                                Tên sản phẩm / dịch vụ tiếng Anh
+                              </span>
+                              <Input
+                                value={item.itemNameEn || ""}
+                                onChange={(e) =>
+                                  handleItemChange(
+                                    item.contractItemId,
+                                    "itemNameEn",
+                                    e.target.value,
+                                  )
+                                }
+                                placeholder="Enter the English item name..."
+                              />
+                            </div>
+                          )}
                         <div className="space-y-1.5">
                           <span className="text-xs font-medium text-muted-foreground">
                             Số lượng
                           </span>
-                          <Input
-                            type="number"
-                            min={0.001}
-                            step={0.001}
+                          <IntegerInput
+                            min={1}
                             value={item.quantity}
-                            onChange={(e) =>
+                            onValueChange={(value) =>
                               handleItemChange(
                                 item.contractItemId,
                                 "quantity",
-                                Number(e.target.value),
+                                value,
                               )
                             }
                           />
@@ -671,16 +649,14 @@ export function ContractOverview({
                           <span className="text-xs font-medium text-muted-foreground">
                             Đơn giá
                           </span>
-                          <Input
-                            type="number"
+                          <DecimalInput
                             min={0}
-                            step={1000}
                             value={item.unitPrice}
-                            onChange={(e) =>
+                            onValueChange={(value) =>
                               handleItemChange(
                                 item.contractItemId,
                                 "unitPrice",
-                                Number(e.target.value),
+                                value,
                               )
                             }
                           />
@@ -730,56 +706,44 @@ export function ContractOverview({
 
                         {item.discountMode ===
                           ContractItemDiscountMode.Percentage && (
-                          <div className="space-y-1.5">
-                            <span className="text-xs font-medium text-muted-foreground">
-                              Mức giảm (%)
-                            </span>
-                            <Input
-                              type="number"
-                              min={0}
-                              max={100}
-                              step={0.01}
-                              value={item.discountPercent}
-                              onFocus={handlePercentageFocus}
-                              onChange={(e) =>
-                                handleItemChange(
-                                  item.contractItemId,
-                                  "discountPercent",
-                                  Number(e.target.value),
-                                )
-                              }
-                              onBlur={(e) =>
-                                handlePercentageBlur(
-                                  e,
-                                  item.contractItemId,
-                                  "discountPercent",
-                                )
-                              }
-                            />
-                          </div>
-                        )}
+                            <div className="space-y-1.5">
+                              <span className="text-xs font-medium text-muted-foreground">
+                                Mức giảm (%)
+                              </span>
+                              <DecimalInput
+                                min={0}
+                                max={100}
+                                value={item.discountPercent}
+                                onValueChange={(value) =>
+                                  handleItemChange(
+                                    item.contractItemId,
+                                    "discountPercent",
+                                    value,
+                                  )
+                                }
+                              />
+                            </div>
+                          )}
 
                         {item.discountMode ===
                           ContractItemDiscountMode.FixedAmount && (
-                          <div className="space-y-1.5">
-                            <span className="text-xs font-medium text-muted-foreground">
-                              Số tiền giảm
-                            </span>
-                            <Input
-                              type="number"
-                              min={0}
-                              step={1000}
-                              value={item.fixedDiscountAmount}
-                              onChange={(e) =>
-                                handleItemChange(
-                                  item.contractItemId,
-                                  "fixedDiscountAmount",
-                                  Number(e.target.value),
-                                )
-                              }
-                            />
-                          </div>
-                        )}
+                            <div className="space-y-1.5">
+                              <span className="text-xs font-medium text-muted-foreground">
+                                Số tiền giảm
+                              </span>
+                              <DecimalInput
+                                min={0}
+                                value={item.fixedDiscountAmount}
+                                onValueChange={(value) =>
+                                  handleItemChange(
+                                    item.contractItemId,
+                                    "fixedDiscountAmount",
+                                    value,
+                                  )
+                                }
+                              />
+                            </div>
+                          )}
 
                         <div className="space-y-1.5">
                           <span className="text-xs font-medium text-muted-foreground">
@@ -808,25 +772,15 @@ export function ContractOverview({
                             <span className="text-xs font-medium text-muted-foreground">
                               Thuế suất (%)
                             </span>
-                            <Input
-                              type="number"
+                            <DecimalInput
                               min={0}
                               max={100}
-                              step={0.01}
                               value={item.vatPercent}
-                              onFocus={handlePercentageFocus}
-                              onChange={(e) =>
+                              onValueChange={(value) =>
                                 handleItemChange(
                                   item.contractItemId,
                                   "vatPercent",
-                                  Number(e.target.value),
-                                )
-                              }
-                              onBlur={(e) =>
-                                handlePercentageBlur(
-                                  e,
-                                  item.contractItemId,
-                                  "vatPercent",
+                                  value,
                                 )
                               }
                             />
@@ -852,14 +806,14 @@ export function ContractOverview({
                           <p className="text-muted-foreground">Chiết khấu</p>
                           <p className="mt-1 font-medium">
                             {item.discountMode ===
-                            ContractItemDiscountMode.Percentage
+                              ContractItemDiscountMode.Percentage
                               ? `${item.discountPercent}%`
                               : item.discountMode ===
-                                  ContractItemDiscountMode.FixedAmount
+                                ContractItemDiscountMode.FixedAmount
                                 ? formatCurrency(
-                                    item.fixedDiscountAmount,
-                                    contract.currencyCode,
-                                  )
+                                  item.fixedDiscountAmount,
+                                  contract.currencyCode,
+                                )
                                 : "Không"}
                           </p>
                         </div>
@@ -871,15 +825,15 @@ export function ContractOverview({
                         </div>
                         {contract.languageMode ===
                           ContractLanguageMode.Bilingual && (
-                          <div className="sm:col-span-2 xl:col-span-4">
-                            <p className="text-muted-foreground">
-                              Tên tiếng Anh
-                            </p>
-                            <p className="mt-1 font-medium">
-                              {item.itemNameEn || "Chưa cập nhật"}
-                            </p>
-                          </div>
-                        )}
+                            <div className="sm:col-span-2 xl:col-span-4">
+                              <p className="text-muted-foreground">
+                                Tên tiếng Anh
+                              </p>
+                              <p className="mt-1 font-medium">
+                                {item.itemNameEn || "Chưa cập nhật"}
+                              </p>
+                            </div>
+                          )}
                       </div>
                     )}
 
@@ -973,9 +927,9 @@ export function ContractOverview({
             <p className="rounded-lg bg-muted/50 px-3 py-2 text-xs leading-5 text-muted-foreground">
               {hasUnsavedFinancialChanges
                 ? `Đang hiển thị số liệu dự kiến theo các thay đổi trên màn hình. Tổng đã lưu: ${formatCurrency(
-                    persistedFinancialTotals.totalPayment,
-                    contract.currencyCode,
-                  )}.`
+                  persistedFinancialTotals.totalPayment,
+                  contract.currencyCode,
+                )}.`
                 : "Số liệu đã được backend tính và lưu cho phiên bản hợp đồng hiện hành."}
             </p>
             {isEditable && (

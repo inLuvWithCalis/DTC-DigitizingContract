@@ -1,9 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import {
   CalendarDays,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
   FileLock2,
   GitBranch,
   Loader2,
@@ -39,6 +43,8 @@ import {
   ContractVersionHistoryResponse,
 } from "@/services/contract-api";
 
+const VERSION_HISTORY_PAGE_SIZE = 4;
+
 const getApiErrorMessage = (error: any, fallback: string) => {
   const data = error?.response?.data;
   return data?.errors
@@ -73,6 +79,7 @@ export function ContractNegotiation({
   const [isLoadingVersion, setIsLoadingVersion] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [versionError, setVersionError] = useState<string | null>(null);
+  const [historyPage, setHistoryPage] = useState(1);
 
   const currentVersion = contract.currentVersion;
   const canCreateRound =
@@ -118,6 +125,22 @@ export function ContractNegotiation({
   useEffect(() => {
     void loadVersionHistory();
   }, [loadVersionHistory]);
+
+  const orderedVersionHistory = [...versionHistory].reverse();
+  const historyTotalPages = Math.max(
+    1,
+    Math.ceil(orderedVersionHistory.length / VERSION_HISTORY_PAGE_SIZE),
+  );
+  const paginatedVersionHistory = orderedVersionHistory.slice(
+    (historyPage - 1) * VERSION_HISTORY_PAGE_SIZE,
+    historyPage * VERSION_HISTORY_PAGE_SIZE,
+  );
+
+  useEffect(() => {
+    setHistoryPage((currentPage) =>
+      Math.min(Math.max(currentPage, 1), historyTotalPages),
+    );
+  }, [historyTotalPages]);
 
   useEffect(() => {
     if (
@@ -185,6 +208,7 @@ export function ContractNegotiation({
       const updatedContract = await contractApi.getDetail(
         contract.contractId,
       );
+      setHistoryPage(1);
       setSelectedVersionId(updatedContract.currentVersion.versionId);
       setContract(updatedContract);
       setChangeNote("");
@@ -344,51 +368,90 @@ export function ContractNegotiation({
                 </div>
               ) : (
                 <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
-                  <div className="max-h-[430px] space-y-2 overflow-y-auto pr-1">
-                    {[...versionHistory].reverse().map((version) => {
-                      const isSelected =
-                        version.versionId === selectedVersionId;
-                      const isCurrent =
-                        version.versionId === currentVersion.versionId;
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      {paginatedVersionHistory.map((version) => {
+                        const isSelected =
+                          version.versionId === selectedVersionId;
+                        const isCurrent =
+                          version.versionId === currentVersion.versionId;
 
-                      return (
-                        <button
-                          type="button"
-                          key={version.versionId}
-                          onClick={() => setSelectedVersionId(version.versionId)}
-                          className={`w-full rounded-xl border p-3 text-left transition-colors ${
-                            isSelected
-                              ? "border-primary bg-primary/5"
-                              : "bg-background hover:bg-muted/50"
-                          }`}
+                        return (
+                          <button
+                            type="button"
+                            key={version.versionId}
+                            onClick={() =>
+                              setSelectedVersionId(version.versionId)
+                            }
+                            className={`w-full rounded-xl border p-3 text-left transition-colors ${
+                              isSelected
+                                ? "border-primary bg-primary/5"
+                                : "bg-background hover:bg-muted/50"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <p className="font-semibold">
+                                  Version {version.versionNo}
+                                </p>
+                                <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                                  <CalendarDays className="size-3" />
+                                  {formatDate(version.createdDate)}
+                                </p>
+                              </div>
+                              <div className="flex flex-col items-end gap-1">
+                                {isCurrent && <Badge>Hiện hành</Badge>}
+                                <Badge
+                                  variant={
+                                    version.isLocked ? "secondary" : "outline"
+                                  }
+                                >
+                                  {version.isLocked ? "Đã khóa" : "Đang sửa"}
+                                </Badge>
+                              </div>
+                            </div>
+                            <p className="mt-3 line-clamp-2 text-sm text-muted-foreground">
+                              {version.changeNote || "Khởi tạo hợp đồng."}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {versionHistory.length >= 5 && (
+                      <div className="flex items-center justify-between gap-2 border-t pt-3">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() =>
+                            setHistoryPage((page) => Math.max(1, page - 1))
+                          }
+                          disabled={historyPage === 1}
+                          aria-label="Trang lịch sử trước"
                         >
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <p className="font-semibold">
-                                Version {version.versionNo}
-                              </p>
-                              <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                                <CalendarDays className="size-3" />
-                                {formatDate(version.createdDate)}
-                              </p>
-                            </div>
-                            <div className="flex flex-col items-end gap-1">
-                              {isCurrent && <Badge>Hiện hành</Badge>}
-                              <Badge
-                                variant={
-                                  version.isLocked ? "secondary" : "outline"
-                                }
-                              >
-                                {version.isLocked ? "Đã khóa" : "Đang sửa"}
-                              </Badge>
-                            </div>
-                          </div>
-                          <p className="mt-3 line-clamp-2 text-sm text-muted-foreground">
-                            {version.changeNote || "Khởi tạo hợp đồng."}
+                          <ChevronLeft className="size-4" />
+                        </Button>
+                        <div className="text-center text-xs text-muted-foreground">
+                          <p className="font-medium text-foreground">
+                            Trang {historyPage} / {historyTotalPages}
                           </p>
-                        </button>
-                      );
-                    })}
+                          <p>{versionHistory.length} phiên bản</p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() =>
+                            setHistoryPage((page) =>
+                              Math.min(historyTotalPages, page + 1),
+                            )
+                          }
+                          disabled={historyPage === historyTotalPages}
+                          aria-label="Trang lịch sử sau"
+                        >
+                          <ChevronRight className="size-4" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="min-h-[260px] rounded-xl border bg-muted/20 p-4 sm:p-5">
@@ -415,23 +478,41 @@ export function ContractNegotiation({
                               Version {selectedVersion.versionNo}
                             </h4>
                           </div>
-                          <Badge
-                            variant={
-                              selectedVersion.isLocked
-                                ? "secondary"
-                                : "outline"
-                            }
-                            className="w-fit gap-1"
-                          >
-                            {selectedVersion.isLocked ? (
-                              <FileLock2 className="size-3.5" />
-                            ) : (
-                              <CheckCircle2 className="size-3.5" />
-                            )}
-                            {selectedVersion.isLocked
-                              ? "Snapshot đã khóa"
-                              : "Version đang chỉnh sửa"}
-                          </Badge>
+                          <div className="flex flex-col items-start gap-2 sm:items-end">
+                            <Badge
+                              variant={
+                                selectedVersion.isLocked
+                                  ? "secondary"
+                                  : "outline"
+                              }
+                              className="w-fit gap-1"
+                            >
+                              {selectedVersion.isLocked ? (
+                                <FileLock2 className="size-3.5" />
+                              ) : (
+                                <CheckCircle2 className="size-3.5" />
+                              )}
+                              {selectedVersion.isLocked
+                                ? "Snapshot đã khóa"
+                                : "Version đang chỉnh sửa"}
+                            </Badge>
+                            {selectedVersion.isLocked &&
+                              selectedVersion.versionId !==
+                                currentVersion.versionId && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  asChild
+                                >
+                                  <Link
+                                    href={`/contracts/${contract.contractId}/versions/${selectedVersion.versionId}`}
+                                  >
+                                    <Eye className="mr-2 size-4" />
+                                    Xem chi tiết
+                                  </Link>
+                                </Button>
+                              )}
+                          </div>
                         </div>
 
                         <div className="grid gap-3 sm:grid-cols-3">
@@ -527,6 +608,7 @@ export function ContractNegotiation({
           </ol>
         </CardContent>
       </Card>
+
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>

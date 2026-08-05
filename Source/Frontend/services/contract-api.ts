@@ -253,6 +253,17 @@ export interface CreateContractNegotiationRoundRequest {
   changeNote: string;
 }
 
+export interface CreateContractNegotiationCommentRequest {
+  currentVersionId: number;
+  termId?: number | null;
+  parentCommentId?: number | null;
+  content: string;
+}
+
+export interface UpdateContractNegotiationCommentStateRequest {
+  rowVersion: string;
+}
+
 export interface SubmitContractForApprovalRequest {
   rowVersion: string;
   currentVersionId: number;
@@ -665,6 +676,35 @@ export const contractApi = {
   getVersionDetail: (id: number, versionId: number) => {
     return axiosClient.get<any, ContractVersionDetailResponse>(
       `${BASE_URL}/${id}/versions/${versionId}`,
+    );
+  },
+  createExternalFeedback: (
+    id: number,
+    data: CreateContractNegotiationCommentRequest,
+  ) => {
+    return axiosClient.post<any, ContractNegotiationCommentResponse>(
+      `${BASE_URL}/${id}/comments/external-feedback`,
+      data,
+    );
+  },
+  resolveComment: (
+    id: number,
+    commentId: number,
+    data: UpdateContractNegotiationCommentStateRequest,
+  ) => {
+    return axiosClient.post<any, ContractNegotiationCommentResponse>(
+      `${BASE_URL}/${id}/comments/${commentId}/resolve`,
+      data,
+    );
+  },
+  reopenComment: (
+    id: number,
+    commentId: number,
+    data: UpdateContractNegotiationCommentStateRequest,
+  ) => {
+    return axiosClient.post<any, ContractNegotiationCommentResponse>(
+      `${BASE_URL}/${id}/comments/${commentId}/reopen`,
+      data,
     );
   },
   submitApproval: (id: number, data: SubmitContractForApprovalRequest) => {

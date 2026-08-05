@@ -14,10 +14,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { ContractTermComments } from "./contract-term-comments";
 
 import {
   ContractDetailResponse,
   ContractLanguageMode,
+  ContractNegotiationCommentResponse,
   ContractStatus,
 } from "@/services/contract-api";
 
@@ -106,6 +108,33 @@ export function ContractTerms({
       return {
         ...prev,
         currentVersion: { ...prev.currentVersion, terms: reorderedTerms },
+      };
+    });
+  };
+
+  const handleCommentChanged = (
+    changedComment: ContractNegotiationCommentResponse,
+  ) => {
+    setContract((prev) => {
+      if (!prev?.currentVersion) return prev;
+      const currentComments = prev.currentVersion.comments || [];
+      const commentExists = currentComments.some(
+        (comment) => comment.commentId === changedComment.commentId,
+      );
+      const updatedComments = commentExists
+        ? currentComments.map((comment) =>
+            comment.commentId === changedComment.commentId
+              ? changedComment
+              : comment,
+          )
+        : [...currentComments, changedComment];
+
+      return {
+        ...prev,
+        currentVersion: {
+          ...prev.currentVersion,
+          comments: updatedComments,
+        },
       };
     });
   };
@@ -265,6 +294,27 @@ export function ContractTerms({
                 )}
               </div>
             )}
+
+            {term.isNegotiable &&
+              term.termId > 0 &&
+              (contract.status === ContractStatus.Negotiating ||
+                (contract.currentVersion.comments || []).some(
+                  (comment) => comment.termId === term.termId,
+                )) && (
+                <ContractTermComments
+                  contractId={contract.contractId}
+                  versionId={contract.currentVersion.versionId}
+                  termId={term.termId}
+                  termCode={term.termCode}
+                  termTitle={term.termTitle}
+                  comments={contract.currentVersion.comments || []}
+                  canWrite={
+                    contract.status === ContractStatus.Negotiating &&
+                    !contract.currentVersion.isLocked
+                  }
+                  onCommentChanged={handleCommentChanged}
+                />
+              )}
           </div>
         ))}
 

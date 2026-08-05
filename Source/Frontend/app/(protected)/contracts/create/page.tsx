@@ -40,6 +40,8 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { DateRangeFilter } from "@/components/ui/custom/date-range-filter";
+import { DecimalInput } from "@/components/ui/custom/decimal-input";
+import { IntegerInput } from "@/components/ui/custom/integer-input";
 import { format } from "date-fns";
 import { CreateContractTermsMock } from "@/components/contracts/create-contract-terms-mock";
 
@@ -383,7 +385,7 @@ export default function CreateContractPage() {
   };
 
   const updateQuantity = (id: string, quantity: number) => {
-    updateCatalogItem(id, { quantity: Math.max(0.001, quantity || 0.001) });
+    updateCatalogItem(id, { quantity: Math.max(1, Math.trunc(quantity || 1)) });
   };
 
   const updateDiscountMode = (
@@ -1076,16 +1078,11 @@ export default function CreateContractPage() {
                                   <span className="text-xs font-medium text-muted-foreground">
                                     SL:
                                   </span>
-                                  <Input
-                                    type="number"
-                                    min={0.001}
-                                    step={0.001}
+                                  <IntegerInput
+                                    min={1}
                                     value={item.quantity}
-                                    onChange={(e) =>
-                                      updateQuantity(
-                                        item.id,
-                                        Number(e.target.value),
-                                      )
+                                    onValueChange={(value) =>
+                                      updateQuantity(item.id, value)
                                     }
                                     className="h-8 w-24 text-center"
                                   />
@@ -1136,17 +1133,12 @@ export default function CreateContractPage() {
                                 <Label className="text-xs text-muted-foreground">
                                   Đơn giá
                                 </Label>
-                                <Input
-                                  type="number"
+                                <DecimalInput
                                   min={0}
-                                  step={1000}
                                   value={item.unitPrice}
-                                  onChange={(event) =>
+                                  onValueChange={(value) =>
                                     updateCatalogItem(item.id, {
-                                      unitPrice: Math.max(
-                                        0,
-                                        Number(event.target.value),
-                                      ),
+                                      unitPrice: value,
                                     })
                                   }
                                 />
@@ -1201,20 +1193,13 @@ export default function CreateContractPage() {
                                     ? "Tiền giảm"
                                     : "Giảm giá (%)"}
                                 </Label>
-                                <Input
-                                  type="number"
+                                <DecimalInput
                                   min={0}
                                   max={
                                     item.discountMode ===
                                     ContractItemDiscountMode.Percentage
                                       ? 100
                                       : amounts.lineSubtotal
-                                  }
-                                  step={
-                                    item.discountMode ===
-                                    ContractItemDiscountMode.Percentage
-                                      ? 0.01
-                                      : 1000
                                   }
                                   disabled={
                                     item.discountMode ===
@@ -1226,11 +1211,7 @@ export default function CreateContractPage() {
                                       ? item.fixedDiscountAmount
                                       : item.discountPercent
                                   }
-                                  onChange={(event) => {
-                                    const value = Math.max(
-                                      0,
-                                      Number(event.target.value),
-                                    );
+                                  onValueChange={(value) => {
                                     updateCatalogItem(
                                       item.id,
                                       item.discountMode ===
@@ -1275,22 +1256,14 @@ export default function CreateContractPage() {
                                 <Label className="text-xs text-muted-foreground">
                                   VAT (%)
                                 </Label>
-                                <Input
-                                  type="number"
+                                <DecimalInput
                                   min={0}
                                   max={100}
-                                  step={0.01}
                                   disabled={!item.isTaxable}
                                   value={item.vatPercent}
-                                  onChange={(event) =>
+                                  onValueChange={(value) =>
                                     updateCatalogItem(item.id, {
-                                      vatPercent: Math.min(
-                                        100,
-                                        Math.max(
-                                          0,
-                                          Number(event.target.value),
-                                        ),
-                                      ),
+                                      vatPercent: value,
                                     })
                                   }
                                 />

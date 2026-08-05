@@ -4,3 +4,4 @@ DTC_DigitizingContract_Codex_Handoff.md
 .vs/
 # Bỏ qua cache Visual Studio ở mọi thư mục
 **/.vs/
+.idea

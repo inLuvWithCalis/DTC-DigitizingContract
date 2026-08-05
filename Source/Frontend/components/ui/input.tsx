@@ -36,7 +36,14 @@ function Input({
     if (type === "number" && maxLength && e.target.value.length > maxLength) {
       e.target.value = e.target.value.slice(0, maxLength);
     }
-    setCharCount(e.target.value.length);
+
+    // Với controlled input, giá trị mới có thể bị component cha từ chối
+    // (ví dụ đã đủ số chữ số). Chờ `value` hợp lệ cập nhật lại bộ đếm để
+    // tránh hiển thị sai như 17/14 dù nội dung thực tế không được chấp nhận.
+    if (value === undefined) {
+      setCharCount(e.target.value.length);
+    }
+
     if (onChange) {
       onChange(e);
     }

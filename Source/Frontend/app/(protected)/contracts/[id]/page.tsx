@@ -9,7 +9,6 @@ import {
   DatabaseZap,
   FileSignature,
   FileText,
-  GitBranch,
   Loader2,
   MessageSquareText,
   Save,
@@ -409,15 +408,6 @@ export default function ContractDetailPage() {
                   <MessageSquareText className="size-4 mr-2" />
                 )}
                 Bắt đầu đàm phán
-              </Button>
-            )}
-            {contract.status === ContractStatus.Negotiating && (
-              <Button
-                variant="outline"
-                onClick={() => setActiveTab("negotiation")}
-              >
-                <GitBranch className="size-4 mr-2" />
-                Tạo vòng mới
               </Button>
             )}
             {contract.status === ContractStatus.Negotiating && (

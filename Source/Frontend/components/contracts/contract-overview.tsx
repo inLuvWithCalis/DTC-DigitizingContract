@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   CalendarDays,
   ChevronLeft,
@@ -18,10 +18,12 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { formatCurrency } from "@/lib/format-currency";
 import { DateRangeFilter } from "@/components/ui/custom/date-range-filter";
 import {
@@ -46,12 +48,18 @@ import { Clock } from "lucide-react";
 
 import {
   ContractDetailResponse,
+  ContractLanguageMode,
   ContractStatus,
   ContractItemType,
+  ContractItemDiscountMode,
   getContractTypeLabel,
 } from "@/services/contract-api";
 import { InfoCard } from "./contract-helpers";
 import { formatDate } from "@/lib/format-date";
+import {
+  calculateContractItemAmounts,
+  calculateContractTotals,
+} from "@/lib/contract-finance";
 
 export function ContractOverview({
   contract,
@@ -65,8 +73,54 @@ export function ContractOverview({
   onOpenTransferModal?: () => void;
 }) {
   const isEditable =
-    contract.status === ContractStatus.Draft ||
-    contract.status === ContractStatus.Negotiating;
+    (contract.status === ContractStatus.Draft ||
+      (contract.status === ContractStatus.Negotiating &&
+        contract.currentVersion.sourceVersionId != null)) &&
+    !contract.currentVersion.isLocked;
+
+  const draftFinancialTotals = useMemo(
+    () =>
+      calculateContractTotals(
+        contract.currentVersion?.items || [],
+        contract.currencyCode,
+      ),
+    [contract.currentVersion?.items, contract.currencyCode],
+  );
+
+  const persistedFinancialTotals = {
+    subtotal:
+      contract.subtotal ?? contract.currentVersion?.subtotal ?? 0,
+    totalDiscount:
+      contract.totalDiscount ?? contract.currentVersion?.totalDiscount ?? 0,
+    totalVat:
+      contract.totalVat ?? contract.currentVersion?.totalVat ?? 0,
+    totalPayment:
+      contract.totalPayment ??
+      contract.currentVersion?.totalPayment ??
+      contract.totalAmount ??
+      0,
+  };
+
+  const hasUnsavedFinancialChanges =
+    isEditable &&
+    (Math.abs(
+      draftFinancialTotals.subtotal - persistedFinancialTotals.subtotal,
+    ) > 0.009 ||
+      Math.abs(
+        draftFinancialTotals.totalDiscount -
+          persistedFinancialTotals.totalDiscount,
+      ) > 0.009 ||
+      Math.abs(
+        draftFinancialTotals.totalVat - persistedFinancialTotals.totalVat,
+      ) > 0.009 ||
+      Math.abs(
+        draftFinancialTotals.totalPayment -
+          persistedFinancialTotals.totalPayment,
+      ) > 0.009);
+
+  const financialTotals = isEditable
+    ? draftFinancialTotals
+    : persistedFinancialTotals;
 
   const [customers, setCustomers] = useState<CustomerResponse[]>([]);
 
@@ -196,7 +250,10 @@ export function ContractOverview({
       unitNameEn: null,
       quantity: 1,
       unitPrice: catalogItem.unitPrice,
+      discountMode: ContractItemDiscountMode.None,
       discountPercent: 0,
+      fixedDiscountAmount: 0,
+      isTaxable: true,
       vatPercent: 10,
       displayOrder: contract.currentVersion.items.length + 1,
     };
@@ -228,17 +285,46 @@ export function ContractOverview({
     setContract((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
 
-  const handleItemChange = (itemId: number, field: string, value: any) => {
+  const handleItemPatch = (
+    itemId: number,
+    patch: Record<string, unknown>,
+  ) => {
     setContract((prev) => {
       if (!prev || !prev.currentVersion) return prev;
       const updatedItems = prev.currentVersion.items.map((item) =>
-        item.contractItemId === itemId ? { ...item, [field]: value } : item,
+        item.contractItemId === itemId ? { ...item, ...patch } : item,
       );
       return {
         ...prev,
         currentVersion: { ...prev.currentVersion, items: updatedItems },
       };
     });
+  };
+
+  const handleItemChange = (itemId: number, field: string, value: unknown) => {
+    handleItemPatch(itemId, { [field]: value });
+  };
+
+  const handlePercentageFocus = (
+    event: React.FocusEvent<HTMLInputElement>,
+  ) => {
+    if (Number(event.currentTarget.value) === 0) {
+      event.currentTarget.select();
+    }
+  };
+
+  const handlePercentageBlur = (
+    event: React.FocusEvent<HTMLInputElement>,
+    itemId: number,
+    field: "discountPercent" | "vatPercent",
+  ) => {
+    const parsedValue = Number(event.currentTarget.value);
+    const normalizedValue = Number.isFinite(parsedValue)
+      ? Math.min(100, Math.max(0, parsedValue))
+      : 0;
+
+    event.currentTarget.value = String(normalizedValue);
+    handleItemChange(itemId, field, normalizedValue);
   };
 
   const handleRemoveItem = (contractItemId: number) => {
@@ -278,6 +364,27 @@ export function ContractOverview({
               <p className="text-lg font-semibold">{contract.contractName}</p>
             )}
           </div>
+
+          {contract.languageMode === ContractLanguageMode.Bilingual && (
+            <div>
+              <p className="mb-1 text-sm font-semibold text-muted-foreground">
+                Tên hợp đồng tiếng Anh
+              </p>
+              {isEditable ? (
+                <Input
+                  value={contract.contractNameEn || ""}
+                  onChange={(e) =>
+                    handleRootChange("contractNameEn", e.target.value)
+                  }
+                  placeholder="Enter the contract name..."
+                />
+              ) : (
+                <p className="font-medium">
+                  {contract.contractNameEn || "Chưa cập nhật"}
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             {isEditable ? (
@@ -452,7 +559,10 @@ export function ContractOverview({
                               </div>
                             </div>
                             <span className="font-semibold text-primary">
-                              {formatCurrency(item.unitPrice)}
+                              {formatCurrency(
+                                item.unitPrice,
+                                contract.currencyCode,
+                              )}
                             </span>
                           </button>
                         ))
@@ -480,54 +590,340 @@ export function ContractOverview({
             )}
 
             <div className="space-y-3">
-              {paginatedItems.map((item) => (
-                <div
-                  key={item.contractItemId}
-                  className="flex flex-col sm:flex-row gap-3 items-center justify-between p-3 border rounded-lg"
-                >
-                  <p className="font-medium flex-1">{item.itemName}</p>
+              {paginatedItems.map((item) => {
+                const amounts = isEditable
+                  ? calculateContractItemAmounts(item, contract.currencyCode)
+                  : {
+                      lineSubtotal: item.lineSubtotal,
+                      discountAmount: item.discountAmount,
+                      vatAmount: item.vatAmount,
+                      lineTotal: item.lineTotal,
+                    };
 
-                  {isEditable ? (
-                    <div className="flex items-center gap-2">
-                      <div className="w-32">
-                        <span className="text-xs text-muted-foreground">
-                          Số lượng
-                        </span>
-                        <Input
-                          type="number"
-                          min={1}
-                          maxLength={9}
-                          value={item.quantity}
-                          onChange={(e) =>
-                            handleItemChange(
-                              item.contractItemId,
-                              "quantity",
-                              Number(e.target.value),
-                            )
-                          }
-                        />
+                return (
+                  <div
+                    key={item.contractItemId}
+                    className="overflow-hidden rounded-xl border bg-background"
+                  >
+                    <div className="flex items-start justify-between gap-3 border-b bg-muted/30 p-4">
+                      <div className="min-w-0">
+                        <p className="font-semibold">{item.itemName}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {item.itemCode ||
+                            (item.itemType === ContractItemType.Product
+                              ? "Sản phẩm"
+                              : "Dịch vụ")}
+                        </p>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10 mt-4 shrink-0"
-                        onClick={() => handleRemoveItem(item.contractItemId)}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
+                      {isEditable && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => handleRemoveItem(item.contractItemId)}
+                        >
+                          <Trash2 className="size-4" />
+                          <span className="sr-only">Xóa sản phẩm</span>
+                        </Button>
+                      )}
                     </div>
-                  ) : (
-                    <div className="text-right">
-                      <p className="text-sm text-muted-foreground">
-                        SL: {item.quantity}
-                      </p>
-                      <p className="font-semibold text-primary">
-                        {formatCurrency(item.unitPrice)}
-                      </p>
+
+                    {isEditable ? (
+                      <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-5">
+                        {contract.languageMode ===
+                          ContractLanguageMode.Bilingual && (
+                          <div className="space-y-1.5 sm:col-span-2 xl:col-span-5">
+                            <span className="text-xs font-medium text-muted-foreground">
+                              Tên sản phẩm / dịch vụ tiếng Anh
+                            </span>
+                            <Input
+                              value={item.itemNameEn || ""}
+                              onChange={(e) =>
+                                handleItemChange(
+                                  item.contractItemId,
+                                  "itemNameEn",
+                                  e.target.value,
+                                )
+                              }
+                              placeholder="Enter the English item name..."
+                            />
+                          </div>
+                        )}
+                        <div className="space-y-1.5">
+                          <span className="text-xs font-medium text-muted-foreground">
+                            Số lượng
+                          </span>
+                          <Input
+                            type="number"
+                            min={0.001}
+                            step={0.001}
+                            value={item.quantity}
+                            onChange={(e) =>
+                              handleItemChange(
+                                item.contractItemId,
+                                "quantity",
+                                Number(e.target.value),
+                              )
+                            }
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <span className="text-xs font-medium text-muted-foreground">
+                            Đơn giá
+                          </span>
+                          <Input
+                            type="number"
+                            min={0}
+                            step={1000}
+                            value={item.unitPrice}
+                            onChange={(e) =>
+                              handleItemChange(
+                                item.contractItemId,
+                                "unitPrice",
+                                Number(e.target.value),
+                              )
+                            }
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <span className="text-xs font-medium text-muted-foreground">
+                            Chiết khấu
+                          </span>
+                          <Select
+                            value={String(item.discountMode)}
+                            onValueChange={(value) =>
+                              handleItemPatch(item.contractItemId, {
+                                discountMode: Number(
+                                  value,
+                                ) as ContractItemDiscountMode,
+                                discountPercent: 0,
+                                fixedDiscountAmount: 0,
+                              })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem
+                                value={String(ContractItemDiscountMode.None)}
+                              >
+                                Không chiết khấu
+                              </SelectItem>
+                              <SelectItem
+                                value={String(
+                                  ContractItemDiscountMode.Percentage,
+                                )}
+                              >
+                                Theo phần trăm
+                              </SelectItem>
+                              <SelectItem
+                                value={String(
+                                  ContractItemDiscountMode.FixedAmount,
+                                )}
+                              >
+                                Số tiền cố định
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {item.discountMode ===
+                          ContractItemDiscountMode.Percentage && (
+                          <div className="space-y-1.5">
+                            <span className="text-xs font-medium text-muted-foreground">
+                              Mức giảm (%)
+                            </span>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={100}
+                              step={0.01}
+                              value={item.discountPercent}
+                              onFocus={handlePercentageFocus}
+                              onChange={(e) =>
+                                handleItemChange(
+                                  item.contractItemId,
+                                  "discountPercent",
+                                  Number(e.target.value),
+                                )
+                              }
+                              onBlur={(e) =>
+                                handlePercentageBlur(
+                                  e,
+                                  item.contractItemId,
+                                  "discountPercent",
+                                )
+                              }
+                            />
+                          </div>
+                        )}
+
+                        {item.discountMode ===
+                          ContractItemDiscountMode.FixedAmount && (
+                          <div className="space-y-1.5">
+                            <span className="text-xs font-medium text-muted-foreground">
+                              Số tiền giảm
+                            </span>
+                            <Input
+                              type="number"
+                              min={0}
+                              step={1000}
+                              value={item.fixedDiscountAmount}
+                              onChange={(e) =>
+                                handleItemChange(
+                                  item.contractItemId,
+                                  "fixedDiscountAmount",
+                                  Number(e.target.value),
+                                )
+                              }
+                            />
+                          </div>
+                        )}
+
+                        <div className="space-y-1.5">
+                          <span className="text-xs font-medium text-muted-foreground">
+                            Thuế VAT
+                          </span>
+                          <div className="flex h-9 items-center justify-between rounded-md border px-3">
+                            <span className="text-sm">
+                              {item.isTaxable ? "Có thuế" : "Không thuế"}
+                            </span>
+                            <Switch
+                              checked={item.isTaxable}
+                              onCheckedChange={(checked) =>
+                                handleItemPatch(item.contractItemId, {
+                                  isTaxable: checked,
+                                  vatPercent: checked
+                                    ? item.vatPercent || 10
+                                    : 0,
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+
+                        {item.isTaxable && (
+                          <div className="space-y-1.5">
+                            <span className="text-xs font-medium text-muted-foreground">
+                              Thuế suất (%)
+                            </span>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={100}
+                              step={0.01}
+                              value={item.vatPercent}
+                              onFocus={handlePercentageFocus}
+                              onChange={(e) =>
+                                handleItemChange(
+                                  item.contractItemId,
+                                  "vatPercent",
+                                  Number(e.target.value),
+                                )
+                              }
+                              onBlur={(e) =>
+                                handlePercentageBlur(
+                                  e,
+                                  item.contractItemId,
+                                  "vatPercent",
+                                )
+                              }
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="grid gap-3 p-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                        <div>
+                          <p className="text-muted-foreground">Số lượng</p>
+                          <p className="mt-1 font-medium">{item.quantity}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Đơn giá</p>
+                          <p className="mt-1 font-medium">
+                            {formatCurrency(
+                              item.unitPrice,
+                              contract.currencyCode,
+                            )}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Chiết khấu</p>
+                          <p className="mt-1 font-medium">
+                            {item.discountMode ===
+                            ContractItemDiscountMode.Percentage
+                              ? `${item.discountPercent}%`
+                              : item.discountMode ===
+                                  ContractItemDiscountMode.FixedAmount
+                                ? formatCurrency(
+                                    item.fixedDiscountAmount,
+                                    contract.currencyCode,
+                                  )
+                                : "Không"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">VAT</p>
+                          <p className="mt-1 font-medium">
+                            {item.isTaxable ? `${item.vatPercent}%` : "Không thuế"}
+                          </p>
+                        </div>
+                        {contract.languageMode ===
+                          ContractLanguageMode.Bilingual && (
+                          <div className="sm:col-span-2 xl:col-span-4">
+                            <p className="text-muted-foreground">
+                              Tên tiếng Anh
+                            </p>
+                            <p className="mt-1 font-medium">
+                              {item.itemNameEn || "Chưa cập nhật"}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="grid gap-3 border-t bg-muted/20 px-4 py-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                      <div className="flex justify-between gap-3 xl:block">
+                        <span className="text-muted-foreground">Tạm tính</span>
+                        <p className="font-medium">
+                          {formatCurrency(
+                            amounts.lineSubtotal,
+                            contract.currencyCode,
+                          )}
+                        </p>
+                      </div>
+                      <div className="flex justify-between gap-3 xl:block">
+                        <span className="text-muted-foreground">Chiết khấu</span>
+                        <p className="font-medium text-emerald-600">
+                          -{formatCurrency(
+                            amounts.discountAmount,
+                            contract.currencyCode,
+                          )}
+                        </p>
+                      </div>
+                      <div className="flex justify-between gap-3 xl:block">
+                        <span className="text-muted-foreground">VAT</span>
+                        <p className="font-medium">
+                          {formatCurrency(
+                            amounts.vatAmount,
+                            contract.currencyCode,
+                          )}
+                        </p>
+                      </div>
+                      <div className="flex justify-between gap-3 xl:block">
+                        <span className="text-muted-foreground">Thành tiền</span>
+                        <p className="font-semibold text-primary">
+                          {formatCurrency(
+                            amounts.lineTotal,
+                            contract.currencyCode,
+                          )}
+                        </p>
+                      </div>
                     </div>
-                  )}
-                </div>
-              ))}
+                  </div>
+                );
+              })}
 
               {itemsTotalPages > 1 && (
                 <div className="flex items-center justify-center gap-2 mt-4 pt-4 border-t">
@@ -564,6 +960,85 @@ export function ContractOverview({
       </Card>
 
       <div className="space-y-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+            <CardTitle className="text-base">Giá trị hợp đồng</CardTitle>
+            <Badge variant={hasUnsavedFinancialChanges ? "secondary" : "outline"}>
+              {hasUnsavedFinancialChanges
+                ? "Dự kiến · chưa lưu"
+                : `Backend · Version ${contract.currentVersion.versionNo}`}
+            </Badge>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="rounded-lg bg-muted/50 px-3 py-2 text-xs leading-5 text-muted-foreground">
+              {hasUnsavedFinancialChanges
+                ? `Đang hiển thị số liệu dự kiến theo các thay đổi trên màn hình. Tổng đã lưu: ${formatCurrency(
+                    persistedFinancialTotals.totalPayment,
+                    contract.currencyCode,
+                  )}.`
+                : "Số liệu đã được backend tính và lưu cho phiên bản hợp đồng hiện hành."}
+            </p>
+            {isEditable && (
+              <div className="space-y-1.5 pb-2">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Đồng tiền
+                </span>
+                <Select
+                  value={contract.currencyCode}
+                  onValueChange={(value) =>
+                    handleRootChange("currencyCode", value)
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="VND">VND — Việt Nam đồng</SelectItem>
+                    <SelectItem value="USD">USD — Đô la Mỹ</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="flex justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">Tạm tính</span>
+              <span>
+                {formatCurrency(
+                  financialTotals.subtotal,
+                  contract.currencyCode,
+                )}
+              </span>
+            </div>
+            <div className="flex justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">Chiết khấu</span>
+              <span className="text-emerald-600">
+                -{formatCurrency(
+                  financialTotals.totalDiscount,
+                  contract.currencyCode,
+                )}
+              </span>
+            </div>
+            <div className="flex justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">VAT</span>
+              <span>
+                {formatCurrency(
+                  financialTotals.totalVat,
+                  contract.currencyCode,
+                )}
+              </span>
+            </div>
+            <Separator />
+            <div className="flex justify-between gap-3">
+              <span className="font-medium">Tổng thanh toán</span>
+              <span className="text-lg font-bold text-primary">
+                {formatCurrency(
+                  financialTotals.totalPayment,
+                  contract.currencyCode,
+                )}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Thanh toán</CardTitle>

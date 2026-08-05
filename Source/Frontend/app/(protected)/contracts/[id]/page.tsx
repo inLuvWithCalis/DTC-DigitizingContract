@@ -9,6 +9,7 @@ import {
   DatabaseZap,
   FileSignature,
   FileText,
+  GitBranch,
   Loader2,
   MessageSquareText,
   Save,
@@ -26,9 +27,12 @@ import { formatCurrency } from "@/lib/format-currency";
 import {
   contractApi,
   ContractDetailResponse,
+  ContractItemDiscountMode,
+  ContractLanguageMode,
   ContractStatus,
   UpdateContractDraftRequest,
 } from "@/services/contract-api";
+import { roundContractMoney } from "@/lib/contract-finance";
 import { toast } from "sonner";
 
 import {
@@ -54,6 +58,7 @@ export default function ContractDetailPage() {
   const [isStartingNegotiation, setIsStartingNegotiation] = useState(false);
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("overview");
 
   // Gọi API lấy dữ liệu hợp đồng
   useEffect(() => {
@@ -116,10 +121,103 @@ export default function ContractDetailPage() {
   const handleUpdateDraft = async () => {
     if (!contract || !contract.currentVersion) return;
 
+    if (!contract.contractName.trim()) {
+      toast.error("Tên hợp đồng không được để trống.");
+      return;
+    }
+
+    if (contract.currentVersion.items.length === 0) {
+      toast.error("Hợp đồng phải có ít nhất một sản phẩm hoặc dịch vụ.");
+      return;
+    }
+
+    if (contract.currentVersion.terms.length === 0) {
+      toast.error("Hợp đồng phải có ít nhất một điều khoản.");
+      return;
+    }
+
+    if (
+      contract.effectiveDate &&
+      contract.expireDate &&
+      new Date(contract.expireDate) < new Date(contract.effectiveDate)
+    ) {
+      toast.error("Ngày hết hạn không được trước ngày hiệu lực.");
+      return;
+    }
+
+    if (
+      contract.languageMode === ContractLanguageMode.Bilingual &&
+      !contract.contractNameEn?.trim()
+    ) {
+      toast.error("Hợp đồng song ngữ phải có tên hợp đồng tiếng Anh.");
+      return;
+    }
+
     for (const item of contract.currentVersion.items) {
-      if (!item.quantity || item.quantity <= 0) {
+      if (
+        contract.languageMode === ContractLanguageMode.Bilingual &&
+        !item.itemNameEn?.trim()
+      ) {
+        toast.error(`Vui lòng nhập tên tiếng Anh cho “${item.itemName}”.`);
+        return;
+      }
+      if (!Number.isFinite(item.quantity) || item.quantity <= 0) {
         toast.error(
           "Vui lòng nhập số lượng hợp lệ cho tất cả sản phẩm/dịch vụ.",
+        );
+        return;
+      }
+
+      if (!Number.isFinite(item.unitPrice) || item.unitPrice < 0) {
+        toast.error(`Đơn giá của “${item.itemName}” không hợp lệ.`);
+        return;
+      }
+
+      if (
+        item.discountMode === ContractItemDiscountMode.Percentage &&
+        (item.discountPercent < 0 || item.discountPercent > 100)
+      ) {
+        toast.error(`Chiết khấu của “${item.itemName}” phải từ 0% đến 100%.`);
+        return;
+      }
+
+      const lineSubtotal = roundContractMoney(
+        item.quantity * item.unitPrice,
+        contract.currencyCode,
+      );
+      if (
+        item.discountMode === ContractItemDiscountMode.FixedAmount &&
+        (item.fixedDiscountAmount < 0 ||
+          item.fixedDiscountAmount > lineSubtotal)
+      ) {
+        toast.error(
+          `Số tiền giảm của “${item.itemName}” không được vượt quá tạm tính.`,
+        );
+        return;
+      }
+
+      if (
+        item.isTaxable &&
+        (item.vatPercent < 0 || item.vatPercent > 100)
+      ) {
+        toast.error(`Thuế VAT của “${item.itemName}” phải từ 0% đến 100%.`);
+        return;
+      }
+    }
+
+    for (const term of contract.currentVersion.terms) {
+      if (!term.termTitle.trim()) {
+        toast.error("Tiêu đề điều khoản không được để trống.");
+        return;
+      }
+
+      if (
+        contract.languageMode === ContractLanguageMode.Bilingual &&
+        (!term.termTitleEn?.trim() ||
+          (!!term.termContent?.trim() && !term.termContentEn?.trim()))
+      ) {
+        toast.error(
+          `Điều khoản “${term.termCode}” chưa đủ nội dung tiếng Anh.`,
         );
         return;
       }
@@ -155,7 +253,10 @@ export default function ContractDetailPage() {
           unitNameEn: item.unitNameEn,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
+          discountMode: item.discountMode,
           discountPercent: item.discountPercent,
+          fixedDiscountAmount: item.fixedDiscountAmount,
+          isTaxable: item.isTaxable,
           vatPercent: item.vatPercent,
           displayOrder: item.displayOrder,
         })),
@@ -184,7 +285,13 @@ export default function ContractDetailPage() {
       toast.success("Cập nhật bản nháp thành công!");
     } catch (err: any) {
       console.error("Lỗi cập nhật bản nháp:", err);
-      toast.error("Cập nhật bản nháp thất bại. Vui lòng thử lại.");
+      const data = err?.response?.data;
+      const message =
+        data?.message ||
+        data?.title ||
+        (typeof data === "string" ? data : null) ||
+        "Cập nhật bản nháp thất bại. Vui lòng thử lại.";
+      toast.error(message);
     } finally {
       setIsUpdating(false);
     }
@@ -200,6 +307,7 @@ export default function ContractDetailPage() {
       });
       const updatedData = res.data ? res.data : res;
       setContract(updatedData);
+      setActiveTab("negotiation");
       toast.success("Hợp đồng đã chuyển sang trạng thái Đàm phán!");
     } catch (err: any) {
       console.error("Lỗi bắt đầu đàm phán:", err);
@@ -272,7 +380,9 @@ export default function ContractDetailPage() {
 
           <div className="flex flex-wrap gap-2">
             {(contract.status === ContractStatus.Draft ||
-              contract.status === ContractStatus.Negotiating) && (
+              (contract.status === ContractStatus.Negotiating &&
+                contract.currentVersion.sourceVersionId != null)) &&
+              !contract.currentVersion.isLocked && (
               <Button
                 variant="outline"
                 onClick={handleUpdateDraft}
@@ -299,6 +409,15 @@ export default function ContractDetailPage() {
                   <MessageSquareText className="size-4 mr-2" />
                 )}
                 Bắt đầu đàm phán
+              </Button>
+            )}
+            {contract.status === ContractStatus.Negotiating && (
+              <Button
+                variant="outline"
+                onClick={() => setActiveTab("negotiation")}
+              >
+                <GitBranch className="size-4 mr-2" />
+                Tạo vòng mới
               </Button>
             )}
             {contract.status === ContractStatus.Negotiating && (
@@ -342,10 +461,13 @@ export default function ContractDetailPage() {
           />
           <InfoCard
             icon={<WalletCards className="size-4" />}
-            label="Giá trị"
+            label="Tổng thanh toán"
             value={
               <span className="text-primary">
-                {formatCurrency(contract.totalAmount)}
+                {formatCurrency(
+                  contract.totalPayment ?? contract.totalAmount,
+                  contract.currencyCode,
+                )}
               </span>
             }
           />
@@ -370,7 +492,11 @@ export default function ContractDetailPage() {
           </div>
         </div>
 
-        <Tabs defaultValue="overview" className="space-y-4">
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="space-y-4"
+        >
           <TabsList className="flex h-auto w-full flex-wrap justify-start">
             <TabsTrigger value="overview">Tổng quan</TabsTrigger>
             <TabsTrigger value="terms">Điều khoản</TabsTrigger>
@@ -393,7 +519,10 @@ export default function ContractDetailPage() {
           </TabsContent>
 
           <TabsContent value="negotiation">
-            <ContractNegotiation contract={contract} />
+            <ContractNegotiation
+              contract={contract}
+              setContract={setContract}
+            />
           </TabsContent>
 
           <TabsContent value="signature">

@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 import {
   ContractDetailResponse,
+  ContractLanguageMode,
   ContractStatus,
 } from "@/services/contract-api";
 
@@ -29,7 +30,11 @@ export function ContractTerms({
     React.SetStateAction<ContractDetailResponse | null>
   >;
 }) {
-  const isEditable = contract.status === ContractStatus.Draft || contract.status === ContractStatus.Negotiating;
+  const isEditable =
+    (contract.status === ContractStatus.Draft ||
+      (contract.status === ContractStatus.Negotiating &&
+        contract.currentVersion.sourceVersionId != null)) &&
+    !contract.currentVersion.isLocked;
   const terms = contract.currentVersion?.terms || [];
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -203,6 +208,44 @@ export function ContractTerms({
                     rows={3}
                   />
                 </div>
+                {contract.languageMode === ContractLanguageMode.Bilingual && (
+                  <>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">
+                        Tiêu đề (Tiếng Anh)
+                      </label>
+                      <Input
+                        value={term.termTitleEn || ""}
+                        onChange={(e) =>
+                          handleTermChange(
+                            term.termId,
+                            "termTitleEn",
+                            e.target.value,
+                          )
+                        }
+                        className="font-semibold"
+                        placeholder="English term title"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">
+                        Nội dung (Tiếng Anh)
+                      </label>
+                      <Textarea
+                        value={term.termContentEn || ""}
+                        onChange={(e) =>
+                          handleTermChange(
+                            term.termId,
+                            "termContentEn",
+                            e.target.value,
+                          )
+                        }
+                        rows={3}
+                        placeholder="English term content"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
               <div>
@@ -210,6 +253,16 @@ export function ContractTerms({
                 <p className="text-sm leading-6 text-muted-foreground">
                   {term.termContent}
                 </p>
+                {contract.languageMode === ContractLanguageMode.Bilingual && (
+                  <div className="mt-3 border-t pt-3">
+                    <p className="text-sm font-semibold mb-1">
+                      {term.termTitleEn || "Chưa có tiêu đề tiếng Anh"}
+                    </p>
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      {term.termContentEn || "Chưa có nội dung tiếng Anh"}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>

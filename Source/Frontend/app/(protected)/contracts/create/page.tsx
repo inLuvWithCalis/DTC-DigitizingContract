@@ -38,6 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { DateRangeFilter } from "@/components/ui/custom/date-range-filter";
 import { format } from "date-fns";
 import { CreateContractTermsMock } from "@/components/contracts/create-contract-terms-mock";
@@ -46,6 +47,7 @@ import {
   ContractType,
   ContractLanguageMode,
   ContractItemType,
+  ContractItemDiscountMode,
   CreateContractRequest,
   CreateContractItemRequest,
   EligibleParentContractResponse,
@@ -53,6 +55,10 @@ import {
   getContractTypeLabel,
   getContractLanguageModeLabel,
 } from "@/services/contract-api";
+import {
+  calculateContractItemAmounts,
+  calculateContractTotals,
+} from "@/lib/contract-finance";
 import { customerApi, CustomerResponse } from "@/services/customers-api";
 import { employeeApi, EmployeeResponse } from "@/services/employees-api";
 import { productApi } from "@/services/catalog/products-api";
@@ -74,10 +80,14 @@ type CatalogItem = {
   id: string; // "p-{id}" or "s-{id}"
   originalId: number;
   itemName: string;
+  itemNameEn: string;
   itemType: ContractItemType;
   unitPrice: number;
   quantity: number;
+  discountMode: ContractItemDiscountMode;
   discountPercent: number;
+  fixedDiscountAmount: number;
+  isTaxable: boolean;
   vatPercent: number;
 };
 
@@ -87,10 +97,12 @@ const contractTypeOptions = [
   ContractType.SoftwareUpkeep,
 ];
 
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat("vi-VN", {
+const formatCurrency = (amount: number, currencyCode: string) => {
+  const currency = currencyCode.trim().toUpperCase() || "VND";
+  return new Intl.NumberFormat(currency === "VND" ? "vi-VN" : "en-US", {
     style: "currency",
-    currency: "VND",
+    currency,
+    maximumFractionDigits: currency === "VND" ? 0 : 2,
   }).format(amount);
 };
 
@@ -129,10 +141,14 @@ export default function CreateContractPage() {
           id: `p-${p.productId}`,
           originalId: p.productId,
           itemName: p.productName || "Sản phẩm không tên",
+          itemNameEn: "",
           itemType: ContractItemType.Product,
           unitPrice: p.productPrice || 0,
           quantity: 1,
+          discountMode: ContractItemDiscountMode.None,
           discountPercent: 0,
+          fixedDiscountAmount: 0,
+          isTaxable: true,
           vatPercent: 10,
         }));
 
@@ -140,10 +156,14 @@ export default function CreateContractPage() {
           id: `s-${s.serviceId}`,
           originalId: s.serviceId,
           itemName: s.serviceName || "Dịch vụ không tên",
+          itemNameEn: "",
           itemType: ContractItemType.Service,
           unitPrice: s.servicePrice || 0,
           quantity: 1,
+          discountMode: ContractItemDiscountMode.None,
           discountPercent: 0,
+          fixedDiscountAmount: 0,
+          isTaxable: true,
           vatPercent: 10,
         }));
 
@@ -176,9 +196,11 @@ export default function CreateContractPage() {
   const [languageMode, setLanguageMode] = useState<ContractLanguageMode>(
     ContractLanguageMode.Vietnamese,
   );
+  const [currencyCode, setCurrencyCode] = useState("VND");
   const [contractTitle, setContractTitle] = useState(
     "Triển khai hệ thống quản lý hợp đồng điện tử",
   );
+  const [contractTitleEn, setContractTitleEn] = useState("");
   const [draftTerms, setDraftTerms] = useState<MockContractTerm[]>([]);
 
   // Fetch eligible parent contracts when customer or contractType changes
@@ -264,10 +286,11 @@ export default function CreateContractPage() {
     selectedItems.includes(item.id),
   );
 
-  const totalValue = selectedCatalogItems.reduce(
-    (sum, item) => sum + item.unitPrice * item.quantity,
-    0,
+  const financialTotals = useMemo(
+    () => calculateContractTotals(selectedCatalogItems, currencyCode),
+    [selectedCatalogItems, currencyCode],
   );
+  const totalValue = financialTotals.totalPayment;
 
   const progressValue = ((currentStep + 1) / steps.length) * 100;
 
@@ -281,10 +304,17 @@ export default function CreateContractPage() {
         !!responsibleEmployeeId &&
         !!templateVersionId &&
         !!contractTitle.trim() &&
+        (languageMode !== ContractLanguageMode.Bilingual ||
+          !!contractTitleEn.trim()) &&
         (!isParentRequired || !!parentContractId)
       );
     }
-    if (stepIdx === 1) return selectedItems.length > 0;
+    if (stepIdx === 1)
+      return (
+        selectedItems.length > 0 &&
+        (languageMode !== ContractLanguageMode.Bilingual ||
+          selectedCatalogItems.every((item) => item.itemNameEn.trim()))
+      );
     if (stepIdx === 2)
       return (
         !!effectiveDate &&
@@ -308,7 +338,10 @@ export default function CreateContractPage() {
     parentContractId,
     templateVersionId,
     contractTitle,
+    contractTitleEn,
+    languageMode,
     selectedItems.length,
+    selectedCatalogItems,
     effectiveDate,
     expiredDate,
     draftTerms,
@@ -341,12 +374,27 @@ export default function CreateContractPage() {
     );
   };
 
-  const updateQuantity = (id: string, quantity: number) => {
+  const updateCatalogItem = (id: string, patch: Partial<CatalogItem>) => {
     setCatalogItems((prev) =>
       prev.map((item) =>
-        item.id === id ? { ...item, quantity: Math.max(1, quantity) } : item,
+        item.id === id ? { ...item, ...patch } : item,
       ),
     );
+  };
+
+  const updateQuantity = (id: string, quantity: number) => {
+    updateCatalogItem(id, { quantity: Math.max(0.001, quantity || 0.001) });
+  };
+
+  const updateDiscountMode = (
+    id: string,
+    discountMode: ContractItemDiscountMode,
+  ) => {
+    updateCatalogItem(id, {
+      discountMode,
+      discountPercent: 0,
+      fixedDiscountAmount: 0,
+    });
   };
 
   // -- SUBMIT ACTION --
@@ -378,6 +426,14 @@ export default function CreateContractPage() {
       setCurrentStep(0);
       return;
     }
+    if (
+      languageMode === ContractLanguageMode.Bilingual &&
+      !contractTitleEn.trim()
+    ) {
+      toast.error("Hợp đồng song ngữ phải có tên hợp đồng tiếng Anh.");
+      setCurrentStep(0);
+      return;
+    }
     if (!templateVersionId) {
       toast.error("Vui lòng chọn template hợp đồng.");
       setCurrentStep(0);
@@ -387,6 +443,38 @@ export default function CreateContractPage() {
     // 2. Validate Step 1: Sản phẩm
     if (selectedItems.length === 0) {
       toast.error("Vui lòng chọn ít nhất 1 sản phẩm hoặc dịch vụ.");
+      setCurrentStep(1);
+      return;
+    }
+    const missingEnglishItem = selectedCatalogItems.find(
+      (item) =>
+        languageMode === ContractLanguageMode.Bilingual &&
+        !item.itemNameEn.trim(),
+    );
+    if (missingEnglishItem) {
+      toast.error(
+        `Vui lòng nhập tên tiếng Anh cho “${missingEnglishItem.itemName}”.`,
+      );
+      setCurrentStep(1);
+      return;
+    }
+    const invalidFinanceItem = selectedCatalogItems.find((item) => {
+      const subtotal = item.quantity * item.unitPrice;
+      return (
+        item.quantity <= 0 ||
+        item.unitPrice < 0 ||
+        item.discountPercent < 0 ||
+        item.discountPercent > 100 ||
+        item.fixedDiscountAmount < 0 ||
+        item.fixedDiscountAmount > subtotal ||
+        item.vatPercent < 0 ||
+        item.vatPercent > 100
+      );
+    });
+    if (invalidFinanceItem) {
+      toast.error(
+        `Thông tin giá, giảm giá hoặc VAT của "${invalidFinanceItem.itemName}" chưa hợp lệ.`,
+      );
       setCurrentStep(1);
       return;
     }
@@ -422,9 +510,16 @@ export default function CreateContractPage() {
           sourceServiceId:
             item.itemType === ContractItemType.Service ? item.originalId : null,
           itemName: item.itemName,
+          itemNameEn:
+            languageMode === ContractLanguageMode.Bilingual
+              ? item.itemNameEn.trim()
+              : null,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
+          discountMode: item.discountMode,
           discountPercent: item.discountPercent,
+          fixedDiscountAmount: item.fixedDiscountAmount,
+          isTaxable: item.isTaxable,
           vatPercent: item.vatPercent,
           displayOrder: index + 1,
         }));
@@ -439,11 +534,15 @@ export default function CreateContractPage() {
             ? Number(parentContractId)
             : null,
         contractName: contractTitle.trim(),
+        contractNameEn:
+          languageMode === ContractLanguageMode.Bilingual
+            ? contractTitleEn.trim()
+            : null,
         effectiveDate: effectiveDate
           ? new Date(effectiveDate).toISOString()
           : null,
         expireDate: expiredDate ? new Date(expiredDate).toISOString() : null,
-        currencyCode: "VND",
+        currencyCode,
         languageMode: languageMode,
         items: itemsPayload,
       };
@@ -728,6 +827,25 @@ export default function CreateContractPage() {
                     />
                   </div>
 
+                  {languageMode === ContractLanguageMode.Bilingual && (
+                    <div className="space-y-2 md:col-span-2">
+                      <Label>
+                        Tên hợp đồng tiếng Anh{" "}
+                        <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        value={contractTitleEn}
+                        onChange={(event) =>
+                          setContractTitleEn(event.target.value)
+                        }
+                        placeholder="Enter the contract name..."
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Backend yêu cầu trường này khi chọn hợp đồng song ngữ.
+                      </p>
+                    </div>
+                  )}
+
                   <div className="space-y-3 md:col-span-2">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                       <div>
@@ -804,34 +922,50 @@ export default function CreateContractPage() {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label>Ngôn ngữ hợp đồng</Label>
-                    <Select
-                      value={String(languageMode)}
-                      onValueChange={(value) =>
-                        setLanguageMode(Number(value) as ContractLanguageMode)
-                      }
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem
-                          value={String(ContractLanguageMode.Vietnamese)}
-                        >
-                          {getContractLanguageModeLabel(
-                            ContractLanguageMode.Vietnamese,
-                          )}
-                        </SelectItem>
-                        <SelectItem
-                          value={String(ContractLanguageMode.Bilingual)}
-                        >
-                          {getContractLanguageModeLabel(
-                            ContractLanguageMode.Bilingual,
-                          )}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Ngôn ngữ hợp đồng</Label>
+                      <Select
+                        value={String(languageMode)}
+                        onValueChange={(value) =>
+                          setLanguageMode(Number(value) as ContractLanguageMode)
+                        }
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem
+                            value={String(ContractLanguageMode.Vietnamese)}
+                          >
+                            {getContractLanguageModeLabel(
+                              ContractLanguageMode.Vietnamese,
+                            )}
+                          </SelectItem>
+                          <SelectItem
+                            value={String(ContractLanguageMode.Bilingual)}
+                          >
+                            {getContractLanguageModeLabel(
+                              ContractLanguageMode.Bilingual,
+                            )}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Đồng tiền thanh toán</Label>
+                      <Select value={currencyCode} onValueChange={setCurrencyCode}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="VND">
+                            VND — Việt Nam đồng
+                          </SelectItem>
+                          <SelectItem value="USD">USD — Đô la Mỹ</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
               )}
@@ -904,6 +1038,10 @@ export default function CreateContractPage() {
                   <div className="space-y-3">
                     {paginatedCatalog.map((item) => {
                       const selected = selectedItems.includes(item.id);
+                      const amounts = calculateContractItemAmounts(
+                        item,
+                        currencyCode,
+                      );
                       return (
                         <div
                           key={item.id}
@@ -940,8 +1078,8 @@ export default function CreateContractPage() {
                                   </span>
                                   <Input
                                     type="number"
-                                    min={1}
-                                    maxLength={9}
+                                    min={0.001}
+                                    step={0.001}
                                     value={item.quantity}
                                     onChange={(e) =>
                                       updateQuantity(
@@ -949,12 +1087,12 @@ export default function CreateContractPage() {
                                         Number(e.target.value),
                                       )
                                     }
-                                    className="w-32 h-8 text-center"
+                                    className="h-8 w-24 text-center"
                                   />
                                 </div>
                               )}
                               <span className="font-semibold text-primary">
-                                {formatCurrency(item.unitPrice * item.quantity)}
+                                {formatCurrency(amounts.lineTotal, currencyCode)}
                               </span>
                               <button
                                 type="button"
@@ -974,6 +1112,218 @@ export default function CreateContractPage() {
                               </button>
                             </div>
                           </div>
+
+                          {selected && (
+                            <div className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-2 xl:grid-cols-5">
+                              {languageMode ===
+                                ContractLanguageMode.Bilingual && (
+                                <div className="space-y-1.5 sm:col-span-2 xl:col-span-5">
+                                  <Label className="text-xs text-muted-foreground">
+                                    Tên sản phẩm / dịch vụ tiếng Anh
+                                  </Label>
+                                  <Input
+                                    value={item.itemNameEn}
+                                    onChange={(event) =>
+                                      updateCatalogItem(item.id, {
+                                        itemNameEn: event.target.value,
+                                      })
+                                    }
+                                    placeholder="Enter the English item name..."
+                                  />
+                                </div>
+                              )}
+                              <div className="space-y-1.5">
+                                <Label className="text-xs text-muted-foreground">
+                                  Đơn giá
+                                </Label>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  step={1000}
+                                  value={item.unitPrice}
+                                  onChange={(event) =>
+                                    updateCatalogItem(item.id, {
+                                      unitPrice: Math.max(
+                                        0,
+                                        Number(event.target.value),
+                                      ),
+                                    })
+                                  }
+                                />
+                              </div>
+
+                              <div className="space-y-1.5">
+                                <Label className="text-xs text-muted-foreground">
+                                  Loại giảm giá
+                                </Label>
+                                <Select
+                                  value={String(item.discountMode)}
+                                  onValueChange={(value) =>
+                                    updateDiscountMode(
+                                      item.id,
+                                      Number(value) as ContractItemDiscountMode,
+                                    )
+                                  }
+                                >
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem
+                                      value={String(
+                                        ContractItemDiscountMode.None,
+                                      )}
+                                    >
+                                      Không giảm
+                                    </SelectItem>
+                                    <SelectItem
+                                      value={String(
+                                        ContractItemDiscountMode.Percentage,
+                                      )}
+                                    >
+                                      Theo phần trăm
+                                    </SelectItem>
+                                    <SelectItem
+                                      value={String(
+                                        ContractItemDiscountMode.FixedAmount,
+                                      )}
+                                    >
+                                      Số tiền cố định
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div className="space-y-1.5">
+                                <Label className="text-xs text-muted-foreground">
+                                  {item.discountMode ===
+                                  ContractItemDiscountMode.FixedAmount
+                                    ? "Tiền giảm"
+                                    : "Giảm giá (%)"}
+                                </Label>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  max={
+                                    item.discountMode ===
+                                    ContractItemDiscountMode.Percentage
+                                      ? 100
+                                      : amounts.lineSubtotal
+                                  }
+                                  step={
+                                    item.discountMode ===
+                                    ContractItemDiscountMode.Percentage
+                                      ? 0.01
+                                      : 1000
+                                  }
+                                  disabled={
+                                    item.discountMode ===
+                                    ContractItemDiscountMode.None
+                                  }
+                                  value={
+                                    item.discountMode ===
+                                    ContractItemDiscountMode.FixedAmount
+                                      ? item.fixedDiscountAmount
+                                      : item.discountPercent
+                                  }
+                                  onChange={(event) => {
+                                    const value = Math.max(
+                                      0,
+                                      Number(event.target.value),
+                                    );
+                                    updateCatalogItem(
+                                      item.id,
+                                      item.discountMode ===
+                                        ContractItemDiscountMode.FixedAmount
+                                        ? { fixedDiscountAmount: value }
+                                        : {
+                                            discountPercent: Math.min(
+                                              100,
+                                              value,
+                                            ),
+                                          },
+                                    );
+                                  }}
+                                />
+                              </div>
+
+                              <div className="space-y-1.5">
+                                <Label className="text-xs text-muted-foreground">
+                                  Thuế
+                                </Label>
+                                <div className="flex h-9 items-center justify-between rounded-md border bg-background px-3">
+                                  <span className="text-sm">
+                                    {item.isTaxable
+                                      ? "Chịu thuế"
+                                      : "Không chịu thuế"}
+                                  </span>
+                                  <Switch
+                                    checked={item.isTaxable}
+                                    onCheckedChange={(checked) =>
+                                      updateCatalogItem(item.id, {
+                                        isTaxable: checked,
+                                        vatPercent: checked
+                                          ? item.vatPercent || 10
+                                          : 0,
+                                      })
+                                    }
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="space-y-1.5">
+                                <Label className="text-xs text-muted-foreground">
+                                  VAT (%)
+                                </Label>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  max={100}
+                                  step={0.01}
+                                  disabled={!item.isTaxable}
+                                  value={item.vatPercent}
+                                  onChange={(event) =>
+                                    updateCatalogItem(item.id, {
+                                      vatPercent: Math.min(
+                                        100,
+                                        Math.max(
+                                          0,
+                                          Number(event.target.value),
+                                        ),
+                                      ),
+                                    })
+                                  }
+                                />
+                              </div>
+
+                              <div className="grid gap-2 rounded-lg bg-muted/40 p-3 text-xs sm:col-span-2 sm:grid-cols-4 xl:col-span-5">
+                                <div>
+                                  <p className="text-muted-foreground">Tạm tính</p>
+                                  <p className="mt-1 font-semibold">
+                                    {formatCurrency(amounts.lineSubtotal, currencyCode)}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-muted-foreground">Giảm giá</p>
+                                  <p className="mt-1 font-semibold text-rose-600">
+                                    -{formatCurrency(amounts.discountAmount, currencyCode)}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-muted-foreground">VAT</p>
+                                  <p className="mt-1 font-semibold">
+                                    {formatCurrency(amounts.vatAmount, currencyCode)}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-muted-foreground">Thành tiền</p>
+                                  <p className="mt-1 font-semibold text-primary">
+                                    {formatCurrency(amounts.lineTotal, currencyCode)}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -1075,6 +1425,11 @@ export default function CreateContractPage() {
                         <h2 className="mt-1 text-xl font-bold">
                           {contractTitle || "Chưa nhập tên hợp đồng"}
                         </h2>
+                        {languageMode === ContractLanguageMode.Bilingual && (
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {contractTitleEn || "Chưa nhập tên tiếng Anh"}
+                          </p>
+                        )}
                       </div>
                       <Badge variant="outline">Draft</Badge>
                     </div>
@@ -1136,7 +1491,7 @@ export default function CreateContractPage() {
                           Tổng giá trị dự kiến
                         </p>
                         <p className="font-semibold text-primary">
-                          {formatCurrency(totalValue)}
+                          {formatCurrency(totalValue, currencyCode)}
                         </p>
                       </div>
                     </div>
@@ -1148,21 +1503,65 @@ export default function CreateContractPage() {
                         Sản phẩm / dịch vụ ({selectedCatalogItems.length})
                       </p>
                       <div className="space-y-2">
-                        {selectedCatalogItems.map((item) => (
-                          <div
-                            key={item.id}
-                            className="flex items-center justify-between rounded-lg bg-background p-3 text-sm"
-                          >
-                            <span>{item.itemName}</span>
-                            <span className="font-medium">
-                              {formatCurrency(item.unitPrice * item.quantity)}
-                              <span className="text-xs text-muted-foreground ml-1.5 font-normal">
-                                ({formatCurrency(item.unitPrice)} x{" "}
-                                {item.quantity})
-                              </span>
-                            </span>
-                          </div>
-                        ))}
+                        {selectedCatalogItems.map((item) => {
+                          const amounts = calculateContractItemAmounts(
+                            item,
+                            currencyCode,
+                          );
+                          return (
+                            <div
+                              key={item.id}
+                              className="flex flex-col gap-2 rounded-lg bg-background p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+                            >
+                              <div>
+                                <p>{item.itemName}</p>
+                                {languageMode ===
+                                  ContractLanguageMode.Bilingual && (
+                                  <p className="text-xs text-muted-foreground">
+                                    {item.itemNameEn ||
+                                      "Chưa có tên tiếng Anh"}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="text-left sm:text-right">
+                                <p className="font-semibold text-primary">
+                                  {formatCurrency(amounts.lineTotal, currencyCode)}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  Tạm tính {formatCurrency(amounts.lineSubtotal, currencyCode)}
+                                  {amounts.discountAmount > 0 &&
+                                    ` · Giảm ${formatCurrency(amounts.discountAmount, currencyCode)}`}
+                                  {amounts.vatAmount > 0 &&
+                                    ` · VAT ${formatCurrency(amounts.vatAmount, currencyCode)}`}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="mt-4 space-y-2 rounded-xl border bg-background p-4 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Tạm tính</span>
+                          <span>{formatCurrency(financialTotals.subtotal, currencyCode)}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Tổng giảm giá</span>
+                          <span className="text-rose-600">
+                            -{formatCurrency(financialTotals.totalDiscount, currencyCode)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Tổng VAT</span>
+                          <span>{formatCurrency(financialTotals.totalVat, currencyCode)}</span>
+                        </div>
+                        <Separator />
+                        <div className="flex items-center justify-between font-semibold">
+                          <span>Tổng thanh toán</span>
+                          <span className="text-primary">
+                            {formatCurrency(financialTotals.totalPayment, currencyCode)}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
@@ -1309,11 +1708,28 @@ export default function CreateContractPage() {
                   </div>
                   <div>
                     <p className="text-sm font-medium">
-                      {formatCurrency(totalValue)}
+                      {formatCurrency(totalValue, currencyCode)}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {selectedItems.length} sản phẩm/dịch vụ đã chọn
                     </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2 rounded-xl bg-muted/30 p-3 text-xs">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Tạm tính</span>
+                    <span>{formatCurrency(financialTotals.subtotal, currencyCode)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Giảm giá</span>
+                    <span className="text-rose-600">
+                      -{formatCurrency(financialTotals.totalDiscount, currencyCode)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">VAT</span>
+                    <span>{formatCurrency(financialTotals.totalVat, currencyCode)}</span>
                   </div>
                 </div>
               </CardContent>

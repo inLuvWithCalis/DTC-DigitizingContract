@@ -40,6 +40,12 @@ export enum ContractItemType {
   Service = 2,
 }
 
+export enum ContractItemDiscountMode {
+  None = 0,
+  Percentage = 1,
+  FixedAmount = 2,
+}
+
 export const getContractItemTypeLabel = (type?: ContractItemType) => {
   switch (type) {
     case ContractItemType.Product:
@@ -178,7 +184,14 @@ export interface CreateContractItemRequest {
   unitNameEn?: string | null;
   quantity: number;
   unitPrice: number;
+  /**
+   * Optional while the current create/edit UI is being migrated.
+   * The API client always normalizes and sends this field to Backend.
+   */
+  discountMode?: ContractItemDiscountMode;
   discountPercent: number;
+  fixedDiscountAmount?: number;
+  isTaxable?: boolean;
   vatPercent: number;
   displayOrder: number;
 }
@@ -233,6 +246,13 @@ export interface StartContractNegotiationRequest {
   rowVersion: string;
 }
 
+export interface CreateContractNegotiationRoundRequest {
+  currentVersionId: number;
+  rowVersion: string;
+  currentVersionRowVersion: string;
+  changeNote: string;
+}
+
 export interface SubmitContractForApprovalRequest {
   rowVersion: string;
   currentVersionId: number;
@@ -255,8 +275,11 @@ export interface ContractItemDetailResponse {
   quantity: number;
   unitPrice: number;
   lineSubtotal: number;
+  discountMode: ContractItemDiscountMode;
   discountPercent: number;
+  fixedDiscountAmount: number;
   discountAmount: number;
+  isTaxable: boolean;
   vatPercent: number;
   vatAmount: number;
   lineTotal: number;
@@ -283,6 +306,11 @@ export interface ContractVersionDetailResponse {
   sourceVersionId?: number | null;
   templateVersionId?: number | null;
   changeNote?: string | null;
+  currencyCode: string;
+  subtotal: number;
+  totalDiscount: number;
+  totalVat: number;
+  totalPayment: number;
   snapshotHash?: string | null;
   isLocked: boolean;
   lockedDate?: string | null;
@@ -326,6 +354,10 @@ export interface ContractDetailResponse {
   effectiveDate?: string | null;
   expireDate?: string | null;
   totalAmount: number;
+  subtotal: number;
+  totalDiscount: number;
+  totalVat: number;
+  totalPayment: number;
   currencyCode: string;
   languageMode: ContractLanguageMode;
   isLegacy: boolean;
@@ -349,6 +381,10 @@ export interface CreateContractResponse {
   contractType: ContractType;
   templateVersionId: number;
   totalAmount: number;
+  subtotal: number;
+  totalDiscount: number;
+  totalVat: number;
+  totalPayment: number;
   currencyCode: string;
   languageMode: ContractLanguageMode;
   employeeId: number;
@@ -369,6 +405,33 @@ export interface SubmitContractForApprovalResponse {
   snapshotHash: string;
   contractRowVersion: string;
   versionRowVersion: string;
+}
+
+export interface ContractNegotiationRoundVersionResponse {
+  versionId: number;
+  versionNo: number;
+  sourceVersionId?: number | null;
+  isLocked: boolean;
+  lockedDate?: string | null;
+  snapshotHash?: string | null;
+  rowVersion: string;
+}
+
+export interface ContractFinancialTotalsResponse {
+  currencyCode: string;
+  subtotal: number;
+  totalDiscount: number;
+  totalVat: number;
+  totalPayment: number;
+}
+
+export interface CreateContractNegotiationRoundResponse {
+  contractId: number;
+  status: ContractStatus;
+  rowVersion: string;
+  sourceVersion: ContractNegotiationRoundVersionResponse;
+  currentVersion: ContractNegotiationRoundVersionResponse;
+  totals: ContractFinancialTotalsResponse;
 }
 
 export interface ContractFilterRequest {
@@ -446,6 +509,51 @@ export interface PagedResult<T> {
 
 const BASE_URL = "/contracts";
 
+/**
+ * Chuẩn hóa dữ liệu tài chính trước khi gửi và bảo đảm hai kiểu chiết khấu
+ * không cùng tồn tại trong một item.
+ */
+const normalizeContractItemFinance = <T extends CreateContractItemRequest>(
+  item: T,
+) => {
+  const requestedFixedDiscount = item.fixedDiscountAmount ?? 0;
+  const discountMode =
+    item.discountMode ??
+    (requestedFixedDiscount > 0
+      ? ContractItemDiscountMode.FixedAmount
+      : item.discountPercent > 0
+        ? ContractItemDiscountMode.Percentage
+        : ContractItemDiscountMode.None);
+  const isTaxable = item.isTaxable ?? true;
+
+  return {
+    ...item,
+    discountMode,
+    discountPercent:
+      discountMode === ContractItemDiscountMode.Percentage
+        ? item.discountPercent
+        : 0,
+    fixedDiscountAmount:
+      discountMode === ContractItemDiscountMode.FixedAmount
+        ? requestedFixedDiscount
+        : 0,
+    isTaxable,
+    vatPercent: isTaxable ? item.vatPercent : 0,
+  };
+};
+
+const normalizeCreateContractRequest = (data: CreateContractRequest) => ({
+  ...data,
+  items: data.items.map(normalizeContractItemFinance),
+});
+
+const normalizeUpdateContractDraftRequest = (
+  data: UpdateContractDraftRequest,
+) => ({
+  ...data,
+  items: data.items.map(normalizeContractItemFinance),
+});
+
 export const contractApi = {
   getList: (params: ContractFilterRequest) => {
     return axiosClient.get<any, PagedResult<ContractListItemResponse>>(
@@ -463,7 +571,10 @@ export const contractApi = {
     return axiosClient.get<any, ContractDetailResponse>(`${BASE_URL}/${id}`);
   },
   create: (data: CreateContractRequest) => {
-    return axiosClient.post<any, CreateContractResponse>(BASE_URL, data);
+    return axiosClient.post<any, CreateContractResponse>(
+      BASE_URL,
+      normalizeCreateContractRequest(data),
+    );
   },
   transferResponsibility: (
     id: number,
@@ -477,12 +588,21 @@ export const contractApi = {
   updateDraft: (id: number, data: UpdateContractDraftRequest) => {
     return axiosClient.put<any, ContractDetailResponse>(
       `${BASE_URL}/${id}/draft`,
-      data,
+      normalizeUpdateContractDraftRequest(data),
     );
   },
   startNegotiation: (id: number, data: StartContractNegotiationRequest) => {
     return axiosClient.post<any, ContractDetailResponse>(
       `${BASE_URL}/${id}/start-negotiation`,
+      data,
+    );
+  },
+  createNegotiationRound: (
+    id: number,
+    data: CreateContractNegotiationRoundRequest,
+  ) => {
+    return axiosClient.post<any, CreateContractNegotiationRoundResponse>(
+      `${BASE_URL}/${id}/negotiation-rounds`,
       data,
     );
   },

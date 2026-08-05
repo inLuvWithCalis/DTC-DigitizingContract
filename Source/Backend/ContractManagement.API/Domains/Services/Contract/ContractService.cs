@@ -9,6 +9,7 @@ using ContractManagement.Domains.Policies.ContractTemplate;
 using ContractManagement.Infrastructure.Persistence.Application;
 using ContractManagement.Infrastructure.Persistence.Application.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -22,6 +23,7 @@ namespace ContractManagement.Domains.Services.Contract
     {
         private const decimal MaxMoney = 9999999999999999.99m;
         private const byte ActiveEmployeeStatus = 1;
+        private static long _syntheticCommentRowVersionSeed = 1000;
 
         private readonly DbDtctechContext _dbContext;
         private readonly IContractAuditWriter _contractAuditWriter;
@@ -1090,6 +1092,10 @@ namespace ContractManagement.Domains.Services.Contract
                 .ThenBy(x => x.TermId)
                 .ToListAsync();
 
+            var comments = await LoadCommentResponsesAsync(
+                contract.ContractId,
+                version.VersionId);
+
             return new ContractDetailResponse
             {
                 ContractId = contract.ContractId,
@@ -1237,7 +1243,9 @@ namespace ContractManagement.Domains.Services.Contract
                             DisplayOrder = term.DisplayOrder,
                             RowVersion = EncodeRowVersion(term.RowVersion)
                         })
-                        .ToList()
+                        .ToList(),
+
+                    Comments = comments
                 }
             };
         }
@@ -2044,6 +2052,899 @@ namespace ContractManagement.Domains.Services.Contract
                     throw;
                 }
             });
+        }
+
+        /// <summary>
+        /// Ghi nhận feedback bên ngoài do nhân viên phụ trách nhập lại.
+        /// Comment và event được tạo trong cùng một transaction serializable.
+        /// </summary>
+        public async Task<ContractNegotiationCommentResponse>
+            CreateExternalFeedbackAsync(
+                int contractId,
+                CreateContractNegotiationCommentRequest request,
+                int employeeId)
+        {
+            ValidateCommentCreateRequest(
+                contractId,
+                request,
+                employeeId);
+
+            var content = request.Content.Trim();
+            var strategy = _dbContext.Database.CreateExecutionStrategy();
+
+            try
+            {
+                return await strategy.ExecuteAsync(async () =>
+                {
+                    await using var transaction =
+                        await _dbContext.Database.BeginTransactionAsync(
+                            IsolationLevel.Serializable);
+
+                    try
+                    {
+                        var contract = await _dbContext.TblContracts
+                            .FirstOrDefaultAsync(x =>
+                                x.ContractId == contractId);
+
+                        if (contract == null
+                            || contract.EmployeeId != employeeId)
+                        {
+                            throw new KeyNotFoundException(
+                                "Không tìm thấy hợp đồng.");
+                        }
+
+                        EnsureNegotiationCommentWriteState(contract);
+
+                        if (!contract.CurrentVersionId.HasValue
+                            || contract.CurrentVersionId.Value !=
+                            request.CurrentVersionId)
+                        {
+                            throw new DbUpdateConcurrencyException(
+                                "Version hiện hành đã thay đổi.");
+                        }
+
+                        var version = await _dbContext.TblContractVersions
+                            .FirstOrDefaultAsync(x =>
+                                x.ContractId == contract.ContractId
+                                && x.VersionId ==
+                                request.CurrentVersionId);
+
+                        if (version == null)
+                        {
+                            throw new KeyNotFoundException(
+                                "Không tìm thấy version hiện hành.");
+                        }
+
+                        if (version.IsLocked)
+                        {
+                            throw new DbUpdateConcurrencyException(
+                                "Version đã bị khóa.");
+                        }
+
+                        int? effectiveTermId = request.TermId;
+
+                        if (request.TermId.HasValue)
+                        {
+                            var term = await _dbContext.TblContractTerms
+                                .FirstOrDefaultAsync(x =>
+                                    x.ContractId == contract.ContractId
+                                    && x.VersionId == version.VersionId
+                                    && x.TermId == request.TermId.Value);
+
+                            if (term == null)
+                            {
+                                throw new InvalidOperationException(
+                                    "Term phải thuộc version hiện hành.");
+                            }
+
+                            if (!term.IsNegotiable)
+                            {
+                                throw new InvalidOperationException(
+                                    "Term này không cho phép feedback đàm phán.");
+                            }
+                        }
+
+                        TblContractNegotiationComment? parent = null;
+
+                        if (request.ParentCommentId.HasValue)
+                        {
+                            parent = await _dbContext
+                                .TblContractNegotiationComments
+                                .FirstOrDefaultAsync(x =>
+                                    x.CommentId ==
+                                    request.ParentCommentId.Value);
+
+                            if (parent == null
+                                || parent.ContractId != contract.ContractId
+                                || parent.VersionId != version.VersionId)
+                            {
+                                throw new InvalidOperationException(
+                                    "Parent comment phải thuộc cùng Contract và Version.");
+                            }
+
+                            if (parent.State ==
+                                (byte)ContractNegotiationCommentState.Resolved)
+                            {
+                                throw new InvalidOperationException(
+                                    "Comment đã resolved không thể nhận reply.");
+                            }
+
+                            if (request.TermId.HasValue
+                                && parent.TermId != request.TermId)
+                            {
+                                throw new InvalidOperationException(
+                                    "Reply phải kế thừa Term của parent comment.");
+                            }
+
+                            effectiveTermId = parent.TermId;
+                        }
+
+                        var now = DateTime.UtcNow;
+                        var comment = new TblContractNegotiationComment
+                        {
+                            ContractId = contract.ContractId,
+                            VersionId = version.VersionId,
+                            TermId = effectiveTermId,
+                            ParentCommentId = request.ParentCommentId,
+                            Content = content,
+                            Source = "ExternalFeedback",
+                            RecordedByEmployeeId = employeeId,
+                            State =
+                                (byte)ContractNegotiationCommentState.Open,
+                            CreatedDate = now
+                        };
+
+                        _dbContext.TblContractNegotiationComments
+                            .Add(comment);
+
+                        var createdEvent =
+                            new TblContractNegotiationCommentEvent
+                            {
+                                EventType =
+                                    (byte)ContractNegotiationCommentEventType
+                                        .Created,
+                                EmployeeId = employeeId,
+                                OccurredAt = now
+                            };
+
+                        _contractAuditWriter.StageEmployeeAudits(
+                        [
+                            new EmployeeContractAuditWriteRequest(
+                                contract.ContractId,
+                                version.VersionId,
+                                employeeId,
+                                request.ParentCommentId.HasValue
+                                    ? ContractAuditActionTypes
+                                        .NegotiationReplyCreated
+                                    : ContractAuditActionTypes
+                                        .ExternalFeedbackCreated,
+                                ContractAuditResults.Succeeded,
+                                now)
+                        ]);
+
+                        SetSyntheticCommentRowVersionIfNeeded(comment);
+                        await _dbContext.SaveChangesAsync();
+
+                        // Event không có physical FK nên phải gán ID trước khi lưu.
+                        createdEvent.CommentId = comment.CommentId;
+                        _dbContext.TblContractNegotiationCommentEvents
+                            .Add(createdEvent);
+                        await _dbContext.SaveChangesAsync();
+
+                        await transaction.CommitAsync();
+                        return await MapCommentResponseAsync(comment);
+                    }
+                    catch (DbUpdateConcurrencyException exception)
+                    {
+                        await RollbackAndClearAsync(transaction);
+                        await PersistNegotiationCommentConflictAuditAsync(
+                            contractId,
+                            request.CurrentVersionId,
+                            employeeId,
+                            DateTime.UtcNow);
+
+                        throw new DbUpdateConcurrencyException(
+                            "Comment không thể ghi vì Contract hoặc Version đã thay đổi.",
+                            exception);
+                    }
+                    catch
+                    {
+                        await RollbackAndClearAsync(transaction);
+                        throw;
+                    }
+                });
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+        }
+
+        public Task<ContractNegotiationCommentResponse>
+            RecordExternalFeedbackAsync(
+                int contractId,
+                CreateContractNegotiationCommentRequest request,
+                int employeeId)
+        {
+            return CreateExternalFeedbackAsync(
+                contractId,
+                request,
+                employeeId);
+        }
+
+        public async Task<ContractNegotiationCommentResponse>
+            ResolveCommentAsync(
+                int contractId,
+                int commentId,
+                UpdateContractNegotiationCommentStateRequest request,
+                int employeeId)
+        {
+            return await ChangeCommentStateAsync(
+                contractId,
+                commentId,
+                request,
+                employeeId,
+                ContractNegotiationCommentState.Resolved,
+                ContractNegotiationCommentEventType.Resolved,
+                ContractAuditActionTypes.NegotiationCommentResolved);
+        }
+
+        public Task<ContractNegotiationCommentResponse>
+            ResolveNegotiationCommentAsync(
+                int contractId,
+                int commentId,
+                UpdateContractNegotiationCommentStateRequest request,
+                int employeeId)
+        {
+            return ResolveCommentAsync(
+                contractId,
+                commentId,
+                request,
+                employeeId);
+        }
+
+        public async Task<ContractNegotiationCommentResponse>
+            ReopenCommentAsync(
+                int contractId,
+                int commentId,
+                UpdateContractNegotiationCommentStateRequest request,
+                int employeeId)
+        {
+            return await ChangeCommentStateAsync(
+                contractId,
+                commentId,
+                request,
+                employeeId,
+                ContractNegotiationCommentState.Open,
+                ContractNegotiationCommentEventType.Reopened,
+                ContractAuditActionTypes.NegotiationCommentReopened);
+        }
+
+        public Task<ContractNegotiationCommentResponse>
+            ReopenNegotiationCommentAsync(
+                int contractId,
+                int commentId,
+                UpdateContractNegotiationCommentStateRequest request,
+                int employeeId)
+        {
+            return ReopenCommentAsync(
+                contractId,
+                commentId,
+                request,
+                employeeId);
+        }
+
+        public async Task<IReadOnlyList<ContractVersionHistoryResponse>>
+            GetVersionHistoryAsync(
+                int contractId,
+                int employeeId)
+        {
+            ValidateContractEmployee(contractId, employeeId);
+
+            var contract = await _dbContext.TblContracts
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.ContractId == contractId
+                    && x.EmployeeId == employeeId);
+
+            if (contract == null)
+            {
+                throw new KeyNotFoundException(
+                    "Không tìm thấy hợp đồng.");
+            }
+
+            EnsureNegotiationHistoryReadState(contract);
+
+            return await _dbContext.TblContractVersions
+                .AsNoTracking()
+                .Where(x => x.ContractId == contractId)
+                .OrderBy(x => x.VersionNo)
+                .ThenBy(x => x.VersionId)
+                .Select(x => new ContractVersionHistoryResponse
+                {
+                    VersionId = x.VersionId,
+                    VersionNo = x.VersionNo,
+                    SourceVersionId = x.SourceVersionId,
+                    ChangeNote = x.ChangeNote,
+                    IsLocked = x.IsLocked,
+                    LockedDate = x.LockedDate,
+                    LockedByEmployeeId = x.LockedByEmployeeId,
+                    CreatedEmployeeId = x.CreatedEmployeeId,
+                    CreatedDate = x.CreatedDate,
+                    RowVersion = EncodeRowVersion(x.RowVersion)
+                })
+                .ToListAsync();
+        }
+
+        public async Task<ContractVersionDetailResponse>
+            GetVersionDetailAsync(
+                int contractId,
+                int versionId,
+                int employeeId)
+        {
+            ValidateContractEmployee(contractId, employeeId);
+
+            var contract = await _dbContext.TblContracts
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.ContractId == contractId
+                    && x.EmployeeId == employeeId);
+
+            if (contract == null)
+            {
+                throw new KeyNotFoundException(
+                    "Không tìm thấy hợp đồng.");
+            }
+
+            EnsureNegotiationHistoryReadState(contract);
+
+            var version = await _dbContext.TblContractVersions
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.ContractId == contractId
+                    && x.VersionId == versionId);
+
+            if (version == null)
+            {
+                throw new KeyNotFoundException(
+                    "Không tìm thấy version của hợp đồng.");
+            }
+
+            var items = await _dbContext.TblContractItems
+                .AsNoTracking()
+                .Where(x =>
+                    x.ContractId == contractId
+                    && x.VersionId == versionId)
+                .OrderBy(x => x.DisplayOrder)
+                .ThenBy(x => x.ContractItemId)
+                .ToListAsync();
+
+            var terms = await _dbContext.TblContractTerms
+                .AsNoTracking()
+                .Where(x =>
+                    x.ContractId == contractId
+                    && x.VersionId == versionId)
+                .OrderBy(x => x.DisplayOrder)
+                .ThenBy(x => x.TermId)
+                .ToListAsync();
+
+            return new ContractVersionDetailResponse
+            {
+                VersionId = version.VersionId,
+                VersionNo = version.VersionNo,
+                SourceVersionId = version.SourceVersionId,
+                TemplateVersionId = version.TemplateVersionId,
+                ChangeNote = version.ChangeNote,
+                CurrencyCode = version.CurrencyCode,
+                Subtotal = version.Subtotal,
+                TotalDiscount = version.TotalDiscount,
+                TotalVat = version.TotalVat,
+                TotalPayment = version.TotalAmount,
+                SnapshotHash = version.SnapshotHash,
+                IsLocked = version.IsLocked,
+                LockedDate = version.LockedDate,
+                LockedByEmployeeId = version.LockedByEmployeeId,
+                CreatedEmployeeId = version.CreatedEmployeeId,
+                CreatedDate = version.CreatedDate,
+                RowVersion = EncodeRowVersion(version.RowVersion),
+                Items = items.Select(MapItemDetail).ToList(),
+                Terms = terms.Select(MapTermDetail).ToList(),
+                Comments = await LoadCommentResponsesAsync(
+                    contractId,
+                    versionId)
+            };
+        }
+
+        private async Task<ContractNegotiationCommentResponse>
+            ChangeCommentStateAsync(
+                int contractId,
+                int commentId,
+                UpdateContractNegotiationCommentStateRequest request,
+                int employeeId,
+                ContractNegotiationCommentState targetState,
+                ContractNegotiationCommentEventType eventType,
+                string auditActionType)
+        {
+            ValidateCommentStateRequest(
+                contractId,
+                commentId,
+                request,
+                employeeId);
+
+            var expectedRowVersion = DecodeRowVersion(
+                request.RowVersion,
+                nameof(request.RowVersion));
+            var strategy = _dbContext.Database.CreateExecutionStrategy();
+            TblContractNegotiationComment? comment = null;
+
+            return await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction =
+                    await _dbContext.Database.BeginTransactionAsync();
+
+                try
+                {
+                    var contract = await _dbContext.TblContracts
+                        .FirstOrDefaultAsync(x =>
+                            x.ContractId == contractId);
+
+                    if (contract == null)
+                    {
+                        throw new KeyNotFoundException(
+                            "Không tìm thấy hợp đồng.");
+                    }
+
+                    comment = await _dbContext
+                        .TblContractNegotiationComments
+                        .FirstOrDefaultAsync(x =>
+                            x.CommentId == commentId
+                            && x.ContractId == contractId);
+
+                    if (comment == null)
+                    {
+                        throw new KeyNotFoundException(
+                            "Không tìm thấy comment của hợp đồng.");
+                    }
+
+                    if (contract.EmployeeId != employeeId)
+                    {
+                        throw new DbUpdateConcurrencyException(
+                            "Người phụ trách hợp đồng đã thay đổi.");
+                    }
+
+                    EnsureNegotiationCommentWriteState(contract);
+
+                    if (!contract.CurrentVersionId.HasValue
+                        || contract.CurrentVersionId.Value !=
+                        comment.VersionId)
+                    {
+                        throw new DbUpdateConcurrencyException(
+                            "Version nguồn của comment không còn là Current Version.");
+                    }
+
+                    var version = await _dbContext.TblContractVersions
+                        .FirstOrDefaultAsync(x =>
+                            x.ContractId == contractId
+                            && x.VersionId == comment!.VersionId);
+
+                    if (version == null)
+                    {
+                        throw new DbUpdateConcurrencyException(
+                            "Không tìm thấy Version nguồn của comment.");
+                    }
+
+                    if (version.IsLocked)
+                    {
+                        throw new DbUpdateConcurrencyException(
+                            "Version nguồn của comment đã bị khóa.");
+                    }
+
+                    EnsureRowVersionMatches(
+                        comment.RowVersion,
+                        expectedRowVersion,
+                        "Comment");
+
+                    if (comment.State == (byte)targetState)
+                    {
+                        throw new DbUpdateConcurrencyException(
+                            "Trạng thái comment đã được xử lý bởi request khác.");
+                    }
+
+                    _dbContext.Entry(comment)
+                        .Property(x => x.RowVersion)
+                        .OriginalValue = expectedRowVersion;
+
+                    var now = DateTime.UtcNow;
+                    var previousState = comment.State;
+                    comment.State = (byte)targetState;
+                    comment.UpdatedDate = now;
+
+                    _dbContext.TblContractNegotiationCommentEvents.Add(
+                        new TblContractNegotiationCommentEvent
+                        {
+                            CommentId = comment.CommentId,
+                            EventType = (byte)eventType,
+                            EmployeeId = employeeId,
+                            OccurredAt = now
+                        });
+
+                    _contractAuditWriter.StageEmployeeAudits(
+                    [
+                        new EmployeeContractAuditWriteRequest(
+                            contract.ContractId,
+                            comment.VersionId,
+                            employeeId,
+                            auditActionType,
+                            ContractAuditResults.Succeeded,
+                            now,
+                            PreviousContractStatus: contract.Status,
+                            NewContractStatus: contract.Status)
+                    ]);
+
+                    RotateCommentRowVersionForInMemory(
+                        comment,
+                        expectedRowVersion);
+                    await _dbContext.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                    _ = previousState;
+                    return await MapCommentResponseAsync(comment);
+                }
+                catch (DbUpdateConcurrencyException exception)
+                {
+                    var versionId = comment?.VersionId;
+                    await RollbackAndClearAsync(transaction);
+                    await PersistNegotiationCommentConflictAuditAsync(
+                        contractId,
+                        versionId,
+                        employeeId,
+                        DateTime.UtcNow);
+
+                    throw new DbUpdateConcurrencyException(
+                        "Comment đã được cập nhật hoặc không còn đủ điều kiện lifecycle.",
+                        exception);
+                }
+                catch
+                {
+                    await RollbackAndClearAsync(transaction);
+                    throw;
+                }
+            });
+        }
+
+        private async Task PersistNegotiationCommentConflictAuditAsync(
+            int contractId,
+            int? versionId,
+            int actorEmployeeId,
+            DateTime occurredAt)
+        {
+            var strategy = _dbContext.Database.CreateExecutionStrategy();
+
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction =
+                    await _dbContext.Database.BeginTransactionAsync();
+
+                try
+                {
+                    _contractAuditWriter.StageEmployeeAudits(
+                    [
+                        new EmployeeContractAuditWriteRequest(
+                            contractId,
+                            versionId,
+                            actorEmployeeId,
+                            ContractAuditActionTypes.ConcurrencyConflict,
+                            ContractAuditResults.ConcurrencyConflict,
+                            occurredAt)
+                    ]);
+
+                    await _dbContext.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                }
+                catch
+                {
+                    await RollbackAndClearAsync(transaction);
+                    throw;
+                }
+            });
+        }
+
+        private async Task RollbackAndClearAsync(
+            Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction
+                transaction)
+        {
+            try
+            {
+                await transaction.RollbackAsync();
+            }
+            finally
+            {
+                _dbContext.ChangeTracker.Clear();
+            }
+        }
+
+        private async Task<List<ContractNegotiationCommentResponse>>
+            LoadCommentResponsesAsync(
+                int contractId,
+                int versionId)
+        {
+            var comments = await _dbContext
+                .TblContractNegotiationComments
+                .AsNoTracking()
+                .Where(x =>
+                    x.ContractId == contractId
+                    && x.VersionId == versionId)
+                .OrderBy(x => x.CreatedDate)
+                .ThenBy(x => x.CommentId)
+                .ToListAsync();
+
+            if (comments.Count == 0)
+            {
+                return [];
+            }
+
+            var commentIds = comments
+                .Select(x => x.CommentId)
+                .ToList();
+
+            var events = await _dbContext
+                .TblContractNegotiationCommentEvents
+                .AsNoTracking()
+                .Where(x => commentIds.Contains(x.CommentId))
+                .OrderBy(x => x.OccurredAt)
+                .ThenBy(x => x.CommentEventId)
+                .ToListAsync();
+
+            return comments
+                .Select(comment => MapCommentResponse(
+                    comment,
+                    events.Where(x =>
+                        x.CommentId == comment.CommentId)))
+                .ToList();
+        }
+
+        private async Task<ContractNegotiationCommentResponse>
+            MapCommentResponseAsync(
+                TblContractNegotiationComment comment)
+        {
+            var events = await _dbContext
+                .TblContractNegotiationCommentEvents
+                .AsNoTracking()
+                .Where(x => x.CommentId == comment.CommentId)
+                .OrderBy(x => x.OccurredAt)
+                .ThenBy(x => x.CommentEventId)
+                .ToListAsync();
+
+            return MapCommentResponse(comment, events);
+        }
+
+        private static ContractNegotiationCommentResponse
+            MapCommentResponse(
+                TblContractNegotiationComment comment,
+                IEnumerable<TblContractNegotiationCommentEvent> events)
+        {
+            return new ContractNegotiationCommentResponse
+            {
+                CommentId = comment.CommentId,
+                ContractId = comment.ContractId,
+                VersionId = comment.VersionId,
+                TermId = comment.TermId,
+                ParentCommentId = comment.ParentCommentId,
+                Content = comment.Content,
+                Source = comment.Source,
+                ExternalFeedback = comment.ExternalFeedback,
+                RecordedByEmployeeId = comment.RecordedByEmployeeId,
+                State = (ContractNegotiationCommentState)comment.State,
+                CreatedDate = comment.CreatedDate,
+                UpdatedDate = comment.UpdatedDate,
+                RowVersion = EncodeRowVersion(comment.RowVersion),
+                Events = events
+                    .OrderBy(x => x.OccurredAt)
+                    .ThenBy(x => x.CommentEventId)
+                    .Select(x => new ContractNegotiationCommentEventResponse
+                    {
+                        CommentEventId = x.CommentEventId,
+                        CommentId = x.CommentId,
+                        EventType =
+                            (ContractNegotiationCommentEventType)x.EventType,
+                        EmployeeId = x.EmployeeId,
+                        OccurredAt = x.OccurredAt
+                    })
+                    .ToList()
+            };
+        }
+
+        private static ContractItemDetailResponse MapItemDetail(
+            TblContractItem item)
+        {
+            return new ContractItemDetailResponse
+            {
+                ContractItemId = item.ContractItemId,
+                ItemType = (ContractItemType)item.ItemType,
+                SourceProductId = item.SourceProductId,
+                SourceServiceId = item.SourceServiceId,
+                ItemCode = item.ItemCode,
+                ItemName = item.ItemName,
+                ItemNameEn = item.ItemNameEn,
+                ItemDescription = item.ItemDescription,
+                ItemDescriptionEn = item.ItemDescriptionEn,
+                UnitName = item.UnitName,
+                UnitNameEn = item.UnitNameEn,
+                Quantity = item.Quantity,
+                UnitPrice = item.UnitPrice,
+                LineSubtotal = item.LineSubtotal,
+                DiscountMode = (ContractItemDiscountMode)item.DiscountMode,
+                DiscountPercent = item.DiscountPercent,
+                FixedDiscountAmount = item.FixedDiscountAmount,
+                DiscountAmount = item.DiscountAmount,
+                IsTaxable = item.IsTaxable,
+                VatPercent = item.VatPercent,
+                VatAmount = item.VatAmount,
+                LineTotal = item.LineTotal,
+                DisplayOrder = item.DisplayOrder,
+                RowVersion = EncodeRowVersion(item.RowVersion)
+            };
+        }
+
+        private static ContractTermDetailResponse MapTermDetail(
+            TblContractTerm term)
+        {
+            return new ContractTermDetailResponse
+            {
+                TermId = term.TermId,
+                SourceTemplateTermId = term.SourceTemplateTermId,
+                TermCode = term.TermCode,
+                TermTitle = term.TermTitle,
+                TermTitleEn = term.TermTitleEn,
+                TermContent = term.TermContent,
+                TermContentEn = term.TermContentEn,
+                IsNegotiable = term.IsNegotiable,
+                DisplayOrder = term.DisplayOrder,
+                RowVersion = EncodeRowVersion(term.RowVersion)
+            };
+        }
+
+        private static void ValidateCommentCreateRequest(
+            int contractId,
+            CreateContractNegotiationCommentRequest request,
+            int employeeId)
+        {
+            if (contractId <= 0)
+            {
+                throw new ArgumentException(
+                    "ContractId phải lớn hơn 0.");
+            }
+
+            if (employeeId <= 0)
+            {
+                throw new UnauthorizedAccessException(
+                    "Không xác định được nhân viên đăng nhập.");
+            }
+
+            ArgumentNullException.ThrowIfNull(request);
+
+            if (request.CurrentVersionId <= 0)
+            {
+                throw new ArgumentException(
+                    "CurrentVersionId phải lớn hơn 0.");
+            }
+
+            if (request.TermId is <= 0)
+            {
+                throw new ArgumentException(
+                    "TermId phải lớn hơn 0 nếu được truyền.");
+            }
+
+            if (request.ParentCommentId is <= 0)
+            {
+                throw new ArgumentException(
+                    "ParentCommentId phải lớn hơn 0 nếu được truyền.");
+            }
+
+            var content = request.Content?.Trim();
+
+            if (string.IsNullOrWhiteSpace(content)
+                || content.Length > 4000)
+            {
+                throw new ArgumentException(
+                    "Content bắt buộc và không vượt quá 4000 ký tự.");
+            }
+        }
+
+        private static void ValidateCommentStateRequest(
+            int contractId,
+            int commentId,
+            UpdateContractNegotiationCommentStateRequest request,
+            int employeeId)
+        {
+            if (contractId <= 0 || commentId <= 0)
+            {
+                throw new ArgumentException(
+                    "ContractId và CommentId phải lớn hơn 0.");
+            }
+
+            if (employeeId <= 0)
+            {
+                throw new UnauthorizedAccessException(
+                    "Không xác định được nhân viên đăng nhập.");
+            }
+
+            ArgumentNullException.ThrowIfNull(request);
+        }
+
+        private static void ValidateContractEmployee(
+            int contractId,
+            int employeeId)
+        {
+            if (contractId <= 0)
+            {
+                throw new ArgumentException(
+                    "ContractId phải lớn hơn 0.");
+            }
+
+            if (employeeId <= 0)
+            {
+                throw new UnauthorizedAccessException(
+                    "Không xác định được nhân viên đăng nhập.");
+            }
+        }
+
+        private static void EnsureNegotiationCommentWriteState(
+            TblContract contract)
+        {
+            var status = (ContractStatus)contract.Status;
+
+            if (status == ContractStatus.Cancelled
+                || status != ContractStatus.Negotiating)
+            {
+                throw new InvalidOperationException(
+                    "Chỉ Contract đang Negotiating mới hỗ trợ comment đàm phán.");
+            }
+        }
+
+        private static void EnsureNegotiationHistoryReadState(
+            TblContract contract)
+        {
+            var status = (ContractStatus)contract.Status;
+
+            if (status == ContractStatus.Cancelled
+                || status != ContractStatus.Negotiating)
+            {
+                throw new InvalidOperationException(
+                    "Chỉ Contract đang Negotiating mới hỗ trợ xem Version history.");
+            }
+        }
+
+        private void SetSyntheticCommentRowVersionIfNeeded(
+            TblContractNegotiationComment comment)
+        {
+            if (_dbContext.Database.ProviderName ==
+                "Microsoft.EntityFrameworkCore.InMemory"
+                && comment.RowVersion is not { Length: 8 })
+            {
+                comment.RowVersion = BitConverter.GetBytes(
+                    Interlocked.Increment(
+                        ref _syntheticCommentRowVersionSeed));
+            }
+        }
+
+        private void RotateCommentRowVersionForInMemory(
+            TblContractNegotiationComment comment,
+            byte[] expectedRowVersion)
+        {
+            if (_dbContext.Database.ProviderName ==
+                "Microsoft.EntityFrameworkCore.InMemory")
+            {
+                comment.RowVersion = BitConverter.GetBytes(
+                    Interlocked.Increment(
+                        ref _syntheticCommentRowVersionSeed));
+            }
+            else
+            {
+                _dbContext.Entry(comment)
+                    .Property(x => x.RowVersion)
+                    .OriginalValue = expectedRowVersion;
+            }
         }
 
         /// <summary>

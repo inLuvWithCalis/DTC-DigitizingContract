@@ -13,6 +13,19 @@ public static class ContractAuditActionTypes
         "ResponsibilityTransferred";
     public const string NegotiationRoundCreated =
         "NegotiationRoundCreated";
+    public const string ExternalFeedbackCreated =
+        "ExternalFeedbackCreated";
+    public const string ExternalFeedbackRecorded =
+        ExternalFeedbackCreated;
+    public const string NegotiationReplyCreated =
+        "NegotiationReplyCreated";
+    public const string NegotiationCommentReplyCreated =
+        NegotiationReplyCreated;
+    public const string NegotiationCommentResolved =
+        "NegotiationCommentResolved";
+    public const string NegotiationCommentReopened =
+        "NegotiationCommentReopened";
+    public const string ConcurrencyConflict = "ConcurrencyConflict";
 }
 
 public static class ContractAuditResults

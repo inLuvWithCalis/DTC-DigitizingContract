@@ -28,6 +28,12 @@ public partial class DbDtctechContext : DbContext
 
     public virtual DbSet<TblContractAudit> TblContractAudits { get; set; }
 
+    public virtual DbSet<TblContractNegotiationComment>
+        TblContractNegotiationComments { get; set; }
+
+    public virtual DbSet<TblContractNegotiationCommentEvent>
+        TblContractNegotiationCommentEvents { get; set; }
+
     public virtual DbSet<TblContractAppendix> TblContractAppendices { get; set; }
 
     public virtual DbSet<TblContractAttachment> TblContractAttachments { get; set; }
@@ -432,6 +438,131 @@ public partial class DbDtctechContext : DbContext
             entity.Property(e => e.CorrelationId)
                 .HasMaxLength(100)
                 .IsUnicode(false);
+        });
+
+        modelBuilder.Entity<TblContractNegotiationComment>(entity =>
+        {
+            entity.HasKey(e => e.CommentId)
+                .HasName("PK_tbl_ContractNegotiationComment");
+
+            entity.ToTable("tbl_ContractNegotiationComment", table =>
+            {
+                table.HasTrigger(
+                    "TR_tbl_ContractNegotiationComment_AppendOnly");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractNegotiationComment_ContractId",
+                    "[ContractId] > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractNegotiationComment_VersionId",
+                    "[VersionId] > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractNegotiationComment_TermId",
+                    "[TermId] IS NULL OR [TermId] > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractNegotiationComment_ParentCommentId",
+                    "[ParentCommentId] IS NULL OR [ParentCommentId] > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractNegotiationComment_Content",
+                    "LEN(LTRIM(RTRIM([Content]))) BETWEEN 1 AND 4000");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractNegotiationComment_Source",
+                    "[Source] = 'ExternalFeedback'");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractNegotiationComment_RecordedByEmployeeId",
+                    "[RecordedByEmployeeId] > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractNegotiationComment_State",
+                    "[State] IN (0, 1)");
+            });
+
+            entity.HasIndex(e => new
+            {
+                e.ContractId,
+                e.VersionId,
+                e.CreatedDate,
+                e.CommentId
+            })
+                .HasDatabaseName(
+                    "IX_tbl_ContractNegotiationComment_Version_Chronological");
+
+            entity.HasIndex(e => e.ParentCommentId)
+                .HasDatabaseName(
+                    "IX_tbl_ContractNegotiationComment_ParentCommentId");
+
+            entity.HasIndex(e => e.TermId)
+                .HasDatabaseName("IX_tbl_ContractNegotiationComment_TermId");
+
+            entity.Property(e => e.Content)
+                .HasColumnType("nvarchar(4000)")
+                .IsRequired();
+
+            entity.Property(e => e.Source)
+                .HasMaxLength(32)
+                .IsUnicode(false)
+                .HasDefaultValue("ExternalFeedback");
+
+            entity.Property(e => e.CreatedDate)
+                .HasColumnType("datetime2")
+                .HasDefaultValueSql(
+                    "(sysutcdatetime())",
+                    "DF_tbl_ContractNegotiationComment_CreatedDate");
+
+            entity.Property(e => e.UpdatedDate)
+                .HasColumnType("datetime2");
+
+            entity.Property(e => e.State)
+                .HasDefaultValue((byte)0);
+
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+        });
+
+        modelBuilder.Entity<TblContractNegotiationCommentEvent>(entity =>
+        {
+            entity.HasKey(e => e.CommentEventId)
+                .HasName("PK_tbl_ContractNegotiationCommentEvent");
+
+            entity.ToTable("tbl_ContractNegotiationCommentEvent", table =>
+            {
+                table.HasTrigger(
+                    "TR_tbl_ContractNegotiationCommentEvent_AppendOnly");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractNegotiationCommentEvent_CommentId",
+                    "[CommentId] > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractNegotiationCommentEvent_EventType",
+                    "[EventType] IN (1, 2, 3)");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractNegotiationCommentEvent_EmployeeId",
+                    "[EmployeeId] > 0");
+            });
+
+            entity.HasIndex(e => new
+            {
+                e.CommentId,
+                e.OccurredAt,
+                e.CommentEventId
+            })
+                .HasDatabaseName(
+                    "IX_tbl_ContractNegotiationCommentEvent_Chronological");
+
+            entity.Property(e => e.OccurredAt)
+                .HasColumnType("datetime2")
+                .HasDefaultValueSql(
+                    "(sysutcdatetime())",
+                    "DF_tbl_ContractNegotiationCommentEvent_OccurredAt");
         });
 
         modelBuilder.Entity<TblContractAppendix>(entity =>

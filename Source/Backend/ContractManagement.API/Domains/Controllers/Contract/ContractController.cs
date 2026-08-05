@@ -4,6 +4,7 @@ using ContractManagement.API.Domains.DTOs.Responses.Contract;
 using ContractManagement.Domains.Interfaces.Contract;
 using ContractManagement.Filter;
 using Microsoft.AspNetCore.Mvc;
+using System.Xml.Linq;
 
 namespace ContractManagement.Domains.Controllers.Contract
 {
@@ -375,6 +376,191 @@ namespace ContractManagement.Domains.Controllers.Contract
                 ApiResponse<CreateContractNegotiationRoundResponse>.Ok(
                     result,
                     "Tạo vòng đàm phán mới thành công."));
+        }
+
+        /// <summary>
+        /// Customer gửi feedback (general và term feedback) về hợp đồng đang đàm phán.
+        /// Employee có thể xem feedback này nhưng không được chỉnh sửa.
+        /// </summary>
+        [HttpPost("{contractId:int}/comments/external-feedback")]
+        [Consumes("application/json")]
+        [Produces("application/json")]
+        [ProducesResponseType(
+            typeof(ApiResponse<ContractNegotiationCommentResponse>),
+            StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> CreateExternalFeedback(
+            int contractId,
+            [FromBody] CreateExternalFeedbackRequest request)
+        {
+            var employeeId =
+                HttpContext.Session.GetInt32("EmployeeId");
+
+            if (employeeId is null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Bạn chưa đăng nhập hoặc session đã hết hạn.");
+            }
+
+            var result = await _contractService
+                .CreateExternalFeedbackAsync(
+                    contractId,
+                    request,
+                    employeeId.Value);
+
+            return Ok(
+                ApiResponse<ContractNegotiationCommentResponse>.Ok(
+                    result,
+                    "Ghi nhận external feedback thành công."));
+        }
+
+        /// <summary>
+        /// Resolve một comment cụ thể và thêm event Resolved. 
+        /// </summary>
+        [HttpPost("{contractId:int}/comments/{commentId:int}/resolve")]
+        [Consumes("application/json")]
+        [Produces("application/json")]
+        [ProducesResponseType(
+            typeof(ApiResponse<ContractNegotiationCommentResponse>),
+            StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> ResolveComment(
+            int contractId,
+            int commentId,
+            [FromBody] ResolveContractNegotiationCommentRequest request)
+        {
+            var employeeId =
+                HttpContext.Session.GetInt32("EmployeeId");
+
+            if (employeeId is null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Bạn chưa đăng nhập hoặc session đã hết hạn.");
+            }
+
+            var result = await _contractService.ResolveCommentAsync(
+                contractId,
+                commentId,
+                request,
+                employeeId.Value);
+
+            return Ok(
+                ApiResponse<ContractNegotiationCommentResponse>.Ok(
+                    result,
+                    "Resolve comment thành công."));
+        }
+
+        /// <summary>
+        /// Reopen một comment đã resolved và thêm event Reopened. 
+        /// </summary>
+        [HttpPost("{contractId:int}/comments/{commentId:int}/reopen")]
+        [Consumes("application/json")]
+        [Produces("application/json")]
+        [ProducesResponseType(
+            typeof(ApiResponse<ContractNegotiationCommentResponse>),
+            StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> ReopenComment(
+            int contractId,
+            int commentId,
+            [FromBody] ReopenContractNegotiationCommentRequest request)
+        {
+            var employeeId =
+                HttpContext.Session.GetInt32("EmployeeId");
+
+            if (employeeId is null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Bạn chưa đăng nhập hoặc session đã hết hạn.");
+            }
+
+            var result = await _contractService.ReopenCommentAsync(
+                contractId,
+                commentId,
+                request,
+                employeeId.Value);
+
+            return Ok(
+                ApiResponse<ContractNegotiationCommentResponse>.Ok(
+                    result,
+                    "Reopen comment thành công."));
+        }
+
+        /// <summary>
+        /// Lấy danh sách Version để employee xem lịch sử negotiation.
+        /// </summary>
+        [HttpGet("{contractId:int}/versions")]
+        [ProducesResponseType(
+            typeof(ApiResponse<IReadOnlyList<ContractVersionHistoryResponse>>),
+            StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetVersionHistory(int contractId)
+        {
+            var employeeId =
+                HttpContext.Session.GetInt32("EmployeeId");
+
+            if (employeeId is null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Bạn chưa đăng nhập hoặc session đã hết hạn.");
+            }
+
+            var result = await _contractService.GetVersionHistoryAsync(
+                contractId,
+                employeeId.Value);
+
+            return Ok(
+                ApiResponse<IReadOnlyList<ContractVersionHistoryResponse>>.Ok(
+                    result,
+                    "Lấy Version history thành công."));
+        }
+
+        /// <summary>
+        /// Xem chi tiết một Version cùng flat chronological comments và events (hiển thị bình luận theo một danh sách thẳng hàng).
+        /// </summary>
+        /// <param name="contractId"></param>
+        /// <param name="versionId"></param>
+        /// <returns></returns>
+        [HttpGet("{contractId:int}/versions/{versionId:int}")]
+        [ProducesResponseType(
+            typeof(ApiResponse<ContractVersionDetailResponse>),
+            StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetVersionDetail(
+            int contractId,
+            int versionId)
+        {
+            var employeeId =
+                HttpContext.Session.GetInt32("EmployeeId");
+
+            if (employeeId is null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Bạn chưa đăng nhập hoặc session đã hết hạn.");
+            }
+
+            var result = await _contractService.GetVersionDetailAsync(
+                contractId,
+                versionId,
+                employeeId.Value);
+
+            return Ok(
+                ApiResponse<ContractVersionDetailResponse>.Ok(
+                    result,
+                    "Lấy Version detail thành công."));
         }
 
         /// <summary>

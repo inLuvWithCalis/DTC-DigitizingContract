@@ -60,6 +60,12 @@ namespace ContractManagement.Domains.Interfaces.Contract
             StartContractNegotiationRequest request,
             int employeeId);
 
+        Task<CreateContractNegotiationRoundResponse>
+            CreateNegotiationRoundAsync(
+                int contractId,
+                CreateContractNegotiationRoundRequest request,
+                int employeeId);
+
         Task<SubmitContractForApprovalResponse> SubmitForApprovalAsync(
             int contractId,
             SubmitContractForApprovalRequest request,

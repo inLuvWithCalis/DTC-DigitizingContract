@@ -220,6 +220,11 @@ public partial class DbDtctechContext : DbContext
                 table.HasCheckConstraint(
                     "CK_tbl_Contract_TotalAmount",
                     "[TotalAmount] >= 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_Contract_FinancialTotals",
+                    "[Subtotal] >= 0 AND [TotalDiscount] >= 0 " +
+                    "AND [TotalVat] >= 0 AND [TotalAmount] >= 0");
             });
             /*
              * ContractCode có thể null khi còn Draft.
@@ -286,6 +291,18 @@ public partial class DbDtctechContext : DbContext
              * Tiền bắt buộc dùng decimal.
              */
             entity.Property(e => e.TotalAmount)
+                .HasPrecision(18, 2)
+                .HasDefaultValue(0m);
+
+            entity.Property(e => e.Subtotal)
+                .HasPrecision(18, 2)
+                .HasDefaultValue(0m);
+
+            entity.Property(e => e.TotalDiscount)
+                .HasPrecision(18, 2)
+                .HasDefaultValue(0m);
+
+            entity.Property(e => e.TotalVat)
                 .HasPrecision(18, 2)
                 .HasDefaultValue(0m);
 
@@ -1001,6 +1018,18 @@ public partial class DbDtctechContext : DbContext
                     "[DiscountPercent] >= 0 AND [DiscountPercent] <= 100");
 
                 table.HasCheckConstraint(
+                    "CK_tbl_ContractItem_DiscountMode",
+                    "[DiscountMode] IN (0, 1, 2)");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractItem_DiscountInputs",
+                    "([DiscountMode] = 0 AND [DiscountPercent] = 0 " +
+                    "AND [FixedDiscountAmount] = 0) OR " +
+                    "([DiscountMode] = 1 AND [FixedDiscountAmount] = 0) OR " +
+                    "([DiscountMode] = 2 AND [DiscountPercent] = 0 " +
+                    "AND [FixedDiscountAmount] <= [LineSubtotal])");
+
+                table.HasCheckConstraint(
                     "CK_tbl_ContractItem_DiscountAmount",
                     "[DiscountAmount] >= 0 AND [DiscountAmount] <= [LineSubtotal]");
 
@@ -1011,6 +1040,10 @@ public partial class DbDtctechContext : DbContext
                 table.HasCheckConstraint(
                     "CK_tbl_ContractItem_VatAmount",
                     "[VatAmount] >= 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractItem_TaxableVat",
+                    "[IsTaxable] = 1 OR ([VatPercent] = 0 AND [VatAmount] = 0)");
 
                 table.HasCheckConstraint(
                     "CK_tbl_ContractItem_LineTotal",
@@ -1090,6 +1123,17 @@ public partial class DbDtctechContext : DbContext
                     0m,
                     "DF_tbl_ContractItem_DiscountPercent");
 
+            entity.Property(e => e.DiscountMode)
+                .HasDefaultValue(
+                    (byte)0,
+                    "DF_tbl_ContractItem_DiscountMode");
+
+            entity.Property(e => e.FixedDiscountAmount)
+                .HasPrecision(18, 2)
+                .HasDefaultValue(
+                    0m,
+                    "DF_tbl_ContractItem_FixedDiscountAmount");
+
             entity.Property(e => e.DiscountAmount)
                 .HasPrecision(18, 2)
                 .HasDefaultValue(
@@ -1101,6 +1145,11 @@ public partial class DbDtctechContext : DbContext
                 .HasDefaultValue(
                     0m,
                     "DF_tbl_ContractItem_VatPercent");
+
+            entity.Property(e => e.IsTaxable)
+                .HasDefaultValue(
+                    true,
+                    "DF_tbl_ContractItem_IsTaxable");
 
             entity.Property(e => e.VatAmount)
                 .HasPrecision(18, 2)
@@ -1159,6 +1208,15 @@ public partial class DbDtctechContext : DbContext
                     "CK_tbl_ContractVersion_VersionNo",
                     "[VersionNo] > 0");
 
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractVersion_CurrencyCode",
+                    "[CurrencyCode] IN ('VND', 'USD')");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractVersion_FinancialTotals",
+                    "[Subtotal] >= 0 AND [TotalDiscount] >= 0 " +
+                    "AND [TotalVat] >= 0 AND [TotalAmount] >= 0");
+
                 /*
                  * Version chưa khóa:
                  * - không có LockedDate;
@@ -1194,6 +1252,28 @@ public partial class DbDtctechContext : DbContext
 
             entity.Property(e => e.ChangeNote)
                 .HasMaxLength(2000);
+
+            entity.Property(e => e.CurrencyCode)
+                .HasMaxLength(3)
+                .IsUnicode(false)
+                .IsFixedLength()
+                .HasDefaultValue("VND");
+
+            entity.Property(e => e.Subtotal)
+                .HasPrecision(18, 2)
+                .HasDefaultValue(0m);
+
+            entity.Property(e => e.TotalDiscount)
+                .HasPrecision(18, 2)
+                .HasDefaultValue(0m);
+
+            entity.Property(e => e.TotalVat)
+                .HasPrecision(18, 2)
+                .HasDefaultValue(0m);
+
+            entity.Property(e => e.TotalAmount)
+                .HasPrecision(18, 2)
+                .HasDefaultValue(0m);
 
             entity.Property(e => e.SnapshotJson)
                 .HasColumnType("nvarchar(max)");

@@ -106,15 +106,21 @@ public partial class TblContractItem
     /// </summary>
     public decimal LineSubtotal { get; set; }
 
+    public byte DiscountMode { get; set; }
+
     /// <summary>
     /// Phần trăm chiết khấu, từ 0 đến 100.
     /// </summary>
     public decimal DiscountPercent { get; set; }
 
+    public decimal FixedDiscountAmount { get; set; }
+
     /// <summary>
     /// Số tiền được chiết khấu.
     /// </summary>
     public decimal DiscountAmount { get; set; }
+
+    public bool IsTaxable { get; set; }
 
     /// <summary>
     /// Phần trăm VAT, từ 0 đến 100.

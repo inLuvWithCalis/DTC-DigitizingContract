@@ -31,6 +31,14 @@ namespace ContractManagement.API.Domains.DTOs.Responses.Contract
 
         public decimal TotalAmount { get; set; }
 
+        public decimal Subtotal { get; set; }
+
+        public decimal TotalDiscount { get; set; }
+
+        public decimal TotalVat { get; set; }
+
+        public decimal TotalPayment { get; set; }
+
         public string CurrencyCode { get; set; } = string.Empty;
 
         public ContractLanguageMode LanguageMode { get; set; }

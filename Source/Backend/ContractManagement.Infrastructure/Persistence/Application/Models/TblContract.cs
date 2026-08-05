@@ -67,6 +67,12 @@ public partial class TblContract
     /// </summary>
     public decimal TotalAmount { get; set; }
 
+    public decimal Subtotal { get; set; }
+
+    public decimal TotalDiscount { get; set; }
+
+    public decimal TotalVat { get; set; }
+
     /// <summary>
     /// Mã tiền tệ ISO 4217, ví dụ VND hoặc USD.
     /// </summary>

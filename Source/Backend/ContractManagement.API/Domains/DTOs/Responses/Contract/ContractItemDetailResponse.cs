@@ -35,9 +35,15 @@ namespace ContractManagement.API.Domains.DTOs.Responses.Contract
 
         public decimal LineSubtotal { get; set; }
 
+        public ContractItemDiscountMode DiscountMode { get; set; }
+
         public decimal DiscountPercent { get; set; }
 
+        public decimal FixedDiscountAmount { get; set; }
+
         public decimal DiscountAmount { get; set; }
+
+        public bool IsTaxable { get; set; }
 
         public decimal VatPercent { get; set; }
 

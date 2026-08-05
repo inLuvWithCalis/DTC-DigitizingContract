@@ -15,6 +15,16 @@
 
         public string? ChangeNote { get; set; }
 
+        public string CurrencyCode { get; set; } = string.Empty;
+
+        public decimal Subtotal { get; set; }
+
+        public decimal TotalDiscount { get; set; }
+
+        public decimal TotalVat { get; set; }
+
+        public decimal TotalPayment { get; set; }
+
         /// <summary>
         /// Hash được sinh khi version bị khóa.
         /// Draft hiện tại có thể chưa có hash.

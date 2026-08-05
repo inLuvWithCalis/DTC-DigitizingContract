@@ -378,6 +378,8 @@ namespace ContractManagement.Domains.Services.Contract
                     }
 
                     var now = DateTime.UtcNow;
+                    var currencyCode = NormalizeCurrencyCode(
+                        request.CurrencyCode);
 
                     /*
                      * Bước 1: Tạo Contract trước để SQL Server sinh ContractId.
@@ -411,10 +413,11 @@ namespace ContractManagement.Domains.Services.Contract
 
                         // Backend tính lại từ ContractItem.
                         TotalAmount = 0m,
+                        Subtotal = 0m,
+                        TotalDiscount = 0m,
+                        TotalVat = 0m,
 
-                        CurrencyCode = request.CurrencyCode
-                            .Trim()
-                            .ToUpperInvariant(),
+                        CurrencyCode = currencyCode,
 
                         LanguageMode = (byte)request.LanguageMode,
 
@@ -442,6 +445,11 @@ namespace ContractManagement.Domains.Services.Contract
                         SourceVersionId = null,
                         TemplateVersionId = request.TemplateVersionId,
                         ChangeNote = "Khởi tạo hợp đồng.",
+                        CurrencyCode = currencyCode,
+                        Subtotal = 0m,
+                        TotalDiscount = 0m,
+                        TotalVat = 0m,
+                        TotalAmount = 0m,
 
                         SnapshotJson = null,
                         SnapshotHash = null,
@@ -462,7 +470,7 @@ namespace ContractManagement.Domains.Services.Contract
                      * Không đọc lại tên hoặc giá từ catalog về sau.
                      */
                     var contractItems = new List<TblContractItem>();
-                    decimal totalAmount = 0m;
+                    var totals = ContractFinancialTotals.Zero;
 
                     for (var index = 0;
                          index < request.Items.Count;
@@ -470,15 +478,13 @@ namespace ContractManagement.Domains.Services.Contract
                     {
                         var requestItem = request.Items[index];
 
-                        var amounts = CalculateItemAmounts(requestItem);
+                        var amounts = CalculateItemAmounts(
+                            requestItem,
+                            currencyCode);
 
-                        if (totalAmount > MaxMoney - amounts.LineTotal)
-                        {
-                            throw new InvalidOperationException(
-                                "Tổng giá trị hợp đồng vượt quá giới hạn cho phép.");
-                        }
-
-                        totalAmount += amounts.LineTotal;
+                        totals = AddToContractTotals(
+                            totals,
+                            amounts);
 
                         contractItems.Add(new TblContractItem
                         {
@@ -515,12 +521,19 @@ namespace ContractManagement.Domains.Services.Contract
 
                             LineSubtotal = amounts.LineSubtotal,
 
+                            DiscountMode =
+                                (byte)requestItem.DiscountMode,
+
                             DiscountPercent =
                                 requestItem.DiscountPercent,
+
+                            FixedDiscountAmount =
+                                requestItem.FixedDiscountAmount,
 
                             DiscountAmount =
                                 amounts.DiscountAmount,
 
+                            IsTaxable = requestItem.IsTaxable,
                             VatPercent = requestItem.VatPercent,
                             VatAmount = amounts.VatAmount,
                             LineTotal = amounts.LineTotal,
@@ -575,7 +588,11 @@ namespace ContractManagement.Domains.Services.Contract
                     contract.CurrentVersionId =
                         contractVersion.VersionId;
 
-                    contract.TotalAmount = totalAmount;
+                    ApplyFinancialTotals(
+                        contract,
+                        contractVersion,
+                        currencyCode,
+                        totals);
 
                     _contractAuditWriter.StageEmployeeAudits(
                     [
@@ -627,6 +644,10 @@ namespace ContractManagement.Domains.Services.Contract
                             request.TemplateVersionId,
 
                         TotalAmount = contract.TotalAmount,
+                        Subtotal = contract.Subtotal,
+                        TotalDiscount = contract.TotalDiscount,
+                        TotalVat = contract.TotalVat,
+                        TotalPayment = contract.TotalAmount,
                         CurrencyCode = contract.CurrencyCode,
                         LanguageMode = request.LanguageMode,
 
@@ -1086,6 +1107,10 @@ namespace ContractManagement.Domains.Services.Contract
                 ExpireDate = contract.ExpireDate,
 
                 TotalAmount = contract.TotalAmount,
+                Subtotal = contract.Subtotal,
+                TotalDiscount = contract.TotalDiscount,
+                TotalVat = contract.TotalVat,
+                TotalPayment = contract.TotalAmount,
                 CurrencyCode = contract.CurrencyCode,
 
                 LanguageMode =
@@ -1136,6 +1161,11 @@ namespace ContractManagement.Domains.Services.Contract
                     SourceVersionId = version.SourceVersionId,
                     TemplateVersionId = version.TemplateVersionId,
                     ChangeNote = version.ChangeNote,
+                    CurrencyCode = version.CurrencyCode,
+                    Subtotal = version.Subtotal,
+                    TotalDiscount = version.TotalDiscount,
+                    TotalVat = version.TotalVat,
+                    TotalPayment = version.TotalAmount,
                     SnapshotHash = version.SnapshotHash,
 
                     IsLocked = version.IsLocked,
@@ -1170,10 +1200,18 @@ namespace ContractManagement.Domains.Services.Contract
                             UnitPrice = item.UnitPrice,
                             LineSubtotal = item.LineSubtotal,
 
+                            DiscountMode =
+                                (ContractItemDiscountMode)
+                                    item.DiscountMode,
+
                             DiscountPercent =
                                 item.DiscountPercent,
 
+                            FixedDiscountAmount =
+                                item.FixedDiscountAmount,
+
                             DiscountAmount = item.DiscountAmount,
+                            IsTaxable = item.IsTaxable,
                             VatPercent = item.VatPercent,
                             VatAmount = item.VatAmount,
                             LineTotal = item.LineTotal,
@@ -1344,6 +1382,7 @@ namespace ContractManagement.Domains.Services.Contract
 
                     await ValidateCatalogSourcesAsync(
                         request.Items
+                            .Where(x => !x.ContractItemId.HasValue)
                             .Cast<CreateContractItemRequest>()
                             .ToList());
 
@@ -1376,7 +1415,9 @@ namespace ContractManagement.Domains.Services.Contract
                         .ToHashSet();
 
                     var now = DateTime.UtcNow;
-                    decimal totalAmount = 0m;
+                    var currencyCode = NormalizeCurrencyCode(
+                        request.CurrencyCode);
+                    var totals = ContractFinancialTotals.Zero;
 
                     /*
                      * Thêm mới hoặc cập nhật Items.
@@ -1386,15 +1427,13 @@ namespace ContractManagement.Domains.Services.Contract
                          index++)
                     {
                         var requestItem = request.Items[index];
-                        var amounts = CalculateItemAmounts(requestItem);
+                        var amounts = CalculateItemAmounts(
+                            requestItem,
+                            currencyCode);
 
-                        if (totalAmount > MaxMoney - amounts.LineTotal)
-                        {
-                            throw new InvalidOperationException(
-                                "Tổng giá trị hợp đồng vượt giới hạn.");
-                        }
-
-                        totalAmount += amounts.LineTotal;
+                        totals = AddToContractTotals(
+                            totals,
+                            amounts);
 
                         TblContractItem item;
 
@@ -1422,6 +1461,20 @@ namespace ContractManagement.Domains.Services.Contract
                             _dbContext.Entry(item)
                                 .Property(x => x.RowVersion)
                                 .OriginalValue = expectedItemRowVersion;
+
+                            if (item.ItemType != (byte)requestItem.ItemType
+                                || item.SourceProductId != requestItem.SourceProductId
+                                || item.SourceServiceId != requestItem.SourceServiceId)
+                            {
+                                throw new InvalidOperationException(
+                                    "Không được thay đổi loại hoặc nguồn Catalog của item đã lưu.");
+                            }
+
+                            if (item.SourceProductId.HasValue
+                                || item.SourceServiceId.HasValue)
+                            {
+                                requestItem.ItemCode = item.ItemCode;
+                            }
 
                             item.UpdatedEmployeeId = employeeId;
                             item.UpdatedDate = now;
@@ -1571,11 +1624,11 @@ namespace ContractManagement.Domains.Services.Contract
                     contract.EffectiveDate = request.EffectiveDate;
                     contract.ExpireDate = request.ExpireDate;
 
-                    contract.CurrencyCode = request.CurrencyCode
-                        .Trim()
-                        .ToUpperInvariant();
-
-                    contract.TotalAmount = totalAmount;
+                    ApplyFinancialTotals(
+                        contract,
+                        version,
+                        currencyCode,
+                        totals);
                     contract.UpdatedEmployeeId = employeeId;
                     contract.UpdateDate = now;
 
@@ -1684,6 +1737,313 @@ namespace ContractManagement.Domains.Services.Contract
             }
 
             return await GetDetailAsync(contractId, employeeId);
+        }
+
+        public async Task<CreateContractNegotiationRoundResponse>
+            CreateNegotiationRoundAsync(
+                int contractId,
+                CreateContractNegotiationRoundRequest request,
+                int employeeId)
+        {
+            if (contractId <= 0)
+            {
+                throw new ArgumentException(
+                    "ContractId phải lớn hơn 0.");
+            }
+
+            if (employeeId <= 0)
+            {
+                throw new UnauthorizedAccessException(
+                    "Không xác định được nhân viên đăng nhập.");
+            }
+
+            ArgumentNullException.ThrowIfNull(request);
+
+            var changeNote = request.ChangeNote?.Trim();
+
+            if (string.IsNullOrWhiteSpace(changeNote)
+                || changeNote.Length > 2000)
+            {
+                throw new ArgumentException(
+                    "ChangeNote bắt buộc và không vượt quá 2000 ký tự.");
+            }
+
+            var expectedContractRowVersion = DecodeRowVersion(
+                request.RowVersion,
+                nameof(request.RowVersion));
+
+            var expectedVersionRowVersion = DecodeRowVersion(
+                request.CurrentVersionRowVersion,
+                nameof(request.CurrentVersionRowVersion));
+
+            var strategy = _dbContext.Database.CreateExecutionStrategy();
+
+            return await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction =
+                    await _dbContext.Database.BeginTransactionAsync();
+
+                try
+                {
+                    var contract = await _dbContext.TblContracts
+                        .FirstOrDefaultAsync(x =>
+                            x.ContractId == contractId
+                            && x.EmployeeId == employeeId);
+
+                    if (contract == null)
+                    {
+                        throw new KeyNotFoundException(
+                            "Không tìm thấy hợp đồng.");
+                    }
+
+                    if (contract.IsLegacy)
+                    {
+                        throw new InvalidOperationException(
+                            "Hợp đồng legacy không hỗ trợ tạo vòng đàm phán.");
+                    }
+
+                    if ((ContractStatus)contract.Status !=
+                        ContractStatus.Negotiating)
+                    {
+                        throw new InvalidOperationException(
+                            "Chỉ Contract đang Negotiating mới được tạo vòng đàm phán mới.");
+                    }
+
+                    if (!contract.CurrentVersionId.HasValue
+                        || contract.CurrentVersionId.Value !=
+                        request.CurrentVersionId)
+                    {
+                        throw new DbUpdateConcurrencyException(
+                            "Version hiện hành đã thay đổi.");
+                    }
+
+                    EnsureRowVersionMatches(
+                        contract.RowVersion,
+                        expectedContractRowVersion,
+                        "Hợp đồng");
+
+                    _dbContext.Entry(contract)
+                        .Property(x => x.RowVersion)
+                        .OriginalValue = expectedContractRowVersion;
+
+                    var sourceVersion = await _dbContext
+                        .TblContractVersions
+                        .FirstOrDefaultAsync(x =>
+                            x.ContractId == contract.ContractId
+                            && x.VersionId == request.CurrentVersionId);
+
+                    if (sourceVersion == null)
+                    {
+                        throw new KeyNotFoundException(
+                            "Không tìm thấy version hiện hành.");
+                    }
+
+                    if (sourceVersion.IsLocked)
+                    {
+                        throw new InvalidOperationException(
+                            "Version nguồn đã bị khóa.");
+                    }
+
+                    EnsureRowVersionMatches(
+                        sourceVersion.RowVersion,
+                        expectedVersionRowVersion,
+                        "Version hợp đồng");
+
+                    _dbContext.Entry(sourceVersion)
+                        .Property(x => x.RowVersion)
+                        .OriginalValue = expectedVersionRowVersion;
+
+                    var customer = await _dbContext.TblCustomers
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(x =>
+                            x.CustomerId == contract.CustomerId);
+
+                    if (customer == null)
+                    {
+                        throw new KeyNotFoundException(
+                            "Không tìm thấy khách hàng của hợp đồng.");
+                    }
+
+                    var sourceItems = await _dbContext.TblContractItems
+                        .AsNoTracking()
+                        .Where(x =>
+                            x.ContractId == contract.ContractId
+                            && x.VersionId == sourceVersion.VersionId)
+                        .OrderBy(x => x.DisplayOrder)
+                        .ThenBy(x => x.ContractItemId)
+                        .ToListAsync();
+
+                    var sourceTerms = await _dbContext.TblContractTerms
+                        .AsNoTracking()
+                        .Where(x =>
+                            x.ContractId == contract.ContractId
+                            && x.VersionId == sourceVersion.VersionId)
+                        .OrderBy(x => x.DisplayOrder)
+                        .ThenBy(x => x.TermId)
+                        .ToListAsync();
+
+                    if (sourceItems.Count == 0 || sourceTerms.Count == 0)
+                    {
+                        throw new InvalidOperationException(
+                            "Version nguồn phải có item và điều khoản.");
+                    }
+
+                    var snapshotJson = BuildSnapshotJson(
+                        contract,
+                        sourceVersion,
+                        customer,
+                        sourceItems,
+                        sourceTerms);
+
+                    var now = DateTime.UtcNow;
+
+                    sourceVersion.SnapshotJson = snapshotJson;
+                    sourceVersion.SnapshotHash =
+                        CalculateSnapshotHash(snapshotJson);
+                    sourceVersion.IsLocked = true;
+                    sourceVersion.LockedDate = now;
+                    sourceVersion.LockedByEmployeeId = employeeId;
+
+                    var newVersion = new TblContractVersion
+                    {
+                        ContractId = contract.ContractId,
+                        VersionNo = checked(sourceVersion.VersionNo + 1),
+                        SourceVersionId = sourceVersion.VersionId,
+                        TemplateVersionId =
+                            sourceVersion.TemplateVersionId,
+                        ChangeNote = changeNote,
+                        CurrencyCode = sourceVersion.CurrencyCode,
+                        Subtotal = sourceVersion.Subtotal,
+                        TotalDiscount =
+                            sourceVersion.TotalDiscount,
+                        TotalVat = sourceVersion.TotalVat,
+                        TotalAmount = sourceVersion.TotalAmount,
+                        SnapshotJson = null,
+                        SnapshotHash = null,
+                        IsLocked = false,
+                        LockedDate = null,
+                        LockedByEmployeeId = null,
+                        CreatedEmployeeId = employeeId,
+                        CreatedDate = now
+                    };
+
+                    _dbContext.TblContractVersions.Add(newVersion);
+                    await _dbContext.SaveChangesAsync();
+
+                    var copiedItems = sourceItems
+                        .Select(source => new TblContractItem
+                        {
+                            ContractId = contract.ContractId,
+                            VersionId = newVersion.VersionId,
+                            ItemType = source.ItemType,
+                            SourceProductId = source.SourceProductId,
+                            SourceServiceId = source.SourceServiceId,
+                            ItemCode = source.ItemCode,
+                            ItemName = source.ItemName,
+                            ItemNameEn = source.ItemNameEn,
+                            ItemDescription = source.ItemDescription,
+                            ItemDescriptionEn =
+                                source.ItemDescriptionEn,
+                            UnitName = source.UnitName,
+                            UnitNameEn = source.UnitNameEn,
+                            Quantity = source.Quantity,
+                            UnitPrice = source.UnitPrice,
+                            LineSubtotal = source.LineSubtotal,
+                            DiscountMode = source.DiscountMode,
+                            DiscountPercent =
+                                source.DiscountPercent,
+                            FixedDiscountAmount =
+                                source.FixedDiscountAmount,
+                            DiscountAmount = source.DiscountAmount,
+                            IsTaxable = source.IsTaxable,
+                            VatPercent = source.VatPercent,
+                            VatAmount = source.VatAmount,
+                            LineTotal = source.LineTotal,
+                            DisplayOrder = source.DisplayOrder,
+                            CreatedEmployeeId = employeeId,
+                            CreatedDate = now
+                        })
+                        .ToList();
+
+                    var copiedTerms = sourceTerms
+                        .Select(source => new TblContractTerm
+                        {
+                            ContractId = contract.ContractId,
+                            VersionId = newVersion.VersionId,
+                            SourceTemplateTermId =
+                                source.SourceTemplateTermId,
+                            TermCode = source.TermCode,
+                            TermTitle = source.TermTitle,
+                            TermTitleEn = source.TermTitleEn,
+                            TermContent = source.TermContent,
+                            TermContentEn = source.TermContentEn,
+                            IsNegotiable = source.IsNegotiable,
+                            DisplayOrder = source.DisplayOrder,
+                            CreatedEmployeeId = employeeId,
+                            CreatedDate = now
+                        })
+                        .ToList();
+
+                    _dbContext.TblContractItems.AddRange(copiedItems);
+                    _dbContext.TblContractTerms.AddRange(copiedTerms);
+
+                    contract.CurrentVersionId = newVersion.VersionId;
+                    contract.UpdatedEmployeeId = employeeId;
+                    contract.UpdateDate = now;
+
+                    _contractAuditWriter.StageEmployeeAudits(
+                    [
+                        new EmployeeContractAuditWriteRequest(
+                            contract.ContractId,
+                            newVersion.VersionId,
+                            employeeId,
+                            ContractAuditActionTypes
+                                .NegotiationRoundCreated,
+                            ContractAuditResults.Succeeded,
+                            now,
+                            PreviousContractStatus: contract.Status,
+                            NewContractStatus: contract.Status,
+                            Reason: changeNote)
+                    ]);
+
+                    await _dbContext.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                    return new CreateContractNegotiationRoundResponse
+                    {
+                        ContractId = contract.ContractId,
+                        Status = ContractStatus.Negotiating,
+                        RowVersion =
+                            EncodeRowVersion(contract.RowVersion),
+                        SourceVersion =
+                            MapNegotiationRoundVersion(sourceVersion),
+                        CurrentVersion =
+                            MapNegotiationRoundVersion(newVersion),
+                        Totals = new ContractFinancialTotalsResponse
+                        {
+                            CurrencyCode = newVersion.CurrencyCode,
+                            Subtotal = newVersion.Subtotal,
+                            TotalDiscount =
+                                newVersion.TotalDiscount,
+                            TotalVat = newVersion.TotalVat,
+                            TotalPayment = newVersion.TotalAmount
+                        }
+                    };
+                }
+                catch
+                {
+                    try
+                    {
+                        await transaction.RollbackAsync();
+                    }
+                    finally
+                    {
+                        _dbContext.ChangeTracker.Clear();
+                    }
+
+                    throw;
+                }
+            });
         }
 
         /// <summary>
@@ -1992,6 +2352,8 @@ namespace ContractManagement.Domains.Services.Contract
                     "Hợp đồng phải có ít nhất một sản phẩm hoặc dịch vụ.");
             }
 
+            _ = NormalizeCurrencyCode(request.CurrencyCode);
+
             foreach (var item in request.Items)
             {
                 if (!Enum.IsDefined(
@@ -2002,29 +2364,7 @@ namespace ContractManagement.Domains.Services.Contract
                         "Loại ContractItem không hợp lệ.");
                 }
 
-                if (item.Quantity <= 0)
-                {
-                    throw new ArgumentException(
-                        "Số lượng item phải lớn hơn 0.");
-                }
-
-                if (item.UnitPrice < 0)
-                {
-                    throw new ArgumentException(
-                        "Đơn giá item không được âm.");
-                }
-
-                if (item.DiscountPercent is < 0 or > 100)
-                {
-                    throw new ArgumentException(
-                        "Phần trăm chiết khấu phải từ 0 đến 100.");
-                }
-
-                if (item.VatPercent is < 0 or > 100)
-                {
-                    throw new ArgumentException(
-                        "Phần trăm VAT phải từ 0 đến 100.");
-                }
+                ValidateFinanceItem(item);
             }
         }
 
@@ -2225,6 +2565,23 @@ namespace ContractManagement.Domains.Services.Contract
         private async Task ValidateCatalogSourcesAsync(
             List<CreateContractItemRequest> items)
         {
+            foreach (var item in items)
+            {
+                if (item.ItemType == ContractItemType.Product
+                    && item.SourceServiceId.HasValue)
+                {
+                    throw new ArgumentException(
+                        "Item loại Product không được truyền SourceServiceId.");
+                }
+
+                if (item.ItemType == ContractItemType.Service
+                    && item.SourceProductId.HasValue)
+                {
+                    throw new ArgumentException(
+                        "Item loại Service không được truyền SourceProductId.");
+                }
+            }
+
             var productIds = items
                 .Where(x => x.SourceProductId.HasValue)
                 .Select(x => x.SourceProductId!.Value)
@@ -2233,19 +2590,30 @@ namespace ContractManagement.Domains.Services.Contract
 
             if (productIds.Count > 0)
             {
-                var activeProductIds =
+                var activeProducts =
                     await _dbContext.TblProducts
                         .AsNoTracking()
                         .Where(x =>
                             productIds.Contains(x.ProductId) &&
                             x.Status == 1)
-                        .Select(x => x.ProductId)
-                        .ToListAsync();
+                        .Select(x => new
+                        {
+                            x.ProductId,
+                            x.ProductCode
+                        })
+                        .ToDictionaryAsync(x => x.ProductId);
 
-                if (activeProductIds.Count != productIds.Count)
+                if (activeProducts.Count != productIds.Count)
                 {
                     throw new InvalidOperationException(
                         "Có Product nguồn không tồn tại hoặc đang inactive.");
+                }
+
+                foreach (var item in items.Where(
+                             x => x.SourceProductId.HasValue))
+                {
+                    item.ItemCode = activeProducts[
+                        item.SourceProductId!.Value].ProductCode;
                 }
             }
 
@@ -2271,6 +2639,12 @@ namespace ContractManagement.Domains.Services.Contract
                     throw new InvalidOperationException(
                         "Có Service nguồn không tồn tại hoặc đang inactive.");
                 }
+
+                foreach (var item in items.Where(
+                             x => x.SourceServiceId.HasValue))
+                {
+                    item.ItemCode = null;
+                }
             }
         }
 
@@ -2284,7 +2658,8 @@ namespace ContractManagement.Domains.Services.Contract
             decimal VatAmount,
             decimal LineTotal)
             CalculateItemAmounts(
-                CreateContractItemRequest item)
+                CreateContractItemRequest item,
+                string currencyCode)
         {
             // Ngăn phép nhân decimal bị overflow.
             if (item.UnitPrice > 0 &&
@@ -2295,21 +2670,42 @@ namespace ContractManagement.Domains.Services.Contract
             }
 
             var subtotal = RoundMoney(
-                item.Quantity * item.UnitPrice);
+                item.Quantity * item.UnitPrice,
+                currencyCode);
 
-            var discountAmount = RoundMoney(
-                subtotal * item.DiscountPercent / 100m);
+            var discountAmount = item.DiscountMode switch
+            {
+                ContractItemDiscountMode.None => 0m,
+                ContractItemDiscountMode.Percentage => RoundMoney(
+                    subtotal * item.DiscountPercent / 100m,
+                    currencyCode),
+                ContractItemDiscountMode.FixedAmount => RoundMoney(
+                    item.FixedDiscountAmount,
+                    currencyCode),
+                _ => throw new ArgumentException(
+                    "DiscountMode không hợp lệ.")
+            };
+
+            if (discountAmount > subtotal)
+            {
+                throw new ArgumentException(
+                    "Fixed discount không được vượt số tiền trước giảm giá.");
+            }
 
             var amountAfterDiscount =
                 subtotal - discountAmount;
 
-            var vatAmount = RoundMoney(
-                amountAfterDiscount *
-                item.VatPercent /
-                100m);
+            var vatAmount = item.IsTaxable
+                ? RoundMoney(
+                    amountAfterDiscount *
+                    item.VatPercent /
+                    100m,
+                    currencyCode)
+                : 0m;
 
             var lineTotal = RoundMoney(
-                amountAfterDiscount + vatAmount);
+                amountAfterDiscount + vatAmount,
+                currencyCode);
 
             if (lineTotal > MaxMoney)
             {
@@ -2324,12 +2720,159 @@ namespace ContractManagement.Domains.Services.Contract
                 lineTotal);
         }
 
-        private static decimal RoundMoney(decimal value)
+        private static decimal RoundMoney(
+            decimal value,
+            string currencyCode)
         {
+            var decimals = currencyCode == "VND" ? 0 : 2;
+
             return Math.Round(
                 value,
-                2,
+                decimals,
                 MidpointRounding.AwayFromZero);
+        }
+
+        private static string NormalizeCurrencyCode(string? currencyCode)
+        {
+            var normalized = currencyCode?
+                .Trim()
+                .ToUpperInvariant();
+
+            if (normalized is not ("VND" or "USD"))
+            {
+                throw new ArgumentException(
+                    "CurrencyCode chỉ hỗ trợ VND hoặc USD.");
+            }
+
+            return normalized;
+        }
+
+        private static void ValidateFinanceItem(
+            CreateContractItemRequest item)
+        {
+            if (item.Quantity <= 0 || GetDecimalScale(item.Quantity) > 3)
+            {
+                throw new ArgumentException(
+                    "Quantity phải lớn hơn 0 và có tối đa 3 chữ số thập phân.");
+            }
+
+            if (item.UnitPrice < 0
+                || item.DiscountPercent < 0
+                || item.FixedDiscountAmount < 0
+                || item.VatPercent < 0)
+            {
+                throw new ArgumentException(
+                    "Dữ liệu tài chính không được âm.");
+            }
+
+            if (!Enum.IsDefined(item.DiscountMode))
+            {
+                throw new ArgumentException(
+                    "DiscountMode không hợp lệ.");
+            }
+
+            if (item.DiscountPercent > 100
+                || GetDecimalScale(item.DiscountPercent) > 2)
+            {
+                throw new ArgumentException(
+                    "DiscountPercent phải từ 0 đến 100 và có tối đa 2 chữ số thập phân.");
+            }
+
+            if (item.VatPercent > 100
+                || GetDecimalScale(item.VatPercent) > 2)
+            {
+                throw new ArgumentException(
+                    "VatPercent phải từ 0 đến 100 và có tối đa 2 chữ số thập phân.");
+            }
+
+            if (item.DiscountMode == ContractItemDiscountMode.None
+                && (item.DiscountPercent != 0
+                    || item.FixedDiscountAmount != 0))
+            {
+                throw new ArgumentException(
+                    "DiscountMode None không nhận discount rate hoặc fixed amount.");
+            }
+
+            if (item.DiscountMode == ContractItemDiscountMode.Percentage
+                && item.FixedDiscountAmount != 0)
+            {
+                throw new ArgumentException(
+                    "Percentage discount không được đồng thời có fixed amount.");
+            }
+
+            if (item.DiscountMode == ContractItemDiscountMode.FixedAmount
+                && item.DiscountPercent != 0)
+            {
+                throw new ArgumentException(
+                    "Fixed discount không được đồng thời có percentage rate.");
+            }
+
+            if (!item.IsTaxable && item.VatPercent != 0)
+            {
+                throw new ArgumentException(
+                    "Item Non-taxable phải có VatPercent bằng 0.");
+            }
+        }
+
+        private static int GetDecimalScale(decimal value)
+        {
+            var bits = decimal.GetBits(value);
+            return (bits[3] >> 16) & 0x7F;
+        }
+
+        private static ContractFinancialTotals AddToContractTotals(
+            ContractFinancialTotals totals,
+            (
+                decimal LineSubtotal,
+                decimal DiscountAmount,
+                decimal VatAmount,
+                decimal LineTotal
+            ) amounts)
+        {
+            if (totals.Subtotal > MaxMoney - amounts.LineSubtotal
+                || totals.TotalDiscount >
+                    MaxMoney - amounts.DiscountAmount
+                || totals.TotalVat > MaxMoney - amounts.VatAmount
+                || totals.TotalPayment > MaxMoney - amounts.LineTotal)
+            {
+                throw new InvalidOperationException(
+                    "Tổng giá trị hợp đồng vượt quá giới hạn cho phép.");
+            }
+
+            return new ContractFinancialTotals(
+                totals.Subtotal + amounts.LineSubtotal,
+                totals.TotalDiscount + amounts.DiscountAmount,
+                totals.TotalVat + amounts.VatAmount,
+                totals.TotalPayment + amounts.LineTotal);
+        }
+
+        private static void ApplyFinancialTotals(
+            TblContract contract,
+            TblContractVersion version,
+            string currencyCode,
+            ContractFinancialTotals totals)
+        {
+            contract.CurrencyCode = currencyCode;
+            contract.Subtotal = totals.Subtotal;
+            contract.TotalDiscount = totals.TotalDiscount;
+            contract.TotalVat = totals.TotalVat;
+            contract.TotalAmount = totals.TotalPayment;
+
+            version.CurrencyCode = currencyCode;
+            version.Subtotal = totals.Subtotal;
+            version.TotalDiscount = totals.TotalDiscount;
+            version.TotalVat = totals.TotalVat;
+            version.TotalAmount = totals.TotalPayment;
+        }
+
+        private readonly record struct ContractFinancialTotals(
+            decimal Subtotal,
+            decimal TotalDiscount,
+            decimal TotalVat,
+            decimal TotalPayment)
+        {
+            public static ContractFinancialTotals Zero =>
+                new(0m, 0m, 0m, 0m);
         }
 
         private static string BuildContractCode(
@@ -2383,6 +2926,21 @@ namespace ContractManagement.Domains.Services.Contract
                 : string.Empty;
         }
 
+        private static ContractNegotiationRoundVersionResponse
+            MapNegotiationRoundVersion(TblContractVersion version)
+        {
+            return new ContractNegotiationRoundVersionResponse
+            {
+                VersionId = version.VersionId,
+                VersionNo = version.VersionNo,
+                SourceVersionId = version.SourceVersionId,
+                IsLocked = version.IsLocked,
+                LockedDate = version.LockedDate,
+                SnapshotHash = version.SnapshotHash,
+                RowVersion = EncodeRowVersion(version.RowVersion)
+            };
+        }
+
         private static void ValidateUpdateRequest(
     int contractId,
     UpdateContractDraftRequest request,
@@ -2417,6 +2975,8 @@ namespace ContractManagement.Domains.Services.Contract
                     "Hợp đồng phải có ít nhất một item.");
             }
 
+            _ = NormalizeCurrencyCode(request.CurrencyCode);
+
             if (request.Terms == null || request.Terms.Count == 0)
             {
                 throw new ArgumentException(
@@ -2441,29 +3001,7 @@ namespace ContractManagement.Domains.Services.Contract
                         "Loại item không hợp lệ.");
                 }
 
-                if (item.Quantity <= 0)
-                {
-                    throw new ArgumentException(
-                        "Số lượng item phải lớn hơn 0.");
-                }
-
-                if (item.UnitPrice < 0)
-                {
-                    throw new ArgumentException(
-                        "Đơn giá item không được âm.");
-                }
-
-                if (item.DiscountPercent is < 0 or > 100)
-                {
-                    throw new ArgumentException(
-                        "Chiết khấu phải từ 0 đến 100.");
-                }
-
-                if (item.VatPercent is < 0 or > 100)
-                {
-                    throw new ArgumentException(
-                        "VAT phải từ 0 đến 100.");
-                }
+                ValidateFinanceItem(item);
 
                 if (item.ContractItemId.HasValue
                     && string.IsNullOrWhiteSpace(item.RowVersion))
@@ -2659,9 +3197,13 @@ namespace ContractManagement.Domains.Services.Contract
             target.UnitPrice = source.UnitPrice;
 
             target.LineSubtotal = amounts.LineSubtotal;
+            target.DiscountMode = (byte)source.DiscountMode;
             target.DiscountPercent = source.DiscountPercent;
+            target.FixedDiscountAmount =
+                source.FixedDiscountAmount;
             target.DiscountAmount = amounts.DiscountAmount;
 
+            target.IsTaxable = source.IsTaxable;
             target.VatPercent = source.VatPercent;
             target.VatAmount = amounts.VatAmount;
             target.LineTotal = amounts.LineTotal;
@@ -2813,6 +3355,9 @@ namespace ContractManagement.Domains.Services.Contract
                     contract.ParentContractId,
                     contract.EffectiveDate,
                     contract.ExpireDate,
+                    contract.Subtotal,
+                    contract.TotalDiscount,
+                    contract.TotalVat,
                     contract.TotalAmount,
                     contract.CurrencyCode,
                     contract.LanguageMode
@@ -2836,7 +3381,12 @@ namespace ContractManagement.Domains.Services.Contract
                     version.VersionNo,
                     version.SourceVersionId,
                     version.TemplateVersionId,
-                    version.ChangeNote
+                    version.ChangeNote,
+                    version.CurrencyCode,
+                    version.Subtotal,
+                    version.TotalDiscount,
+                    version.TotalVat,
+                    version.TotalAmount
                 },
 
                 items = items.Select(x => new
@@ -2855,8 +3405,11 @@ namespace ContractManagement.Domains.Services.Contract
                     x.Quantity,
                     x.UnitPrice,
                     x.LineSubtotal,
+                    x.DiscountMode,
                     x.DiscountPercent,
+                    x.FixedDiscountAmount,
                     x.DiscountAmount,
+                    x.IsTaxable,
                     x.VatPercent,
                     x.VatAmount,
                     x.LineTotal,

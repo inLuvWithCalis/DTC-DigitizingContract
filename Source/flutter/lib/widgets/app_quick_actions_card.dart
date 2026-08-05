@@ -106,68 +106,71 @@ class _AppQuickActionsCardState extends State<AppQuickActionsCard> {
               AnimatedSize(
                 duration: const Duration(milliseconds: 300),
                 curve: Curves.easeInOut,
-                child: (_isExpanded || _isEditing) && expandedItems.isNotEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.only(top: 18.0),
-                        child: _buildItemGrid(context, expandedItems),
-                      )
-                    : const SizedBox.shrink(),
-              ),
-
-              if (_isExpanded || _isEditing) ...[
-                const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: InkWell(
-                    onTap: () {
-                      setState(() {
-                        _isEditing = !_isEditing;
-                      });
-                    },
-                    borderRadius: BorderRadius.circular(12),
-                    child: Padding(
-                      padding: const EdgeInsets.only(
-                        top: 16,
-                        right: 8,
-                        left: 8,
-                      ),
-                      child: Row(
+                child: (_isExpanded || _isEditing)
+                    ? Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const SizedBox(width: 4),
-                          Text(
-                            _isEditing ? 'Xong' : 'Tùy chỉnh',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.primary,
+                          if (expandedItems.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 18.0),
+                              child: _buildItemGrid(context, expandedItems),
+                            ),
+                          const SizedBox(height: 6),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: InkWell(
+                              onTap: () {
+                                setState(() {
+                                  _isEditing = !_isEditing;
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(12),
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  top: 8,
+                                  bottom: 4,
+                                  right: 8,
+                                  left: 8,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      _isEditing ? 'Xong' : 'Tùy chỉnh',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: theme.colorScheme.primary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+                      )
+                    : const SizedBox.shrink(),
+              ),
             ],
           ),
         ),
 
-        if (widget.items.length > widget.initialVisibleCount || _isEditing)
-          Positioned(
-            bottom: 0,
-            child: _ExpandToggleButton(
-              isExpanded: _isExpanded || _isEditing,
-              onTap: () {
-                setState(() {
-                  _isExpanded = !_isExpanded;
-                  if (!_isExpanded) {
-                    _isEditing = false;
-                  }
-                });
-              },
-            ),
+        Positioned(
+          bottom: 0,
+          child: _ExpandToggleButton(
+            isExpanded: _isExpanded || _isEditing,
+            onTap: () {
+              setState(() {
+                _isExpanded = !_isExpanded;
+                if (!_isExpanded) {
+                  _isEditing = false;
+                }
+              });
+            },
           ),
+        ),
       ],
     );
   }
@@ -201,6 +204,14 @@ class _AppQuickActionsCardState extends State<AppQuickActionsCard> {
     );
   }
 
+  void _handleRemoveItem(QuickActionData item) {
+    if (widget.items.length <= 1) {
+      AppToast.error(context, "Cần giữ lại tối thiểu 1 lối tắt");
+    } else {
+      widget.onRemoveItem?.call(item.id);
+    }
+  }
+
   Widget _buildItemCard(BuildContext context, QuickActionData item) {
     final theme = Theme.of(context);
     final isAddButton = item.id == '__add__';
@@ -209,6 +220,8 @@ class _AppQuickActionsCardState extends State<AppQuickActionsCard> {
       onTap: () {
         if (isAddButton) {
           widget.onOpenAddBottomSheet?.call();
+        } else if (_isEditing) {
+          _handleRemoveItem(item);
         } else {
           item.onTap?.call();
         }
@@ -279,16 +292,7 @@ class _AppQuickActionsCardState extends State<AppQuickActionsCard> {
                   duration: const Duration(milliseconds: 280),
                   curve: Curves.easeOutBack,
                   child: GestureDetector(
-                    onTap: () {
-                      if (widget.items.length <= 1) {
-                        AppToast.error(
-                          context,
-                          "Cần giữ lại tối thiểu 1 lối tắt",
-                        );
-                      } else {
-                        widget.onRemoveItem?.call(item.id);
-                      }
-                    },
+                    onTap: () => _handleRemoveItem(item),
                     child: Container(
                       padding: const EdgeInsets.all(2),
                       decoration: const BoxDecoration(
@@ -332,10 +336,7 @@ class _AppQuickActionsCardState extends State<AppQuickActionsCard> {
         duration: const Duration(milliseconds: 320),
         curve: Curves.easeOutBack,
         builder: (context, scale, child) {
-          return Transform.scale(
-            scale: scale,
-            child: child,
-          );
+          return Transform.scale(scale: scale, child: child);
         },
         child: cardContent,
       );

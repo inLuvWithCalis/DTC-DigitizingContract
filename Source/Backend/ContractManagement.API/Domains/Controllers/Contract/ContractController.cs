@@ -379,6 +379,79 @@ namespace ContractManagement.Domains.Controllers.Contract
         }
 
         /// <summary>
+        /// Lấy tất cả comment gốc của hợp đồng.
+        /// Comment gốc là comment không có ParentCommentId.
+        /// </summary>
+        [HttpGet("{contractId:int}/comments")]
+        [Produces("application/json")]
+        [ProducesResponseType(
+            typeof(ApiResponse<
+                IReadOnlyList<ContractNegotiationCommentResponse>>),
+            StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetRootComments(int contractId)
+        {
+            var employeeId =
+                HttpContext.Session.GetInt32("EmployeeId");
+
+            if (employeeId is null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Bạn chưa đăng nhập hoặc session đã hết hạn.");
+            }
+
+            var result = await _contractService.GetRootCommentsAsync(
+                contractId,
+                employeeId.Value);
+
+            return Ok(
+                ApiResponse<
+                    IReadOnlyList<ContractNegotiationCommentResponse>>.Ok(
+                    result,
+                    "Lấy danh sách comment gốc thành công."));
+        }
+
+        /// <summary>
+        /// Lấy tất cả comment con trực tiếp của một comment cha.
+        /// </summary>
+        [HttpGet(
+            "{contractId:int}/comments/{parentCommentId:int}/replies")]
+        [Produces("application/json")]
+        [ProducesResponseType(
+            typeof(ApiResponse<
+                IReadOnlyList<ContractNegotiationCommentResponse>>),
+            StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetCommentReplies(
+            int contractId,
+            int parentCommentId)
+        {
+            var employeeId =
+                HttpContext.Session.GetInt32("EmployeeId");
+
+            if (employeeId is null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Bạn chưa đăng nhập hoặc session đã hết hạn.");
+            }
+
+            var result = await _contractService.GetCommentRepliesAsync(
+                contractId,
+                parentCommentId,
+                employeeId.Value);
+
+            return Ok(
+                ApiResponse<
+                    IReadOnlyList<ContractNegotiationCommentResponse>>.Ok(
+                    result,
+                    "Lấy danh sách comment con thành công."));
+        }
+
+        /// <summary>
         /// Customer gửi feedback (general và term feedback) về hợp đồng đang đàm phán.
         /// Employee có thể xem feedback này nhưng không được chỉnh sửa.
         /// </summary>

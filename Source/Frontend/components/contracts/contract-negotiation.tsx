@@ -50,9 +50,9 @@ const getApiErrorMessage = (error: any, fallback: string) => {
   return data?.errors
     ? Object.values(data.errors).flat().join("; ")
     : data?.message ||
-        data?.title ||
-        (typeof data === "string" ? data : null) ||
-        fallback;
+    data?.title ||
+    (typeof data === "string" ? data : null) ||
+    fallback;
 };
 
 export function ContractNegotiation({
@@ -383,11 +383,10 @@ export function ContractNegotiation({
                             onClick={() =>
                               setSelectedVersionId(version.versionId)
                             }
-                            className={`w-full rounded-xl border p-3 text-left transition-colors ${
-                              isSelected
-                                ? "border-primary bg-primary/5"
-                                : "bg-background hover:bg-muted/50"
-                            }`}
+                            className={`w-full rounded-xl border p-3 text-left transition-colors ${isSelected
+                              ? "border-primary bg-primary/5"
+                              : "bg-background hover:bg-muted/50"
+                              }`}
                           >
                             <div className="flex items-start justify-between gap-2">
                               <div>
@@ -401,13 +400,13 @@ export function ContractNegotiation({
                               </div>
                               <div className="flex flex-col items-end gap-1">
                                 {isCurrent && <Badge>Hiện hành</Badge>}
-                                <Badge
-                                  variant={
-                                    version.isLocked ? "secondary" : "outline"
-                                  }
-                                >
-                                  {version.isLocked ? "Đã khóa" : "Đang sửa"}
-                                </Badge>
+                                {version.isLocked && (
+                                  <Badge
+                                    variant="secondary"
+                                  >
+                                    Đã khóa
+                                  </Badge>
+                                )}
                               </div>
                             </div>
                             <p className="mt-3 line-clamp-2 text-sm text-muted-foreground">
@@ -498,7 +497,7 @@ export function ContractNegotiation({
                             </Badge>
                             {selectedVersion.isLocked &&
                               selectedVersion.versionId !==
-                                currentVersion.versionId && (
+                              currentVersion.versionId && (
                                 <Button
                                   variant="outline"
                                   size="sm"

@@ -146,6 +146,71 @@ public sealed class ContractServiceSlice05Tests
     }
 
     [Fact]
+    public async Task CommentQueries_ShouldReturnRootsAndDirectRepliesOnly()
+    {
+        await using var context = CreateContext();
+        await SeedContractAsync(context);
+        var service = CreateService(context);
+
+        var firstRoot = await service.CreateExternalFeedbackAsync(
+            ContractId,
+            NewCommentRequest("First root"),
+            EmployeeId);
+
+        var secondRoot = await service.CreateExternalFeedbackAsync(
+            ContractId,
+            NewCommentRequest("Second root"),
+            EmployeeId);
+
+        var directReply = await service.CreateExternalFeedbackAsync(
+            ContractId,
+            new CreateContractNegotiationCommentRequest
+            {
+                CurrentVersionId = VersionId,
+                ParentCommentId = firstRoot.CommentId,
+                Content = "Direct reply"
+            },
+            EmployeeId);
+
+        await service.CreateExternalFeedbackAsync(
+            ContractId,
+            new CreateContractNegotiationCommentRequest
+            {
+                CurrentVersionId = VersionId,
+                ParentCommentId = directReply.CommentId,
+                Content = "Nested reply"
+            },
+            EmployeeId);
+
+        var roots = await service.GetRootCommentsAsync(
+            ContractId,
+            EmployeeId);
+        var replies = await service.GetCommentRepliesAsync(
+            ContractId,
+            firstRoot.CommentId,
+            EmployeeId);
+
+        Assert.Equal(
+            [firstRoot.CommentId, secondRoot.CommentId],
+            roots.Select(x => x.CommentId));
+        Assert.Single(replies);
+        Assert.Equal(directReply.CommentId, replies[0].CommentId);
+        Assert.Equal(firstRoot.CommentId, replies[0].ParentCommentId);
+        Assert.Single(replies[0].Events);
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(
+            () => service.GetRootCommentsAsync(
+                ContractId,
+                OtherEmployeeId));
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(
+            () => service.GetCommentRepliesAsync(
+                ContractId,
+                directReply.CommentId,
+                EmployeeId));
+    }
+
+    [Fact]
     public async Task ExternalFeedback_ShouldRejectNonNegotiableAndCrossVersionTerm()
     {
         await using var context = CreateContext();

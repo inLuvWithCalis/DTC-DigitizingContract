@@ -678,6 +678,16 @@ export const contractApi = {
       `${BASE_URL}/${id}/versions/${versionId}`,
     );
   },
+  getRootComments: (id: number) => {
+    return axiosClient.get<any, ContractNegotiationCommentResponse[]>(
+      `${BASE_URL}/${id}/comments`,
+    );
+  },
+  getCommentReplies: (id: number, parentCommentId: number) => {
+    return axiosClient.get<any, ContractNegotiationCommentResponse[]>(
+      `${BASE_URL}/${id}/comments/${parentCommentId}/replies`,
+    );
+  },
   createExternalFeedback: (
     id: number,
     data: CreateContractNegotiationCommentRequest,

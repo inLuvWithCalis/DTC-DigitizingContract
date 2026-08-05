@@ -2055,6 +2055,80 @@ namespace ContractManagement.Domains.Services.Contract
         }
 
         /// <summary>
+        /// Lấy tất cả comment gốc của hợp đồng theo thứ tự thời gian.
+        /// </summary>
+        public async Task<IReadOnlyList<ContractNegotiationCommentResponse>>
+            GetRootCommentsAsync(
+                int contractId,
+                int employeeId)
+        {
+            ValidateContractEmployee(contractId, employeeId);
+            await EnsureContractCommentReadAccessAsync(
+                contractId,
+                employeeId);
+
+            var comments = await _dbContext
+                .TblContractNegotiationComments
+                .AsNoTracking()
+                .Where(x =>
+                    x.ContractId == contractId
+                    && x.ParentCommentId == null)
+                .OrderBy(x => x.CreatedDate)
+                .ThenBy(x => x.CommentId)
+                .ToListAsync();
+
+            return await MapCommentResponsesAsync(comments);
+        }
+
+        /// <summary>
+        /// Lấy các comment con trực tiếp dựa theo ID comment cha.
+        /// </summary>
+        public async Task<IReadOnlyList<ContractNegotiationCommentResponse>>
+            GetCommentRepliesAsync(
+                int contractId,
+                int parentCommentId,
+                int employeeId)
+        {
+            ValidateContractEmployee(contractId, employeeId);
+
+            if (parentCommentId <= 0)
+            {
+                throw new ArgumentException(
+                    "ParentCommentId phải lớn hơn 0.");
+            }
+
+            await EnsureContractCommentReadAccessAsync(
+                contractId,
+                employeeId);
+
+            var parentExists = await _dbContext
+                .TblContractNegotiationComments
+                .AsNoTracking()
+                .AnyAsync(x =>
+                    x.CommentId == parentCommentId
+                    && x.ContractId == contractId
+                    && x.ParentCommentId == null);
+
+            if (!parentExists)
+            {
+                throw new KeyNotFoundException(
+                    "Không tìm thấy comment cha.");
+            }
+
+            var comments = await _dbContext
+                .TblContractNegotiationComments
+                .AsNoTracking()
+                .Where(x =>
+                    x.ContractId == contractId
+                    && x.ParentCommentId == parentCommentId)
+                .OrderBy(x => x.CreatedDate)
+                .ThenBy(x => x.CommentId)
+                .ToListAsync();
+
+            return await MapCommentResponsesAsync(comments);
+        }
+
+        /// <summary>
         /// Ghi nhận feedback bên ngoài do nhân viên phụ trách nhập lại.
         /// Comment và event được tạo trong cùng một transaction serializable.
         /// </summary>
@@ -2678,6 +2752,14 @@ namespace ContractManagement.Domains.Services.Contract
                 .ThenBy(x => x.CommentId)
                 .ToListAsync();
 
+            return await MapCommentResponsesAsync(comments);
+        }
+
+        private async Task<List<ContractNegotiationCommentResponse>>
+            MapCommentResponsesAsync(
+                List<TblContractNegotiationComment> comments)
+        {
+
             if (comments.Count == 0)
             {
                 return [];
@@ -2701,6 +2783,23 @@ namespace ContractManagement.Domains.Services.Contract
                     events.Where(x =>
                         x.CommentId == comment.CommentId)))
                 .ToList();
+        }
+
+        private async Task EnsureContractCommentReadAccessAsync(
+            int contractId,
+            int employeeId)
+        {
+            var contractExists = await _dbContext.TblContracts
+                .AsNoTracking()
+                .AnyAsync(x =>
+                    x.ContractId == contractId
+                    && x.EmployeeId == employeeId);
+
+            if (!contractExists)
+            {
+                throw new KeyNotFoundException(
+                    "Không tìm thấy hợp đồng.");
+            }
         }
 
         private async Task<ContractNegotiationCommentResponse>

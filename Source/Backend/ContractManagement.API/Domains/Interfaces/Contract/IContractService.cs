@@ -72,6 +72,17 @@ namespace ContractManagement.Domains.Interfaces.Contract
                 CreateContractNegotiationCommentRequest request,
                 int employeeId);
 
+        Task<IReadOnlyList<ContractNegotiationCommentResponse>>
+            GetRootCommentsAsync(
+                int contractId,
+                int employeeId);
+
+        Task<IReadOnlyList<ContractNegotiationCommentResponse>>
+            GetCommentRepliesAsync(
+                int contractId,
+                int parentCommentId,
+                int employeeId);
+
         Task<ContractNegotiationCommentResponse>
             RecordExternalFeedbackAsync(
                 int contractId,

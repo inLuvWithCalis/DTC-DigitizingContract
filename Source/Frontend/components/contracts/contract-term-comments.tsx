@@ -1,19 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  ArrowLeft,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  CornerDownRight,
   Loader2,
   MessageSquareText,
   Reply,
   RotateCcw,
   Send,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +29,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { employeeApi } from "@/services/employees-api";
 import {
   contractApi,
   ContractNegotiationCommentResponse,
@@ -34,6 +37,11 @@ import {
 } from "@/services/contract-api";
 
 const COMMENTS_PAGE_SIZE = 5;
+
+type ReplyTarget = {
+  commentId: number;
+  employeeName: string;
+};
 
 const formatDateTime = (value: string) =>
   new Date(value).toLocaleString("vi-VN", {
@@ -54,6 +62,56 @@ const getApiErrorMessage = (error: any, fallback: string) => {
         fallback;
 };
 
+const getInitials = (name: string) => {
+  const initials = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(-2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+
+  return initials || "NV";
+};
+
+function CommentPagination({
+  currentPage,
+  totalPages,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+
+  return (
+    <div className="flex items-center justify-between gap-3 border-t pt-3">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+        disabled={currentPage === 1}
+      >
+        <ChevronLeft className="mr-1 size-4" />
+        Trước
+      </Button>
+      <span className="text-xs font-medium text-muted-foreground">
+        Trang {currentPage} / {totalPages}
+      </span>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+        disabled={currentPage === totalPages}
+      >
+        Sau
+        <ChevronRight className="ml-1 size-4" />
+      </Button>
+    </div>
+  );
+}
+
 export function ContractTermComments({
   contractId,
   versionId,
@@ -73,30 +131,188 @@ export function ContractTermComments({
   canWrite: boolean;
   onCommentChanged: (comment: ContractNegotiationCommentResponse) => void;
 }) {
-  const termComments = comments.filter((comment) => comment.termId === termId);
-  const openCommentsCount = termComments.filter(
-    (comment) => comment.state === ContractNegotiationCommentState.Open,
-  ).length;
-  const [currentPage, setCurrentPage] = useState(1);
+  const initialRootComments = useMemo(
+    () =>
+      comments.filter(
+        (comment) =>
+          comment.versionId === versionId &&
+          comment.termId === termId &&
+          !comment.parentCommentId,
+      ),
+    [comments, termId, versionId],
+  );
+
+  const [isOpen, setIsOpen] = useState(false);
+  const [rootComments, setRootComments] = useState(initialRootComments);
+  const [childComments, setChildComments] = useState<
+    ContractNegotiationCommentResponse[]
+  >([]);
+  const [selectedParentId, setSelectedParentId] = useState<number | null>(null);
+  const [rootPage, setRootPage] = useState(1);
+  const [childPage, setChildPage] = useState(1);
   const [content, setContent] = useState("");
-  const [replyTo, setReplyTo] = useState<number | null>(null);
+  const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
+  const [employeeNames, setEmployeeNames] = useState<Record<number, string>>(
+    {},
+  );
+  const [isLoadingRoots, setIsLoadingRoots] = useState(false);
+  const [isLoadingChildren, setIsLoadingChildren] = useState(false);
+  const [rootError, setRootError] = useState<string | null>(null);
+  const [childError, setChildError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [processingCommentId, setProcessingCommentId] = useState<number | null>(
     null,
   );
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(termComments.length / COMMENTS_PAGE_SIZE),
+  const termRootComments = rootComments.filter(
+    (comment) =>
+      comment.versionId === versionId && comment.termId === termId,
   );
-  const paginatedComments = termComments.slice(
-    (currentPage - 1) * COMMENTS_PAGE_SIZE,
-    currentPage * COMMENTS_PAGE_SIZE,
+  const selectedParent =
+    termRootComments.find(
+      (comment) => comment.commentId === selectedParentId,
+    ) ?? null;
+  const openRootCount = termRootComments.filter(
+    (comment) => comment.state === ContractNegotiationCommentState.Open,
+  ).length;
+  const rootTotalPages = Math.max(
+    1,
+    Math.ceil(termRootComments.length / COMMENTS_PAGE_SIZE),
+  );
+  const childTotalPages = Math.max(
+    1,
+    Math.ceil(childComments.length / COMMENTS_PAGE_SIZE),
+  );
+  const paginatedRoots = termRootComments.slice(
+    (rootPage - 1) * COMMENTS_PAGE_SIZE,
+    rootPage * COMMENTS_PAGE_SIZE,
+  );
+  const paginatedChildren = childComments.slice(
+    (childPage - 1) * COMMENTS_PAGE_SIZE,
+    childPage * COMMENTS_PAGE_SIZE,
   );
 
   useEffect(() => {
-    setCurrentPage((page) => Math.min(Math.max(page, 1), totalPages));
-  }, [totalPages]);
+    if (!isOpen) {
+      setRootComments(initialRootComments);
+    }
+  }, [initialRootComments, isOpen]);
+
+  useEffect(() => {
+    setRootPage((page) => Math.min(Math.max(page, 1), rootTotalPages));
+  }, [rootTotalPages]);
+
+  useEffect(() => {
+    setChildPage((page) => Math.min(Math.max(page, 1), childTotalPages));
+  }, [childTotalPages]);
+
+  const getEmployeeName = (employeeId: number) =>
+    employeeNames[employeeId] || `Nhân viên #${employeeId}`;
+
+  const loadEmployeeNames = async (
+    targetComments: ContractNegotiationCommentResponse[],
+  ) => {
+    const employeeIds = Array.from(
+      new Set(targetComments.map((comment) => comment.recordedByEmployeeId)),
+    );
+    if (employeeIds.length === 0) return;
+
+    const entries = await Promise.all(
+      employeeIds.map(async (employeeId) => {
+        try {
+          const employee = await employeeApi.getById(employeeId);
+          return [
+            employeeId,
+            employee.employeeFullName?.trim() || `Nhân viên #${employeeId}`,
+          ] as const;
+        } catch {
+          return [employeeId, `Nhân viên #${employeeId}`] as const;
+        }
+      }),
+    );
+
+    setEmployeeNames((current) => ({
+      ...current,
+      ...Object.fromEntries(entries),
+    }));
+  };
+
+  const loadRootComments = async () => {
+    setIsLoadingRoots(true);
+    setRootError(null);
+    try {
+      const result = await contractApi.getRootComments(contractId);
+      setRootComments(result);
+      await loadEmployeeNames(result);
+    } catch (error: any) {
+      console.error("Lỗi tải comment cha:", error);
+      setRootError(
+        getApiErrorMessage(
+          error,
+          "Không thể tải danh sách trao đổi của điều khoản.",
+        ),
+      );
+    } finally {
+      setIsLoadingRoots(false);
+    }
+  };
+
+  const loadChildComments = async (parentCommentId: number) => {
+    setIsLoadingChildren(true);
+    setChildError(null);
+    setChildComments([]);
+    try {
+      const result = await contractApi.getCommentReplies(
+        contractId,
+        parentCommentId,
+      );
+      const termReplies = result.filter(
+        (comment) =>
+          comment.versionId === versionId && comment.termId === termId,
+      );
+      setChildComments(termReplies);
+      await loadEmployeeNames(termReplies);
+    } catch (error: any) {
+      console.error("Lỗi tải comment con:", error);
+      setChildError(
+        getApiErrorMessage(error, "Không thể tải các câu trả lời."),
+      );
+    } finally {
+      setIsLoadingChildren(false);
+    }
+  };
+
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    setContent("");
+    setReplyTarget(null);
+    setSelectedParentId(null);
+    setChildComments([]);
+    setRootPage(1);
+    setChildPage(1);
+
+    if (open) {
+      void loadRootComments();
+    }
+  };
+
+  const handleSelectParent = (
+    parentComment: ContractNegotiationCommentResponse,
+  ) => {
+    setSelectedParentId(parentComment.commentId);
+    setContent("");
+    setReplyTarget(null);
+    setChildPage(1);
+    void loadChildComments(parentComment.commentId);
+  };
+
+  const handleBackToRoots = () => {
+    setSelectedParentId(null);
+    setChildComments([]);
+    setContent("");
+    setReplyTarget(null);
+    setChildError(null);
+  };
 
   const handleSubmit = async () => {
     const normalizedContent = content.trim();
@@ -105,6 +321,10 @@ export function ContractTermComments({
       return;
     }
 
+    const submittedContent = replyTarget
+      ? `@${replyTarget.employeeName} ${normalizedContent}`
+      : normalizedContent;
+
     setIsSubmitting(true);
     try {
       const createdComment = await contractApi.createExternalFeedback(
@@ -112,24 +332,42 @@ export function ContractTermComments({
         {
           currentVersionId: versionId,
           termId,
-          parentCommentId: replyTo,
-          content: normalizedContent,
+          parentCommentId: selectedParent?.commentId ?? null,
+          content: submittedContent,
         },
       );
+
       onCommentChanged(createdComment);
+      await loadEmployeeNames([createdComment]);
       setContent("");
-      setReplyTo(null);
-      setCurrentPage(
-        Math.max(
-          1,
-          Math.ceil((termComments.length + 1) / COMMENTS_PAGE_SIZE),
-        ),
-      );
-      toast.success(replyTo ? "Đã gửi câu trả lời." : "Đã gửi phản hồi.");
+      setReplyTarget(null);
+
+      if (selectedParent) {
+        setChildComments((current) => [...current, createdComment]);
+        setChildPage(
+          Math.max(
+            1,
+            Math.ceil((childComments.length + 1) / COMMENTS_PAGE_SIZE),
+          ),
+        );
+        toast.success("Đã gửi câu trả lời.");
+      } else {
+        setRootComments((current) => [...current, createdComment]);
+        setRootPage(
+          Math.max(
+            1,
+            Math.ceil((termRootComments.length + 1) / COMMENTS_PAGE_SIZE),
+          ),
+        );
+        toast.success("Đã tạo trao đổi mới.");
+      }
     } catch (error: any) {
       console.error("Lỗi gửi comment:", error);
       toast.error(
-        getApiErrorMessage(error, "Không thể gửi phản hồi. Vui lòng thử lại."),
+        getApiErrorMessage(
+          error,
+          "Không thể gửi phản hồi. Vui lòng thử lại.",
+        ),
       );
     } finally {
       setIsSubmitting(false);
@@ -150,11 +388,30 @@ export function ContractTermComments({
           : await contractApi.reopenComment(contractId, comment.commentId, {
               rowVersion: comment.rowVersion,
             });
+
+      if (updatedComment.parentCommentId) {
+        setChildComments((current) =>
+          current.map((item) =>
+            item.commentId === updatedComment.commentId
+              ? updatedComment
+              : item,
+          ),
+        );
+      } else {
+        setRootComments((current) =>
+          current.map((item) =>
+            item.commentId === updatedComment.commentId
+              ? updatedComment
+              : item,
+          ),
+        );
+      }
+
       onCommentChanged(updatedComment);
       toast.success(
         action === "resolve"
-          ? "Đã đánh dấu phản hồi là đã xử lý."
-          : "Đã mở lại phản hồi.",
+          ? "Đã đánh dấu trao đổi là đã xử lý."
+          : "Đã mở lại trao đổi.",
       );
     } catch (error: any) {
       console.error("Lỗi cập nhật trạng thái comment:", error);
@@ -169,223 +426,447 @@ export function ContractTermComments({
     }
   };
 
+  const beginReply = (comment: ContractNegotiationCommentResponse) => {
+    setReplyTarget({
+      commentId: comment.commentId,
+      employeeName: getEmployeeName(comment.recordedByEmployeeId),
+    });
+  };
+
+  const renderComposer = (isThreadReply: boolean) => {
+    const threadIsResolved =
+      selectedParent?.state === ContractNegotiationCommentState.Resolved;
+    if (!canWrite || (isThreadReply && threadIsResolved)) return null;
+
+    return (
+      <div className="space-y-2 rounded-xl border bg-muted/20 p-3">
+        {replyTarget && (
+          <div className="flex items-center justify-between gap-3 rounded-lg bg-primary/10 px-3 py-2 text-sm">
+            <span className="min-w-0 truncate">
+              Đang trả lời
+              <strong className="ml-1 text-primary">
+                @{replyTarget.employeeName}
+              </strong>
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-7 shrink-0"
+              onClick={() => setReplyTarget(null)}
+              aria-label="Hủy trả lời"
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
+        )}
+        <Textarea
+          value={content}
+          onChange={(event) => setContent(event.target.value)}
+          placeholder={
+            isThreadReply
+              ? "Viết câu trả lời..."
+              : "Bắt đầu một trao đổi mới..."
+          }
+          rows={3}
+          maxLength={4000}
+          disabled={isSubmitting}
+        />
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs text-muted-foreground">
+            {content.length}/4000
+          </span>
+          <Button
+            size="sm"
+            onClick={() => void handleSubmit()}
+            disabled={isSubmitting || !content.trim()}
+          >
+            {isSubmitting ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <Send className="mr-2 size-4" />
+            )}
+            {isThreadReply ? "Gửi trả lời" : "Tạo trao đổi"}
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <Dialog
-      onOpenChange={(open) => {
-        if (!open) {
-          setReplyTo(null);
-          setContent("");
-        }
-      }}
-    >
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="mt-4 w-fit">
           <MessageSquareText className="mr-2 size-4 text-primary" />
           Trao đổi điều khoản
           <Badge variant="secondary" className="ml-2">
-            {termComments.length}
+            {termRootComments.length}
           </Badge>
-          {openCommentsCount > 0 && (
+          {openRootCount > 0 && (
             <span className="ml-1 text-xs text-muted-foreground">
-              ({openCommentsCount} đang mở)
+              ({openRootCount} đang mở)
             </span>
           )}
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-h-[90vh] overflow-hidden sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <MessageSquareText className="size-5 text-primary" />
-            Trao đổi điều khoản
-          </DialogTitle>
-          <DialogDescription>
-            {termCode} · {termTitle}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-h-[92vh] overflow-hidden sm:max-w-4xl">
+        {selectedParent ? (
+          <>
+            <DialogHeader>
+              <div className="mb-1 flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="-ml-2"
+                  onClick={handleBackToRoots}
+                >
+                  <ArrowLeft className="mr-1.5 size-4" />
+                  Danh sách trao đổi
+                </Button>
+              </div>
+              <DialogTitle className="pr-8 text-left leading-6">
+                {selectedParent.content}
+              </DialogTitle>
+              <DialogDescription className="text-left">
+                {termCode} · {termTitle}
+              </DialogDescription>
+            </DialogHeader>
 
-        <ScrollArea className="max-h-[70vh] pr-4">
-          <div className="space-y-4 pr-1">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-              <span className="font-medium">
-                {termComments.length} phản hồi
-              </span>
-              {openCommentsCount > 0 && (
-                <Badge variant="outline">
-                  {openCommentsCount} đang mở
-                </Badge>
-              )}
-            </div>
-
-            <Separator />
-
-      {termComments.length === 0 ? (
-        <div className="rounded-lg border border-dashed px-4 py-6 text-center">
-          <p className="text-sm font-medium">Chưa có phản hồi</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Các trao đổi về điều khoản này sẽ được lưu theo version hiện hành.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {paginatedComments.map((comment) => {
-            const isResolved =
-              comment.state === ContractNegotiationCommentState.Resolved;
-            const isProcessing = processingCommentId === comment.commentId;
-
-            return (
-              <div
-                key={comment.commentId}
-                className={`rounded-lg border p-3 ${
-                  comment.parentCommentId ? "ml-4 border-l-2 border-l-primary/40" : ""
-                }`}
-              >
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="flex items-center gap-1.5 text-sm font-medium">
-                      {comment.parentCommentId && (
-                        <CornerDownRight className="size-3.5 text-muted-foreground" />
+            <div className="space-y-4">
+              <div className="rounded-xl border bg-muted/20 p-4">
+                <div className="flex items-start gap-3">
+                  <Avatar className="size-9 border">
+                    <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
+                      {getInitials(
+                        getEmployeeName(selectedParent.recordedByEmployeeId),
                       )}
-                      Phản hồi #{comment.commentId}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Nhân viên #{comment.recordedByEmployeeId} · {" "}
-                      {formatDateTime(comment.createdDate)}
-                      {comment.parentCommentId
-                        ? ` · Trả lời #${comment.parentCommentId}`
-                        : ""}
-                    </p>
-                  </div>
-                  <Badge variant={isResolved ? "secondary" : "outline"}>
-                    {isResolved ? "Đã xử lý" : "Đang mở"}
-                  </Badge>
-                </div>
-
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-6">
-                  {comment.content}
-                </p>
-
-                {canWrite && (
-                  <div className="mt-3 flex flex-wrap gap-2 border-t pt-3">
-                    {!isResolved && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setReplyTo(comment.commentId);
-                          setContent("");
-                        }}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold">
+                          {getEmployeeName(selectedParent.recordedByEmployeeId)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDateTime(selectedParent.createdDate)}
+                        </p>
+                      </div>
+                      <Badge
+                        variant={
+                          selectedParent.state ===
+                          ContractNegotiationCommentState.Resolved
+                            ? "secondary"
+                            : "outline"
+                        }
                       >
-                        <Reply className="mr-1.5 size-3.5" />
-                        Trả lời
-                      </Button>
+                        {selectedParent.state ===
+                        ContractNegotiationCommentState.Resolved
+                          ? "Đã xử lý"
+                          : "Đang mở"}
+                      </Badge>
+                    </div>
+                    <p className="mt-3 whitespace-pre-wrap text-sm leading-6">
+                      {selectedParent.content}
+                    </p>
+                    {canWrite && (
+                      <div className="mt-3 flex flex-wrap gap-1 border-t pt-2">
+                        {selectedParent.state ===
+                          ContractNegotiationCommentState.Open && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => beginReply(selectedParent)}
+                          >
+                            <Reply className="mr-1.5 size-3.5" />
+                            Trả lời
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={
+                            processingCommentId === selectedParent.commentId
+                          }
+                          onClick={() =>
+                            void handleChangeState(
+                              selectedParent,
+                              selectedParent.state ===
+                                ContractNegotiationCommentState.Resolved
+                                ? "reopen"
+                                : "resolve",
+                            )
+                          }
+                        >
+                          {processingCommentId === selectedParent.commentId ? (
+                            <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                          ) : selectedParent.state ===
+                            ContractNegotiationCommentState.Resolved ? (
+                            <RotateCcw className="mr-1.5 size-3.5" />
+                          ) : (
+                            <CheckCircle2 className="mr-1.5 size-3.5" />
+                          )}
+                          {selectedParent.state ===
+                          ContractNegotiationCommentState.Resolved
+                            ? "Mở lại"
+                            : "Đã xử lý"}
+                        </Button>
+                      </div>
                     )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold">
+                  Câu trả lời ({childComments.length})
+                </p>
+              </div>
+              <Separator />
+
+              <ScrollArea className="h-[34vh] pr-4">
+                {isLoadingChildren ? (
+                  <div className="flex h-32 items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="size-4 animate-spin" />
+                    Đang tải câu trả lời...
+                  </div>
+                ) : childError ? (
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-center">
+                    <p className="text-sm text-destructive">{childError}</p>
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      disabled={isProcessing}
+                      className="mt-3"
                       onClick={() =>
-                        void handleChangeState(
-                          comment,
-                          isResolved ? "reopen" : "resolve",
-                        )
+                        void loadChildComments(selectedParent.commentId)
                       }
                     >
-                      {isProcessing ? (
-                        <Loader2 className="mr-1.5 size-3.5 animate-spin" />
-                      ) : isResolved ? (
-                        <RotateCcw className="mr-1.5 size-3.5" />
-                      ) : (
-                        <CheckCircle2 className="mr-1.5 size-3.5" />
-                      )}
-                      {isResolved ? "Mở lại" : "Đã xử lý"}
+                      Thử lại
                     </Button>
                   </div>
+                ) : childComments.length === 0 ? (
+                  <div className="rounded-lg border border-dashed px-4 py-8 text-center">
+                    <MessageSquareText className="mx-auto size-8 text-muted-foreground/50" />
+                    <p className="mt-2 text-sm font-medium">
+                      Chưa có câu trả lời
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Bạn có thể tiếp tục cuộc trao đổi ở bên dưới.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {paginatedChildren.map((comment) => {
+                      const employeeName = getEmployeeName(
+                        comment.recordedByEmployeeId,
+                      );
+                      const isResolved =
+                        comment.state ===
+                        ContractNegotiationCommentState.Resolved;
+                      const isProcessing =
+                        processingCommentId === comment.commentId;
+
+                      return (
+                        <div
+                          key={comment.commentId}
+                          className="flex items-start gap-3"
+                        >
+                          <Avatar className="size-8 border">
+                            <AvatarFallback className="bg-sky-500/10 text-[11px] font-semibold text-sky-700">
+                              {getInitials(employeeName)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                              <span className="text-sm font-semibold">
+                                {employeeName}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {formatDateTime(comment.createdDate)}
+                              </span>
+                              {isResolved && (
+                                <Badge variant="secondary" className="h-5">
+                                  Đã xử lý
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="mt-1.5 rounded-lg bg-muted px-3 py-2.5">
+                              <p className="whitespace-pre-wrap text-sm leading-6">
+                                {comment.content}
+                              </p>
+                            </div>
+                            {canWrite &&
+                              selectedParent.state ===
+                                ContractNegotiationCommentState.Open && (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-2 text-xs"
+                                    onClick={() => beginReply(comment)}
+                                  >
+                                    <Reply className="mr-1 size-3" />
+                                    Trả lời
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-2 text-xs"
+                                    disabled={isProcessing}
+                                    onClick={() =>
+                                      void handleChangeState(
+                                        comment,
+                                        isResolved ? "reopen" : "resolve",
+                                      )
+                                    }
+                                  >
+                                    {isProcessing ? (
+                                      <Loader2 className="mr-1 size-3 animate-spin" />
+                                    ) : isResolved ? (
+                                      <RotateCcw className="mr-1 size-3" />
+                                    ) : (
+                                      <CheckCircle2 className="mr-1 size-3" />
+                                    )}
+                                    {isResolved ? "Mở lại" : "Đã xử lý"}
+                                  </Button>
+                                </div>
+                              )}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    <CommentPagination
+                      currentPage={childPage}
+                      totalPages={childTotalPages}
+                      onPageChange={setChildPage}
+                    />
+                  </div>
+                )}
+              </ScrollArea>
+
+              {renderComposer(true)}
+            </div>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <MessageSquareText className="size-5 text-primary" />
+                Trao đổi điều khoản
+              </DialogTitle>
+              <DialogDescription>
+                {termCode} · {termTitle}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {renderComposer(false)}
+
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold">
+                  Danh sách trao đổi ({termRootComments.length})
+                </p>
+                {openRootCount > 0 && (
+                  <Badge variant="outline">{openRootCount} đang mở</Badge>
                 )}
               </div>
-            );
-          })}
+              <Separator />
 
-          {termComments.length > COMMENTS_PAGE_SIZE && (
-            <div className="flex items-center justify-between gap-3 border-t pt-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                disabled={currentPage === 1}
-              >
-                <ChevronLeft className="mr-1 size-4" />
-                Trước
-              </Button>
-              <span className="text-xs font-medium text-muted-foreground">
-                Trang {currentPage} / {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setCurrentPage((page) => Math.min(totalPages, page + 1))
-                }
-                disabled={currentPage === totalPages}
-              >
-                Sau
-                <ChevronRight className="ml-1 size-4" />
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
+              <ScrollArea className="h-[45vh] pr-4">
+                {isLoadingRoots ? (
+                  <div className="flex h-40 items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="size-4 animate-spin" />
+                    Đang tải danh sách trao đổi...
+                  </div>
+                ) : rootError ? (
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-center">
+                    <p className="text-sm text-destructive">{rootError}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => void loadRootComments()}
+                    >
+                      Thử lại
+                    </Button>
+                  </div>
+                ) : termRootComments.length === 0 ? (
+                  <div className="rounded-lg border border-dashed px-4 py-10 text-center">
+                    <MessageSquareText className="mx-auto size-9 text-muted-foreground/50" />
+                    <p className="mt-3 text-sm font-medium">
+                      Chưa có trao đổi nào
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Tạo trao đổi đầu tiên cho điều khoản này.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {paginatedRoots.map((comment) => {
+                      const employeeName = getEmployeeName(
+                        comment.recordedByEmployeeId,
+                      );
+                      const isResolved =
+                        comment.state ===
+                        ContractNegotiationCommentState.Resolved;
 
-      {canWrite && (
-        <div className="mt-4 space-y-2 border-t pt-4">
-          {replyTo && (
-            <div className="flex items-center justify-between rounded-lg bg-primary/5 px-3 py-2 text-sm">
-              <span>Đang trả lời phản hồi #{replyTo}</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setReplyTo(null);
-                  setContent("");
-                }}
-              >
-                Hủy trả lời
-              </Button>
+                      return (
+                        <button
+                          key={comment.commentId}
+                          type="button"
+                          onClick={() => handleSelectParent(comment)}
+                          className="group w-full rounded-xl border bg-background p-4 text-left transition-colors hover:border-primary/40 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <div className="flex items-start gap-3">
+                            <Avatar className="size-9 border">
+                              <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
+                                {getInitials(employeeName)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                  <p className="text-sm font-semibold">
+                                    {employeeName}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {formatDateTime(comment.createdDate)}
+                                  </p>
+                                </div>
+                                <Badge
+                                  variant={
+                                    isResolved ? "secondary" : "outline"
+                                  }
+                                >
+                                  {isResolved ? "Đã xử lý" : "Đang mở"}
+                                </Badge>
+                              </div>
+                              <p className="mt-3 line-clamp-2 whitespace-pre-wrap text-sm leading-6">
+                                {comment.content}
+                              </p>
+                              <span className="mt-3 inline-flex items-center text-xs font-medium text-primary">
+                                Xem cuộc trao đổi
+                                <ChevronRight className="ml-1 size-3.5 transition-transform group-hover:translate-x-0.5" />
+                              </span>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+
+                    <CommentPagination
+                      currentPage={rootPage}
+                      totalPages={rootTotalPages}
+                      onPageChange={setRootPage}
+                    />
+                  </div>
+                )}
+              </ScrollArea>
             </div>
-          )}
-          <Textarea
-            value={content}
-            onChange={(event) => setContent(event.target.value)}
-            placeholder={
-              replyTo
-                ? "Nhập nội dung trả lời..."
-                : "Nhập phản hồi cho điều khoản này..."
-            }
-            rows={3}
-            maxLength={4000}
-            disabled={isSubmitting}
-          />
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-xs text-muted-foreground">
-              {content.length}/4000
-            </span>
-            <Button
-              size="sm"
-              onClick={() => void handleSubmit()}
-              disabled={isSubmitting || !content.trim()}
-            >
-              {isSubmitting ? (
-                <Loader2 className="mr-2 size-4 animate-spin" />
-              ) : (
-                <Send className="mr-2 size-4" />
-              )}
-              {replyTo ? "Gửi trả lời" : "Gửi phản hồi"}
-            </Button>
-          </div>
-        </div>
-      )}
-          </div>
-        </ScrollArea>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -300,6 +300,56 @@ export interface ContractTermDetailResponse {
   rowVersion: string;
 }
 
+export enum ContractNegotiationCommentState {
+  Open = 0,
+  Resolved = 1,
+}
+
+export enum ContractNegotiationCommentEventType {
+  Created = 1,
+  Resolved = 2,
+  Reopened = 3,
+}
+
+export interface ContractNegotiationCommentEventResponse {
+  commentEventId: number;
+  commentId: number;
+  eventType: ContractNegotiationCommentEventType;
+  employeeId: number;
+  occurredAt: string;
+}
+
+export interface ContractNegotiationCommentResponse {
+  commentId: number;
+  contractId: number;
+  versionId: number;
+  termId?: number | null;
+  parentCommentId?: number | null;
+  content: string;
+  source: string;
+  externalFeedback: boolean;
+  recordedByEmployeeId: number;
+  createdEmployeeId: number;
+  state: ContractNegotiationCommentState;
+  createdDate: string;
+  updatedDate?: string | null;
+  rowVersion: string;
+  events: ContractNegotiationCommentEventResponse[];
+}
+
+export interface ContractVersionHistoryResponse {
+  versionId: number;
+  versionNo: number;
+  sourceVersionId?: number | null;
+  changeNote?: string | null;
+  isLocked: boolean;
+  lockedDate?: string | null;
+  lockedByEmployeeId?: number | null;
+  createdEmployeeId: number;
+  createdDate: string;
+  rowVersion: string;
+}
+
 export interface ContractVersionDetailResponse {
   versionId: number;
   versionNo: number;
@@ -320,6 +370,7 @@ export interface ContractVersionDetailResponse {
   rowVersion: string;
   items: ContractItemDetailResponse[];
   terms: ContractTermDetailResponse[];
+  comments: ContractNegotiationCommentResponse[];
 }
 
 export interface ContractCustomerSummaryResponse {
@@ -604,6 +655,16 @@ export const contractApi = {
     return axiosClient.post<any, CreateContractNegotiationRoundResponse>(
       `${BASE_URL}/${id}/negotiation-rounds`,
       data,
+    );
+  },
+  getVersionHistory: (id: number) => {
+    return axiosClient.get<any, ContractVersionHistoryResponse[]>(
+      `${BASE_URL}/${id}/versions`,
+    );
+  },
+  getVersionDetail: (id: number, versionId: number) => {
+    return axiosClient.get<any, ContractVersionDetailResponse>(
+      `${BASE_URL}/${id}/versions/${versionId}`,
     );
   },
   submitApproval: (id: number, data: SubmitContractForApprovalRequest) => {

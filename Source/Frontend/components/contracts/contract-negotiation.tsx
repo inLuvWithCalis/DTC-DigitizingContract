@@ -1,12 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
+  CalendarDays,
   CheckCircle2,
   FileLock2,
   GitBranch,
   Loader2,
   MessageSquareText,
+  Package,
+  RefreshCw,
+  ScrollText,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -25,11 +29,25 @@ import {
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { formatCurrency } from "@/lib/format-currency";
+import { formatDate } from "@/lib/format-date";
 import {
   contractApi,
   ContractDetailResponse,
   ContractStatus,
+  ContractVersionDetailResponse,
+  ContractVersionHistoryResponse,
 } from "@/services/contract-api";
+
+const getApiErrorMessage = (error: any, fallback: string) => {
+  const data = error?.response?.data;
+  return data?.errors
+    ? Object.values(data.errors).flat().join("; ")
+    : data?.message ||
+        data?.title ||
+        (typeof data === "string" ? data : null) ||
+        fallback;
+};
 
 export function ContractNegotiation({
   contract,
@@ -43,11 +61,107 @@ export function ContractNegotiation({
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [changeNote, setChangeNote] = useState("");
   const [isCreatingRound, setIsCreatingRound] = useState(false);
+  const [versionHistory, setVersionHistory] = useState<
+    ContractVersionHistoryResponse[]
+  >([]);
+  const [selectedVersionId, setSelectedVersionId] = useState<number>(
+    contract.currentVersion.versionId,
+  );
+  const [selectedVersion, setSelectedVersion] =
+    useState<ContractVersionDetailResponse | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isLoadingVersion, setIsLoadingVersion] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [versionError, setVersionError] = useState<string | null>(null);
 
   const currentVersion = contract.currentVersion;
   const canCreateRound =
     contract.status === ContractStatus.Negotiating &&
     !currentVersion.isLocked;
+
+  const loadVersionHistory = useCallback(async () => {
+    if (contract.status !== ContractStatus.Negotiating) {
+      setVersionHistory([]);
+      setSelectedVersion(null);
+      return;
+    }
+
+    setIsLoadingHistory(true);
+    setHistoryError(null);
+    try {
+      const versions = await contractApi.getVersionHistory(
+        contract.contractId,
+      );
+      setVersionHistory(versions);
+      setSelectedVersionId((currentSelection) =>
+        versions.some((version) => version.versionId === currentSelection)
+          ? currentSelection
+          : contract.currentVersion.versionId,
+      );
+    } catch (error: any) {
+      console.error("Lỗi tải lịch sử version:", error);
+      setHistoryError(
+        getApiErrorMessage(
+          error,
+          "Không thể tải lịch sử phiên bản đàm phán.",
+        ),
+      );
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }, [
+    contract.contractId,
+    contract.currentVersion.versionId,
+    contract.status,
+  ]);
+
+  useEffect(() => {
+    void loadVersionHistory();
+  }, [loadVersionHistory]);
+
+  useEffect(() => {
+    if (
+      contract.status !== ContractStatus.Negotiating ||
+      !selectedVersionId
+    ) {
+      return;
+    }
+
+    let isCancelled = false;
+    const loadSelectedVersion = async () => {
+      setIsLoadingVersion(true);
+      setVersionError(null);
+      try {
+        const detail = await contractApi.getVersionDetail(
+          contract.contractId,
+          selectedVersionId,
+        );
+        if (!isCancelled) {
+          setSelectedVersion(detail);
+        }
+      } catch (error: any) {
+        console.error("Lỗi tải chi tiết version:", error);
+        if (!isCancelled) {
+          setSelectedVersion(null);
+          setVersionError(
+            getApiErrorMessage(
+              error,
+              "Không thể tải chi tiết phiên bản đã chọn.",
+            ),
+          );
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingVersion(false);
+        }
+      }
+    };
+
+    void loadSelectedVersion();
+    return () => {
+      isCancelled = true;
+    };
+  }, [contract.contractId, contract.status, selectedVersionId]);
 
   const handleCreateRound = async () => {
     const normalizedChangeNote = changeNote.trim();
@@ -71,6 +185,7 @@ export function ContractNegotiation({
       const updatedContract = await contractApi.getDetail(
         contract.contractId,
       );
+      setSelectedVersionId(updatedContract.currentVersion.versionId);
       setContract(updatedContract);
       setChangeNote("");
       setIsDialogOpen(false);
@@ -79,13 +194,12 @@ export function ContractNegotiation({
       );
     } catch (error: any) {
       console.error("Lỗi tạo vòng đàm phán:", error);
-      const data = error?.response?.data;
-      const message = data?.errors
-        ? Object.values(data.errors).flat().join("; ")
-        : data?.message ||
-          data?.title ||
-          "Không thể tạo vòng đàm phán mới. Vui lòng thử lại.";
-      toast.error(message);
+      toast.error(
+        getApiErrorMessage(
+          error,
+          "Không thể tạo vòng đàm phán mới. Vui lòng thử lại.",
+        ),
+      );
     } finally {
       setIsCreatingRound(false);
     }
@@ -180,14 +294,213 @@ export function ContractNegotiation({
             )}
           </div>
 
-          <div className="rounded-xl border border-dashed p-6 text-center">
-            <MessageSquareText className="mx-auto mb-3 size-8 text-muted-foreground" />
-            <p className="font-medium">Chưa có API lịch sử/comment</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Hiện tại hệ thống mới hỗ trợ snapshot và tạo version mới. Danh
-              sách toàn bộ version sẽ nối khi backend có API lịch sử.
-            </p>
-          </div>
+          {contract.status === ContractStatus.Negotiating && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold">Lịch sử phiên bản</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Chọn một version để xem snapshot và dữ liệu đàm phán.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => void loadVersionHistory()}
+                  disabled={isLoadingHistory}
+                  aria-label="Tải lại lịch sử phiên bản"
+                >
+                  <RefreshCw
+                    className={`size-4 ${isLoadingHistory ? "animate-spin" : ""}`}
+                  />
+                </Button>
+              </div>
+
+              {historyError ? (
+                <Alert variant="destructive">
+                  <AlertTitle>Không thể tải lịch sử version</AlertTitle>
+                  <AlertDescription className="space-y-3">
+                    <p>{historyError}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void loadVersionHistory()}
+                    >
+                      Thử lại
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              ) : isLoadingHistory && versionHistory.length === 0 ? (
+                <div className="flex min-h-40 items-center justify-center rounded-xl border border-dashed">
+                  <Loader2 className="mr-2 size-5 animate-spin text-primary" />
+                  <span className="text-sm text-muted-foreground">
+                    Đang tải lịch sử version...
+                  </span>
+                </div>
+              ) : versionHistory.length === 0 ? (
+                <div className="rounded-xl border border-dashed p-6 text-center">
+                  <GitBranch className="mx-auto mb-3 size-8 text-muted-foreground" />
+                  <p className="font-medium">Chưa có lịch sử phiên bản</p>
+                </div>
+              ) : (
+                <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+                  <div className="max-h-[430px] space-y-2 overflow-y-auto pr-1">
+                    {[...versionHistory].reverse().map((version) => {
+                      const isSelected =
+                        version.versionId === selectedVersionId;
+                      const isCurrent =
+                        version.versionId === currentVersion.versionId;
+
+                      return (
+                        <button
+                          type="button"
+                          key={version.versionId}
+                          onClick={() => setSelectedVersionId(version.versionId)}
+                          className={`w-full rounded-xl border p-3 text-left transition-colors ${
+                            isSelected
+                              ? "border-primary bg-primary/5"
+                              : "bg-background hover:bg-muted/50"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="font-semibold">
+                                Version {version.versionNo}
+                              </p>
+                              <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                                <CalendarDays className="size-3" />
+                                {formatDate(version.createdDate)}
+                              </p>
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              {isCurrent && <Badge>Hiện hành</Badge>}
+                              <Badge
+                                variant={
+                                  version.isLocked ? "secondary" : "outline"
+                                }
+                              >
+                                {version.isLocked ? "Đã khóa" : "Đang sửa"}
+                              </Badge>
+                            </div>
+                          </div>
+                          <p className="mt-3 line-clamp-2 text-sm text-muted-foreground">
+                            {version.changeNote || "Khởi tạo hợp đồng."}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="min-h-[260px] rounded-xl border bg-muted/20 p-4 sm:p-5">
+                    {isLoadingVersion ? (
+                      <div className="flex min-h-[230px] items-center justify-center">
+                        <Loader2 className="mr-2 size-5 animate-spin text-primary" />
+                        <span className="text-sm text-muted-foreground">
+                          Đang tải snapshot...
+                        </span>
+                      </div>
+                    ) : versionError ? (
+                      <Alert variant="destructive">
+                        <AlertTitle>Không thể tải snapshot</AlertTitle>
+                        <AlertDescription>{versionError}</AlertDescription>
+                      </Alert>
+                    ) : selectedVersion ? (
+                      <div className="space-y-5">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                              Snapshot đã chọn
+                            </p>
+                            <h4 className="mt-1 text-xl font-bold">
+                              Version {selectedVersion.versionNo}
+                            </h4>
+                          </div>
+                          <Badge
+                            variant={
+                              selectedVersion.isLocked
+                                ? "secondary"
+                                : "outline"
+                            }
+                            className="w-fit gap-1"
+                          >
+                            {selectedVersion.isLocked ? (
+                              <FileLock2 className="size-3.5" />
+                            ) : (
+                              <CheckCircle2 className="size-3.5" />
+                            )}
+                            {selectedVersion.isLocked
+                              ? "Snapshot đã khóa"
+                              : "Version đang chỉnh sửa"}
+                          </Badge>
+                        </div>
+
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <div className="rounded-lg border bg-background p-3">
+                            <Package className="mb-2 size-4 text-primary" />
+                            <p className="text-xl font-bold">
+                              {selectedVersion.items.length}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Sản phẩm / dịch vụ
+                            </p>
+                          </div>
+                          <div className="rounded-lg border bg-background p-3">
+                            <ScrollText className="mb-2 size-4 text-primary" />
+                            <p className="text-xl font-bold">
+                              {selectedVersion.terms.length}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Điều khoản
+                            </p>
+                          </div>
+                          <div className="rounded-lg border bg-background p-3">
+                            <MessageSquareText className="mb-2 size-4 text-primary" />
+                            <p className="text-xl font-bold">
+                              {selectedVersion.comments?.length || 0}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Bình luận
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-3 text-sm sm:grid-cols-2">
+                          <div>
+                            <p className="text-muted-foreground">Ngày tạo</p>
+                            <p className="mt-1 font-medium">
+                              {formatDate(selectedVersion.createdDate)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">
+                              Tổng thanh toán
+                            </p>
+                            <p className="mt-1 font-semibold text-primary">
+                              {formatCurrency(
+                                selectedVersion.totalPayment,
+                                selectedVersion.currencyCode,
+                              )}
+                            </p>
+                          </div>
+                        </div>
+
+                        <Separator />
+                        <div>
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            Lý do thay đổi
+                          </p>
+                          <p className="mt-2 text-sm leading-6">
+                            {selectedVersion.changeNote ||
+                              "Khởi tạo hợp đồng."}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

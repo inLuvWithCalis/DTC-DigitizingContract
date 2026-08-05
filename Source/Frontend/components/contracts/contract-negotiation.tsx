@@ -50,9 +50,9 @@ const getApiErrorMessage = (error: any, fallback: string) => {
   return data?.errors
     ? Object.values(data.errors).flat().join("; ")
     : data?.message ||
-    data?.title ||
-    (typeof data === "string" ? data : null) ||
-    fallback;
+        data?.title ||
+        (typeof data === "string" ? data : null) ||
+        fallback;
 };
 
 export function ContractNegotiation({
@@ -83,8 +83,7 @@ export function ContractNegotiation({
 
   const currentVersion = contract.currentVersion;
   const canCreateRound =
-    contract.status === ContractStatus.Negotiating &&
-    !currentVersion.isLocked;
+    contract.status === ContractStatus.Negotiating && !currentVersion.isLocked;
 
   const loadVersionHistory = useCallback(async () => {
     if (contract.status !== ContractStatus.Negotiating) {
@@ -96,9 +95,7 @@ export function ContractNegotiation({
     setIsLoadingHistory(true);
     setHistoryError(null);
     try {
-      const versions = await contractApi.getVersionHistory(
-        contract.contractId,
-      );
+      const versions = await contractApi.getVersionHistory(contract.contractId);
       setVersionHistory(versions);
       setSelectedVersionId((currentSelection) =>
         versions.some((version) => version.versionId === currentSelection)
@@ -108,19 +105,12 @@ export function ContractNegotiation({
     } catch (error: any) {
       console.error("Lỗi tải lịch sử version:", error);
       setHistoryError(
-        getApiErrorMessage(
-          error,
-          "Không thể tải lịch sử phiên bản đàm phán.",
-        ),
+        getApiErrorMessage(error, "Không thể tải lịch sử phiên bản đàm phán."),
       );
     } finally {
       setIsLoadingHistory(false);
     }
-  }, [
-    contract.contractId,
-    contract.currentVersion.versionId,
-    contract.status,
-  ]);
+  }, [contract.contractId, contract.currentVersion.versionId, contract.status]);
 
   useEffect(() => {
     void loadVersionHistory();
@@ -143,10 +133,7 @@ export function ContractNegotiation({
   }, [historyTotalPages]);
 
   useEffect(() => {
-    if (
-      contract.status !== ContractStatus.Negotiating ||
-      !selectedVersionId
-    ) {
+    if (contract.status !== ContractStatus.Negotiating || !selectedVersionId) {
       return;
     }
 
@@ -205,9 +192,7 @@ export function ContractNegotiation({
         },
       );
 
-      const updatedContract = await contractApi.getDetail(
-        contract.contractId,
-      );
+      const updatedContract = await contractApi.getDetail(contract.contractId);
       setHistoryPage(1);
       setSelectedVersionId(updatedContract.currentVersion.versionId);
       setContract(updatedContract);
@@ -230,7 +215,7 @@ export function ContractNegotiation({
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+    <div>
       <Card>
         <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -263,18 +248,6 @@ export function ContractNegotiation({
             </Alert>
           )}
 
-          {contract.status === ContractStatus.Negotiating && (
-            <Alert>
-              <GitBranch className="size-4" />
-              <AlertTitle>Quy trình tạo revision</AlertTitle>
-              <AlertDescription>
-                Trước một lượt điều chỉnh mới, hãy tạo vòng đàm phán. Backend
-                sẽ khóa phiên bản hiện tại, tạo bản sao mới rồi bạn mới sửa và
-                lưu nội dung trên phiên bản đó.
-              </AlertDescription>
-            </Alert>
-          )}
-
           <div className="rounded-xl border bg-muted/20 p-4 sm:p-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -284,11 +257,6 @@ export function ContractNegotiation({
                 <p className="mt-1 text-2xl font-bold">
                   Version {currentVersion.versionNo}
                 </p>
-                {currentVersion.sourceVersionId && (
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Phát sinh từ version ID {currentVersion.sourceVersionId}
-                  </p>
-                )}
               </div>
               <Badge
                 variant={currentVersion.isLocked ? "secondary" : "outline"}
@@ -327,17 +295,6 @@ export function ContractNegotiation({
                     Chọn một version để xem snapshot và dữ liệu đàm phán.
                   </p>
                 </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => void loadVersionHistory()}
-                  disabled={isLoadingHistory}
-                  aria-label="Tải lại lịch sử phiên bản"
-                >
-                  <RefreshCw
-                    className={`size-4 ${isLoadingHistory ? "animate-spin" : ""}`}
-                  />
-                </Button>
               </div>
 
               {historyError ? (
@@ -383,10 +340,11 @@ export function ContractNegotiation({
                             onClick={() =>
                               setSelectedVersionId(version.versionId)
                             }
-                            className={`w-full rounded-xl border p-3 text-left transition-colors ${isSelected
-                              ? "border-primary bg-primary/5"
-                              : "bg-background hover:bg-muted/50"
-                              }`}
+                            className={`w-full rounded-xl border p-3 text-left transition-colors ${
+                              isSelected
+                                ? "border-primary bg-primary/5"
+                                : "bg-background hover:bg-muted/50"
+                            }`}
                           >
                             <div className="flex items-start justify-between gap-2">
                               <div>
@@ -401,11 +359,7 @@ export function ContractNegotiation({
                               <div className="flex flex-col items-end gap-1">
                                 {isCurrent && <Badge>Hiện hành</Badge>}
                                 {version.isLocked && (
-                                  <Badge
-                                    variant="secondary"
-                                  >
-                                    Đã khóa
-                                  </Badge>
+                                  <Badge variant="secondary">Đã khóa</Badge>
                                 )}
                               </div>
                             </div>
@@ -497,12 +451,8 @@ export function ContractNegotiation({
                             </Badge>
                             {selectedVersion.isLocked &&
                               selectedVersion.versionId !==
-                              currentVersion.versionId && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  asChild
-                                >
+                                currentVersion.versionId && (
+                                <Button variant="outline" size="sm" asChild>
                                   <Link
                                     href={`/contracts/${contract.contractId}/versions/${selectedVersion.versionId}`}
                                   >
@@ -570,8 +520,7 @@ export function ContractNegotiation({
                             Lý do thay đổi
                           </p>
                           <p className="mt-2 text-sm leading-6">
-                            {selectedVersion.changeNote ||
-                              "Khởi tạo hợp đồng."}
+                            {selectedVersion.changeNote || "Khởi tạo hợp đồng."}
                           </p>
                         </div>
                       </div>
@@ -584,39 +533,14 @@ export function ContractNegotiation({
         </CardContent>
       </Card>
 
-      <Card className="h-fit">
-        <CardHeader>
-          <CardTitle className="text-base">Luồng thao tác</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ol className="space-y-4 text-sm">
-            {[
-              "Nhập lý do và tạo vòng mới.",
-              "Backend snapshot và khóa version hiện tại.",
-              "Hệ thống tải version mới chưa khóa.",
-              "Sửa tổng quan hoặc điều khoản rồi lưu thay đổi.",
-              "Gửi duyệt khi hai bên đã chốt nội dung.",
-            ].map((step, index) => (
-              <li key={step} className="flex gap-3">
-                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                  {index + 1}
-                </span>
-                <span className="pt-0.5 text-muted-foreground">{step}</span>
-              </li>
-            ))}
-          </ol>
-        </CardContent>
-      </Card>
-
-
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Tạo vòng đàm phán mới</DialogTitle>
             <DialogDescription>
-              Version {currentVersion.versionNo} sẽ được khóa và snapshot.
-              Hệ thống sau đó tạo version {currentVersion.versionNo + 1} để
-              bạn tiếp tục chỉnh sửa.
+              Version {currentVersion.versionNo} sẽ được khóa và snapshot. Hệ
+              thống sau đó tạo version {currentVersion.versionNo + 1} để bạn
+              tiếp tục chỉnh sửa.
             </DialogDescription>
           </DialogHeader>
 

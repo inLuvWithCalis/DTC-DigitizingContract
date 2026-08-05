@@ -90,12 +90,10 @@ export function ContractOverview({
   );
 
   const persistedFinancialTotals = {
-    subtotal:
-      contract.subtotal ?? contract.currentVersion?.subtotal ?? 0,
+    subtotal: contract.subtotal ?? contract.currentVersion?.subtotal ?? 0,
     totalDiscount:
       contract.totalDiscount ?? contract.currentVersion?.totalDiscount ?? 0,
-    totalVat:
-      contract.totalVat ?? contract.currentVersion?.totalVat ?? 0,
+    totalVat: contract.totalVat ?? contract.currentVersion?.totalVat ?? 0,
     totalPayment:
       contract.totalPayment ??
       contract.currentVersion?.totalPayment ??
@@ -110,14 +108,14 @@ export function ContractOverview({
     ) > 0.009 ||
       Math.abs(
         draftFinancialTotals.totalDiscount -
-        persistedFinancialTotals.totalDiscount,
+          persistedFinancialTotals.totalDiscount,
       ) > 0.009 ||
       Math.abs(
         draftFinancialTotals.totalVat - persistedFinancialTotals.totalVat,
       ) > 0.009 ||
       Math.abs(
         draftFinancialTotals.totalPayment -
-        persistedFinancialTotals.totalPayment,
+          persistedFinancialTotals.totalPayment,
       ) > 0.009);
 
   const financialTotals = isEditable
@@ -287,10 +285,7 @@ export function ContractOverview({
     setContract((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
 
-  const handleItemPatch = (
-    itemId: number,
-    patch: Record<string, unknown>,
-  ) => {
+  const handleItemPatch = (itemId: number, patch: Record<string, unknown>) => {
     setContract((prev) => {
       if (!prev || !prev.currentVersion) return prev;
       const updatedItems = prev.currentVersion.items.map((item) =>
@@ -382,15 +377,15 @@ export function ContractOverview({
                       setContract((prev) =>
                         prev
                           ? {
-                            ...prev,
-                            customer: {
-                              ...prev.customer,
-                              customerId: found.customerId,
-                              customerCode: found.customerCode,
-                              customerFullName: found.customerFullName,
-                              customerCompany: found.customerCompany,
-                            },
-                          }
+                              ...prev,
+                              customer: {
+                                ...prev.customer,
+                                customerId: found.customerId,
+                                customerCode: found.customerCode,
+                                customerFullName: found.customerFullName,
+                                customerCompany: found.customerCompany,
+                              },
+                            }
                           : prev,
                       );
                     }
@@ -574,11 +569,11 @@ export function ContractOverview({
                 const amounts = isEditable
                   ? calculateContractItemAmounts(item, contract.currencyCode)
                   : {
-                    lineSubtotal: item.lineSubtotal,
-                    discountAmount: item.discountAmount,
-                    vatAmount: item.vatAmount,
-                    lineTotal: item.lineTotal,
-                  };
+                      lineSubtotal: item.lineSubtotal,
+                      discountAmount: item.discountAmount,
+                      vatAmount: item.vatAmount,
+                      lineTotal: item.lineTotal,
+                    };
 
                 return (
                   <div
@@ -609,26 +604,26 @@ export function ContractOverview({
                     </div>
 
                     {isEditable ? (
-                      <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-5">
+                      <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
                         {contract.languageMode ===
                           ContractLanguageMode.Bilingual && (
-                            <div className="space-y-1.5 sm:col-span-2 xl:col-span-5">
-                              <span className="text-xs font-medium text-muted-foreground">
-                                Tên sản phẩm / dịch vụ tiếng Anh
-                              </span>
-                              <Input
-                                value={item.itemNameEn || ""}
-                                onChange={(e) =>
-                                  handleItemChange(
-                                    item.contractItemId,
-                                    "itemNameEn",
-                                    e.target.value,
-                                  )
-                                }
-                                placeholder="Enter the English item name..."
-                              />
-                            </div>
-                          )}
+                          <div className="space-y-1.5 sm:col-span-2 xl:col-span-5">
+                            <span className="text-xs font-medium text-muted-foreground">
+                              Tên sản phẩm / dịch vụ tiếng Anh
+                            </span>
+                            <Input
+                              value={item.itemNameEn || ""}
+                              onChange={(e) =>
+                                handleItemChange(
+                                  item.contractItemId,
+                                  "itemNameEn",
+                                  e.target.value,
+                                )
+                              }
+                              placeholder="Enter the English item name..."
+                            />
+                          </div>
+                        )}
                         <div className="space-y-1.5">
                           <span className="text-xs font-medium text-muted-foreground">
                             Số lượng
@@ -677,7 +672,7 @@ export function ContractOverview({
                               })
                             }
                           >
-                            <SelectTrigger>
+                            <SelectTrigger className="w-full">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -706,44 +701,44 @@ export function ContractOverview({
 
                         {item.discountMode ===
                           ContractItemDiscountMode.Percentage && (
-                            <div className="space-y-1.5">
-                              <span className="text-xs font-medium text-muted-foreground">
-                                Mức giảm (%)
-                              </span>
-                              <DecimalInput
-                                min={0}
-                                max={100}
-                                value={item.discountPercent}
-                                onValueChange={(value) =>
-                                  handleItemChange(
-                                    item.contractItemId,
-                                    "discountPercent",
-                                    value,
-                                  )
-                                }
-                              />
-                            </div>
-                          )}
+                          <div className="space-y-1.5">
+                            <span className="text-xs font-medium text-muted-foreground">
+                              Mức giảm (%)
+                            </span>
+                            <DecimalInput
+                              min={0}
+                              max={100}
+                              value={item.discountPercent}
+                              onValueChange={(value) =>
+                                handleItemChange(
+                                  item.contractItemId,
+                                  "discountPercent",
+                                  value,
+                                )
+                              }
+                            />
+                          </div>
+                        )}
 
                         {item.discountMode ===
                           ContractItemDiscountMode.FixedAmount && (
-                            <div className="space-y-1.5">
-                              <span className="text-xs font-medium text-muted-foreground">
-                                Số tiền giảm
-                              </span>
-                              <DecimalInput
-                                min={0}
-                                value={item.fixedDiscountAmount}
-                                onValueChange={(value) =>
-                                  handleItemChange(
-                                    item.contractItemId,
-                                    "fixedDiscountAmount",
-                                    value,
-                                  )
-                                }
-                              />
-                            </div>
-                          )}
+                          <div className="space-y-1.5">
+                            <span className="text-xs font-medium text-muted-foreground">
+                              Số tiền giảm
+                            </span>
+                            <DecimalInput
+                              min={0}
+                              value={item.fixedDiscountAmount}
+                              onValueChange={(value) =>
+                                handleItemChange(
+                                  item.contractItemId,
+                                  "fixedDiscountAmount",
+                                  value,
+                                )
+                              }
+                            />
+                          </div>
+                        )}
 
                         <div className="space-y-1.5">
                           <span className="text-xs font-medium text-muted-foreground">
@@ -806,34 +801,36 @@ export function ContractOverview({
                           <p className="text-muted-foreground">Chiết khấu</p>
                           <p className="mt-1 font-medium">
                             {item.discountMode ===
-                              ContractItemDiscountMode.Percentage
+                            ContractItemDiscountMode.Percentage
                               ? `${item.discountPercent}%`
                               : item.discountMode ===
-                                ContractItemDiscountMode.FixedAmount
+                                  ContractItemDiscountMode.FixedAmount
                                 ? formatCurrency(
-                                  item.fixedDiscountAmount,
-                                  contract.currencyCode,
-                                )
+                                    item.fixedDiscountAmount,
+                                    contract.currencyCode,
+                                  )
                                 : "Không"}
                           </p>
                         </div>
                         <div>
                           <p className="text-muted-foreground">VAT</p>
                           <p className="mt-1 font-medium">
-                            {item.isTaxable ? `${item.vatPercent}%` : "Không thuế"}
+                            {item.isTaxable
+                              ? `${item.vatPercent}%`
+                              : "Không thuế"}
                           </p>
                         </div>
                         {contract.languageMode ===
                           ContractLanguageMode.Bilingual && (
-                            <div className="sm:col-span-2 xl:col-span-4">
-                              <p className="text-muted-foreground">
-                                Tên tiếng Anh
-                              </p>
-                              <p className="mt-1 font-medium">
-                                {item.itemNameEn || "Chưa cập nhật"}
-                              </p>
-                            </div>
-                          )}
+                          <div className="sm:col-span-2 xl:col-span-4">
+                            <p className="text-muted-foreground">
+                              Tên tiếng Anh
+                            </p>
+                            <p className="mt-1 font-medium">
+                              {item.itemNameEn || "Chưa cập nhật"}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -848,9 +845,12 @@ export function ContractOverview({
                         </p>
                       </div>
                       <div className="flex justify-between gap-3 xl:block">
-                        <span className="text-muted-foreground">Chiết khấu</span>
+                        <span className="text-muted-foreground">
+                          Chiết khấu
+                        </span>
                         <p className="font-medium text-emerald-600">
-                          -{formatCurrency(
+                          -
+                          {formatCurrency(
                             amounts.discountAmount,
                             contract.currencyCode,
                           )}
@@ -866,7 +866,9 @@ export function ContractOverview({
                         </p>
                       </div>
                       <div className="flex justify-between gap-3 xl:block">
-                        <span className="text-muted-foreground">Thành tiền</span>
+                        <span className="text-muted-foreground">
+                          Thành tiền
+                        </span>
                         <p className="font-semibold text-primary">
                           {formatCurrency(
                             amounts.lineTotal,
@@ -917,19 +919,19 @@ export function ContractOverview({
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
             <CardTitle className="text-base">Giá trị hợp đồng</CardTitle>
-            <Badge variant={hasUnsavedFinancialChanges ? "secondary" : "outline"}>
-              {hasUnsavedFinancialChanges
-                ? "Dự kiến · chưa lưu"
-                : `Backend · Version ${contract.currentVersion.versionNo}`}
+            <Badge
+              variant={hasUnsavedFinancialChanges ? "secondary" : "outline"}
+            >
+              Phiên bản {contract.currentVersion.versionNo}
             </Badge>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="rounded-lg bg-muted/50 px-3 py-2 text-xs leading-5 text-muted-foreground">
               {hasUnsavedFinancialChanges
                 ? `Đang hiển thị số liệu dự kiến theo các thay đổi trên màn hình. Tổng đã lưu: ${formatCurrency(
-                  persistedFinancialTotals.totalPayment,
-                  contract.currencyCode,
-                )}.`
+                    persistedFinancialTotals.totalPayment,
+                    contract.currencyCode,
+                  )}.`
                 : "Số liệu đã được backend tính và lưu cho phiên bản hợp đồng hiện hành."}
             </p>
             {isEditable && (
@@ -965,7 +967,8 @@ export function ContractOverview({
             <div className="flex justify-between gap-3 text-sm">
               <span className="text-muted-foreground">Chiết khấu</span>
               <span className="text-emerald-600">
-                -{formatCurrency(
+                -
+                {formatCurrency(
                   financialTotals.totalDiscount,
                   contract.currencyCode,
                 )}
@@ -993,12 +996,11 @@ export function ContractOverview({
           </CardContent>
         </Card>
 
-        <Card>
+        {/* <Card>
           <CardHeader>
             <CardTitle className="text-base">Thanh toán</CardTitle>
           </CardHeader>
           <CardContent>
-            {/* TODO: Tích hợp API tracking luồng tiền sau */}
             <div className="mb-2 flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Tiến độ thanh toán</span>
               <span className="font-semibold">0%</span>
@@ -1025,7 +1027,7 @@ export function ContractOverview({
               </p>
             </div>
           </CardContent>
-        </Card>
+        </Card> */}
       </div>
     </div>
   );

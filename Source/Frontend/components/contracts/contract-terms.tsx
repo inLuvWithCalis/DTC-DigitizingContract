@@ -26,11 +26,13 @@ import {
 export function ContractTerms({
   contract,
   setContract,
+  onDraftChange,
 }: {
   contract: ContractDetailResponse;
   setContract: React.Dispatch<
     React.SetStateAction<ContractDetailResponse | null>
   >;
+  onDraftChange?: () => void;
 }) {
   const isEditable =
     (contract.status === ContractStatus.Draft ||
@@ -55,6 +57,7 @@ export function ContractTerms({
   );
 
   const handleTermChange = (termId: number, field: string, value: any) => {
+    onDraftChange?.();
     setContract((prev) => {
       if (!prev || !prev.currentVersion) return prev;
       const updatedTerms = prev.currentVersion.terms.map((t) =>
@@ -68,6 +71,7 @@ export function ContractTerms({
   };
 
   const handleAddTerm = () => {
+    onDraftChange?.();
     setContract((prev) => {
       if (!prev || !prev.currentVersion) return prev;
       const newDisplayOrder = prev.currentVersion.terms.length + 1;
@@ -96,6 +100,7 @@ export function ContractTerms({
   };
 
   const handleRemoveTerm = (termId: number) => {
+    onDraftChange?.();
     setContract((prev) => {
       if (!prev || !prev.currentVersion) return prev;
       const updatedTerms = prev.currentVersion.terms.filter(

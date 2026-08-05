@@ -29,6 +29,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { employeeApi } from "@/services/employees-api";
 import {
   contractApi,
@@ -121,22 +122,35 @@ export function ContractTermComments({
   comments,
   canWrite,
   onCommentChanged,
+  triggerClassName,
 }: {
   contractId: number;
   versionId: number;
-  termId: number;
-  termCode: string;
-  termTitle: string;
+  termId: number | null;
+  termCode?: string;
+  termTitle?: string;
   comments: ContractNegotiationCommentResponse[];
   canWrite: boolean;
-  onCommentChanged: (comment: ContractNegotiationCommentResponse) => void;
+  onCommentChanged?: (comment: ContractNegotiationCommentResponse) => void;
+  triggerClassName?: string;
 }) {
+  const isGeneralDiscussion = termId == null;
+  const discussionLabel = isGeneralDiscussion
+    ? "Trao đổi chung"
+    : "Trao đổi điều khoản";
+  const discussionDescription = isGeneralDiscussion
+    ? "Nội dung trao đổi chung của hợp đồng"
+    : [termCode, termTitle].filter(Boolean).join(" · ") ||
+      "Nội dung trao đổi của điều khoản";
+  const matchesTerm = (comment: ContractNegotiationCommentResponse) =>
+    (comment.termId ?? null) === termId;
+
   const initialRootComments = useMemo(
     () =>
       comments.filter(
         (comment) =>
           comment.versionId === versionId &&
-          comment.termId === termId &&
+          (comment.termId ?? null) === termId &&
           !comment.parentCommentId,
       ),
     [comments, termId, versionId],
@@ -149,7 +163,6 @@ export function ContractTermComments({
   >([]);
   const [selectedParentId, setSelectedParentId] = useState<number | null>(null);
   const [rootPage, setRootPage] = useState(1);
-  const [childPage, setChildPage] = useState(1);
   const [content, setContent] = useState("");
   const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
   const [employeeNames, setEmployeeNames] = useState<Record<number, string>>(
@@ -165,8 +178,7 @@ export function ContractTermComments({
   );
 
   const termRootComments = rootComments.filter(
-    (comment) =>
-      comment.versionId === versionId && comment.termId === termId,
+    (comment) => comment.versionId === versionId && matchesTerm(comment),
   );
   const selectedParent =
     termRootComments.find(
@@ -179,17 +191,9 @@ export function ContractTermComments({
     1,
     Math.ceil(termRootComments.length / COMMENTS_PAGE_SIZE),
   );
-  const childTotalPages = Math.max(
-    1,
-    Math.ceil(childComments.length / COMMENTS_PAGE_SIZE),
-  );
   const paginatedRoots = termRootComments.slice(
     (rootPage - 1) * COMMENTS_PAGE_SIZE,
     rootPage * COMMENTS_PAGE_SIZE,
-  );
-  const paginatedChildren = childComments.slice(
-    (childPage - 1) * COMMENTS_PAGE_SIZE,
-    childPage * COMMENTS_PAGE_SIZE,
   );
 
   useEffect(() => {
@@ -201,10 +205,6 @@ export function ContractTermComments({
   useEffect(() => {
     setRootPage((page) => Math.min(Math.max(page, 1), rootTotalPages));
   }, [rootTotalPages]);
-
-  useEffect(() => {
-    setChildPage((page) => Math.min(Math.max(page, 1), childTotalPages));
-  }, [childTotalPages]);
 
   const getEmployeeName = (employeeId: number) =>
     employeeNames[employeeId] || `Nhân viên #${employeeId}`;
@@ -268,7 +268,7 @@ export function ContractTermComments({
       );
       const termReplies = result.filter(
         (comment) =>
-          comment.versionId === versionId && comment.termId === termId,
+          comment.versionId === versionId && matchesTerm(comment),
       );
       setChildComments(termReplies);
       await loadEmployeeNames(termReplies);
@@ -289,7 +289,6 @@ export function ContractTermComments({
     setSelectedParentId(null);
     setChildComments([]);
     setRootPage(1);
-    setChildPage(1);
 
     if (open) {
       void loadRootComments();
@@ -302,7 +301,6 @@ export function ContractTermComments({
     setSelectedParentId(parentComment.commentId);
     setContent("");
     setReplyTarget(null);
-    setChildPage(1);
     void loadChildComments(parentComment.commentId);
   };
 
@@ -337,19 +335,13 @@ export function ContractTermComments({
         },
       );
 
-      onCommentChanged(createdComment);
+      onCommentChanged?.(createdComment);
       await loadEmployeeNames([createdComment]);
       setContent("");
       setReplyTarget(null);
 
       if (selectedParent) {
         setChildComments((current) => [...current, createdComment]);
-        setChildPage(
-          Math.max(
-            1,
-            Math.ceil((childComments.length + 1) / COMMENTS_PAGE_SIZE),
-          ),
-        );
         toast.success("Đã gửi câu trả lời.");
       } else {
         setRootComments((current) => [...current, createdComment]);
@@ -364,10 +356,7 @@ export function ContractTermComments({
     } catch (error: any) {
       console.error("Lỗi gửi comment:", error);
       toast.error(
-        getApiErrorMessage(
-          error,
-          "Không thể gửi phản hồi. Vui lòng thử lại.",
-        ),
+        getApiErrorMessage(error, "Không thể gửi phản hồi. Vui lòng thử lại."),
       );
     } finally {
       setIsSubmitting(false);
@@ -392,22 +381,18 @@ export function ContractTermComments({
       if (updatedComment.parentCommentId) {
         setChildComments((current) =>
           current.map((item) =>
-            item.commentId === updatedComment.commentId
-              ? updatedComment
-              : item,
+            item.commentId === updatedComment.commentId ? updatedComment : item,
           ),
         );
       } else {
         setRootComments((current) =>
           current.map((item) =>
-            item.commentId === updatedComment.commentId
-              ? updatedComment
-              : item,
+            item.commentId === updatedComment.commentId ? updatedComment : item,
           ),
         );
       }
 
-      onCommentChanged(updatedComment);
+      onCommentChanged?.(updatedComment);
       toast.success(
         action === "resolve"
           ? "Đã đánh dấu trao đổi là đã xử lý."
@@ -416,10 +401,7 @@ export function ContractTermComments({
     } catch (error: any) {
       console.error("Lỗi cập nhật trạng thái comment:", error);
       toast.error(
-        getApiErrorMessage(
-          error,
-          "Không thể cập nhật trạng thái phản hồi.",
-        ),
+        getApiErrorMessage(error, "Không thể cập nhật trạng thái phản hồi."),
       );
     } finally {
       setProcessingCommentId(null);
@@ -496,9 +478,13 @@ export function ContractTermComments({
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="mt-4 w-fit">
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn("mt-4 w-fit", triggerClassName)}
+        >
           <MessageSquareText className="mr-2 size-4 text-primary" />
-          Trao đổi điều khoản
+          {discussionLabel}
           <Badge variant="secondary" className="ml-2">
             {termRootComments.length}
           </Badge>
@@ -529,94 +515,79 @@ export function ContractTermComments({
                 {selectedParent.content}
               </DialogTitle>
               <DialogDescription className="text-left">
-                {termCode} · {termTitle}
+                {discussionDescription}
               </DialogDescription>
+              <div className="space-y-3 text-left">
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant={
+                      selectedParent.state ===
+                      ContractNegotiationCommentState.Resolved
+                        ? "secondary"
+                        : "outline"
+                    }
+                  >
+                    {selectedParent.state ===
+                    ContractNegotiationCommentState.Resolved
+                      ? "Đã xử lý"
+                      : "Đang mở"}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                      {getEmployeeName(selectedParent.recordedByEmployeeId)}
+                    </span>{" "}
+                    · {formatDateTime(selectedParent.createdDate)}
+                  </span>
+                </div>
+                {canWrite && (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedParent.state ===
+                      ContractNegotiationCommentState.Open && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => beginReply(selectedParent)}
+                      >
+                        <Reply className="mr-1.5 size-3.5" />
+                        Trả lời
+                      </Button>
+                    )}
+                    <Button
+                      variant="default"
+                      size="sm"
+                      disabled={
+                        processingCommentId === selectedParent.commentId
+                      }
+                      onClick={() =>
+                        void handleChangeState(
+                          selectedParent,
+                          selectedParent.state ===
+                            ContractNegotiationCommentState.Resolved
+                            ? "reopen"
+                            : "resolve",
+                        )
+                      }
+                    >
+                      {processingCommentId === selectedParent.commentId ? (
+                        <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                      ) : selectedParent.state ===
+                        ContractNegotiationCommentState.Resolved ? (
+                        <RotateCcw className="mr-1.5 size-3.5" />
+                      ) : (
+                        <CheckCircle2 className="mr-1.5 size-3.5" />
+                      )}
+                      {selectedParent.state ===
+                      ContractNegotiationCommentState.Resolved
+                        ? "Mở lại"
+                        : "Đã xử lý"}
+                    </Button>
+                  </div>
+                )}
+              </div>
             </DialogHeader>
 
             <div className="space-y-4">
-              <div className="rounded-xl border bg-muted/20 p-4">
-                <div className="flex items-start gap-3">
-                  <Avatar className="size-9 border">
-                    <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
-                      {getInitials(
-                        getEmployeeName(selectedParent.recordedByEmployeeId),
-                      )}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold">
-                          {getEmployeeName(selectedParent.recordedByEmployeeId)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatDateTime(selectedParent.createdDate)}
-                        </p>
-                      </div>
-                      <Badge
-                        variant={
-                          selectedParent.state ===
-                          ContractNegotiationCommentState.Resolved
-                            ? "secondary"
-                            : "outline"
-                        }
-                      >
-                        {selectedParent.state ===
-                        ContractNegotiationCommentState.Resolved
-                          ? "Đã xử lý"
-                          : "Đang mở"}
-                      </Badge>
-                    </div>
-                    <p className="mt-3 whitespace-pre-wrap text-sm leading-6">
-                      {selectedParent.content}
-                    </p>
-                    {canWrite && (
-                      <div className="mt-3 flex flex-wrap gap-1 border-t pt-2">
-                        {selectedParent.state ===
-                          ContractNegotiationCommentState.Open && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => beginReply(selectedParent)}
-                          >
-                            <Reply className="mr-1.5 size-3.5" />
-                            Trả lời
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={
-                            processingCommentId === selectedParent.commentId
-                          }
-                          onClick={() =>
-                            void handleChangeState(
-                              selectedParent,
-                              selectedParent.state ===
-                                ContractNegotiationCommentState.Resolved
-                                ? "reopen"
-                                : "resolve",
-                            )
-                          }
-                        >
-                          {processingCommentId === selectedParent.commentId ? (
-                            <Loader2 className="mr-1.5 size-3.5 animate-spin" />
-                          ) : selectedParent.state ===
-                            ContractNegotiationCommentState.Resolved ? (
-                            <RotateCcw className="mr-1.5 size-3.5" />
-                          ) : (
-                            <CheckCircle2 className="mr-1.5 size-3.5" />
-                          )}
-                          {selectedParent.state ===
-                          ContractNegotiationCommentState.Resolved
-                            ? "Mở lại"
-                            : "Đã xử lý"}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+              {renderComposer(true)}
 
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold">
@@ -652,12 +623,12 @@ export function ContractTermComments({
                       Chưa có câu trả lời
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Bạn có thể tiếp tục cuộc trao đổi ở bên dưới.
+                      Bạn có thể tiếp tục cuộc trao đổi ở phía trên.
                     </p>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {paginatedChildren.map((comment) => {
+                    {childComments.map((comment) => {
                       const employeeName = getEmployeeName(
                         comment.recordedByEmployeeId,
                       );
@@ -736,17 +707,9 @@ export function ContractTermComments({
                         </div>
                       );
                     })}
-
-                    <CommentPagination
-                      currentPage={childPage}
-                      totalPages={childTotalPages}
-                      onPageChange={setChildPage}
-                    />
                   </div>
                 )}
               </ScrollArea>
-
-              {renderComposer(true)}
             </div>
           </>
         ) : (
@@ -754,10 +717,10 @@ export function ContractTermComments({
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <MessageSquareText className="size-5 text-primary" />
-                Trao đổi điều khoản
+                {discussionLabel}
               </DialogTitle>
               <DialogDescription>
-                {termCode} · {termTitle}
+                {discussionDescription}
               </DialogDescription>
             </DialogHeader>
 
@@ -836,9 +799,7 @@ export function ContractTermComments({
                                   </p>
                                 </div>
                                 <Badge
-                                  variant={
-                                    isResolved ? "secondary" : "outline"
-                                  }
+                                  variant={isResolved ? "secondary" : "outline"}
                                 >
                                   {isResolved ? "Đã xử lý" : "Đang mở"}
                                 </Badge>

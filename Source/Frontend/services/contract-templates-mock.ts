@@ -198,6 +198,72 @@ export const mockContractTemplates: MockContractTemplate[] = [
     updatedAt: "20/07/2026",
     terms: upkeepTerms,
   },
+  {
+    versionId: 4,
+    templateCode: "TPL-SW-SUPPLY-ENTERPRISE",
+    name: "Hợp đồng cung cấp phần mềm doanh nghiệp",
+    version: "1.3",
+    description:
+      "Mẫu mở rộng cho dự án triển khai phần mềm quy mô doanh nghiệp và nhiều chi nhánh.",
+    contractType: ContractType.SoftwareSupply,
+    updatedAt: "24/07/2026",
+    terms: softwareSupplyTerms,
+  },
+  {
+    versionId: 5,
+    templateCode: "TPL-SW-MAINTENANCE-SLA",
+    name: "Hợp đồng bảo trì theo SLA",
+    version: "1.1",
+    description:
+      "Mẫu bảo trì có cam kết thời gian phản hồi và xử lý theo từng mức độ sự cố.",
+    contractType: ContractType.SoftwareMaintenance,
+    updatedAt: "25/07/2026",
+    terms: maintenanceTerms,
+  },
+  {
+    versionId: 6,
+    templateCode: "TPL-SW-UPKEEP-ANNUAL",
+    name: "Hợp đồng duy trì hệ thống hàng năm",
+    version: "2.0",
+    description:
+      "Mẫu dịch vụ duy trì, giám sát và báo cáo vận hành theo chu kỳ hàng năm.",
+    contractType: ContractType.SoftwareUpkeep,
+    updatedAt: "27/07/2026",
+    terms: upkeepTerms,
+  },
+  {
+    versionId: 7,
+    templateCode: "TPL-SW-SUPPLY-SAAS",
+    name: "Hợp đồng cung cấp phần mềm SaaS",
+    version: "1.0",
+    description:
+      "Mẫu dành cho phần mềm dạng thuê bao, bao gồm cấp quyền sử dụng và khởi tạo dịch vụ.",
+    contractType: ContractType.SoftwareSupply,
+    updatedAt: "29/07/2026",
+    terms: softwareSupplyTerms,
+  },
+  {
+    versionId: 8,
+    templateCode: "TPL-SW-MAINTENANCE-PREMIUM",
+    name: "Hợp đồng bảo trì ưu tiên 24/7",
+    version: "1.0",
+    description:
+      "Mẫu bảo trì ưu tiên với đầu mối hỗ trợ liên tục và quy trình xử lý khẩn cấp.",
+    contractType: ContractType.SoftwareMaintenance,
+    updatedAt: "01/08/2026",
+    terms: maintenanceTerms,
+  },
+  {
+    versionId: 9,
+    templateCode: "TPL-SW-UPKEEP-CLOUD",
+    name: "Hợp đồng duy trì nền tảng Cloud",
+    version: "1.4",
+    description:
+      "Mẫu duy trì hạ tầng Cloud, theo dõi tài nguyên và tối ưu hiệu năng định kỳ.",
+    contractType: ContractType.SoftwareUpkeep,
+    updatedAt: "03/08/2026",
+    terms: upkeepTerms,
+  },
 ];
 
 export function cloneMockTerms(terms: MockContractTerm[]) {

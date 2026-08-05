@@ -48,8 +48,9 @@ export default function ContractVersionDetailPage() {
   const versionId = Number(params.versionId);
 
   const [contract, setContract] = useState<ContractDetailResponse | null>(null);
-  const [version, setVersion] =
-    useState<ContractVersionDetailResponse | null>(null);
+  const [version, setVersion] = useState<ContractVersionDetailResponse | null>(
+    null,
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -113,9 +114,7 @@ export default function ContractVersionDetailPage() {
             <AlertDescription className="space-y-3">
               <p>{error || "Không tìm thấy dữ liệu version."}</p>
               <Button variant="outline" size="sm" asChild>
-                <Link href={`/contracts/${params.id}`}>
-                  Quay lại hợp đồng
-                </Link>
+                <Link href={`/contracts/${params.id}`}>Quay lại hợp đồng</Link>
               </Button>
             </AlertDescription>
           </Alert>
@@ -150,12 +149,6 @@ export default function ContractVersionDetailPage() {
               {contract.contractName}
             </p>
           </div>
-
-          <Button variant="outline" asChild>
-            <Link href={`/contracts/${contract.contractId}`}>
-              Xem hợp đồng hiện hành
-            </Link>
-          </Button>
         </div>
 
         <div className="grid gap-4 md:grid-cols-4">
@@ -185,9 +178,7 @@ export default function ContractVersionDetailPage() {
           <InfoCard
             icon={<Clock className="size-4" />}
             label="Người phụ trách"
-            value={
-              contract.responsibleEmployee?.employeeFullName || "Chưa gán"
-            }
+            value={contract.responsibleEmployee?.employeeFullName || "Chưa gán"}
           />
         </div>
 
@@ -201,7 +192,7 @@ export default function ContractVersionDetailPage() {
                 Chi tiết Version {version.versionNo}
               </CardTitle>
               <p className="mt-2 text-sm text-muted-foreground">
-                Tạo ngày {formatDate(version.createdDate)} · {" "}
+                Tạo ngày {formatDate(version.createdDate)} ·{" "}
                 {version.changeNote || "Khởi tạo hợp đồng."}
               </p>
             </div>
@@ -218,7 +209,10 @@ export default function ContractVersionDetailPage() {
             </Badge>
           </CardHeader>
           <CardContent>
-            <ContractVersionSnapshotTabs version={version} />
+            <ContractVersionSnapshotTabs
+              contractId={contract.contractId}
+              version={version}
+            />
           </CardContent>
         </Card>
       </div>

@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   LayoutTemplate,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -70,6 +71,7 @@ import {
   MockContractTerm,
   mockContractTemplates,
 } from "@/services/contract-templates-mock";
+import { useAuthStore } from "@/hooks/use-auth-store";
 
 const steps = [
   { title: "Khách hàng & Mẫu", description: "Thiết lập cơ bản" },
@@ -110,6 +112,7 @@ const formatCurrency = (amount: number, currencyCode: string) => {
 
 export default function CreateContractPage() {
   const router = useRouter();
+  const user = useAuthStore((state) => state.user);
 
   // -- STATES --
   const [currentStep, setCurrentStep] = useState(0);
@@ -185,6 +188,33 @@ export default function CreateContractPage() {
   const [customerId, setCustomerId] = useState<string>("");
   const [responsibleEmployeeId, setResponsibleEmployeeId] =
     useState<string>("");
+
+  const handleAssignToMe = () => {
+    if (!user?.employeeId) return;
+
+    setEmployees((currentEmployees) => {
+      const currentUserExists = currentEmployees.some(
+        (employee) => employee.employeeId === user.employeeId,
+      );
+
+      if (currentUserExists) return currentEmployees;
+
+      return [
+        {
+          employeeId: user.employeeId,
+          employeeCode: user.employeeCode,
+          employeeAccount: user.employeeAccount,
+          employeeFullName: user.employeeFullName,
+          employeeMobile: user.employeeMobile,
+          employeeEmail: user.employeeEmail,
+          departmentId: user.departmentId,
+          status: user.status,
+        },
+        ...currentEmployees,
+      ];
+    });
+    setResponsibleEmployeeId(String(user.employeeId));
+  };
   const [contractType, setContractType] = useState<ContractType>(
     ContractType.SoftwareSupply,
   );
@@ -195,6 +225,9 @@ export default function CreateContractPage() {
   const [isLoadingEligibleParents, setIsLoadingEligibleParents] =
     useState<boolean>(false);
   const [templateVersionId, setTemplateVersionId] = useState<string>("");
+  const [templateSearch, setTemplateSearch] = useState("");
+  const [templatePage, setTemplatePage] = useState(1);
+  const templatePageSize = 3;
   const [languageMode, setLanguageMode] = useState<ContractLanguageMode>(
     ContractLanguageMode.Vietnamese,
   );
@@ -204,6 +237,34 @@ export default function CreateContractPage() {
   );
   const [contractTitleEn, setContractTitleEn] = useState("");
   const [draftTerms, setDraftTerms] = useState<MockContractTerm[]>([]);
+
+  const filteredTemplates = useMemo(() => {
+    const normalizedSearch = templateSearch.trim().toLocaleLowerCase("vi");
+
+    if (!normalizedSearch) return mockContractTemplates;
+
+    return mockContractTemplates.filter((template) =>
+      [
+        template.name,
+        template.templateCode,
+        template.description,
+        template.version,
+        getContractTypeLabel(template.contractType),
+      ].some((value) =>
+        value.toLocaleLowerCase("vi").includes(normalizedSearch),
+      ),
+    );
+  }, [templateSearch]);
+
+  const templateTotalPages = Math.max(
+    1,
+    Math.ceil(filteredTemplates.length / templatePageSize),
+  );
+
+  const paginatedTemplates = useMemo(() => {
+    const startIndex = (templatePage - 1) * templatePageSize;
+    return filteredTemplates.slice(startIndex, startIndex + templatePageSize);
+  }, [filteredTemplates, templatePage]);
 
   // Fetch eligible parent contracts when customer or contractType changes
   useEffect(() => {
@@ -353,6 +414,7 @@ export default function CreateContractPage() {
     const nextType = Number(value) as ContractType;
     setContractType(nextType);
     setParentContractId("");
+    setTemplatePage(1);
 
     if (selectedTemplate?.contractType !== nextType) {
       setTemplateVersionId("");
@@ -378,9 +440,7 @@ export default function CreateContractPage() {
 
   const updateCatalogItem = (id: string, patch: Partial<CatalogItem>) => {
     setCatalogItems((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, ...patch } : item,
-      ),
+      prev.map((item) => (item.id === id ? { ...item, ...patch } : item)),
     );
   };
 
@@ -708,10 +768,20 @@ export default function CreateContractPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>
-                      Nhân viên phụ trách{" "}
-                      <span className="text-red-500">*</span>
-                    </Label>
+                    <div className="flex items-center gap-2">
+                      <Label>
+                        Nhân viên phụ trách{" "}
+                        <span className="text-red-500">*</span>
+                      </Label>
+                      <button
+                        type="button"
+                        onClick={handleAssignToMe}
+                        disabled={isLoadingEmployees || !user?.employeeId}
+                        className="text-xs font-medium text-primary underline-offset-4 hover:underline disabled:pointer-events-none disabled:opacity-50"
+                      >
+                        Gán cho tôi
+                      </button>
+                    </div>
                     <Select
                       value={responsibleEmployeeId}
                       onValueChange={setResponsibleEmployeeId}
@@ -859,11 +929,24 @@ export default function CreateContractPage() {
                           Chọn mẫu phù hợp để nạp sẵn bộ điều khoản.
                         </p>
                       </div>
-                      <Badge variant="secondary">Dữ liệu mock</Badge>
+                    </div>
+
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        value={templateSearch}
+                        onChange={(event) => {
+                          setTemplateSearch(event.target.value);
+                          setTemplatePage(1);
+                        }}
+                        className="pl-9"
+                        placeholder="Tìm theo tên, mã hoặc mô tả template..."
+                        aria-label="Tìm kiếm template hợp đồng"
+                      />
                     </div>
 
                     <div className="grid gap-3 lg:grid-cols-3">
-                      {mockContractTemplates.map((template) => {
+                      {paginatedTemplates.map((template) => {
                         const selected =
                           template.versionId === Number(templateVersionId);
                         const compatible =
@@ -922,52 +1005,105 @@ export default function CreateContractPage() {
                         );
                       })}
                     </div>
+
+                    {filteredTemplates.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed px-4 py-8 text-center">
+                        <LayoutTemplate className="mx-auto size-8 text-muted-foreground/60" />
+                        <p className="mt-3 text-sm font-medium">
+                          Không tìm thấy template phù hợp
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Thử tìm bằng tên, mã template hoặc loại hợp đồng khác.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-xs text-muted-foreground">
+                          Hiển thị {(templatePage - 1) * templatePageSize + 1}–
+                          {Math.min(
+                            templatePage * templatePageSize,
+                            filteredTemplates.length,
+                          )}{" "}
+                          trong {filteredTemplates.length} template
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={templatePage === 1}
+                            onClick={() =>
+                              setTemplatePage((page) => Math.max(1, page - 1))
+                            }
+                          >
+                            <ChevronLeft className="size-4" />
+                            Trước
+                          </Button>
+                          <span className="min-w-20 text-center text-xs font-medium">
+                            Trang {templatePage}/{templateTotalPages}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={templatePage === templateTotalPages}
+                            onClick={() =>
+                              setTemplatePage((page) =>
+                                Math.min(templateTotalPages, page + 1),
+                              )
+                            }
+                          >
+                            Sau
+                            <ChevronRight className="size-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Ngôn ngữ hợp đồng</Label>
-                      <Select
-                        value={String(languageMode)}
-                        onValueChange={(value) =>
-                          setLanguageMode(Number(value) as ContractLanguageMode)
-                        }
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem
-                            value={String(ContractLanguageMode.Vietnamese)}
-                          >
-                            {getContractLanguageModeLabel(
-                              ContractLanguageMode.Vietnamese,
-                            )}
-                          </SelectItem>
-                          <SelectItem
-                            value={String(ContractLanguageMode.Bilingual)}
-                          >
-                            {getContractLanguageModeLabel(
-                              ContractLanguageMode.Bilingual,
-                            )}
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Đồng tiền thanh toán</Label>
-                      <Select value={currencyCode} onValueChange={setCurrencyCode}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="VND">
-                            VND — Việt Nam đồng
-                          </SelectItem>
-                          <SelectItem value="USD">USD — Đô la Mỹ</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <div className="space-y-2">
+                    <Label>Ngôn ngữ hợp đồng</Label>
+                    <Select
+                      value={String(languageMode)}
+                      onValueChange={(value) =>
+                        setLanguageMode(Number(value) as ContractLanguageMode)
+                      }
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem
+                          value={String(ContractLanguageMode.Vietnamese)}
+                        >
+                          {getContractLanguageModeLabel(
+                            ContractLanguageMode.Vietnamese,
+                          )}
+                        </SelectItem>
+                        <SelectItem
+                          value={String(ContractLanguageMode.Bilingual)}
+                        >
+                          {getContractLanguageModeLabel(
+                            ContractLanguageMode.Bilingual,
+                          )}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Đồng tiền thanh toán</Label>
+                    <Select
+                      value={currencyCode}
+                      onValueChange={setCurrencyCode}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="VND">VND — Việt Nam đồng</SelectItem>
+                        <SelectItem value="USD">USD — Đô la Mỹ</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               )}
@@ -1084,12 +1220,15 @@ export default function CreateContractPage() {
                                     onValueChange={(value) =>
                                       updateQuantity(item.id, value)
                                     }
-                                    className="h-8 w-24 text-center"
+                                    className="h-8 w-24 bg-white text-center"
                                   />
                                 </div>
                               )}
                               <span className="font-semibold text-primary">
-                                {formatCurrency(amounts.lineTotal, currencyCode)}
+                                {formatCurrency(
+                                  amounts.lineTotal,
+                                  currencyCode,
+                                )}
                               </span>
                               <button
                                 type="button"
@@ -1125,6 +1264,7 @@ export default function CreateContractPage() {
                                         itemNameEn: event.target.value,
                                       })
                                     }
+                                    className="bg-white"
                                     placeholder="Enter the English item name..."
                                   />
                                 </div>
@@ -1136,6 +1276,7 @@ export default function CreateContractPage() {
                                 <DecimalInput
                                   min={0}
                                   value={item.unitPrice}
+                                  className="bg-white"
                                   onValueChange={(value) =>
                                     updateCatalogItem(item.id, {
                                       unitPrice: value,
@@ -1157,7 +1298,7 @@ export default function CreateContractPage() {
                                     )
                                   }
                                 >
-                                  <SelectTrigger className="w-full">
+                                  <SelectTrigger className="w-full bg-white">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -1211,6 +1352,7 @@ export default function CreateContractPage() {
                                       ? item.fixedDiscountAmount
                                       : item.discountPercent
                                   }
+                                  className="bg-white"
                                   onValueChange={(value) => {
                                     updateCatalogItem(
                                       item.id,
@@ -1232,7 +1374,7 @@ export default function CreateContractPage() {
                                 <Label className="text-xs text-muted-foreground">
                                   Thuế
                                 </Label>
-                                <div className="flex h-9 items-center justify-between rounded-md border bg-background px-3">
+                                <div className="flex h-9 items-center justify-between rounded-md border bg-white px-3">
                                   <span className="text-sm">
                                     {item.isTaxable
                                       ? "Chịu thuế"
@@ -1261,6 +1403,7 @@ export default function CreateContractPage() {
                                   max={100}
                                   disabled={!item.isTaxable}
                                   value={item.vatPercent}
+                                  className="bg-white"
                                   onValueChange={(value) =>
                                     updateCatalogItem(item.id, {
                                       vatPercent: value,
@@ -1271,27 +1414,46 @@ export default function CreateContractPage() {
 
                               <div className="grid gap-2 rounded-lg bg-muted/40 p-3 text-xs sm:col-span-2 sm:grid-cols-4 xl:col-span-5">
                                 <div>
-                                  <p className="text-muted-foreground">Tạm tính</p>
+                                  <p className="text-muted-foreground">
+                                    Tạm tính
+                                  </p>
                                   <p className="mt-1 font-semibold">
-                                    {formatCurrency(amounts.lineSubtotal, currencyCode)}
+                                    {formatCurrency(
+                                      amounts.lineSubtotal,
+                                      currencyCode,
+                                    )}
                                   </p>
                                 </div>
                                 <div>
-                                  <p className="text-muted-foreground">Giảm giá</p>
+                                  <p className="text-muted-foreground">
+                                    Giảm giá
+                                  </p>
                                   <p className="mt-1 font-semibold text-rose-600">
-                                    -{formatCurrency(amounts.discountAmount, currencyCode)}
+                                    -
+                                    {formatCurrency(
+                                      amounts.discountAmount,
+                                      currencyCode,
+                                    )}
                                   </p>
                                 </div>
                                 <div>
                                   <p className="text-muted-foreground">VAT</p>
                                   <p className="mt-1 font-semibold">
-                                    {formatCurrency(amounts.vatAmount, currencyCode)}
+                                    {formatCurrency(
+                                      amounts.vatAmount,
+                                      currencyCode,
+                                    )}
                                   </p>
                                 </div>
                                 <div>
-                                  <p className="text-muted-foreground">Thành tiền</p>
+                                  <p className="text-muted-foreground">
+                                    Thành tiền
+                                  </p>
                                   <p className="mt-1 font-semibold text-primary">
-                                    {formatCurrency(amounts.lineTotal, currencyCode)}
+                                    {formatCurrency(
+                                      amounts.lineTotal,
+                                      currencyCode,
+                                    )}
                                   </p>
                                 </div>
                               </div>
@@ -1352,9 +1514,7 @@ export default function CreateContractPage() {
                         }}
                         onChange={(range) => {
                           setEffectiveDate(
-                            range.from
-                              ? format(range.from, "yyyy-MM-dd")
-                              : "",
+                            range.from ? format(range.from, "yyyy-MM-dd") : "",
                           );
                           setExpiredDate(
                             range.to ? format(range.to, "yyyy-MM-dd") : "",
@@ -1383,9 +1543,9 @@ export default function CreateContractPage() {
                     <FileSignature className="size-4" />
                     <AlertTitle>Sẵn sàng khởi tạo</AlertTitle>
                     <AlertDescription>
-                      Thông tin cơ bản được gửi tới backend để tạo hợp đồng.
-                      Bộ điều khoản bên dưới đang là mock và chỉ dùng để xem
-                      trước giao diện.
+                      Thông tin cơ bản được gửi tới backend để tạo hợp đồng. Bộ
+                      điều khoản bên dưới đang là mock và chỉ dùng để xem trước
+                      giao diện.
                     </AlertDescription>
                   </Alert>
 
@@ -1491,17 +1651,23 @@ export default function CreateContractPage() {
                                 {languageMode ===
                                   ContractLanguageMode.Bilingual && (
                                   <p className="text-xs text-muted-foreground">
-                                    {item.itemNameEn ||
-                                      "Chưa có tên tiếng Anh"}
+                                    {item.itemNameEn || "Chưa có tên tiếng Anh"}
                                   </p>
                                 )}
                               </div>
                               <div className="text-left sm:text-right">
                                 <p className="font-semibold text-primary">
-                                  {formatCurrency(amounts.lineTotal, currencyCode)}
+                                  {formatCurrency(
+                                    amounts.lineTotal,
+                                    currencyCode,
+                                  )}
                                 </p>
                                 <p className="text-xs text-muted-foreground">
-                                  Tạm tính {formatCurrency(amounts.lineSubtotal, currencyCode)}
+                                  Tạm tính{" "}
+                                  {formatCurrency(
+                                    amounts.lineSubtotal,
+                                    currencyCode,
+                                  )}
                                   {amounts.discountAmount > 0 &&
                                     ` · Giảm ${formatCurrency(amounts.discountAmount, currencyCode)}`}
                                   {amounts.vatAmount > 0 &&
@@ -1515,24 +1681,47 @@ export default function CreateContractPage() {
 
                       <div className="mt-4 space-y-2 rounded-xl border bg-background p-4 text-sm">
                         <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Tạm tính</span>
-                          <span>{formatCurrency(financialTotals.subtotal, currencyCode)}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Tổng giảm giá</span>
-                          <span className="text-rose-600">
-                            -{formatCurrency(financialTotals.totalDiscount, currencyCode)}
+                          <span className="text-muted-foreground">
+                            Tạm tính
+                          </span>
+                          <span>
+                            {formatCurrency(
+                              financialTotals.subtotal,
+                              currencyCode,
+                            )}
                           </span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Tổng VAT</span>
-                          <span>{formatCurrency(financialTotals.totalVat, currencyCode)}</span>
+                          <span className="text-muted-foreground">
+                            Tổng giảm giá
+                          </span>
+                          <span className="text-rose-600">
+                            -
+                            {formatCurrency(
+                              financialTotals.totalDiscount,
+                              currencyCode,
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">
+                            Tổng VAT
+                          </span>
+                          <span>
+                            {formatCurrency(
+                              financialTotals.totalVat,
+                              currencyCode,
+                            )}
+                          </span>
                         </div>
                         <Separator />
                         <div className="flex items-center justify-between font-semibold">
                           <span>Tổng thanh toán</span>
                           <span className="text-primary">
-                            {formatCurrency(financialTotals.totalPayment, currencyCode)}
+                            {formatCurrency(
+                              financialTotals.totalPayment,
+                              currencyCode,
+                            )}
                           </span>
                         </div>
                       </div>
@@ -1667,9 +1856,7 @@ export default function CreateContractPage() {
                       {draftTerms.length} điều khoản
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {
-                        draftTerms.filter((term) => term.isNegotiable).length
-                      }{" "}
+                      {draftTerms.filter((term) => term.isNegotiable).length}{" "}
                       điều khoản có thể đàm phán
                     </p>
                   </div>
@@ -1692,17 +1879,25 @@ export default function CreateContractPage() {
                 <div className="space-y-2 rounded-xl bg-muted/30 p-3 text-xs">
                   <div className="flex justify-between gap-3">
                     <span className="text-muted-foreground">Tạm tính</span>
-                    <span>{formatCurrency(financialTotals.subtotal, currencyCode)}</span>
+                    <span>
+                      {formatCurrency(financialTotals.subtotal, currencyCode)}
+                    </span>
                   </div>
                   <div className="flex justify-between gap-3">
                     <span className="text-muted-foreground">Giảm giá</span>
                     <span className="text-rose-600">
-                      -{formatCurrency(financialTotals.totalDiscount, currencyCode)}
+                      -
+                      {formatCurrency(
+                        financialTotals.totalDiscount,
+                        currencyCode,
+                      )}
                     </span>
                   </div>
                   <div className="flex justify-between gap-3">
                     <span className="text-muted-foreground">VAT</span>
-                    <span>{formatCurrency(financialTotals.totalVat, currencyCode)}</span>
+                    <span>
+                      {formatCurrency(financialTotals.totalVat, currencyCode)}
+                    </span>
                   </div>
                 </div>
               </CardContent>

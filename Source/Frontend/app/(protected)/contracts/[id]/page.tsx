@@ -1,13 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type Dispatch, type SetStateAction } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Clock,
-  DatabaseZap,
-  FileSignature,
   FileText,
   Loader2,
   MessageSquareText,
@@ -46,6 +44,20 @@ import { ContractDocuments } from "@/components/contracts/contract-attachments";
 import { ContractClosing } from "@/components/contracts/contract-closing";
 import { TransferResponsibilityModal } from "@/components/contracts/transfer-responsibility-modal";
 
+const CONTRACT_TABS = [
+  "overview",
+  "terms",
+  "negotiation",
+  "signature",
+  "documents",
+  "closing",
+] as const;
+
+type ContractTab = (typeof CONTRACT_TABS)[number];
+
+const isContractTab = (value: string): value is ContractTab =>
+  CONTRACT_TABS.some((tab) => tab === value);
+
 export default function ContractDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -57,7 +69,49 @@ export default function ContractDetailPage() {
   const [isStartingNegotiation, setIsStartingNegotiation] = useState(false);
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState<ContractTab>("overview");
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  useEffect(() => {
+    const syncTabFromHash = () => {
+      const tabFromHash = window.location.hash.slice(1);
+
+      if (isContractTab(tabFromHash)) {
+        setActiveTab(tabFromHash);
+      }
+    };
+
+    syncTabFromHash();
+    window.addEventListener("hashchange", syncTabFromHash);
+
+    return () => window.removeEventListener("hashchange", syncTabFromHash);
+  }, []);
+
+  const handleTabChange = (value: string) => {
+    if (!isContractTab(value)) return;
+
+    setActiveTab(value);
+    window.history.replaceState(window.history.state, "", `#${value}`);
+  };
+
+  const handleContractChange: Dispatch<
+    SetStateAction<ContractDetailResponse | null>
+  > = (value) => {
+    setContract(value);
+    setHasUnsavedChanges(true);
+  };
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   // Gọi API lấy dữ liệu hợp đồng
   useEffect(() => {
@@ -73,6 +127,7 @@ export default function ContractDetailPage() {
         // Gán dữ liệu (Phụ thuộc vào cấu trúc BaseResponse của bạn)
         const contractData = res.data ? res.data : res;
         setContract(contractData);
+        setHasUnsavedChanges(false);
       } catch (err: any) {
         console.error("Lỗi lấy chi tiết hợp đồng:", err);
         setError("Không thể lấy dữ liệu hợp đồng. Vui lòng thử lại sau.");
@@ -195,10 +250,7 @@ export default function ContractDetailPage() {
         return;
       }
 
-      if (
-        item.isTaxable &&
-        (item.vatPercent < 0 || item.vatPercent > 100)
-      ) {
+      if (item.isTaxable && (item.vatPercent < 0 || item.vatPercent > 100)) {
         toast.error(`Thuế VAT của “${item.itemName}” phải từ 0% đến 100%.`);
         return;
       }
@@ -281,6 +333,7 @@ export default function ContractDetailPage() {
       const updatedData = res.data ? res.data : res;
 
       setContract(updatedData); // Cập nhật lại UI với data mới
+      setHasUnsavedChanges(false);
       toast.success("Cập nhật bản nháp thành công!");
     } catch (err: any) {
       console.error("Lỗi cập nhật bản nháp:", err);
@@ -306,7 +359,7 @@ export default function ContractDetailPage() {
       });
       const updatedData = res.data ? res.data : res;
       setContract(updatedData);
-      setActiveTab("negotiation");
+      handleTabChange("negotiation");
       toast.success("Hợp đồng đã chuyển sang trạng thái Đàm phán!");
     } catch (err: any) {
       console.error("Lỗi bắt đầu đàm phán:", err);
@@ -351,6 +404,12 @@ export default function ContractDetailPage() {
     }
   };
 
+  const canUpdateDraft =
+    (contract.status === ContractStatus.Draft ||
+      (contract.status === ContractStatus.Negotiating &&
+        contract.currentVersion.sourceVersionId != null)) &&
+    !contract.currentVersion.isLocked;
+
   return (
     <>
       <Header />
@@ -378,10 +437,7 @@ export default function ContractDetailPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {(contract.status === ContractStatus.Draft ||
-              (contract.status === ContractStatus.Negotiating &&
-                contract.currentVersion.sourceVersionId != null)) &&
-              !contract.currentVersion.isLocked && (
+            {canUpdateDraft && (
               <Button
                 variant="outline"
                 onClick={handleUpdateDraft}
@@ -484,7 +540,7 @@ export default function ContractDetailPage() {
 
         <Tabs
           value={activeTab}
-          onValueChange={setActiveTab}
+          onValueChange={handleTabChange}
           className="space-y-4"
         >
           <TabsList className="flex h-auto w-full flex-wrap justify-start">
@@ -499,13 +555,17 @@ export default function ContractDetailPage() {
           <TabsContent value="overview">
             <ContractOverview
               contract={contract}
-              setContract={setContract}
+              setContract={handleContractChange}
               onOpenTransferModal={() => setIsTransferModalOpen(true)}
             />
           </TabsContent>
 
           <TabsContent value="terms">
-            <ContractTerms contract={contract} setContract={setContract} />
+            <ContractTerms
+              contract={contract}
+              setContract={setContract}
+              onDraftChange={() => setHasUnsavedChanges(true)}
+            />
           </TabsContent>
 
           <TabsContent value="negotiation">
@@ -537,6 +597,31 @@ export default function ContractDetailPage() {
           currentEmployeeName={contract.responsibleEmployee?.employeeFullName}
           onSuccess={(updated) => setContract(updated)}
         />
+
+        {hasUnsavedChanges && canUpdateDraft && (
+          <Alert
+            className="fixed bottom-6 right-6 z-50 w-[calc(100%-3rem)] max-w-md animate-in fade-in-0 slide-in-from-bottom-8 bg-background shadow-lg duration-300"
+            aria-live="polite"
+          >
+            <AlertTitle>Hợp đồng có thay đổi chưa được lưu</AlertTitle>
+            <AlertDescription className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <span>Bạn có muốn lưu các thay đổi vừa thực hiện không?</span>
+              <Button
+                onClick={handleUpdateDraft}
+                disabled={isUpdating}
+                size="sm"
+                className="shrink-0"
+              >
+                {isUpdating ? (
+                  <Loader2 className="size-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="size-4 mr-2" />
+                )}
+                Lưu thay đổi
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
       </div>
     </>
   );

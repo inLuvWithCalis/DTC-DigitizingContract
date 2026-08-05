@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
+  FileText,
   MessageSquareText,
   Package,
   ScrollText,
@@ -15,35 +16,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatCurrency } from "@/lib/format-currency";
 import {
   ContractItemDiscountMode,
-  ContractNegotiationCommentEventType,
-  ContractNegotiationCommentState,
   ContractVersionDetailResponse,
   getContractItemTypeLabel,
 } from "@/services/contract-api";
+import { ContractTermComments } from "./contract-term-comments";
 
 const PAGE_SIZE = 5;
-
-const formatDateTime = (value: string) =>
-  new Date(value).toLocaleString("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-
-const getCommentEventLabel = (eventType: ContractNegotiationCommentEventType) => {
-  switch (eventType) {
-    case ContractNegotiationCommentEventType.Created:
-      return "Đã tạo";
-    case ContractNegotiationCommentEventType.Resolved:
-      return "Đã xử lý";
-    case ContractNegotiationCommentEventType.Reopened:
-      return "Đã mở lại";
-    default:
-      return "Cập nhật";
-  }
-};
 
 function PaginationControls({
   page,
@@ -107,15 +85,36 @@ function EmptyState({
 }
 
 export function ContractVersionSnapshotTabs({
+  contractId,
   version,
 }: {
+  contractId: number;
   version: ContractVersionDetailResponse;
 }) {
   const [itemsPage, setItemsPage] = useState(1);
   const [termsPage, setTermsPage] = useState(1);
-  const [commentsPage, setCommentsPage] = useState(1);
 
   const comments = version.comments || [];
+  const rootComments = comments.filter((comment) => !comment.parentCommentId);
+  const commentTermIds = Array.from(
+    new Set(rootComments.map((comment) => comment.termId ?? null)),
+  );
+  const commentScopes = commentTermIds.map((termId) => {
+    const term =
+      termId == null
+        ? null
+        : version.terms.find((item) => item.termId === termId);
+
+    return {
+      termId,
+      termCode:
+        term?.termCode ||
+        (termId == null ? undefined : `Điều khoản #${termId}`),
+      termTitle:
+        term?.termTitle ||
+        (termId == null ? undefined : "Điều khoản không còn trong snapshot"),
+    };
+  });
   const paginatedItems = version.items.slice(
     (itemsPage - 1) * PAGE_SIZE,
     itemsPage * PAGE_SIZE,
@@ -124,11 +123,6 @@ export function ContractVersionSnapshotTabs({
     (termsPage - 1) * PAGE_SIZE,
     termsPage * PAGE_SIZE,
   );
-  const paginatedComments = comments.slice(
-    (commentsPage - 1) * PAGE_SIZE,
-    commentsPage * PAGE_SIZE,
-  );
-
   return (
     <Tabs defaultValue="items" className="space-y-4">
       <TabsList className="grid h-auto w-full grid-cols-3">
@@ -164,7 +158,7 @@ export function ContractVersionSnapshotTabs({
                 <div>
                   <p className="font-semibold">{item.itemName}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {item.itemCode || "Không có mã"} · {" "}
+                    {item.itemCode || "Không có mã"} ·{" "}
                     {getContractItemTypeLabel(item.itemType)}
                   </p>
                 </div>
@@ -241,9 +235,7 @@ export function ContractVersionSnapshotTabs({
                   <h3 className="mt-1 font-semibold">{term.termTitle}</h3>
                 </div>
                 <Badge variant={term.isNegotiable ? "outline" : "secondary"}>
-                  {term.isNegotiable
-                    ? "Cho phép đàm phán"
-                    : "Điều khoản cứng"}
+                  {term.isNegotiable ? "Cho phép đàm phán" : "Điều khoản cứng"}
                 </Badge>
               </div>
               <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
@@ -271,75 +263,49 @@ export function ContractVersionSnapshotTabs({
       </TabsContent>
 
       <TabsContent value="comments" className="space-y-3">
-        {comments.length === 0 ? (
+        {commentScopes.length === 0 ? (
           <EmptyState icon={<MessageSquareText className="size-8" />}>
             Version này chưa có bình luận
           </EmptyState>
         ) : (
-          paginatedComments.map((comment) => {
-            const relatedTerm = comment.termId
-              ? version.terms.find((term) => term.termId === comment.termId)
-              : null;
-
-            return (
-              <div key={comment.commentId} className="rounded-xl border p-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="font-medium">
-                      Nhân viên #{comment.recordedByEmployeeId}
+          commentScopes.map((scope) => (
+            <div
+              key={scope.termId ?? "general"}
+              className="rounded-xl border bg-muted/10 p-4 transition-colors hover:border-primary/30 sm:p-5"
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                    <FileText className="size-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold">
+                      {scope.termId == null
+                        ? "Trao đổi chung"
+                        : scope.termTitle}
                     </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {formatDateTime(comment.createdDate)}
-                      {comment.parentCommentId
-                        ? ` · Trả lời #${comment.parentCommentId}`
-                        : ""}
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {scope.termId == null
+                        ? "Nội dung trao đổi chung của hợp đồng"
+                        : scope.termCode}
                     </p>
                   </div>
-                  <Badge
-                    variant={
-                      comment.state ===
-                      ContractNegotiationCommentState.Resolved
-                        ? "secondary"
-                        : "outline"
-                    }
-                  >
-                    {comment.state ===
-                    ContractNegotiationCommentState.Resolved
-                      ? "Đã xử lý"
-                      : "Đang mở"}
-                  </Badge>
                 </div>
-                <Badge variant="outline" className="mt-3">
-                  {relatedTerm
-                    ? `${relatedTerm.termCode} · ${relatedTerm.termTitle}`
-                    : "Trao đổi chung"}
-                </Badge>
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-6">
-                  {comment.content}
-                </p>
-                {comment.events.length > 0 && (
-                  <div className="mt-4 flex flex-wrap gap-2 border-t pt-3">
-                    {comment.events.map((event) => (
-                      <span
-                        key={event.commentEventId}
-                        className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground"
-                      >
-                        {getCommentEventLabel(event.eventType)} · {" "}
-                        {formatDateTime(event.occurredAt)}
-                      </span>
-                    ))}
-                  </div>
-                )}
+
+                <ContractTermComments
+                  contractId={contractId}
+                  versionId={version.versionId}
+                  termId={scope.termId}
+                  termCode={scope.termCode}
+                  termTitle={scope.termTitle}
+                  comments={comments}
+                  canWrite={false}
+                  triggerClassName="mt-0 shrink-0 self-start"
+                />
               </div>
-            );
-          })
+            </div>
+          ))
         )}
-        <PaginationControls
-          page={commentsPage}
-          totalItems={comments.length}
-          label="bình luận"
-          onPageChange={setCommentsPage}
-        />
       </TabsContent>
     </Tabs>
   );

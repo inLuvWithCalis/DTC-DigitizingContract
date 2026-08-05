@@ -43,6 +43,16 @@ public partial class TblContractVersion
     /// </summary>
     public string? ChangeNote { get; set; }
 
+    public string CurrencyCode { get; set; } = "VND";
+
+    public decimal Subtotal { get; set; }
+
+    public decimal TotalDiscount { get; set; }
+
+    public decimal TotalVat { get; set; }
+
+    public decimal TotalAmount { get; set; }
+
     /// <summary>
     /// Snapshot chuẩn hóa của toàn bộ nội dung pháp lý tại thời điểm khóa version.
     ///

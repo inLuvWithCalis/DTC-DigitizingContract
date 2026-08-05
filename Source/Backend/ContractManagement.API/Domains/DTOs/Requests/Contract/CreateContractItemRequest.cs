@@ -76,8 +76,19 @@ namespace ContractManagement.API.Domains.DTOs.Requests.Contract
             "9999999999999999.99")]
         public decimal UnitPrice { get; set; }
 
+        [EnumDataType(typeof(ContractItemDiscountMode))]
+        public ContractItemDiscountMode DiscountMode { get; set; }
+
         [Range(typeof(decimal), "0", "100")]
         public decimal DiscountPercent { get; set; }
+
+        [Range(
+            typeof(decimal),
+            "0",
+            "9999999999999999.99")]
+        public decimal FixedDiscountAmount { get; set; }
+
+        public bool IsTaxable { get; set; } = true;
 
         [Range(typeof(decimal), "0", "100")]
         public decimal VatPercent { get; set; }

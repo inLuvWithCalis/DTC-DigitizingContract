@@ -11,6 +11,8 @@ public static class ContractAuditActionTypes
     public const string ResponsibleAssigned = "ResponsibleAssigned";
     public const string ResponsibilityTransferred =
         "ResponsibilityTransferred";
+    public const string NegotiationRoundCreated =
+        "NegotiationRoundCreated";
 }
 
 public static class ContractAuditResults

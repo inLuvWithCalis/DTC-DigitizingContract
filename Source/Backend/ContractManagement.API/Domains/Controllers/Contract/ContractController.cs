@@ -342,6 +342,42 @@ namespace ContractManagement.Domains.Controllers.Contract
         }
 
         /// <summary>
+        /// Khóa version hiện hành và tạo vòng đàm phán mới.
+        /// </summary>
+        [HttpPost("{contractId:int}/negotiation-rounds")]
+        [ProducesResponseType(
+            typeof(ApiResponse<CreateContractNegotiationRoundResponse>),
+            StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> CreateNegotiationRound(
+            int contractId,
+            [FromBody] CreateContractNegotiationRoundRequest request)
+        {
+            var employeeId =
+                HttpContext.Session.GetInt32("EmployeeId");
+
+            if (employeeId is null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Bạn chưa đăng nhập hoặc session đã hết hạn.");
+            }
+
+            var result =
+                await _contractService.CreateNegotiationRoundAsync(
+                    contractId,
+                    request,
+                    employeeId.Value);
+
+            return Ok(
+                ApiResponse<CreateContractNegotiationRoundResponse>.Ok(
+                    result,
+                    "Tạo vòng đàm phán mới thành công."));
+        }
+
+        /// <summary>
         /// Gửi version hiện hành đi duyệt và khóa snapshot.
         /// </summary>
         [HttpPost("{contractId:int}/submit-approval")]

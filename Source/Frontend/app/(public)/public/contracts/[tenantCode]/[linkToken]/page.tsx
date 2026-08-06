@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { PublicContractComments } from "@/components/contracts/public-contract-comments";
+import { PublicContractDiscussionModal } from "@/components/contracts/public-contract-comments";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,7 +47,9 @@ const getStatus = (error: any) => error?.response?.status as number | undefined;
 
 const getErrorMessage = (error: any, fallback: string) => {
   const data = error?.response?.data;
-  return data?.message || data?.title || (typeof data === "string" ? data : fallback);
+  return (
+    data?.message || data?.title || (typeof data === "string" ? data : fallback)
+  );
 };
 
 export default function PublicContractPage() {
@@ -58,8 +60,11 @@ export default function PublicContractPage() {
   const [step, setStep] = useState<AccessStep>("checking");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp] = useState("");
-  const [publicChallengeId, setPublicChallengeId] = useState<string | null>(null);
-  const [contract, setContract] = useState<CustomerSharedContractResponse | null>(null);
+  const [publicChallengeId, setPublicChallengeId] = useState<string | null>(
+    null,
+  );
+  const [contract, setContract] =
+    useState<CustomerSharedContractResponse | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
   const [isRequestingOtp, setIsRequestingOtp] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
@@ -85,7 +90,9 @@ export default function PublicContractPage() {
       if (getStatus(error) === 401) {
         resetToPhone();
       } else {
-        setPageError(getErrorMessage(error, "Không thể tải hợp đồng được chia sẻ."));
+        setPageError(
+          getErrorMessage(error, "Không thể tải hợp đồng được chia sẻ."),
+        );
         setStep("error");
       }
       return false;
@@ -97,12 +104,18 @@ export default function PublicContractPage() {
   }, [loadSharedContract]);
 
   const sortedItems = useMemo(
-    () => [...(contract?.items ?? [])].sort((a, b) => a.displayOrder - b.displayOrder),
+    () =>
+      [...(contract?.items ?? [])].sort(
+        (a, b) => a.displayOrder - b.displayOrder,
+      ),
     [contract?.items],
   );
 
   const sortedTerms = useMemo(
-    () => [...(contract?.terms ?? [])].sort((a, b) => a.displayOrder - b.displayOrder),
+    () =>
+      [...(contract?.terms ?? [])].sort(
+        (a, b) => a.displayOrder - b.displayOrder,
+      ),
     [contract?.terms],
   );
 
@@ -131,7 +144,9 @@ export default function PublicContractPage() {
 
   const handleVerifyOtp = async () => {
     if (!publicChallengeId) {
-      resetToPhone("Phiên yêu cầu OTP không còn hợp lệ. Vui lòng yêu cầu mã mới.");
+      resetToPhone(
+        "Phiên yêu cầu OTP không còn hợp lệ. Vui lòng yêu cầu mã mới.",
+      );
       return;
     }
 
@@ -163,7 +178,10 @@ export default function PublicContractPage() {
     request: CreateCustomerNegotiationCommentRequest,
   ): Promise<CustomerPublicNegotiationCommentResponse> => {
     try {
-      const created = await publicContractApi.createComment(tenantCode, request);
+      const created = await publicContractApi.createComment(
+        tenantCode,
+        request,
+      );
       setContract((current) =>
         current
           ? { ...current, comments: [...current.comments, created] }
@@ -324,40 +342,44 @@ export default function PublicContractPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
-      <header className="rounded-2xl border bg-background p-5 shadow-sm sm:p-8">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <Badge variant="outline">Hợp đồng được chia sẻ</Badge>
-            <h1 className="mt-3 text-2xl font-bold sm:text-3xl">
-              {contract.contractName}
-            </h1>
-            {contract.contractNameEn && (
-              <p className="mt-1 text-muted-foreground italic">
-                {contract.contractNameEn}
+      <Card className="rounded-2xl">
+        <CardContent className="p-5 sm:p-8">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <Badge variant="outline">Hợp đồng được chia sẻ</Badge>
+              <h1 className="mt-3 text-2xl font-bold sm:text-3xl">
+                {contract.contractName}
+              </h1>
+              {contract.contractNameEn && (
+                <p className="mt-1 text-muted-foreground italic">
+                  {contract.contractNameEn}
+                </p>
+              )}
+              {contract.contractCode && (
+                <p className="mt-3 text-sm font-medium text-primary">
+                  Mã hợp đồng: {contract.contractCode}
+                </p>
+              )}
+            </div>
+            <div className="rounded-xl bg-primary/5 px-4 py-3 text-right">
+              <p className="text-xs text-muted-foreground">Tổng giá trị</p>
+              <p className="mt-1 text-xl font-bold text-primary">
+                {formatCurrency(contract.totalAmount, contract.currencyCode)}
               </p>
-            )}
-            {contract.contractCode && (
-              <p className="mt-3 text-sm font-medium text-primary">
-                Mã hợp đồng: {contract.contractCode}
-              </p>
-            )}
+            </div>
           </div>
-          <div className="rounded-xl bg-primary/5 px-4 py-3 text-right">
-            <p className="text-xs text-muted-foreground">Tổng giá trị</p>
-            <p className="mt-1 text-xl font-bold text-primary">
-              {formatCurrency(contract.totalAmount, contract.currencyCode)}
-            </p>
+          <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 border-t pt-4 text-sm text-muted-foreground">
+            <span className="flex items-center gap-2">
+              <CalendarDays className="size-4" /> Hiệu lực:{" "}
+              {formatDate(contract.effectiveDate)}
+            </span>
+            <span className="flex items-center gap-2">
+              <CalendarDays className="size-4" /> Hết hạn:{" "}
+              {formatDate(contract.expireDate)}
+            </span>
           </div>
-        </div>
-        <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 border-t pt-4 text-sm text-muted-foreground">
-          <span className="flex items-center gap-2">
-            <CalendarDays className="size-4" /> Hiệu lực: {formatDate(contract.effectiveDate)}
-          </span>
-          <span className="flex items-center gap-2">
-            <CalendarDays className="size-4" /> Hết hạn: {formatDate(contract.expireDate)}
-          </span>
-        </div>
-      </header>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -398,7 +420,9 @@ export default function PublicContractPage() {
                           </p>
                         )}
                       </TableCell>
-                      <TableCell className="text-right">{item.quantity}</TableCell>
+                      <TableCell className="text-right">
+                        {item.quantity}
+                      </TableCell>
                       <TableCell>{item.unitName || "—"}</TableCell>
                       <TableCell className="text-right font-medium">
                         {formatCurrency(item.lineTotal, contract.currencyCode)}
@@ -413,18 +437,26 @@ export default function PublicContractPage() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MessageSquareText className="size-5 text-primary" />
-            Trao đổi chung
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <PublicContractComments
+        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="rounded-xl bg-primary/10 p-2.5 text-primary">
+              <MessageSquareText className="size-5" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="font-semibold">Trao đổi chung</h2>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+                Thảo luận các nội dung áp dụng cho toàn bộ hợp đồng, không gắn
+                với một điều khoản cụ thể.
+              </p>
+            </div>
+          </div>
+
+          <PublicContractDiscussionModal
             termId={null}
             comments={contract.comments}
-            canCreateRoot
+            canWrite
             onCreate={handleCreateComment}
+            triggerClassName="mt-0 shrink-0"
           />
         </CardContent>
       </Card>
@@ -435,7 +467,8 @@ export default function PublicContractPage() {
             <FileText className="size-5 text-primary" /> Điều khoản hợp đồng
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Chỉ các điều khoản được đánh dấu có thể thương lượng mới cho phép tạo trao đổi mới.
+            Chỉ các điều khoản được đánh dấu có thể thương lượng mới cho phép
+            tạo trao đổi mới.
           </p>
         </div>
 
@@ -450,7 +483,9 @@ export default function PublicContractPage() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <CardTitle className="text-base">
-                      {[term.termCode, term.termTitle].filter(Boolean).join(" · ")}
+                      {[term.termCode, term.termTitle]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </CardTitle>
                     {term.termTitleEn && (
                       <p className="mt-1 text-sm text-muted-foreground italic">
@@ -459,23 +494,29 @@ export default function PublicContractPage() {
                     )}
                   </div>
                   <Badge variant={term.isNegotiable ? "default" : "secondary"}>
-                    {term.isNegotiable ? "Có thể thương lượng" : "Điều khoản cố định"}
+                    {term.isNegotiable
+                      ? "Có thể thương lượng"
+                      : "Điều khoản cố định"}
                   </Badge>
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3 text-sm leading-7">
-                  <p className="whitespace-pre-wrap">{term.termContent || "—"}</p>
+                  <p className="whitespace-pre-wrap">
+                    {term.termContent || "—"}
+                  </p>
                   {term.termContentEn && (
                     <p className="whitespace-pre-wrap text-muted-foreground italic">
                       {term.termContentEn}
                     </p>
                   )}
                 </div>
-                <PublicContractComments
+                <PublicContractDiscussionModal
                   termId={term.termId}
+                  termCode={term.termCode}
+                  termTitle={term.termTitle}
                   comments={contract.comments}
-                  canCreateRoot={term.isNegotiable}
+                  canWrite={term.isNegotiable}
                   onCreate={handleCreateComment}
                 />
               </CardContent>
@@ -488,7 +529,8 @@ export default function PublicContractPage() {
         <LockKeyhole className="size-4" />
         <AlertTitle>Phiên truy cập được bảo vệ</AlertTitle>
         <AlertDescription>
-          Trang này chỉ hỗ trợ xem và trao đổi hợp đồng. Chức năng ký điện tử chưa được cung cấp trong luồng này.
+          Trang này chỉ hỗ trợ xem và trao đổi hợp đồng. Chức năng ký điện tử
+          chưa được cung cấp trong luồng này.
         </AlertDescription>
       </Alert>
     </div>

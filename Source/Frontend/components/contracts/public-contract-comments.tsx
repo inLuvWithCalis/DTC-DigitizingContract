@@ -4,12 +4,20 @@ import { useMemo, useState } from "react";
 import { CheckCircle2, Loader2, MessageSquareText, Reply, Send, X } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  ContractTermComments,
+  type ContractTermCommentsDataSource,
+} from "@/components/contracts/contract-term-comments";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDateTime } from "@/lib/format-date-time";
 import { cn } from "@/lib/utils";
+import {
+  ContractNegotiationCommentState,
+  type ContractNegotiationCommentResponse,
+} from "@/services/contract-api";
 import {
   CreateCustomerNegotiationCommentRequest,
   CustomerPublicNegotiationCommentResponse,
@@ -24,6 +32,31 @@ const getErrorMessage = (error: any, fallback: string) => {
 
 const getAuthor = (comment: CustomerPublicNegotiationCommentResponse) =>
   comment.source === "Customer" ? "Khách hàng" : "Nhà cung cấp";
+
+const PUBLIC_COMMENT_VERSION_ID = 0;
+
+const toContractComment = (
+  comment: CustomerPublicNegotiationCommentResponse,
+): ContractNegotiationCommentResponse => ({
+  commentId: comment.commentId,
+  contractId: 0,
+  versionId: PUBLIC_COMMENT_VERSION_ID,
+  termId: comment.termId,
+  parentCommentId: comment.parentCommentId,
+  content: comment.content,
+  source: comment.source,
+  externalFeedback: comment.source === "ExternalFeedback",
+  recordedByEmployeeId: 0,
+  createdEmployeeId: 0,
+  state:
+    comment.lifecycleState === "Resolved"
+      ? ContractNegotiationCommentState.Resolved
+      : ContractNegotiationCommentState.Open,
+  createdDate: comment.createdDate,
+  updatedDate: comment.updatedDate,
+  rowVersion: "",
+  events: [],
+});
 
 function PublicCommentNode({
   comment,
@@ -249,5 +282,92 @@ export function PublicContractComments({
         </div>
       )}
     </div>
+  );
+}
+
+export function PublicContractDiscussionModal({
+  termId,
+  termCode,
+  termTitle,
+  comments,
+  canWrite,
+  onCreate,
+  triggerClassName,
+}: {
+  termId: number | null;
+  termCode?: string;
+  termTitle?: string;
+  comments: CustomerPublicNegotiationCommentResponse[];
+  canWrite: boolean;
+  onCreate: (
+    request: CreateCustomerNegotiationCommentRequest,
+  ) => Promise<CustomerPublicNegotiationCommentResponse>;
+  triggerClassName?: string;
+}) {
+  const scopedComments = useMemo(
+    () =>
+      comments.filter((comment) => (comment.termId ?? null) === termId),
+    [comments, termId],
+  );
+  const modalComments = useMemo(
+    () => scopedComments.map(toContractComment),
+    [scopedComments],
+  );
+
+  const dataSource = useMemo<ContractTermCommentsDataSource>(() => {
+    const commentById = new Map(
+      scopedComments.map((comment) => [comment.commentId, comment]),
+    );
+    const isDescendantOf = (
+      comment: CustomerPublicNegotiationCommentResponse,
+      parentCommentId: number,
+    ) => {
+      let ancestorId = comment.parentCommentId;
+      const visited = new Set<number>();
+
+      while (ancestorId && !visited.has(ancestorId)) {
+        if (ancestorId === parentCommentId) return true;
+        visited.add(ancestorId);
+        ancestorId = commentById.get(ancestorId)?.parentCommentId;
+      }
+
+      return false;
+    };
+
+    return {
+      getRootComments: async () =>
+        scopedComments
+          .filter((comment) => !comment.parentCommentId)
+          .map(toContractComment),
+      getCommentReplies: async (parentCommentId) =>
+        scopedComments
+          .filter((comment) => isDescendantOf(comment, parentCommentId))
+          .map(toContractComment),
+      createComment: async (input) =>
+        toContractComment(
+          await onCreate({
+            termId: input.termId,
+            parentCommentId: input.parentCommentId,
+            content: input.content,
+          }),
+        ),
+      getAuthorName: (comment) =>
+        comment.source === "Customer" ? "Khách hàng" : "Nhà cung cấp",
+      shouldSuppressError: (error) => getStatus(error) === 401,
+    };
+  }, [onCreate, scopedComments]);
+
+  return (
+    <ContractTermComments
+      contractId={0}
+      versionId={PUBLIC_COMMENT_VERSION_ID}
+      termId={termId}
+      termCode={termCode}
+      termTitle={termTitle}
+      comments={modalComments}
+      canWrite={canWrite}
+      dataSource={dataSource}
+      triggerClassName={triggerClassName}
+    />
   );
 }

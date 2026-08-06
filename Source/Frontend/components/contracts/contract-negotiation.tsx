@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { ContractTermComments } from "@/components/contracts/contract-term-comments";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,7 @@ import { formatDate } from "@/lib/format-date";
 import {
   contractApi,
   ContractDetailResponse,
+  ContractNegotiationCommentResponse,
   ContractStatus,
   ContractVersionDetailResponse,
   ContractVersionHistoryResponse,
@@ -83,6 +85,8 @@ export function ContractNegotiation({
 
   const currentVersion = contract.currentVersion;
   const canCreateRound =
+    contract.status === ContractStatus.Negotiating && !currentVersion.isLocked;
+  const canWriteGeneralComments =
     contract.status === ContractStatus.Negotiating && !currentVersion.isLocked;
 
   const loadVersionHistory = useCallback(async () => {
@@ -214,8 +218,78 @@ export function ContractNegotiation({
     }
   };
 
+  const handleGeneralCommentChanged = (
+    changedComment: ContractNegotiationCommentResponse,
+  ) => {
+    const updateComments = (
+      comments: ContractNegotiationCommentResponse[] | undefined,
+    ) => {
+      const currentComments = comments || [];
+      const commentExists = currentComments.some(
+        (comment) => comment.commentId === changedComment.commentId,
+      );
+
+      return commentExists
+        ? currentComments.map((comment) =>
+            comment.commentId === changedComment.commentId
+              ? changedComment
+              : comment,
+          )
+        : [...currentComments, changedComment];
+    };
+
+    setContract((current) =>
+      current
+        ? {
+            ...current,
+            currentVersion: {
+              ...current.currentVersion,
+              comments: updateComments(current.currentVersion.comments),
+            },
+          }
+        : current,
+    );
+    setSelectedVersion((current) =>
+      current?.versionId === changedComment.versionId
+        ? { ...current, comments: updateComments(current.comments) }
+        : current,
+    );
+  };
+
   return (
-    <div>
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="rounded-xl bg-primary/10 p-2.5 text-primary">
+              <MessageSquareText className="size-5" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="font-semibold">Trao đổi chung</h2>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+                Thảo luận các nội dung áp dụng cho toàn bộ hợp đồng, không gắn
+                với một điều khoản cụ thể.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+            {!canWriteGeneralComments && (
+              <Badge variant="secondary">Chỉ xem</Badge>
+            )}
+            <ContractTermComments
+              contractId={contract.contractId}
+              versionId={currentVersion.versionId}
+              termId={null}
+              comments={currentVersion.comments || []}
+              canWrite={canWriteGeneralComments}
+              onCommentChanged={handleGeneralCommentChanged}
+              triggerClassName="mt-0"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
           <div>

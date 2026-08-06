@@ -26,7 +26,7 @@ export interface ContractAttachmentResponse {
 }
 
 const getBaseUrl = (contractId: number) =>
-  `/contracts/${contractId}/attachments`;
+  `/api/contracts/${contractId}/attachments`;
 
 export const contractAttachmentsApi = {
   getAll(contractId: number) {

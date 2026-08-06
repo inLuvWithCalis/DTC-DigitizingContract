@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { ContractTermComments } from "@/components/contracts/contract-term-comments";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,7 @@ import { formatDate } from "@/lib/format-date";
 import {
   contractApi,
   ContractDetailResponse,
+  ContractNegotiationCommentResponse,
   ContractStatus,
   ContractVersionDetailResponse,
   ContractVersionHistoryResponse,
@@ -58,11 +60,15 @@ const getApiErrorMessage = (error: any, fallback: string) => {
 export function ContractNegotiation({
   contract,
   setContract,
+  hasUnsavedChanges,
+  onNegotiationRoundCreated,
 }: {
   contract: ContractDetailResponse;
   setContract: React.Dispatch<
     React.SetStateAction<ContractDetailResponse | null>
   >;
+  hasUnsavedChanges: boolean;
+  onNegotiationRoundCreated?: () => void;
 }) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [changeNote, setChangeNote] = useState("");
@@ -83,6 +89,8 @@ export function ContractNegotiation({
 
   const currentVersion = contract.currentVersion;
   const canCreateRound =
+    contract.status === ContractStatus.Negotiating && !currentVersion.isLocked;
+  const canWriteGeneralComments =
     contract.status === ContractStatus.Negotiating && !currentVersion.isLocked;
 
   const loadVersionHistory = useCallback(async () => {
@@ -174,6 +182,11 @@ export function ContractNegotiation({
   }, [contract.contractId, contract.status, selectedVersionId]);
 
   const handleCreateRound = async () => {
+    if (hasUnsavedChanges) {
+      toast.error("Vui lòng lưu các thay đổi trước khi tạo vòng đàm phán mới.");
+      return;
+    }
+
     const normalizedChangeNote = changeNote.trim();
     if (!normalizedChangeNote) {
       toast.error("Vui lòng nhập lý do tạo vòng đàm phán mới.");
@@ -191,18 +204,46 @@ export function ContractNegotiation({
           changeNote: normalizedChangeNote,
         },
       );
+      onNegotiationRoundCreated?.();
+      setChangeNote("");
+      setIsDialogOpen(false);
 
-      const updatedContract = await contractApi.getDetail(contract.contractId);
+      let updatedContract: ContractDetailResponse;
+      try {
+        updatedContract = await contractApi.getDetail(contract.contractId);
+      } catch {
+        toast.warning(
+          "Đã tạo vòng đàm phán mới nhưng chưa tải được dữ liệu mới. Vui lòng tải lại trang.",
+        );
+        return;
+      }
+
       setHistoryPage(1);
       setSelectedVersionId(updatedContract.currentVersion.versionId);
       setContract(updatedContract);
-      setChangeNote("");
-      setIsDialogOpen(false);
       toast.success(
         `Đã khóa phiên bản ${result.sourceVersion.versionNo} và tạo phiên bản ${result.currentVersion.versionNo}.`,
       );
     } catch (error: any) {
       console.error("Lỗi tạo vòng đàm phán:", error);
+      if (error?.response?.status === 409) {
+        try {
+          const refreshedContract = await contractApi.getDetail(
+            contract.contractId,
+          );
+          setContract(refreshedContract);
+          setSelectedVersionId(refreshedContract.currentVersion.versionId);
+          toast.error(
+            "Hợp đồng hoặc version đã thay đổi. Dữ liệu mới nhất đã được tải lại.",
+          );
+        } catch {
+          toast.error(
+            "Hợp đồng hoặc version đã thay đổi. Vui lòng tải lại trang trước khi thử lại.",
+          );
+        }
+        return;
+      }
+
       toast.error(
         getApiErrorMessage(
           error,
@@ -214,8 +255,78 @@ export function ContractNegotiation({
     }
   };
 
+  const handleGeneralCommentChanged = (
+    changedComment: ContractNegotiationCommentResponse,
+  ) => {
+    const updateComments = (
+      comments: ContractNegotiationCommentResponse[] | undefined,
+    ) => {
+      const currentComments = comments || [];
+      const commentExists = currentComments.some(
+        (comment) => comment.commentId === changedComment.commentId,
+      );
+
+      return commentExists
+        ? currentComments.map((comment) =>
+            comment.commentId === changedComment.commentId
+              ? changedComment
+              : comment,
+          )
+        : [...currentComments, changedComment];
+    };
+
+    setContract((current) =>
+      current
+        ? {
+            ...current,
+            currentVersion: {
+              ...current.currentVersion,
+              comments: updateComments(current.currentVersion.comments),
+            },
+          }
+        : current,
+    );
+    setSelectedVersion((current) =>
+      current?.versionId === changedComment.versionId
+        ? { ...current, comments: updateComments(current.comments) }
+        : current,
+    );
+  };
+
   return (
-    <div>
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="rounded-xl bg-primary/10 p-2.5 text-primary">
+              <MessageSquareText className="size-5" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="font-semibold">Trao đổi chung</h2>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+                Thảo luận các nội dung áp dụng cho toàn bộ hợp đồng, không gắn
+                với một điều khoản cụ thể.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+            {!canWriteGeneralComments && (
+              <Badge variant="secondary">Chỉ xem</Badge>
+            )}
+            <ContractTermComments
+              contractId={contract.contractId}
+              versionId={currentVersion.versionId}
+              termId={null}
+              comments={currentVersion.comments || []}
+              canWrite={canWriteGeneralComments}
+              onCommentChanged={handleGeneralCommentChanged}
+              triggerClassName="mt-0"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -231,6 +342,12 @@ export function ContractNegotiation({
             <Button
               className="w-full sm:w-auto"
               onClick={() => setIsDialogOpen(true)}
+              disabled={hasUnsavedChanges}
+              title={
+                hasUnsavedChanges
+                  ? "Hãy lưu các thay đổi trước khi tạo vòng mới"
+                  : undefined
+              }
             >
               <GitBranch className="mr-2 size-4" />
               Tạo vòng mới
@@ -545,6 +662,16 @@ export function ContractNegotiation({
           </DialogHeader>
 
           <div className="space-y-2 py-2">
+            <Alert>
+              <FileLock2 className="size-4" />
+              <AlertTitle>Ảnh hưởng sau khi tạo vòng mới</AlertTitle>
+              <AlertDescription>
+                Comment của version hiện tại chỉ còn trong lịch sử. Link và
+                phiên truy cập khách hàng hiện tại sẽ mất hiệu lực; sau khi sửa
+                version mới, bạn cần tạo link khác để gửi khách hàng.
+              </AlertDescription>
+            </Alert>
+
             <Label htmlFor="negotiation-change-note">
               Lý do thay đổi <span className="text-destructive">*</span>
             </Label>
@@ -572,7 +699,9 @@ export function ContractNegotiation({
             </Button>
             <Button
               onClick={handleCreateRound}
-              disabled={isCreatingRound || !changeNote.trim()}
+              disabled={
+                isCreatingRound || hasUnsavedChanges || !changeNote.trim()
+              }
             >
               {isCreatingRound ? (
                 <Loader2 className="mr-2 size-4 animate-spin" />

@@ -26,19 +26,17 @@ import {
 export function ContractTerms({
   contract,
   setContract,
+  canEdit,
   onDraftChange,
 }: {
   contract: ContractDetailResponse;
   setContract: React.Dispatch<
     React.SetStateAction<ContractDetailResponse | null>
   >;
+  canEdit: boolean;
   onDraftChange?: () => void;
 }) {
-  const isEditable =
-    (contract.status === ContractStatus.Draft ||
-      (contract.status === ContractStatus.Negotiating &&
-        contract.currentVersion.sourceVersionId != null)) &&
-    !contract.currentVersion.isLocked;
+  const isEditable = canEdit;
   const terms = contract.currentVersion?.terms || [];
 
   const [currentPage, setCurrentPage] = useState(1);

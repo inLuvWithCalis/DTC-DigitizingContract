@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useEffect, type Dispatch, type SetStateAction } from "react";
+import {
+  useCallback,
+  useState,
+  useEffect,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -9,6 +15,7 @@ import {
   FileSignature,
   FileText,
   Loader2,
+  LockKeyhole,
   MessageSquareText,
   Save,
   Send,
@@ -24,6 +31,7 @@ import { formatCurrency } from "@/lib/format-currency";
 
 import {
   contractApi,
+  ContractCustomerAccessLinkResponse,
   ContractDetailResponse,
   ContractItemDiscountMode,
   ContractLanguageMode,
@@ -57,6 +65,49 @@ const CONTRACT_TABS = [
 
 type ContractTab = (typeof CONTRACT_TABS)[number];
 
+type StoredCustomerAccessLink = Pick<
+  ContractCustomerAccessLinkResponse,
+  "linkId" | "state" | "expiresAt"
+>;
+
+const CUSTOMER_ACCESS_LINK_STORAGE_PREFIX = "contract-customer-access-link";
+
+const getCustomerAccessLinkStorageKey = (
+  contractId: number,
+  versionId: number,
+) => `${CUSTOMER_ACCESS_LINK_STORAGE_PREFIX}:${contractId}:${versionId}`;
+
+const readStoredCustomerAccessLink = (
+  contractId: number,
+  versionId: number,
+): StoredCustomerAccessLink | null => {
+  if (typeof window === "undefined") return null;
+
+  const storageKey = getCustomerAccessLinkStorageKey(contractId, versionId);
+  try {
+    const value = window.localStorage.getItem(storageKey);
+    if (!value) return null;
+
+    const parsed = JSON.parse(value) as StoredCustomerAccessLink;
+    const expiresAt = new Date(parsed.expiresAt).getTime();
+    if (
+      !Number.isInteger(parsed.linkId) ||
+      parsed.linkId <= 0 ||
+      !parsed.state ||
+      !parsed.expiresAt ||
+      !Number.isFinite(expiresAt) ||
+      expiresAt <= Date.now()
+    ) {
+      window.localStorage.removeItem(storageKey);
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
 const isContractTab = (value: string): value is ContractTab =>
   CONTRACT_TABS.some((tab) => tab === value);
 
@@ -73,6 +124,10 @@ export default function ContractDetailPage() {
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<ContractTab>("overview");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [knownCustomerAccessLink, setKnownCustomerAccessLink] =
+    useState<StoredCustomerAccessLink | null>(null);
+  const currentContractId = contract?.contractId ?? null;
+  const currentVersionId = contract?.currentVersion.versionId ?? null;
 
   useEffect(() => {
     const syncTabFromHash = () => {
@@ -115,31 +170,92 @@ export default function ContractDetailPage() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [hasUnsavedChanges]);
 
-  // Gọi API lấy dữ liệu hợp đồng
-  useEffect(() => {
-    if (!params.id) return;
+  const fetchContractDetail = useCallback(
+    async (showLoading = true) => {
+      if (!params.id) return;
 
-    const fetchContractDetail = async () => {
       try {
-        setIsLoading(true);
-        // Do API trả về theo cấu trúc { data: { ... } }, interceptor thường tự unwrap
-        // Nếu không, bạn lấy res.data hoặc res.data.data tùy theo config của bạn
+        if (showLoading) setIsLoading(true);
         const res: any = await contractApi.getDetail(Number(params.id));
-
-        // Gán dữ liệu (Phụ thuộc vào cấu trúc BaseResponse của bạn)
         const contractData = res.data ? res.data : res;
         setContract(contractData);
         setHasUnsavedChanges(false);
+        setError(null);
       } catch (err: any) {
         console.error("Lỗi lấy chi tiết hợp đồng:", err);
-        setError("Không thể lấy dữ liệu hợp đồng. Vui lòng thử lại sau.");
+        if (showLoading) {
+          setError("Không thể lấy dữ liệu hợp đồng. Vui lòng thử lại sau.");
+        }
+        throw err;
       } finally {
-        setIsLoading(false);
+        if (showLoading) setIsLoading(false);
       }
+    },
+    [params.id],
+  );
+
+  // Gọi API lấy dữ liệu hợp đồng
+  useEffect(() => {
+    void fetchContractDetail().catch(() => undefined);
+  }, [fetchContractDetail]);
+
+  useEffect(() => {
+    if (!currentContractId || !currentVersionId) {
+      setKnownCustomerAccessLink(null);
+      return;
+    }
+
+    const storageKey = getCustomerAccessLinkStorageKey(
+      currentContractId,
+      currentVersionId,
+    );
+    const syncStoredLink = () =>
+      setKnownCustomerAccessLink(
+        readStoredCustomerAccessLink(
+          currentContractId,
+          currentVersionId,
+        ),
+      );
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === storageKey) syncStoredLink();
     };
 
-    fetchContractDetail();
-  }, [params.id]);
+    syncStoredLink();
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [currentContractId, currentVersionId]);
+
+  const handleCustomerAccessLinkChange = useCallback(
+    (link: StoredCustomerAccessLink | null) => {
+      if (!currentContractId || !currentVersionId) return;
+
+      const storageKey = getCustomerAccessLinkStorageKey(
+        currentContractId,
+        currentVersionId,
+      );
+      if (link) {
+        const storedLink: StoredCustomerAccessLink = {
+          linkId: link.linkId,
+          state: link.state,
+          expiresAt: link.expiresAt,
+        };
+        try {
+          window.localStorage.setItem(storageKey, JSON.stringify(storedLink));
+        } catch {
+          // State trong phiên hiện tại vẫn được cập nhật nếu storage bị chặn.
+        }
+        setKnownCustomerAccessLink(storedLink);
+      } else {
+        try {
+          window.localStorage.removeItem(storageKey);
+        } catch {
+          // Không có gì cần xử lý thêm khi storage bị chặn.
+        }
+        setKnownCustomerAccessLink(null);
+      }
+    },
+    [currentContractId, currentVersionId],
+  );
 
   if (isLoading) {
     return (
@@ -353,6 +469,10 @@ export default function ContractDetailPage() {
 
   const handleStartNegotiation = async () => {
     if (!contract) return;
+    if (hasUnsavedChanges) {
+      toast.error("Vui lòng lưu các thay đổi trước khi bắt đầu đàm phán.");
+      return;
+    }
 
     setIsStartingNegotiation(true);
     try {
@@ -377,6 +497,10 @@ export default function ContractDetailPage() {
 
   const handleSubmitApproval = async () => {
     if (!contract || !contract.currentVersion) return;
+    if (hasUnsavedChanges) {
+      toast.error("Vui lòng lưu các thay đổi trước khi gửi duyệt.");
+      return;
+    }
 
     setIsSubmittingApproval(true);
     try {
@@ -391,6 +515,7 @@ export default function ContractDetailPage() {
       const detailRes: ContractDetailResponse = await contractApi.getDetail(
         contract.contractId,
       );
+      handleCustomerAccessLinkChange(null);
       setContract(detailRes);
 
       toast.success("Hợp đồng đã được gửi duyệt!");
@@ -406,11 +531,14 @@ export default function ContractDetailPage() {
     }
   };
 
+  const isCurrentVersionShared =
+    contract.status === ContractStatus.Negotiating &&
+    knownCustomerAccessLink !== null;
   const canUpdateDraft =
     (contract.status === ContractStatus.Draft ||
-      (contract.status === ContractStatus.Negotiating &&
-        contract.currentVersion.sourceVersionId != null)) &&
-    !contract.currentVersion.isLocked;
+      contract.status === ContractStatus.Negotiating) &&
+    !contract.currentVersion.isLocked &&
+    !isCurrentVersionShared;
 
   return (
     <>
@@ -457,7 +585,7 @@ export default function ContractDetailPage() {
             {contract.status === ContractStatus.Draft && (
               <Button
                 onClick={handleStartNegotiation}
-                disabled={isStartingNegotiation}
+                disabled={isStartingNegotiation || hasUnsavedChanges}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
               >
                 {isStartingNegotiation ? (
@@ -471,7 +599,7 @@ export default function ContractDetailPage() {
             {contract.status === ContractStatus.Negotiating && (
               <Button
                 onClick={handleSubmitApproval}
-                disabled={isSubmittingApproval}
+                disabled={isSubmittingApproval || hasUnsavedChanges}
                 className="bg-amber-600 hover:bg-amber-700 text-white"
               >
                 {isSubmittingApproval ? (
@@ -545,6 +673,18 @@ export default function ContractDetailPage() {
           </div>
         </div>
 
+        {isCurrentVersionShared && (
+          <Alert className="border-amber-300 bg-amber-50/60 dark:bg-amber-950/20">
+            <LockKeyhole className="size-4 text-amber-700" />
+            <AlertTitle>Version đang được chia sẻ với khách hàng</AlertTitle>
+            <AlertDescription>
+              Nội dung được chuyển sang chế độ chỉ xem để tránh thay đổi trực
+              tiếp dữ liệu khách hàng đang xem. Muốn chỉnh sửa, hãy vào tab
+              “Đàm phán” và tạo vòng mới.
+            </AlertDescription>
+          </Alert>
+        )}
+
         <Tabs
           value={activeTab}
           onValueChange={handleTabChange}
@@ -554,7 +694,7 @@ export default function ContractDetailPage() {
             <TabsTrigger value="overview">Tổng quan</TabsTrigger>
             <TabsTrigger value="terms">Điều khoản</TabsTrigger>
             <TabsTrigger value="negotiation">Đàm phán</TabsTrigger>
-            <TabsTrigger value="signature">Ký điện tử</TabsTrigger>
+            <TabsTrigger value="signature">Truy cập khách hàng</TabsTrigger>
             <TabsTrigger value="documents">Chứng từ</TabsTrigger>
             <TabsTrigger value="closing">Đóng hợp đồng</TabsTrigger>
           </TabsList>
@@ -563,6 +703,7 @@ export default function ContractDetailPage() {
             <ContractOverview
               contract={contract}
               setContract={handleContractChange}
+              canEdit={canUpdateDraft}
               onOpenTransferModal={() => setIsTransferModalOpen(true)}
             />
           </TabsContent>
@@ -571,6 +712,7 @@ export default function ContractDetailPage() {
             <ContractTerms
               contract={contract}
               setContract={setContract}
+              canEdit={canUpdateDraft}
               onDraftChange={() => setHasUnsavedChanges(true)}
             />
           </TabsContent>
@@ -579,11 +721,21 @@ export default function ContractDetailPage() {
             <ContractNegotiation
               contract={contract}
               setContract={setContract}
+              hasUnsavedChanges={hasUnsavedChanges}
+              onNegotiationRoundCreated={() =>
+                handleCustomerAccessLinkChange(null)
+              }
             />
           </TabsContent>
 
           <TabsContent value="signature">
-            <ContractSignature contract={contract} />
+            <ContractSignature
+              contract={contract}
+              onContractRefetch={() => fetchContractDetail(false)}
+              knownLink={knownCustomerAccessLink}
+              hasUnsavedChanges={hasUnsavedChanges}
+              onCustomerAccessLinkChange={handleCustomerAccessLinkChange}
+            />
           </TabsContent>
 
           <TabsContent value="documents">

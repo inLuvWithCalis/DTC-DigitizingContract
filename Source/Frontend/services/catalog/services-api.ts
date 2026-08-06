@@ -102,7 +102,7 @@ export interface PagedResult<T> {
   totalPages: number;
 }
 
-const BASE_URL = "/catalog/services";
+const BASE_URL = "/api/catalog/services";
 
 export const serviceApi = {
   getList: (params: ServiceFilterParams) => {
@@ -158,7 +158,7 @@ export interface ServiceTypeResponse {
   serviceCount: number;
 }
 
-const SERVICE_TYPE_BASE_URL = "/catalog/service-types";
+const SERVICE_TYPE_BASE_URL = "/api/catalog/service-types";
 
 export const serviceTypeApi = {
   getList: (params: ServiceTypeFilterParams) => {
@@ -190,4 +190,3 @@ export const serviceTypeApi = {
     );
   },
 };
-

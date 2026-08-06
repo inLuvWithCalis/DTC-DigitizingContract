@@ -62,7 +62,8 @@ export interface PagedResult<T> {
   totalPages: number;
 }
 
-const getBaseUrl = (customerId: number) => `/customers/${customerId}/interactions`;
+const getBaseUrl = (customerId: number) =>
+  `/api/customers/${customerId}/interactions`;
 
 export const customerInteractionApi = {
   getByCustomer: (customerId: number) => {

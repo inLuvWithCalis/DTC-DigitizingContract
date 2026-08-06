@@ -104,7 +104,7 @@ export interface PagedResult<T> {
   totalPages: number;
 }
 
-const BASE_URL = "/admin/employees";
+const BASE_URL = "/api/admin/employees";
 
 export const employeeApi = {
   getList: (params: EmployeeFilterParams) => {

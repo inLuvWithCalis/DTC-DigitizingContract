@@ -271,6 +271,32 @@ export interface SubmitContractForApprovalRequest {
   workflowId?: number | null;
 }
 
+export type ContractCustomerVerificationPhoneSource =
+  | "CustomerMobile"
+  | "CustomerPhone"
+  | "Manual";
+
+export interface UpdateContractCustomerVerificationPhoneRequest {
+  phoneSource: ContractCustomerVerificationPhoneSource;
+  manualPhoneNumber?: string | null;
+  reason: string;
+  rowVersion: string;
+}
+
+export interface CreateContractCustomerAccessLinkRequest {
+  rowVersion: string;
+}
+
+export interface ReplaceContractCustomerAccessLinkRequest {
+  rowVersion: string;
+  reason: string;
+}
+
+export interface RevokeContractCustomerAccessLinkRequest {
+  rowVersion: string;
+  reason: string;
+}
+
 export interface ContractItemDetailResponse {
   contractItemId: number;
   itemType: ContractItemType;
@@ -322,6 +348,10 @@ export enum ContractNegotiationCommentEventType {
   Reopened = 3,
 }
 
+export type ContractNegotiationCommentSource =
+  | "Customer"
+  | "ExternalFeedback";
+
 export interface ContractNegotiationCommentEventResponse {
   commentEventId: number;
   commentId: number;
@@ -337,7 +367,7 @@ export interface ContractNegotiationCommentResponse {
   termId?: number | null;
   parentCommentId?: number | null;
   content: string;
-  source: string;
+  source: ContractNegotiationCommentSource;
   externalFeedback: boolean;
   recordedByEmployeeId: number;
   createdEmployeeId: number;
@@ -469,6 +499,22 @@ export interface SubmitContractForApprovalResponse {
   versionRowVersion: string;
 }
 
+export interface ContractCustomerVerificationPhoneResponse {
+  verificationPhoneId: number;
+  phoneSource: ContractCustomerVerificationPhoneSource;
+  maskedPhoneNumber: string;
+  isCurrent: boolean;
+  createdDate: string;
+  rowVersion: string;
+}
+
+export interface ContractCustomerAccessLinkResponse {
+  linkId: number;
+  state: string;
+  expiresAt: string;
+  publicUrl: string;
+}
+
 export interface ContractNegotiationRoundVersionResponse {
   versionId: number;
   versionNo: number;
@@ -569,7 +615,7 @@ export interface PagedResult<T> {
   totalPages: number;
 }
 
-const BASE_URL = "/contracts";
+const BASE_URL = "/api/contracts";
 
 /**
  * Chuẩn hóa dữ liệu tài chính trước khi gửi và bảo đảm hai kiểu chiết khấu
@@ -714,6 +760,49 @@ export const contractApi = {
   ) => {
     return axiosClient.post<any, ContractNegotiationCommentResponse>(
       `${BASE_URL}/${id}/comments/${commentId}/reopen`,
+      data,
+    );
+  },
+  getCustomerVerificationPhones: (id: number) => {
+    return axiosClient.get<any, ContractCustomerVerificationPhoneResponse[]>(
+      `${BASE_URL}/${id}/customer-access/verification-phone`,
+    );
+  },
+  updateCustomerVerificationPhone: (
+    id: number,
+    data: UpdateContractCustomerVerificationPhoneRequest,
+  ) => {
+    return axiosClient.put<any, ContractCustomerVerificationPhoneResponse>(
+      `${BASE_URL}/${id}/customer-access/verification-phone`,
+      data,
+    );
+  },
+  createCustomerAccessLink: (
+    id: number,
+    data: CreateContractCustomerAccessLinkRequest,
+  ) => {
+    return axiosClient.post<any, ContractCustomerAccessLinkResponse>(
+      `${BASE_URL}/${id}/customer-access/links`,
+      data,
+    );
+  },
+  replaceCustomerAccessLink: (
+    id: number,
+    linkId: number,
+    data: ReplaceContractCustomerAccessLinkRequest,
+  ) => {
+    return axiosClient.post<any, ContractCustomerAccessLinkResponse>(
+      `${BASE_URL}/${id}/customer-access/links/${linkId}/replace`,
+      data,
+    );
+  },
+  revokeCustomerAccessLink: (
+    id: number,
+    linkId: number,
+    data: RevokeContractCustomerAccessLinkRequest,
+  ) => {
+    return axiosClient.post<any, void>(
+      `${BASE_URL}/${id}/customer-access/links/${linkId}/revoke`,
       data,
     );
   },

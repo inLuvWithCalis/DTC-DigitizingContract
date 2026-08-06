@@ -95,7 +95,7 @@ export interface PagedResult<T> {
   totalPages: number;
 }
 
-const BASE_URL = "/catalog/products";
+const BASE_URL = "/api/catalog/products";
 
 export const productApi = {
   getList: (params: ProductFilterParams) => {

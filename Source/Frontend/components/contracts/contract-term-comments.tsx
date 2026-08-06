@@ -209,11 +209,26 @@ export function ContractTermComments({
   const getEmployeeName = (employeeId: number) =>
     employeeNames[employeeId] || `Nhân viên #${employeeId}`;
 
+  const getCommentAuthorName = (
+    comment: ContractNegotiationCommentResponse,
+  ) =>
+    comment.source === "Customer"
+      ? "Khách hàng"
+      : getEmployeeName(comment.recordedByEmployeeId);
+
   const loadEmployeeNames = async (
     targetComments: ContractNegotiationCommentResponse[],
   ) => {
     const employeeIds = Array.from(
-      new Set(targetComments.map((comment) => comment.recordedByEmployeeId)),
+      new Set(
+        targetComments
+          .filter(
+            (comment) =>
+              comment.source !== "Customer" &&
+              comment.recordedByEmployeeId > 0,
+          )
+          .map((comment) => comment.recordedByEmployeeId),
+      ),
     );
     if (employeeIds.length === 0) return;
 
@@ -411,7 +426,7 @@ export function ContractTermComments({
   const beginReply = (comment: ContractNegotiationCommentResponse) => {
     setReplyTarget({
       commentId: comment.commentId,
-      employeeName: getEmployeeName(comment.recordedByEmployeeId),
+      employeeName: getCommentAuthorName(comment),
     });
   };
 
@@ -534,7 +549,7 @@ export function ContractTermComments({
                   </Badge>
                   <span className="text-xs text-muted-foreground">
                     <span className="font-medium text-foreground">
-                      {getEmployeeName(selectedParent.recordedByEmployeeId)}
+                      {getCommentAuthorName(selectedParent)}
                     </span>{" "}
                     · {formatDateTime(selectedParent.createdDate)}
                   </span>
@@ -629,9 +644,7 @@ export function ContractTermComments({
                 ) : (
                   <div className="space-y-4">
                     {childComments.map((comment) => {
-                      const employeeName = getEmployeeName(
-                        comment.recordedByEmployeeId,
-                      );
+                      const employeeName = getCommentAuthorName(comment);
                       const isResolved =
                         comment.state ===
                         ContractNegotiationCommentState.Resolved;
@@ -768,9 +781,7 @@ export function ContractTermComments({
                 ) : (
                   <div className="space-y-3">
                     {paginatedRoots.map((comment) => {
-                      const employeeName = getEmployeeName(
-                        comment.recordedByEmployeeId,
-                      );
+                      const employeeName = getCommentAuthorName(comment);
                       const isResolved =
                         comment.state ===
                         ContractNegotiationCommentState.Resolved;

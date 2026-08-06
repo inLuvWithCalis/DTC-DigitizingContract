@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useEffect, type Dispatch, type SetStateAction } from "react";
+import {
+  useCallback,
+  useState,
+  useEffect,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -115,31 +121,34 @@ export default function ContractDetailPage() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [hasUnsavedChanges]);
 
-  // Gọi API lấy dữ liệu hợp đồng
-  useEffect(() => {
-    if (!params.id) return;
+  const fetchContractDetail = useCallback(
+    async (showLoading = true) => {
+      if (!params.id) return;
 
-    const fetchContractDetail = async () => {
       try {
-        setIsLoading(true);
-        // Do API trả về theo cấu trúc { data: { ... } }, interceptor thường tự unwrap
-        // Nếu không, bạn lấy res.data hoặc res.data.data tùy theo config của bạn
+        if (showLoading) setIsLoading(true);
         const res: any = await contractApi.getDetail(Number(params.id));
-
-        // Gán dữ liệu (Phụ thuộc vào cấu trúc BaseResponse của bạn)
         const contractData = res.data ? res.data : res;
         setContract(contractData);
         setHasUnsavedChanges(false);
+        setError(null);
       } catch (err: any) {
         console.error("Lỗi lấy chi tiết hợp đồng:", err);
-        setError("Không thể lấy dữ liệu hợp đồng. Vui lòng thử lại sau.");
+        if (showLoading) {
+          setError("Không thể lấy dữ liệu hợp đồng. Vui lòng thử lại sau.");
+        }
+        throw err;
       } finally {
-        setIsLoading(false);
+        if (showLoading) setIsLoading(false);
       }
-    };
+    },
+    [params.id],
+  );
 
-    fetchContractDetail();
-  }, [params.id]);
+  // Gọi API lấy dữ liệu hợp đồng
+  useEffect(() => {
+    void fetchContractDetail().catch(() => undefined);
+  }, [fetchContractDetail]);
 
   if (isLoading) {
     return (
@@ -554,7 +563,7 @@ export default function ContractDetailPage() {
             <TabsTrigger value="overview">Tổng quan</TabsTrigger>
             <TabsTrigger value="terms">Điều khoản</TabsTrigger>
             <TabsTrigger value="negotiation">Đàm phán</TabsTrigger>
-            <TabsTrigger value="signature">Ký điện tử</TabsTrigger>
+            <TabsTrigger value="signature">Truy cập khách hàng</TabsTrigger>
             <TabsTrigger value="documents">Chứng từ</TabsTrigger>
             <TabsTrigger value="closing">Đóng hợp đồng</TabsTrigger>
           </TabsList>
@@ -583,7 +592,10 @@ export default function ContractDetailPage() {
           </TabsContent>
 
           <TabsContent value="signature">
-            <ContractSignature contract={contract} />
+            <ContractSignature
+              contract={contract}
+              onContractRefetch={() => fetchContractDetail(false)}
+            />
           </TabsContent>
 
           <TabsContent value="documents">

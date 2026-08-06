@@ -83,7 +83,7 @@ export interface PagedResult<T> {
   totalPages: number;
 }
 
-const BASE_URL = "/customers";
+const BASE_URL = "/api/customers";
 
 export const customerApi = {
   getList: (params: CustomerFilterParams) => {

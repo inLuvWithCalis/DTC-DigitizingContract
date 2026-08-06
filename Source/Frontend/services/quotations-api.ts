@@ -26,7 +26,7 @@ export interface CreateQuotationRequestDto {
   items: Omit<QuotationItemResponse, "amount" | "productName">[];
 }
 
-const BASE_URL = "/Quotation";
+const BASE_URL = "/api/Quotation";
 
 export const quotationApi = {
   getAll: () => {

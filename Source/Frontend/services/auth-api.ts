@@ -1,5 +1,7 @@
 import axiosClient from "@/lib/axios-interceptor";
 
+const BASE_URL = "/api/Auth";
+
 export interface LoginRequestDto {
   accountName: string;
   password?: string;
@@ -41,7 +43,7 @@ export interface UserProfileDto {
 
 export const authApi = {
   login: (payload: LoginRequestDto, tenantCode: string) => {
-    return axiosClient.post<any, LoginResponseDto>("/Auth/login", payload, {
+    return axiosClient.post<any, LoginResponseDto>(`${BASE_URL}/login`, payload, {
       withCredentials: true,
       headers: {
         "X-Tenant-Code": tenantCode,
@@ -50,12 +52,12 @@ export const authApi = {
   },
 
   getMe: () => {
-    return axiosClient.get<any, UserProfileDto>("/Auth/me");
+    return axiosClient.get<any, UserProfileDto>(`${BASE_URL}/me`);
   },
 
   logout: async () => {
     await axiosClient.post<any, void>(
-      "/Auth/logout",
+      `${BASE_URL}/logout`,
       {},
       {
         withCredentials: true,

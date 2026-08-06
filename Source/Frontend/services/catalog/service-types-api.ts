@@ -32,7 +32,7 @@ export interface PagedResult<T> {
   totalPages: number;
 }
 
-const BASE_URL = "/catalog/service-types";
+const BASE_URL = "/api/catalog/service-types";
 
 export const serviceTypeApi = {
   getList: (params: ServiceTypeFilterParams) => {

@@ -20,7 +20,7 @@ export interface DepartmentResponse {
   langId?: number | null;
 }
 
-const BASE_URL = "/admin/departments";
+const BASE_URL = "/api/admin/departments";
 
 export const departmentApi = {
   getAll: () => {

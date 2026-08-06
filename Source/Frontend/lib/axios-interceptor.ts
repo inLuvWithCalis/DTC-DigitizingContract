@@ -10,14 +10,24 @@ const axiosClient: AxiosInstance = axios.create({
   withCredentials: true,
 });
 
-axiosClient.interceptors.response.use(
-  (response: AxiosResponse) => {
-    const res = response.data;
-    if (res && typeof res === "object" && "success" in res && "data" in res) {
-      return res.data;
-    }
-    return res;
+export const publicAxiosClient: AxiosInstance = axios.create({
+  baseURL: BASE_URL,
+  headers: {
+    "Content-Type": "application/json",
   },
+  withCredentials: true,
+});
+
+const unwrapApiResponse = (response: AxiosResponse) => {
+  const res = response.data;
+  if (res && typeof res === "object" && "success" in res && "data" in res) {
+    return res.data;
+  }
+  return res;
+};
+
+axiosClient.interceptors.response.use(
+  unwrapApiResponse,
 
   (error: AxiosError) => {
     if (error.response?.status === 401) {
@@ -30,6 +40,11 @@ axiosClient.interceptors.response.use(
 
     return Promise.reject(error);
   },
+);
+
+publicAxiosClient.interceptors.response.use(
+  unwrapApiResponse,
+  (error: AxiosError) => Promise.reject(error),
 );
 
 export default axiosClient;

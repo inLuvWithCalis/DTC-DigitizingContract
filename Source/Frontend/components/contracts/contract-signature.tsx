@@ -38,6 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { ConfirmDialog } from "@/components/ui/custom/confirm-dialog";
 import { formatDateTime } from "@/lib/format-date-time";
 import {
   contractApi,
@@ -49,6 +50,10 @@ import {
 } from "@/services/contract-api";
 
 type LinkAction = "replace" | "revoke";
+type KnownCustomerAccessLink = Pick<
+  ContractCustomerAccessLinkResponse,
+  "linkId" | "state" | "expiresAt"
+>;
 
 const PHONE_SOURCE_LABELS: Record<
   ContractCustomerVerificationPhoneSource,
@@ -89,9 +94,15 @@ const withFrontendOrigin = (
 export function ContractSignature({
   contract,
   onContractRefetch,
+  knownLink,
+  hasUnsavedChanges,
+  onCustomerAccessLinkChange,
 }: {
   contract: ContractDetailResponse;
   onContractRefetch: () => Promise<void>;
+  knownLink: KnownCustomerAccessLink | null;
+  hasUnsavedChanges: boolean;
+  onCustomerAccessLinkChange: (link: KnownCustomerAccessLink | null) => void;
 }) {
   const [phones, setPhones] = useState<
     ContractCustomerVerificationPhoneResponse[]
@@ -108,6 +119,7 @@ export function ContractSignature({
     useState<ContractCustomerAccessLinkResponse | null>(null);
   const [oneTimePublicUrl, setOneTimePublicUrl] = useState<string | null>(null);
   const [isCreatingLink, setIsCreatingLink] = useState(false);
+  const [isCreateLinkConfirmOpen, setIsCreateLinkConfirmOpen] = useState(false);
   const [linkAction, setLinkAction] = useState<LinkAction | null>(null);
   const [linkActionReason, setLinkActionReason] = useState("");
   const [isSubmittingLinkAction, setIsSubmittingLinkAction] = useState(false);
@@ -119,8 +131,26 @@ export function ContractSignature({
 
   const canCreateLink =
     Boolean(currentPhone) &&
+    !hasUnsavedChanges &&
     (contract.status === ContractStatus.Draft ||
       contract.status === ContractStatus.Negotiating);
+
+  useEffect(() => {
+    const shouldClearOneTimeUrl =
+      !knownLink || activeLink?.linkId !== knownLink.linkId;
+    setActiveLink((current) => {
+      if (!knownLink) return null;
+      if (current?.linkId === knownLink.linkId) return current;
+
+      return { ...knownLink, publicUrl: "" };
+    });
+    if (shouldClearOneTimeUrl) setOneTimePublicUrl(null);
+  }, [
+    activeLink?.linkId,
+    knownLink?.expiresAt,
+    knownLink?.linkId,
+    knownLink?.state,
+  ]);
 
   const loadPhones = useCallback(async () => {
     try {
@@ -159,6 +189,11 @@ export function ContractSignature({
   };
 
   const handleUpdatePhone = async () => {
+    if (hasUnsavedChanges) {
+      toast.error("Vui lòng lưu thay đổi hợp đồng trước khi quản lý truy cập.");
+      return;
+    }
+
     const reason = phoneReason.trim();
     const manualPhone = manualPhoneNumber.trim();
 
@@ -192,6 +227,7 @@ export function ContractSignature({
       ) {
         setActiveLink(null);
         setOneTimePublicUrl(null);
+        onCustomerAccessLinkChange(null);
       }
       await Promise.all([loadPhones(), refetchAfterMutation()]);
       toast.success("Đã cập nhật số điện thoại xác minh.");
@@ -205,6 +241,11 @@ export function ContractSignature({
   };
 
   const handleCreateLink = async () => {
+    if (hasUnsavedChanges) {
+      toast.error("Vui lòng lưu thay đổi hợp đồng trước khi tạo link.");
+      return;
+    }
+
     if (!currentPhone) {
       toast.error("Hãy chọn số điện thoại xác minh trước khi tạo link.");
       return;
@@ -219,7 +260,9 @@ export function ContractSignature({
       const publicLink = withFrontendOrigin(result);
       setActiveLink(publicLink);
       setOneTimePublicUrl(publicLink.publicUrl);
+      onCustomerAccessLinkChange(publicLink);
       await refetchAfterMutation();
+      setIsCreateLinkConfirmOpen(false);
       toast.success("Đã tạo link truy cập khách hàng.");
     } catch (error: any) {
       toast.error(getErrorMessage(error, "Không thể tạo link truy cập."));
@@ -243,6 +286,10 @@ export function ContractSignature({
 
   const handleLinkAction = async () => {
     if (!activeLink || !linkAction) return;
+    if (hasUnsavedChanges) {
+      toast.error("Vui lòng lưu thay đổi hợp đồng trước khi quản lý link.");
+      return;
+    }
 
     const reason = linkActionReason.trim();
     if (!reason) {
@@ -266,6 +313,7 @@ export function ContractSignature({
         const publicLink = withFrontendOrigin(result);
         setActiveLink(publicLink);
         setOneTimePublicUrl(publicLink.publicUrl);
+        onCustomerAccessLinkChange(publicLink);
         toast.success("Đã thay link truy cập. Link cũ không còn hiệu lực.");
       } else {
         await contractApi.revokeCustomerAccessLink(
@@ -275,6 +323,7 @@ export function ContractSignature({
         );
         setActiveLink(null);
         setOneTimePublicUrl(null);
+        onCustomerAccessLinkChange(null);
         toast.success("Đã thu hồi link truy cập khách hàng.");
       }
 
@@ -316,6 +365,17 @@ export function ContractSignature({
           hiện tại, OTP đang chờ và phiên truy cập của khách hàng mất hiệu lực.
         </AlertDescription>
       </Alert>
+
+      {hasUnsavedChanges && (
+        <Alert className="border-amber-300 bg-amber-50/60 dark:bg-amber-950/20">
+          <ShieldAlert className="size-4 text-amber-700" />
+          <AlertTitle>Hợp đồng có thay đổi chưa được lưu</AlertTitle>
+          <AlertDescription>
+            Hãy lưu nội dung hợp đồng trước khi chọn số, tạo, thay hoặc thu hồi
+            link khách hàng.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)]">
         <Card>
@@ -364,6 +424,7 @@ export function ContractSignature({
                   }
                   disabled={
                     isSavingPhone ||
+                    hasUnsavedChanges ||
                     contract.status === ContractStatus.Cancelled
                   }
                 >
@@ -402,6 +463,7 @@ export function ContractSignature({
                     }
                     disabled={
                       isSavingPhone ||
+                      hasUnsavedChanges ||
                       contract.status === ContractStatus.Cancelled
                     }
                   />
@@ -420,7 +482,9 @@ export function ContractSignature({
                 onChange={(event) => setPhoneReason(event.target.value)}
                 maxLength={1000}
                 disabled={
-                  isSavingPhone || contract.status === ContractStatus.Cancelled
+                  isSavingPhone ||
+                  hasUnsavedChanges ||
+                  contract.status === ContractStatus.Cancelled
                 }
               />
             </div>
@@ -428,7 +492,9 @@ export function ContractSignature({
             <Button
               onClick={handleUpdatePhone}
               disabled={
-                isSavingPhone || contract.status === ContractStatus.Cancelled
+                isSavingPhone ||
+                hasUnsavedChanges ||
+                contract.status === ContractStatus.Cancelled
               }
             >
               {isSavingPhone ? <Loader2 className="animate-spin" /> : <Phone />}
@@ -552,12 +618,14 @@ export function ContractSignature({
                   <Button
                     variant="outline"
                     onClick={() => setLinkAction("replace")}
+                    disabled={hasUnsavedChanges}
                   >
                     <RefreshCw /> Thay link
                   </Button>
                   <Button
                     variant="destructive"
                     onClick={() => setLinkAction("revoke")}
+                    disabled={hasUnsavedChanges}
                   >
                     <Trash2 /> Thu hồi
                   </Button>
@@ -579,7 +647,7 @@ export function ContractSignature({
             {!activeLink && (
               <Button
                 className="w-full"
-                onClick={handleCreateLink}
+                onClick={() => setIsCreateLinkConfirmOpen(true)}
                 disabled={!canCreateLink || isCreatingLink}
               >
                 {isCreatingLink ? (
@@ -600,6 +668,22 @@ export function ContractSignature({
           </CardContent>
         </Card>
       </div>
+
+      <ConfirmDialog
+        isOpen={isCreateLinkConfirmOpen}
+        onClose={() => setIsCreateLinkConfirmOpen(false)}
+        onConfirm={handleCreateLink}
+        title="Tạo link truy cập khách hàng?"
+        description={
+          contract.status === ContractStatus.Draft
+            ? "Link sẽ chờ kích hoạt cho đến khi bắt đầu đàm phán. URL chỉ hiển thị một lần sau khi tạo, hãy sao chép và lưu lại."
+            : "URL chỉ hiển thị một lần sau khi tạo. Version hợp đồng hiện tại sẽ chuyển sang chỉ xem; bạn cần tạo vòng đàm phán mới nếu muốn tiếp tục chỉnh sửa."
+        }
+        icon={<Link2 className="size-5 text-primary" />}
+        confirmText="Tạo link"
+        cancelText="Hủy"
+        isLoading={isCreatingLink}
+      />
 
       <Dialog
         open={linkAction !== null}
@@ -657,7 +741,7 @@ export function ContractSignature({
             <Button
               variant={linkAction === "revoke" ? "destructive" : "default"}
               onClick={handleLinkAction}
-              disabled={isSubmittingLinkAction}
+              disabled={isSubmittingLinkAction || hasUnsavedChanges}
             >
               {isSubmittingLinkAction ? (
                 <Loader2 className="animate-spin" />

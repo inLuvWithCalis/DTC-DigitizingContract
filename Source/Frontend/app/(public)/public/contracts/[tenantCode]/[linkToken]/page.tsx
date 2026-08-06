@@ -23,6 +23,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
 import {
   Table,
@@ -276,24 +281,30 @@ export default function PublicContractPage() {
             ) : (
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="customer-otp">Mã OTP</Label>
-                  <Input
+                  <InputOTP
                     id="customer-otp"
-                    type="text"
                     inputMode="numeric"
                     autoComplete="one-time-code"
                     maxLength={6}
-                    placeholder="Nhập mã xác thực"
                     value={otp}
-                    onChange={(event) =>
-                      setOtp(event.target.value.replace(/\D/g, ""))
-                    }
+                    onChange={(value) => setOtp(value.replace(/\D/g, ""))}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") void handleVerifyOtp();
                     }}
                     disabled={isVerifyingOtp}
+                    containerClassName="justify-center"
                     autoFocus
-                  />
+                  >
+                    <InputOTPGroup>
+                      {Array.from({ length: 6 }, (_, index) => (
+                        <InputOTPSlot
+                          key={index}
+                          index={index}
+                          className="size-12 text-lg font-semibold"
+                        />
+                      ))}
+                    </InputOTPGroup>
+                  </InputOTP>
                 </div>
                 <Button
                   className="w-full"

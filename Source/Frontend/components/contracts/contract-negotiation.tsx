@@ -60,11 +60,15 @@ const getApiErrorMessage = (error: any, fallback: string) => {
 export function ContractNegotiation({
   contract,
   setContract,
+  hasUnsavedChanges,
+  onNegotiationRoundCreated,
 }: {
   contract: ContractDetailResponse;
   setContract: React.Dispatch<
     React.SetStateAction<ContractDetailResponse | null>
   >;
+  hasUnsavedChanges: boolean;
+  onNegotiationRoundCreated?: () => void;
 }) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [changeNote, setChangeNote] = useState("");
@@ -178,6 +182,11 @@ export function ContractNegotiation({
   }, [contract.contractId, contract.status, selectedVersionId]);
 
   const handleCreateRound = async () => {
+    if (hasUnsavedChanges) {
+      toast.error("Vui lòng lưu các thay đổi trước khi tạo vòng đàm phán mới.");
+      return;
+    }
+
     const normalizedChangeNote = changeNote.trim();
     if (!normalizedChangeNote) {
       toast.error("Vui lòng nhập lý do tạo vòng đàm phán mới.");
@@ -195,18 +204,46 @@ export function ContractNegotiation({
           changeNote: normalizedChangeNote,
         },
       );
+      onNegotiationRoundCreated?.();
+      setChangeNote("");
+      setIsDialogOpen(false);
 
-      const updatedContract = await contractApi.getDetail(contract.contractId);
+      let updatedContract: ContractDetailResponse;
+      try {
+        updatedContract = await contractApi.getDetail(contract.contractId);
+      } catch {
+        toast.warning(
+          "Đã tạo vòng đàm phán mới nhưng chưa tải được dữ liệu mới. Vui lòng tải lại trang.",
+        );
+        return;
+      }
+
       setHistoryPage(1);
       setSelectedVersionId(updatedContract.currentVersion.versionId);
       setContract(updatedContract);
-      setChangeNote("");
-      setIsDialogOpen(false);
       toast.success(
         `Đã khóa phiên bản ${result.sourceVersion.versionNo} và tạo phiên bản ${result.currentVersion.versionNo}.`,
       );
     } catch (error: any) {
       console.error("Lỗi tạo vòng đàm phán:", error);
+      if (error?.response?.status === 409) {
+        try {
+          const refreshedContract = await contractApi.getDetail(
+            contract.contractId,
+          );
+          setContract(refreshedContract);
+          setSelectedVersionId(refreshedContract.currentVersion.versionId);
+          toast.error(
+            "Hợp đồng hoặc version đã thay đổi. Dữ liệu mới nhất đã được tải lại.",
+          );
+        } catch {
+          toast.error(
+            "Hợp đồng hoặc version đã thay đổi. Vui lòng tải lại trang trước khi thử lại.",
+          );
+        }
+        return;
+      }
+
       toast.error(
         getApiErrorMessage(
           error,
@@ -305,6 +342,12 @@ export function ContractNegotiation({
             <Button
               className="w-full sm:w-auto"
               onClick={() => setIsDialogOpen(true)}
+              disabled={hasUnsavedChanges}
+              title={
+                hasUnsavedChanges
+                  ? "Hãy lưu các thay đổi trước khi tạo vòng mới"
+                  : undefined
+              }
             >
               <GitBranch className="mr-2 size-4" />
               Tạo vòng mới
@@ -619,6 +662,16 @@ export function ContractNegotiation({
           </DialogHeader>
 
           <div className="space-y-2 py-2">
+            <Alert>
+              <FileLock2 className="size-4" />
+              <AlertTitle>Ảnh hưởng sau khi tạo vòng mới</AlertTitle>
+              <AlertDescription>
+                Comment của version hiện tại chỉ còn trong lịch sử. Link và
+                phiên truy cập khách hàng hiện tại sẽ mất hiệu lực; sau khi sửa
+                version mới, bạn cần tạo link khác để gửi khách hàng.
+              </AlertDescription>
+            </Alert>
+
             <Label htmlFor="negotiation-change-note">
               Lý do thay đổi <span className="text-destructive">*</span>
             </Label>
@@ -646,7 +699,9 @@ export function ContractNegotiation({
             </Button>
             <Button
               onClick={handleCreateRound}
-              disabled={isCreatingRound || !changeNote.trim()}
+              disabled={
+                isCreatingRound || hasUnsavedChanges || !changeNote.trim()
+              }
             >
               {isCreatingRound ? (
                 <Loader2 className="mr-2 size-4 animate-spin" />

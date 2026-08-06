@@ -51,7 +51,6 @@ import { Clock } from "lucide-react";
 import {
   ContractDetailResponse,
   ContractLanguageMode,
-  ContractStatus,
   ContractItemType,
   ContractItemDiscountMode,
   getContractTypeLabel,
@@ -66,19 +65,17 @@ import {
 export function ContractOverview({
   contract,
   setContract,
+  canEdit,
   onOpenTransferModal,
 }: {
   contract: ContractDetailResponse;
   setContract: React.Dispatch<
     React.SetStateAction<ContractDetailResponse | null>
   >;
+  canEdit: boolean;
   onOpenTransferModal?: () => void;
 }) {
-  const isEditable =
-    (contract.status === ContractStatus.Draft ||
-      (contract.status === ContractStatus.Negotiating &&
-        contract.currentVersion.sourceVersionId != null)) &&
-    !contract.currentVersion.isLocked;
+  const isEditable = canEdit;
 
   const draftFinancialTotals = useMemo(
     () =>

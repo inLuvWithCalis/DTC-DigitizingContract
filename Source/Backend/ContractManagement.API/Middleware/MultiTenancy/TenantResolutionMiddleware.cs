@@ -27,8 +27,13 @@ public sealed class TenantResolutionMiddleware
       ITenantResolver tenantResolver,
       ICurrentTenant currentTenant)
     {
-        // Chỉ áp dụng Tenant cho API
-        if (!context.Request.Path.StartsWithSegments("/api"))
+        var isPublicCustomerAccess = context.GetEndpoint()?
+            .Metadata
+            .GetMetadata<PublicCustomerAccessAttribute>() is not null;
+
+        // Public customer endpoints use tenantCode from the route, never employee session state.
+        if (!context.Request.Path.StartsWithSegments("/api")
+            && !isPublicCustomerAccess)
         {
             await _next(context);
             return;
@@ -89,7 +94,8 @@ public sealed class TenantResolutionMiddleware
          * Khi Session đã có tenant nhưng header truyền tenant khác,
          * từ chối request thay vì cho người dùng đổi tenant.
          */
-        if (!string.IsNullOrWhiteSpace(tenantFromSession)
+        if (!isPublicCustomerAccess
+            && !string.IsNullOrWhiteSpace(tenantFromSession)
             && !string.IsNullOrWhiteSpace(tenantFromHeader)
             && !string.Equals(
                 tenantFromSession,
@@ -110,10 +116,11 @@ public sealed class TenantResolutionMiddleware
             return;
         }
 
-        string? tenantCode =
-            tenantFromSession
-            ?? tenantFromClaim
-            ?? tenantFromHeader;
+        string? tenantCode = isPublicCustomerAccess
+            ? context.Request.RouteValues["tenantCode"]?.ToString()
+            : tenantFromSession
+                ?? tenantFromClaim
+                ?? tenantFromHeader;
 
         if (string.IsNullOrWhiteSpace(tenantCode))
         {

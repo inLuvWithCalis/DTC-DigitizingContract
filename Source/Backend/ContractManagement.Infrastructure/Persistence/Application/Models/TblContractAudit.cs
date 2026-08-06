@@ -17,6 +17,11 @@ public partial class TblContractAudit
 
     public int? ActorEmployeeId { get; set; }
 
+    /// <summary>
+    /// Non-secret logical session reference for customer-originated audit entries.
+    /// </summary>
+    public int? ActorCustomerAccessSessionId { get; set; }
+
     public string ActionType { get; set; } = null!;
 
     public string Result { get; set; } = null!;

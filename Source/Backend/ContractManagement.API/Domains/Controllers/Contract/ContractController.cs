@@ -637,6 +637,129 @@ namespace ContractManagement.Domains.Controllers.Contract
         }
 
         /// <summary>
+        /// Lấy lịch sử số điện thoại xác minh đã che dùng cho customer OTP access.
+        /// FE dùng dữ liệu này để hiển thị số đang chọn và nguồn của số; không nhận số điện thoại đầy đủ.
+        /// Người phụ trách, Manager và AdminOfficer được phép gọi.
+        /// </summary>
+        [HttpGet("{contractId:int}/customer-access/verification-phone")]
+        public async Task<IActionResult> GetCustomerVerificationPhones(int contractId)
+        {
+            try
+            {
+                var result = await _contractService.GetCustomerVerificationPhonesAsync(
+                    contractId,
+                    GetEmployeeId());
+                return Ok(ApiResponse<IReadOnlyList<ContractCustomerVerificationPhoneResponse>>.Ok(result));
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<object>.Fail(exception.Message));
+            }
+        }
+
+        /// <summary>
+        /// Chọn số điện thoại xác minh cho customer OTP access và trả về biểu diễn đã che.
+        /// FE gửi Contract RowVersion và lý do cho mọi thay đổi; số nhập tay cũng bắt buộc có lý do.
+        /// Đổi số sẽ thu hồi ngay public link hiện tại, OTP challenge đang chờ và customer session.
+        /// </summary>
+        [HttpPut("{contractId:int}/customer-access/verification-phone")]
+        public async Task<IActionResult> UpdateCustomerVerificationPhone(
+            int contractId,
+            [FromBody] UpdateContractCustomerVerificationPhoneRequest request)
+        {
+            try
+            {
+                var result = await _contractService.UpdateCustomerVerificationPhoneAsync(
+                    contractId,
+                    request,
+                    GetEmployeeId());
+                return Ok(ApiResponse<ContractCustomerVerificationPhoneResponse>.Ok(result));
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<object>.Fail(exception.Message));
+            }
+        }
+
+        /// <summary>
+        /// Tạo public link đầu tiên cho Current Version. Chỉ người phụ trách hiện tại được gọi API này.
+        /// Ở Draft, link chờ đến khi bắt đầu thương lượng; ở Negotiating, link active ngay. Response chỉ trả
+        /// raw public URL đúng một lần, nên FE phải hiển thị hoặc sao chép link ở thời điểm này.
+        /// </summary>
+        [HttpPost("{contractId:int}/customer-access/links")]
+        public async Task<IActionResult> CreateCustomerAccessLink(
+            int contractId,
+            [FromBody] CreateContractCustomerAccessLinkRequest request)
+        {
+            try
+            {
+                var result = await _contractService.CreateCustomerAccessLinkAsync(
+                    contractId,
+                    request,
+                    GetEmployeeId(),
+                    GetPublicBaseUrl());
+                return Ok(ApiResponse<ContractCustomerAccessLinkResponse>.Ok(result));
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<object>.Fail(exception.Message));
+            }
+        }
+
+        /// <summary>
+        /// Thay public link hiện tại bằng link mới cho Current Version.
+        /// Người phụ trách, Manager hoặc AdminOfficer được phép gọi. Link cũ, OTP challenge và customer session
+        /// của link cũ ngừng hoạt động ngay; FE chỉ nhận raw public URL mới trong response này.
+        /// </summary>
+        [HttpPost("{contractId:int}/customer-access/links/{linkId:int}/replace")]
+        public async Task<IActionResult> ReplaceCustomerAccessLink(
+            int contractId,
+            int linkId,
+            [FromBody] ReplaceContractCustomerAccessLinkRequest request)
+        {
+            try
+            {
+                var result = await _contractService.ReplaceCustomerAccessLinkAsync(
+                    contractId,
+                    linkId,
+                    request,
+                    GetEmployeeId(),
+                    GetPublicBaseUrl());
+                return Ok(ApiResponse<ContractCustomerAccessLinkResponse>.Ok(result));
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<object>.Fail(exception.Message));
+            }
+        }
+
+        /// <summary>
+        /// Thu hồi public link mà không tạo link thay thế.
+        /// Người phụ trách, Manager hoặc AdminOfficer được phép gọi. Mọi quyền truy cập dựa trên link, gồm
+        /// OTP challenge và customer session, đều thất bại ngay sau response thành công.
+        /// </summary>
+        [HttpPost("{contractId:int}/customer-access/links/{linkId:int}/revoke")]
+        public async Task<IActionResult> RevokeCustomerAccessLink(
+            int contractId,
+            int linkId,
+            [FromBody] RevokeContractCustomerAccessLinkRequest request)
+        {
+            try
+            {
+                await _contractService.RevokeCustomerAccessLinkAsync(
+                    contractId,
+                    linkId,
+                    request,
+                    GetEmployeeId());
+                return NoContent();
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<object>.Fail(exception.Message));
+            }
+        }
+
+        /// <summary>
         /// Gửi version hiện hành đi duyệt và khóa snapshot.
         /// </summary>
         [HttpPost("{contractId:int}/submit-approval")]
@@ -671,5 +794,20 @@ namespace ContractManagement.Domains.Controllers.Contract
                     result,
                     "Gửi hợp đồng duyệt thành công."));
         }
+
+        private int GetEmployeeId()
+        {
+            var employeeId = HttpContext.Session.GetInt32("EmployeeId");
+            if (employeeId is null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Bạn chưa đăng nhập hoặc session đã hết hạn.");
+            }
+
+            return employeeId.Value;
+        }
+
+        private string GetPublicBaseUrl() =>
+            $"{Request.Scheme}://{Request.Host.Value}";
     }
 }

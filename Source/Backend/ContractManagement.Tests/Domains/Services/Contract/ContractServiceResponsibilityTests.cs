@@ -319,18 +319,20 @@ public class ContractServiceResponsibilityTests
     }
 
     [Fact]
-    public async Task NonEmployeeAudit_ShouldAllowNullActorEmployeeId()
+    public async Task CustomerAudit_ShouldRequireSessionAndAllowNullActorEmployeeId()
     {
         await using var context = CreateContext();
-        context.TblContractAudits.Add(
-            CreateAudit(
-                actorType: "Customer",
-                actorEmployeeId: null));
+        var audit = CreateAudit(
+            actorType: "Customer",
+            actorEmployeeId: null);
+        audit.ActorCustomerAccessSessionId = 1;
+        context.TblContractAudits.Add(audit);
 
         await context.SaveChangesAsync();
 
-        var audit = await context.TblContractAudits.SingleAsync();
-        Assert.Null(audit.ActorEmployeeId);
+        var persistedAudit = await context.TblContractAudits.SingleAsync();
+        Assert.Null(persistedAudit.ActorEmployeeId);
+        Assert.Equal(1, persistedAudit.ActorCustomerAccessSessionId);
     }
 
     [Fact]
@@ -446,6 +448,10 @@ public class ContractServiceResponsibilityTests
         IContractAuditWriter inner) : IContractAuditWriter
     {
         private bool _shouldThrow = true;
+
+        public void StageAudits(
+            IReadOnlyCollection<ContractAuditWriteRequest> requests) =>
+            inner.StageAudits(requests);
 
         public void StageEmployeeAudits(
             IReadOnlyCollection<EmployeeContractAuditWriteRequest> requests)

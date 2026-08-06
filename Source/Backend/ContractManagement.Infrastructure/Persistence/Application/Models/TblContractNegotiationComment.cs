@@ -25,7 +25,9 @@ public partial class TblContractNegotiationComment
     /// </summary>
     public string Source { get; set; } = "ExternalFeedback";
 
-    public int RecordedByEmployeeId { get; set; }
+    public int? RecordedByEmployeeId { get; set; }
+
+    public int? CustomerAccessSessionId { get; set; }
 
     /// <summary>
     /// 0 = Open, 1 = Resolved.
@@ -64,7 +66,7 @@ public partial class TblContractNegotiationComment
     [NotMapped]
     public int CreatedEmployeeId
     {
-        get => RecordedByEmployeeId;
+        get => RecordedByEmployeeId ?? 0;
         set => RecordedByEmployeeId = value;
     }
 }

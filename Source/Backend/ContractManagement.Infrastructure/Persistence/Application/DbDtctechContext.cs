@@ -28,6 +28,21 @@ public partial class DbDtctechContext : DbContext
 
     public virtual DbSet<TblContractAudit> TblContractAudits { get; set; }
 
+    public virtual DbSet<TblContractCustomerVerificationPhone>
+        TblContractCustomerVerificationPhones { get; set; }
+
+    public virtual DbSet<TblContractCustomerAccessLink>
+        TblContractCustomerAccessLinks { get; set; }
+
+    public virtual DbSet<TblContractCustomerOtpChallenge>
+        TblContractCustomerOtpChallenges { get; set; }
+
+    public virtual DbSet<TblContractCustomerAccessSession>
+        TblContractCustomerAccessSessions { get; set; }
+
+    public virtual DbSet<TblContractCustomerOtpDeliveryOutbox>
+        TblContractCustomerOtpDeliveryOutbox { get; set; }
+
     public virtual DbSet<TblContractNegotiationComment>
         TblContractNegotiationComments { get; set; }
 
@@ -266,6 +281,12 @@ public partial class DbDtctechContext : DbContext
                 e => e.CurrentVersionId,
                 "IX_tbl_Contract_CurrentVersionId");
 
+            entity.HasIndex(e => e.CurrentVerificationPhoneId)
+                .HasDatabaseName("IX_tbl_Contract_CurrentVerificationPhoneId");
+
+            entity.HasIndex(e => e.CurrentCustomerAccessLinkId)
+                .HasDatabaseName("IX_tbl_Contract_CurrentCustomerAccessLinkId");
+
             entity.Property(e => e.ContractCode)
                 .HasMaxLength(50)
                 .IsUnicode(false);
@@ -374,9 +395,14 @@ public partial class DbDtctechContext : DbContext
                 table.HasCheckConstraint(
                     "CK_tbl_ContractAudit_Actor",
                     "([ActorType] = 'Employee' " +
-                    "AND [ActorEmployeeId] > 0) OR " +
-                    "([ActorType] <> 'Employee' " +
-                    "AND [ActorEmployeeId] IS NULL)");
+                    "AND [ActorEmployeeId] > 0 " +
+                    "AND [ActorCustomerAccessSessionId] IS NULL) OR " +
+                    "([ActorType] = 'Customer' " +
+                    "AND [ActorEmployeeId] IS NULL " +
+                    "AND [ActorCustomerAccessSessionId] > 0) OR " +
+                    "([ActorType] = 'System' " +
+                    "AND [ActorEmployeeId] IS NULL " +
+                    "AND [ActorCustomerAccessSessionId] IS NULL)");
 
                 table.HasCheckConstraint(
                     "CK_tbl_ContractAudit_ActionType",
@@ -417,6 +443,8 @@ public partial class DbDtctechContext : DbContext
             entity.Property(e => e.ActionType)
                 .HasMaxLength(64)
                 .IsUnicode(false);
+
+            entity.Property(e => e.ActorCustomerAccessSessionId);
 
             entity.Property(e => e.Result)
                 .HasMaxLength(32)
@@ -472,11 +500,16 @@ public partial class DbDtctechContext : DbContext
 
                 table.HasCheckConstraint(
                     "CK_tbl_ContractNegotiationComment_Source",
-                    "[Source] = 'ExternalFeedback'");
+                    "[Source] IN ('ExternalFeedback', 'Customer')");
 
                 table.HasCheckConstraint(
-                    "CK_tbl_ContractNegotiationComment_RecordedByEmployeeId",
-                    "[RecordedByEmployeeId] > 0");
+                    "CK_tbl_ContractNegotiationComment_Actor",
+                    "([Source] = 'ExternalFeedback' " +
+                    "AND [RecordedByEmployeeId] > 0 " +
+                    "AND [CustomerAccessSessionId] IS NULL) OR " +
+                    "([Source] = 'Customer' " +
+                    "AND [RecordedByEmployeeId] IS NULL " +
+                    "AND [CustomerAccessSessionId] > 0)");
 
                 table.HasCheckConstraint(
                     "CK_tbl_ContractNegotiationComment_State",
@@ -545,8 +578,13 @@ public partial class DbDtctechContext : DbContext
                     "[EventType] IN (1, 2, 3)");
 
                 table.HasCheckConstraint(
-                    "CK_tbl_ContractNegotiationCommentEvent_EmployeeId",
-                    "[EmployeeId] > 0");
+                    "CK_tbl_ContractNegotiationCommentEvent_Actor",
+                    "([ActorType] = 'Employee' AND [EmployeeId] > 0 " +
+                    "AND [CustomerAccessSessionId] IS NULL) OR " +
+                    "([ActorType] = 'Customer' AND [EmployeeId] IS NULL " +
+                    "AND [CustomerAccessSessionId] > 0) OR " +
+                    "([ActorType] = 'System' AND [EmployeeId] IS NULL " +
+                    "AND [CustomerAccessSessionId] IS NULL)");
             });
 
             entity.HasIndex(e => new
@@ -563,6 +601,147 @@ public partial class DbDtctechContext : DbContext
                 .HasDefaultValueSql(
                     "(sysutcdatetime())",
                     "DF_tbl_ContractNegotiationCommentEvent_OccurredAt");
+
+            entity.Property(e => e.ActorType)
+                .HasMaxLength(32)
+                .IsUnicode(false)
+                .HasDefaultValue("Employee");
+        });
+
+        modelBuilder.Entity<TblContractCustomerVerificationPhone>(entity =>
+        {
+            entity.HasKey(e => e.VerificationPhoneId)
+                .HasName("PK_tbl_ContractCustomerVerificationPhone");
+
+            entity.ToTable("tbl_ContractCustomerVerificationPhone", table =>
+            {
+                table.HasCheckConstraint("CK_tbl_ContractCustomerVerificationPhone_ContractId", "[ContractId] > 0");
+                table.HasCheckConstraint("CK_tbl_ContractCustomerVerificationPhone_Source", "[PhoneSource] IN ('CustomerMobile', 'CustomerPhone', 'Manual')");
+                table.HasCheckConstraint("CK_tbl_ContractCustomerVerificationPhone_Phone", "LEN(LTRIM(RTRIM([PhoneNumberNormalized]))) BETWEEN 3 AND 32");
+                table.HasCheckConstraint("CK_tbl_ContractCustomerVerificationPhone_Reason", "LEN(LTRIM(RTRIM([Reason]))) BETWEEN 1 AND 1000");
+                table.HasCheckConstraint("CK_tbl_ContractCustomerVerificationPhone_CreatedBy", "[CreatedByEmployeeId] > 0");
+            });
+
+            entity.HasIndex(e => new { e.ContractId, e.CreatedDate, e.VerificationPhoneId })
+                .HasDatabaseName("IX_tbl_ContractCustomerVerificationPhone_Contract_Chronological");
+            entity.HasIndex(e => new { e.ContractId, e.PhoneNumberNormalized })
+                .HasDatabaseName("IX_tbl_ContractCustomerVerificationPhone_Contract_Phone");
+            entity.Property(e => e.PhoneSource).HasMaxLength(32).IsUnicode(false);
+            entity.Property(e => e.PhoneNumberNormalized).HasMaxLength(32).IsUnicode(false);
+            entity.Property(e => e.Reason).HasMaxLength(1000);
+            entity.Property(e => e.CreatedDate).HasColumnType("datetime2").HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.RowVersion).IsRowVersion().IsConcurrencyToken();
+        });
+
+        modelBuilder.Entity<TblContractCustomerAccessLink>(entity =>
+        {
+            entity.HasKey(e => e.CustomerAccessLinkId)
+                .HasName("PK_tbl_ContractCustomerAccessLink");
+
+            entity.ToTable("tbl_ContractCustomerAccessLink", table =>
+            {
+                table.HasCheckConstraint("CK_tbl_ContractCustomerAccessLink_LogicalIds", "[TenantId] > 0 AND [ContractId] > 0 AND [VersionId] > 0 AND [VerificationPhoneId] > 0 AND [CreatedByEmployeeId] > 0");
+                table.HasCheckConstraint("CK_tbl_ContractCustomerAccessLink_TokenHash", "LEN(LTRIM(RTRIM([TokenHash]))) = 64");
+                table.HasCheckConstraint("CK_tbl_ContractCustomerAccessLink_Expiry", "[ExpiresAt] > [CreatedDate]");
+                table.HasCheckConstraint("CK_tbl_ContractCustomerAccessLink_Activation", "[ActivatedAt] IS NULL OR ([ActivatedAt] >= [CreatedDate] AND [ActivatedAt] <= [ExpiresAt])");
+                table.HasCheckConstraint("CK_tbl_ContractCustomerAccessLink_Revocation", "([RevokedAt] IS NULL AND [RevokedByEmployeeId] IS NULL AND [RevocationReason] IS NULL) OR ([RevokedAt] IS NOT NULL AND [RevokedByEmployeeId] > 0 AND LEN(LTRIM(RTRIM([RevocationReason]))) BETWEEN 1 AND 1000)");
+            });
+
+            entity.HasIndex(e => e.TokenHash).IsUnique().HasDatabaseName("UX_tbl_ContractCustomerAccessLink_TokenHash");
+            entity.HasIndex(e => e.ContractId).IsUnique().HasFilter("[RevokedAt] IS NULL").HasDatabaseName("UX_tbl_ContractCustomerAccessLink_ActiveContract");
+            entity.HasIndex(e => new { e.ContractId, e.VersionId, e.VerificationPhoneId }).HasFilter("[RevokedAt] IS NULL").HasDatabaseName("IX_tbl_ContractCustomerAccessLink_ActiveContext");
+            entity.HasIndex(e => new { e.ExpiresAt, e.RevokedAt }).HasDatabaseName("IX_tbl_ContractCustomerAccessLink_Expiry");
+            entity.Property(e => e.TokenHash).HasMaxLength(64).IsUnicode(false);
+            entity.Property(e => e.RevocationReason).HasMaxLength(1000);
+            entity.Property(e => e.CreatedDate).HasColumnType("datetime2").HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.ActivatedAt).HasColumnType("datetime2");
+            entity.Property(e => e.ExpiresAt).HasColumnType("datetime2");
+            entity.Property(e => e.RevokedAt).HasColumnType("datetime2");
+            entity.Property(e => e.RowVersion).IsRowVersion().IsConcurrencyToken();
+        });
+
+        modelBuilder.Entity<TblContractCustomerOtpChallenge>(entity =>
+        {
+            entity.HasKey(e => e.CustomerOtpChallengeId)
+                .HasName("PK_tbl_ContractCustomerOtpChallenge");
+
+            entity.ToTable("tbl_ContractCustomerOtpChallenge", table =>
+            {
+                table.HasCheckConstraint("CK_tbl_ContractCustomerOtpChallenge_LogicalIds", "[LinkId] > 0 AND [VerificationPhoneId] > 0");
+                table.HasCheckConstraint("CK_tbl_ContractCustomerOtpChallenge_PublicId", "LEN(LTRIM(RTRIM([PublicChallengeId]))) BETWEEN 32 AND 64");
+                table.HasCheckConstraint("CK_tbl_ContractCustomerOtpChallenge_Purpose", "[Purpose] = 'CustomerAccess'");
+                table.HasCheckConstraint("CK_tbl_ContractCustomerOtpChallenge_OtpHash", "LEN(LTRIM(RTRIM([OtpHash]))) = 64");
+                table.HasCheckConstraint("CK_tbl_ContractCustomerOtpChallenge_Attempts", "[FailedAttemptCount] BETWEEN 0 AND 5");
+                table.HasCheckConstraint("CK_tbl_ContractCustomerOtpChallenge_Expiry", "[ExpiresAt] > [CreatedDate]");
+                table.HasCheckConstraint("CK_tbl_ContractCustomerOtpChallenge_Lock", "[LockedAt] IS NULL OR [FailedAttemptCount] = 5");
+            });
+
+            entity.HasIndex(e => e.PublicChallengeId).IsUnique().HasDatabaseName("UX_tbl_ContractCustomerOtpChallenge_PublicChallengeId");
+            entity.HasIndex(e => new { e.LinkId, e.CreatedDate }).HasDatabaseName("IX_tbl_ContractCustomerOtpChallenge_Link_Created");
+            entity.HasIndex(e => new { e.LinkId, e.ExpiresAt }).HasFilter("[UsedAt] IS NULL AND [LockedAt] IS NULL AND [InvalidatedAt] IS NULL").HasDatabaseName("IX_tbl_ContractCustomerOtpChallenge_ActiveLookup");
+            entity.Property(e => e.PublicChallengeId).HasMaxLength(64).IsUnicode(false);
+            entity.Property(e => e.Purpose).HasMaxLength(32).IsUnicode(false);
+            entity.Property(e => e.OtpHash).HasMaxLength(64).IsUnicode(false);
+            entity.Property(e => e.ExpiresAt).HasColumnType("datetime2");
+            entity.Property(e => e.SentAt).HasColumnType("datetime2");
+            entity.Property(e => e.UsedAt).HasColumnType("datetime2");
+            entity.Property(e => e.LockedAt).HasColumnType("datetime2");
+            entity.Property(e => e.InvalidatedAt).HasColumnType("datetime2");
+            entity.Property(e => e.CreatedDate).HasColumnType("datetime2").HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.RowVersion).IsRowVersion().IsConcurrencyToken();
+        });
+
+        modelBuilder.Entity<TblContractCustomerAccessSession>(entity =>
+        {
+            entity.HasKey(e => e.CustomerAccessSessionId)
+                .HasName("PK_tbl_ContractCustomerAccessSession");
+
+            entity.ToTable("tbl_ContractCustomerAccessSession", table =>
+            {
+                table.HasCheckConstraint("CK_tbl_ContractCustomerAccessSession_LogicalIds", "[TenantId] > 0 AND [LinkId] > 0 AND [ContractId] > 0 AND [VersionId] > 0 AND [VerificationPhoneId] > 0");
+                table.HasCheckConstraint("CK_tbl_ContractCustomerAccessSession_TokenHash", "LEN(LTRIM(RTRIM([SessionTokenHash]))) = 64");
+                table.HasCheckConstraint("CK_tbl_ContractCustomerAccessSession_Expiry", "[IssuedAt] <= [LastActivityAt] AND [IdleExpiresAt] >= [LastActivityAt] AND [HardExpiresAt] >= [IdleExpiresAt]");
+                table.HasCheckConstraint("CK_tbl_ContractCustomerAccessSession_Revocation", "[RevokedAt] IS NULL OR LEN(LTRIM(RTRIM([RevocationReason]))) BETWEEN 1 AND 1000");
+            });
+
+            entity.HasIndex(e => e.SessionTokenHash).IsUnique().HasDatabaseName("UX_tbl_ContractCustomerAccessSession_TokenHash");
+            entity.HasIndex(e => new { e.LinkId, e.RevokedAt, e.IdleExpiresAt }).HasDatabaseName("IX_tbl_ContractCustomerAccessSession_ActiveLink");
+            entity.HasIndex(e => new { e.ContractId, e.VersionId, e.RevokedAt }).HasDatabaseName("IX_tbl_ContractCustomerAccessSession_ContractVersion");
+            entity.Property(e => e.SessionTokenHash).HasMaxLength(64).IsUnicode(false);
+            entity.Property(e => e.RevocationReason).HasMaxLength(1000);
+            entity.Property(e => e.IssuedAt).HasColumnType("datetime2");
+            entity.Property(e => e.LastActivityAt).HasColumnType("datetime2");
+            entity.Property(e => e.IdleExpiresAt).HasColumnType("datetime2");
+            entity.Property(e => e.HardExpiresAt).HasColumnType("datetime2");
+            entity.Property(e => e.RevokedAt).HasColumnType("datetime2");
+            entity.Property(e => e.RowVersion).IsRowVersion().IsConcurrencyToken();
+        });
+
+        modelBuilder.Entity<TblContractCustomerOtpDeliveryOutbox>(entity =>
+        {
+            entity.HasKey(e => e.CustomerOtpDeliveryOutboxId)
+                .HasName("PK_tbl_ContractCustomerOtpDeliveryOutbox");
+
+            entity.ToTable("tbl_ContractCustomerOtpDeliveryOutbox", table =>
+            {
+                table.HasCheckConstraint("CK_tbl_ContractCustomerOtpDeliveryOutbox_Challenge", "[ChallengeId] > 0");
+                table.HasCheckConstraint("CK_tbl_ContractCustomerOtpDeliveryOutbox_Status", "[Status] IN ('Pending', 'Leased', 'Sent', 'Failed')");
+                table.HasCheckConstraint("CK_tbl_ContractCustomerOtpDeliveryOutbox_Attempts", "[AttemptCount] >= 0");
+                table.HasCheckConstraint("CK_tbl_ContractCustomerOtpDeliveryOutbox_Payload", "LEN(LTRIM(RTRIM([EncryptedPayload]))) > 0");
+            });
+
+            entity.HasIndex(e => e.ChallengeId).IsUnique().HasDatabaseName("UX_tbl_ContractCustomerOtpDeliveryOutbox_ChallengeId");
+            entity.HasIndex(e => new { e.Status, e.NextAttemptAt, e.LeaseUntil }).HasDatabaseName("IX_tbl_ContractCustomerOtpDeliveryOutbox_Lease");
+            entity.Property(e => e.EncryptedPayload).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.Status).HasMaxLength(16).IsUnicode(false);
+            entity.Property(e => e.LeaseId).HasMaxLength(64).IsUnicode(false);
+            entity.Property(e => e.LastFailure).HasMaxLength(1000);
+            entity.Property(e => e.NextAttemptAt).HasColumnType("datetime2");
+            entity.Property(e => e.LeaseUntil).HasColumnType("datetime2");
+            entity.Property(e => e.SentAt).HasColumnType("datetime2");
+            entity.Property(e => e.FailedAt).HasColumnType("datetime2");
+            entity.Property(e => e.CreatedDate).HasColumnType("datetime2").HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.RowVersion).IsRowVersion().IsConcurrencyToken();
         });
 
         modelBuilder.Entity<TblContractAppendix>(entity =>

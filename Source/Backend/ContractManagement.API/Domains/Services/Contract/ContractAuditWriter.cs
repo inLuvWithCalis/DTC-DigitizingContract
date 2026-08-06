@@ -6,7 +6,7 @@ using ContractManagement.Infrastructure.Persistence.Application.Models;
 namespace ContractManagement.Domains.Services.Contract;
 
 /// <summary>
-/// Bổ sung request và tenant metadata cho Contract business audit.
+/// Stages non-secret Contract audit facts for employee, customer, and system actors.
 /// </summary>
 public sealed class ContractAuditWriter : IContractAuditWriter
 {
@@ -33,6 +33,27 @@ public sealed class ContractAuditWriter : IContractAuditWriter
     {
         ArgumentNullException.ThrowIfNull(requests);
 
+        StageAudits(requests.Select(request => new ContractAuditWriteRequest(
+            request.ContractId,
+            request.VersionId,
+            ContractAuditActorTypes.Employee,
+            request.ActorEmployeeId,
+            null,
+            request.ActionType,
+            request.Result,
+            request.OccurredAt,
+            request.PreviousContractStatus,
+            request.NewContractStatus,
+            request.PreviousResponsibleEmployeeId,
+            request.NewResponsibleEmployeeId,
+            request.Reason)).ToList());
+    }
+
+    public void StageAudits(
+        IReadOnlyCollection<ContractAuditWriteRequest> requests)
+    {
+        ArgumentNullException.ThrowIfNull(requests);
+
         if (requests.Count == 0)
         {
             return;
@@ -51,41 +72,62 @@ public sealed class ContractAuditWriter : IContractAuditWriter
             httpContext?.Request.Headers.UserAgent.ToString(),
             MaxUserAgentLength);
 
-        var audits = requests
-            .Select(request =>
-            {
-                if (request.ActorEmployeeId <= 0)
-                {
-                    throw new InvalidOperationException(
-                        "Employee audit actor phải có EmployeeId hợp lệ.");
-                }
+        var audits = requests.Select(request =>
+        {
+            ValidateActor(request);
 
-                return new TblContractAudit
-                {
-                    TenantId = tenantId,
-                    ContractId = request.ContractId,
-                    VersionId = request.VersionId,
-                    ActorType = ContractAuditActorTypes.Employee,
-                    ActorEmployeeId = request.ActorEmployeeId,
-                    ActionType = request.ActionType,
-                    Result = request.Result,
-                    PreviousContractStatus =
-                        request.PreviousContractStatus,
-                    NewContractStatus = request.NewContractStatus,
-                    PreviousResponsibleEmployeeId =
-                        request.PreviousResponsibleEmployeeId,
-                    NewResponsibleEmployeeId =
-                        request.NewResponsibleEmployeeId,
-                    Reason = request.Reason,
-                    OccurredAt = request.OccurredAt,
-                    IpAddress = ipAddress,
-                    UserAgent = userAgent,
-                    CorrelationId = correlationId
-                };
-            })
-            .ToList();
+            return new TblContractAudit
+            {
+                TenantId = tenantId,
+                ContractId = request.ContractId,
+                VersionId = request.VersionId,
+                ActorType = request.ActorType,
+                ActorEmployeeId = request.ActorEmployeeId,
+                ActorCustomerAccessSessionId =
+                    request.ActorCustomerAccessSessionId,
+                ActionType = request.ActionType,
+                Result = request.Result,
+                PreviousContractStatus = request.PreviousContractStatus,
+                NewContractStatus = request.NewContractStatus,
+                PreviousResponsibleEmployeeId =
+                    request.PreviousResponsibleEmployeeId,
+                NewResponsibleEmployeeId = request.NewResponsibleEmployeeId,
+                Reason = request.Reason,
+                OccurredAt = request.OccurredAt,
+                IpAddress = ipAddress,
+                UserAgent = userAgent,
+                CorrelationId = correlationId
+            };
+        }).ToList();
 
         _dbContext.TblContractAudits.AddRange(audits);
+    }
+
+    private static void ValidateActor(ContractAuditWriteRequest request)
+    {
+        var isEmployee = string.Equals(
+            request.ActorType,
+            ContractAuditActorTypes.Employee,
+            StringComparison.Ordinal);
+        var isCustomer = string.Equals(
+            request.ActorType,
+            ContractAuditActorTypes.Customer,
+            StringComparison.Ordinal);
+        var isSystem = string.Equals(
+            request.ActorType,
+            ContractAuditActorTypes.System,
+            StringComparison.Ordinal);
+
+        if ((!isEmployee && !isCustomer && !isSystem)
+            || (isEmployee && (request.ActorEmployeeId is not > 0
+                || request.ActorCustomerAccessSessionId.HasValue))
+            || (isCustomer && (request.ActorEmployeeId.HasValue
+                || request.ActorCustomerAccessSessionId is not > 0))
+            || (isSystem && (request.ActorEmployeeId.HasValue
+                || request.ActorCustomerAccessSessionId.HasValue)))
+        {
+            throw new InvalidOperationException("Contract audit actor is invalid.");
+        }
     }
 
     private static string? NormalizeAndLimit(

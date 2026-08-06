@@ -4,16 +4,19 @@ using ContractManagement.Infrastructure.Persistence.Application;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace ContractManagement.Migrations
+namespace ContractManagement.Infrastructure.Migrations.Application
 {
     [DbContext(typeof(DbDtctechContext))]
-    partial class DbDtctechContextModelSnapshot : ModelSnapshot
+    [Migration("20260805101442_Phase6_Slice06CustomerAccessAndPublicComments")]
+    partial class Phase6_Slice06CustomerAccessAndPublicComments
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

@@ -24,6 +24,7 @@ using ContractManagement.Middleware;
 using ContractManagement.Middleware.MultiTenancy;
 using Microsoft.AspNetCore.Identity;
 using ContractManagement.API.Helpers;
+using ContractManagement.API.Domains.CustomerAccess;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -76,6 +77,28 @@ builder.Services.AddSwaggerGen(options =>
  */
 builder.Services.AddContractManagementInfrastructure(
     builder.Configuration);
+
+builder.Services.AddOptions<CustomerOtpOptions>()
+    .Bind(builder.Configuration.GetSection(CustomerOtpOptions.SectionName))
+    .Validate(options => builder.Environment.IsDevelopment()
+        || (IsThirtyTwoByteBase64(options.HashKey)
+            && IsThirtyTwoByteBase64(options.EncryptionKey)
+            && !string.Equals(options.Provider, "Fake", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(options.ProviderEndpoint)
+            && !string.IsNullOrWhiteSpace(options.ProviderApiKey)),
+        "Production customer OTP requires configured hash/encryption keys and a delivery provider.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<CustomerAccessCryptography>();
+
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddSingleton<ICustomerOtpDeliveryProvider, FakeCustomerOtpDeliveryProvider>();
+}
+else
+{
+    builder.Services.AddHttpClient<ICustomerOtpDeliveryProvider, HttpCustomerOtpDeliveryProvider>();
+}
+builder.Services.AddHostedService<CustomerOtpDeliveryOutboxWorker>();
 
 #endregion
 
@@ -216,6 +239,10 @@ builder.Services.AddScoped<
     ContractService>();
 
 builder.Services.AddScoped<
+    ICustomerContractAccessService,
+    CustomerContractAccessService>();
+
+builder.Services.AddScoped<
     IContractAuditWriter,
     ContractAuditWriter>();
 
@@ -338,3 +365,16 @@ FrontendLauncher.Start();
  */
 
 app.Run();
+
+static bool IsThirtyTwoByteBase64(string? value)
+{
+    try
+    {
+        return !string.IsNullOrWhiteSpace(value)
+            && Convert.FromBase64String(value).Length == 32;
+    }
+    catch (FormatException)
+    {
+        return false;
+    }
+}

@@ -175,7 +175,7 @@ export function ContractTerms({
 
                 {/* Nút Toggle Cứng / Mềm */}
                 {isEditable ? (
-                  <button
+                  <Button
                     onClick={() =>
                       handleTermChange(
                         term.termId,
@@ -183,17 +183,15 @@ export function ContractTerms({
                         !term.isNegotiable,
                       )
                     }
-                    className={`flex max-w-full gap-2 rounded-full border px-3 py-1 text-left text-xs font-bold transition-colors cursor-pointer ${
-                      term.isNegotiable
-                        ? "bg-green-50 text-green-700 border-green-200"
-                        : "bg-red-50 text-red-700 border-red-200"
+                    className={`flex max-w-full gap-2 rounded-full border px-3 py-1 text-left text-xs font-bold transition-colors ${
+                      term.isNegotiable ? "badge-success" : "badge-danger"
                     }`}
                   >
                     <ArrowRightLeftIcon className="size-4" />
                     {term.isNegotiable
                       ? "Trạng thái: Cho phép đàm phán"
                       : "Trạng thái: Cố định"}
-                  </button>
+                  </Button>
                 ) : (
                   <span
                     className={`text-xs font-bold px-3 py-1 rounded-full ${term.isNegotiable ? "text-green-700 bg-green-50" : "text-red-700 bg-red-50"}`}

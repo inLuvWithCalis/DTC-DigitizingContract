@@ -753,7 +753,7 @@ export function ContractTermComments({
                                       Trả lời
                                     </Button>
                                   )}
-                                  {canManageCommentState && (
+                                  {/* {canManageCommentState && (
                                     <Button
                                       variant="ghost"
                                       size="sm"
@@ -775,7 +775,7 @@ export function ContractTermComments({
                                       )}
                                       {isResolved ? "Mở lại" : "Đã xử lý"}
                                     </Button>
-                                  )}
+                                  )} */}
                                 </div>
                               )}
                           </div>

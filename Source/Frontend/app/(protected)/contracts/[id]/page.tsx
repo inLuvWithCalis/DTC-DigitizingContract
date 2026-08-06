@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 
 import { Header } from "@/components/ui/custom/header";
+import { showConfirmToast } from "@/components/ui/custom/confirm-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -211,10 +212,7 @@ export default function ContractDetailPage() {
     );
     const syncStoredLink = () =>
       setKnownCustomerAccessLink(
-        readStoredCustomerAccessLink(
-          currentContractId,
-          currentVersionId,
-        ),
+        readStoredCustomerAccessLink(currentContractId, currentVersionId),
       );
     const handleStorage = (event: StorageEvent) => {
       if (event.key === storageKey) syncStoredLink();
@@ -495,40 +493,49 @@ export default function ContractDetailPage() {
     }
   };
 
-  const handleSubmitApproval = async () => {
+  const handleSubmitApproval = () => {
     if (!contract || !contract.currentVersion) return;
     if (hasUnsavedChanges) {
       toast.error("Vui lòng lưu các thay đổi trước khi gửi duyệt.");
       return;
     }
 
-    setIsSubmittingApproval(true);
-    try {
-      const payload = {
-        rowVersion: contract.rowVersion,
-        currentVersionId: contract.currentVersion.versionId,
-        currentVersionRowVersion: contract.currentVersion.rowVersion,
-        workflowId: null,
-      };
-      await contractApi.submitApproval(contract.contractId, payload);
+    showConfirmToast({
+      title: "Gửi hợp đồng để duyệt?",
+      description:
+        "Sau khi gửi, hợp đồng sẽ chuyển sang trạng thái Chờ duyệt và không thể chỉnh sửa cho đến khi được xử lý.",
+      confirmLabel: "Gửi duyệt",
+      cancelLabel: "Hủy",
+      onConfirm: async () => {
+        setIsSubmittingApproval(true);
+        try {
+          const payload = {
+            rowVersion: contract.rowVersion,
+            currentVersionId: contract.currentVersion.versionId,
+            currentVersionRowVersion: contract.currentVersion.rowVersion,
+            workflowId: null,
+          };
+          await contractApi.submitApproval(contract.contractId, payload);
 
-      const detailRes: ContractDetailResponse = await contractApi.getDetail(
-        contract.contractId,
-      );
-      handleCustomerAccessLinkChange(null);
-      setContract(detailRes);
+          const detailRes: ContractDetailResponse = await contractApi.getDetail(
+            contract.contractId,
+          );
+          handleCustomerAccessLinkChange(null);
+          setContract(detailRes);
 
-      toast.success("Hợp đồng đã được gửi duyệt!");
-    } catch (err: any) {
-      console.error("Lỗi gửi duyệt hợp đồng:", err);
-      const errorData = err?.response?.data;
-      const message = errorData?.errors
-        ? Object.values(errorData.errors).flat().join("; ")
-        : errorData?.title || "Không thể gửi duyệt. Vui lòng thử lại.";
-      toast.error(message);
-    } finally {
-      setIsSubmittingApproval(false);
-    }
+          toast.success("Hợp đồng đã được gửi duyệt!");
+        } catch (err: any) {
+          console.error("Lỗi gửi duyệt hợp đồng:", err);
+          const errorData = err?.response?.data;
+          const message = errorData?.errors
+            ? Object.values(errorData.errors).flat().join("; ")
+            : errorData?.title || "Không thể gửi duyệt. Vui lòng thử lại.";
+          toast.error(message);
+        } finally {
+          setIsSubmittingApproval(false);
+        }
+      },
+    });
   };
 
   const isCurrentVersionShared =
@@ -679,8 +686,8 @@ export default function ContractDetailPage() {
             <AlertTitle>Version đang được chia sẻ với khách hàng</AlertTitle>
             <AlertDescription>
               Nội dung được chuyển sang chế độ chỉ xem để tránh thay đổi trực
-              tiếp dữ liệu khách hàng đang xem. Muốn chỉnh sửa, hãy vào tab
-              “Đàm phán” và tạo vòng mới.
+              tiếp dữ liệu khách hàng đang xem. Muốn chỉnh sửa, hãy vào tab “Đàm
+              phán” và tạo vòng mới.
             </AlertDescription>
           </Alert>
         )}

@@ -45,7 +45,7 @@ import {
   ContractVersionHistoryResponse,
 } from "@/services/contract-api";
 
-const VERSION_HISTORY_PAGE_SIZE = 4;
+const VERSION_HISTORY_PAGE_SIZE = 3;
 
 const getApiErrorMessage = (error: any, fallback: string) => {
   const data = error?.response?.data;
@@ -234,11 +234,11 @@ export function ContractNegotiation({
           setContract(refreshedContract);
           setSelectedVersionId(refreshedContract.currentVersion.versionId);
           toast.error(
-            "Hợp đồng hoặc version đã thay đổi. Dữ liệu mới nhất đã được tải lại.",
+            "Hợp đồng hoặc phiên bản đã thay đổi. Dữ liệu mới nhất đã được tải lại.",
           );
         } catch {
           toast.error(
-            "Hợp đồng hoặc version đã thay đổi. Vui lòng tải lại trang trước khi thử lại.",
+            "Hợp đồng hoặc phiên bản đã thay đổi. Vui lòng tải lại trang trước khi thử lại.",
           );
         }
         return;
@@ -335,7 +335,7 @@ export function ContractNegotiation({
               Vòng đàm phán
             </CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              Mỗi vòng mới sẽ lưu snapshot của phiên bản trước khi chỉnh sửa.
+              Mỗi vòng mới sẽ lưu bản sao của phiên bản trước khi chỉnh sửa.
             </p>
           </div>
           {canCreateRound && (
@@ -372,7 +372,7 @@ export function ContractNegotiation({
                   Phiên bản hiện hành
                 </p>
                 <p className="mt-1 text-2xl font-bold">
-                  Version {currentVersion.versionNo}
+                  Phiên bản {currentVersion.versionNo}
                 </p>
               </div>
               <Badge
@@ -393,7 +393,7 @@ export function ContractNegotiation({
                 <Separator className="my-4" />
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Lý do tạo version
+                    Lý do tạo phiên bản
                   </p>
                   <p className="mt-2 text-sm leading-6">
                     {currentVersion.changeNote}
@@ -408,15 +408,12 @@ export function ContractNegotiation({
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="font-semibold">Lịch sử phiên bản</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Chọn một version để xem snapshot và dữ liệu đàm phán.
-                  </p>
                 </div>
               </div>
 
               {historyError ? (
                 <Alert variant="destructive">
-                  <AlertTitle>Không thể tải lịch sử version</AlertTitle>
+                  <AlertTitle>Không thể tải lịch sử phiên bản</AlertTitle>
                   <AlertDescription className="space-y-3">
                     <p>{historyError}</p>
                     <Button
@@ -432,7 +429,7 @@ export function ContractNegotiation({
                 <div className="flex min-h-40 items-center justify-center rounded-xl border border-dashed">
                   <Loader2 className="mr-2 size-5 animate-spin text-primary" />
                   <span className="text-sm text-muted-foreground">
-                    Đang tải lịch sử version...
+                    Đang tải lịch sử phiên bản...
                   </span>
                 </div>
               ) : versionHistory.length === 0 ? (
@@ -442,8 +439,8 @@ export function ContractNegotiation({
                 </div>
               ) : (
                 <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
-                  <div className="space-y-3">
-                    <div className="space-y-2">
+                  <div className="space-y-3 flex flex-col">
+                    <div className="space-y-2 flex-1">
                       {paginatedVersionHistory.map((version) => {
                         const isSelected =
                           version.versionId === selectedVersionId;
@@ -466,7 +463,7 @@ export function ContractNegotiation({
                             <div className="flex items-start justify-between gap-2">
                               <div>
                                 <p className="font-semibold">
-                                  Version {version.versionNo}
+                                  Phiên bản {version.versionNo}
                                 </p>
                                 <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
                                   <CalendarDays className="size-3" />
@@ -529,12 +526,12 @@ export function ContractNegotiation({
                       <div className="flex min-h-[230px] items-center justify-center">
                         <Loader2 className="mr-2 size-5 animate-spin text-primary" />
                         <span className="text-sm text-muted-foreground">
-                          Đang tải snapshot...
+                          Đang tải bản sao lưu...
                         </span>
                       </div>
                     ) : versionError ? (
                       <Alert variant="destructive">
-                        <AlertTitle>Không thể tải snapshot</AlertTitle>
+                        <AlertTitle>Không thể tải bản sao lưu</AlertTitle>
                         <AlertDescription>{versionError}</AlertDescription>
                       </Alert>
                     ) : selectedVersion ? (
@@ -542,7 +539,7 @@ export function ContractNegotiation({
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                           <div>
                             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                              Snapshot đã chọn
+                              Bản sao lưu đã chọn
                             </p>
                             <h4 className="mt-1 text-xl font-bold">
                               Version {selectedVersion.versionNo}
@@ -563,8 +560,8 @@ export function ContractNegotiation({
                                 <CheckCircle2 className="size-3.5" />
                               )}
                               {selectedVersion.isLocked
-                                ? "Snapshot đã khóa"
-                                : "Version đang chỉnh sửa"}
+                                ? "Bản sao lưu đã khóa"
+                                : "Phiên bản đang chỉnh sửa"}
                             </Badge>
                             {selectedVersion.isLocked &&
                               selectedVersion.versionId !==
@@ -655,8 +652,8 @@ export function ContractNegotiation({
           <DialogHeader>
             <DialogTitle>Tạo vòng đàm phán mới</DialogTitle>
             <DialogDescription>
-              Version {currentVersion.versionNo} sẽ được khóa và snapshot. Hệ
-              thống sau đó tạo version {currentVersion.versionNo + 1} để bạn
+              Phiên bản {currentVersion.versionNo} sẽ được khóa và sao lưu. Hệ
+              thống sau đó tạo phiên bản {currentVersion.versionNo + 1} để bạn
               tiếp tục chỉnh sửa.
             </DialogDescription>
           </DialogHeader>
@@ -672,7 +669,7 @@ export function ContractNegotiation({
               </AlertDescription>
             </Alert>
 
-            <Label htmlFor="negotiation-change-note">
+            <Label htmlFor="negotiation-change-note" className="py-2">
               Lý do thay đổi <span className="text-destructive">*</span>
             </Label>
             <Textarea

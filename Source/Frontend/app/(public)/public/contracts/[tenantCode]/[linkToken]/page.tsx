@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 
 import { PublicContractDiscussionModal } from "@/components/contracts/public-contract-comments";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,12 @@ const getErrorMessage = (error: any, fallback: string) => {
     data?.message || data?.title || (typeof data === "string" ? data : fallback)
   );
 };
+
+const PublicThemeToggle = () => (
+  <div className="fixed right-4 top-4 z-50 sm:right-6 sm:top-6">
+    <ThemeToggle />
+  </div>
+);
 
 export default function PublicContractPage() {
   const params = useParams<{ tenantCode: string; linkToken: string }>();
@@ -139,7 +146,7 @@ export default function PublicContractPage() {
       setPublicChallengeId(result.publicChallengeId);
       setOtp("");
       setStep("otp");
-      toast.success("Nếu thông tin hợp lệ, mã xác thực sẽ được gửi.");
+      toast.info("Nếu thông tin hợp lệ, mã xác thực sẽ được gửi.");
     } catch (error: any) {
       toast.error(getErrorMessage(error, "Không thể yêu cầu mã xác thực."));
     } finally {
@@ -169,6 +176,7 @@ export default function PublicContractPage() {
       });
       setOtp("");
       setPublicChallengeId(null);
+      toast.success("Xác thực thành công!");
       await loadSharedContract();
     } catch (error: any) {
       resetToPhone(
@@ -203,34 +211,41 @@ export default function PublicContractPage() {
 
   if (step === "checking") {
     return (
-      <div className="flex min-h-screen items-center justify-center px-4">
-        <div className="flex flex-col items-center gap-3 text-muted-foreground">
-          <Loader2 className="size-8 animate-spin text-primary" />
-          <p>Đang kiểm tra quyền truy cập...</p>
+      <>
+        <PublicThemeToggle />
+        <div className="flex min-h-screen items-center justify-center px-4">
+          <div className="flex flex-col items-center gap-3 text-muted-foreground">
+            <Loader2 className="size-8 animate-spin text-primary" />
+            <p>Đang kiểm tra quyền truy cập...</p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   if (step === "error") {
     return (
-      <div className="mx-auto flex min-h-screen max-w-lg items-center px-4">
-        <Alert variant="destructive">
-          <AlertTitle>Không thể mở hợp đồng</AlertTitle>
-          <AlertDescription className="mt-2 space-y-3">
-            <p>{pageError}</p>
-            <Button variant="outline" size="sm" onClick={loadSharedContract}>
-              <RefreshCw /> Thử lại
-            </Button>
-          </AlertDescription>
-        </Alert>
-      </div>
+      <>
+        <PublicThemeToggle />
+        <div className="mx-auto flex min-h-screen max-w-lg items-center px-4">
+          <Alert variant="destructive">
+            <AlertTitle>Không thể mở hợp đồng</AlertTitle>
+            <AlertDescription className="mt-2 space-y-3">
+              <p>{pageError}</p>
+              <Button variant="outline" size="sm" onClick={loadSharedContract}>
+                <RefreshCw /> Thử lại
+              </Button>
+            </AlertDescription>
+          </Alert>
+        </div>
+      </>
     );
   }
 
   if (step === "phone" || step === "otp") {
     return (
       <div className="flex min-h-screen items-center justify-center px-4 py-10">
+        <PublicThemeToggle />
         <Card className="w-full max-w-md shadow-lg">
           <CardHeader className="text-center">
             <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -349,10 +364,11 @@ export default function PublicContractPage() {
     );
   }
 
-  if (!contract) return null;
+  if (!contract) return <PublicThemeToggle />;
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
+      <PublicThemeToggle />
       <Card className="rounded-2xl">
         <CardContent className="p-5 sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">

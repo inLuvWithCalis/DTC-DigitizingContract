@@ -1,5 +1,40 @@
 namespace ContractManagement.Domains.Interfaces.Contract;
 
+public static class ContractAuditSubjectTypes
+{
+    public const string Contract = "Contract";
+    public const string ContractVersion = "ContractVersion";
+    public const string NegotiationComment = "NegotiationComment";
+    public const string CustomerAccessLink = "CustomerAccessLink";
+    public const string CustomerOtpChallenge = "CustomerOtpChallenge";
+    public const string CustomerAccessSession = "CustomerAccessSession";
+}
+
+public static class ContractAuditFailureCodes
+{
+    public const string InsufficientAuthority = "InsufficientAuthority";
+    public const string StaleRowVersion = "StaleRowVersion";
+    public const string LinkExpired = "LinkExpired";
+    public const string LinkRevoked = "LinkRevoked";
+    public const string OtpMismatch = "OtpMismatch";
+    public const string OtpDeliveryFailed = "OtpDeliveryFailed";
+    public const string OtpLocked = "OtpLocked";
+    public const string OtpRateLimited = "OtpRateLimited";
+    public const string VerificationPhoneMismatch = "VerificationPhoneMismatch";
+    public const string ChallengeUnavailable = "ChallengeUnavailable";
+    public const string SessionExpired = "SessionExpired";
+    public const string SessionRevoked = "SessionRevoked";
+    public const string VersionNoLongerCurrent = "VersionNoLongerCurrent";
+}
+
+public static class ContractAuditValues
+{
+    public static IReadOnlyDictionary<string, object?> Create(
+        params (string Key, object? Value)[] values) =>
+        values.ToDictionary(value => value.Key, value => value.Value,
+            StringComparer.Ordinal);
+}
+
 public static class ContractAuditActorTypes
 {
     public const string Employee = "Employee";
@@ -13,6 +48,8 @@ public static class ContractAuditActionTypes
     public const string ResponsibleAssigned = "ResponsibleAssigned";
     public const string ResponsibilityTransferred =
         "ResponsibilityTransferred";
+    public const string DraftUpdated = "DraftUpdated";
+    public const string NegotiationStarted = "NegotiationStarted";
     public const string NegotiationRoundCreated =
         "NegotiationRoundCreated";
     public const string ExternalFeedbackCreated =
@@ -51,6 +88,9 @@ public static class ContractAuditActionTypes
 public static class ContractAuditResults
 {
     public const string Succeeded = "Succeeded";
+    public const string Failed = "Failed";
+    public const string Denied = "Denied";
+    public const string RateLimited = "RateLimited";
     public const string ConcurrencyConflict = "ConcurrencyConflict";
 }
 
@@ -68,7 +108,13 @@ public sealed record EmployeeContractAuditWriteRequest(
     byte? NewContractStatus = null,
     int? PreviousResponsibleEmployeeId = null,
     int? NewResponsibleEmployeeId = null,
-    string? Reason = null);
+    string? Reason = null,
+    string? SubjectType = null,
+    int? SubjectId = null,
+    IReadOnlyDictionary<string, object?>? PreviousValues = null,
+    IReadOnlyDictionary<string, object?>? NewValues = null,
+    string? FailureCode = null,
+    string? CorrelationId = null);
 
 public sealed record ContractAuditWriteRequest(
     int ContractId,
@@ -83,7 +129,13 @@ public sealed record ContractAuditWriteRequest(
     byte? NewContractStatus = null,
     int? PreviousResponsibleEmployeeId = null,
     int? NewResponsibleEmployeeId = null,
-    string? Reason = null);
+    string? Reason = null,
+    string? SubjectType = null,
+    int? SubjectId = null,
+    IReadOnlyDictionary<string, object?>? PreviousValues = null,
+    IReadOnlyDictionary<string, object?>? NewValues = null,
+    string? FailureCode = null,
+    string? CorrelationId = null);
 
 /// <summary>
 /// Stage Contract audit vào DbContext hiện tại.

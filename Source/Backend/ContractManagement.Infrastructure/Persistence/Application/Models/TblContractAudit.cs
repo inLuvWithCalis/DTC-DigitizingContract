@@ -13,6 +13,10 @@ public partial class TblContractAudit
 
     public int? VersionId { get; set; }
 
+    public string? SubjectType { get; set; }
+
+    public int? SubjectId { get; set; }
+
     public string ActorType { get; set; } = null!;
 
     public int? ActorEmployeeId { get; set; }
@@ -35,6 +39,12 @@ public partial class TblContractAudit
     public int? NewResponsibleEmployeeId { get; set; }
 
     public string? Reason { get; set; }
+
+    public string? PreviousValuesJson { get; set; }
+
+    public string? NewValuesJson { get; set; }
+
+    public string? FailureCode { get; set; }
 
     public DateTime OccurredAt { get; set; }
 

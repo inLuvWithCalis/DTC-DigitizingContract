@@ -142,7 +142,9 @@ public sealed class ContractServiceSlice05Tests
         Assert.Contains(
             context.TblContractAudits,
             audit => audit.ActionType ==
-                ContractAuditActionTypes.ConcurrencyConflict);
+                ContractAuditActionTypes.NegotiationCommentResolved
+                && audit.Result == ContractAuditResults.ConcurrencyConflict
+                && audit.FailureCode == ContractAuditFailureCodes.StaleRowVersion);
     }
 
     [Fact]

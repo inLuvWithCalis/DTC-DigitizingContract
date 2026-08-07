@@ -4,6 +4,7 @@ using ContractManagement.Infrastructure.MultiTenancy.Interfaces;
 using ContractManagement.Infrastructure.MultiTenancy.Models;
 using ContractManagement.Infrastructure.Persistence.Application;
 using ContractManagement.Infrastructure.Persistence.Central;
+using ContractManagement.Infrastructure.Persistence.Application.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -143,7 +144,8 @@ public sealed class CustomerOtpDeliveryOutboxWorker : BackgroundService
                 await StageDeliveryAuditAsync(
                     dbContext,
                     auditWriter,
-                    challenge.LinkId,
+                    challenge,
+                    candidate.CustomerOtpDeliveryOutboxId,
                     ContractAuditActionTypes.CustomerOtpSent,
                     ContractAuditResults.Succeeded,
                     sentAt,
@@ -173,9 +175,10 @@ public sealed class CustomerOtpDeliveryOutboxWorker : BackgroundService
                 await StageDeliveryAuditAsync(
                     dbContext,
                     auditWriter,
-                    challenge.LinkId,
+                    challenge,
+                    candidate.CustomerOtpDeliveryOutboxId,
                     ContractAuditActionTypes.CustomerOtpFailed,
-                    "Failed",
+                    ContractAuditResults.Failed,
                     failedAt,
                     cancellationToken);
                 await dbContext.SaveChangesAsync(cancellationToken);
@@ -186,14 +189,17 @@ public sealed class CustomerOtpDeliveryOutboxWorker : BackgroundService
     private static async Task StageDeliveryAuditAsync(
         DbDtctechContext dbContext,
         IContractAuditWriter auditWriter,
-        int linkId,
+        TblContractCustomerOtpChallenge challenge,
+        int outboxId,
         string actionType,
         string result,
         DateTime occurredAt,
         CancellationToken cancellationToken)
     {
         var link = await dbContext.TblContractCustomerAccessLinks.AsNoTracking()
-            .SingleOrDefaultAsync(x => x.CustomerAccessLinkId == linkId, cancellationToken);
+            .SingleOrDefaultAsync(
+                x => x.CustomerAccessLinkId == challenge.LinkId,
+                cancellationToken);
         if (link is null)
         {
             return;
@@ -209,7 +215,22 @@ public sealed class CustomerOtpDeliveryOutboxWorker : BackgroundService
                 null,
                 actionType,
                 result,
-                occurredAt)
+                occurredAt,
+                SubjectType: ContractAuditSubjectTypes.CustomerOtpChallenge,
+                SubjectId: challenge.CustomerOtpChallengeId,
+                NewValues: ContractAuditValues.Create(
+                    ("LinkId", link.CustomerAccessLinkId),
+                    ("CustomerOtpChallengeId", challenge.CustomerOtpChallengeId),
+                    ("CurrentVersionId", link.VersionId),
+                    ("ExpiresAt", challenge.ExpiresAt),
+                    ("ChallengeState", result == ContractAuditResults.Succeeded
+                        ? "Sent"
+                        : "DeliveryFailed"),
+                    ("FailedAttemptCount", challenge.FailedAttemptCount)),
+                FailureCode: result == ContractAuditResults.Failed
+                    ? ContractAuditFailureCodes.OtpDeliveryFailed
+                    : null,
+                CorrelationId: $"customer-otp-outbox-{outboxId}")
         ]);
     }
 }

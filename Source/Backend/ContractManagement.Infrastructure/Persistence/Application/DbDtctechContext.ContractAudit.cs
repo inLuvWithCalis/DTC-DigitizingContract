@@ -1,5 +1,6 @@
 using ContractManagement.Infrastructure.Persistence.Application.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace ContractManagement.Infrastructure.Persistence.Application;
 
@@ -151,6 +152,24 @@ public partial class DbDtctechContext
                 "Contract audit phải có ActorType.");
         }
 
+        var hasSubjectType = audit.SubjectType is not null;
+        var hasSubjectId = audit.SubjectId.HasValue;
+        if (hasSubjectType != hasSubjectId
+            || (hasSubjectType
+                && (string.IsNullOrWhiteSpace(audit.SubjectType)
+                    || audit.SubjectId is <= 0
+                    || audit.SubjectType is not (
+                        "Contract"
+                        or "ContractVersion"
+                        or "NegotiationComment"
+                        or "CustomerAccessLink"
+                        or "CustomerOtpChallenge"
+                        or "CustomerAccessSession"))))
+        {
+            throw new InvalidOperationException(
+                "Contract audit subject phải nhất quán và hợp lệ.");
+        }
+
         var isEmployeeActor = string.Equals(
             audit.ActorType,
             "Employee",
@@ -208,10 +227,44 @@ public partial class DbDtctechContext
                 "Contract audit phải có action, result và correlation.");
         }
 
+        ValidateJsonObject(audit.PreviousValuesJson, "PreviousValuesJson");
+        ValidateJsonObject(audit.NewValuesJson, "NewValuesJson");
+
+        if (audit.FailureCode is not null
+            && string.IsNullOrWhiteSpace(audit.FailureCode))
+        {
+            throw new InvalidOperationException(
+                "Contract audit FailureCode không được rỗng.");
+        }
+
         if (audit.OccurredAt.Kind != DateTimeKind.Utc)
         {
             throw new InvalidOperationException(
                 "Contract audit phải sử dụng timestamp UTC.");
+        }
+    }
+
+    private static void ValidateJsonObject(string? json, string fieldName)
+    {
+        if (json is null)
+        {
+            return;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                throw new InvalidOperationException(
+                    $"Contract audit {fieldName} must be a JSON object.");
+            }
+        }
+        catch (JsonException exception)
+        {
+            throw new InvalidOperationException(
+                $"Contract audit {fieldName} is invalid JSON.",
+                exception);
         }
     }
 }

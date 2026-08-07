@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   History,
   KeyRound,
@@ -55,6 +57,8 @@ type KnownCustomerAccessLink = Pick<
   "linkId" | "state" | "expiresAt"
 >;
 
+const PHONE_HISTORY_PAGE_SIZE = 5;
+
 const PHONE_SOURCE_LABELS: Record<
   ContractCustomerVerificationPhoneSource,
   string
@@ -64,10 +68,24 @@ const PHONE_SOURCE_LABELS: Record<
   Manual: "Nhập thủ công",
 };
 
-const LINK_STATE_LABELS: Record<string, string> = {
-  Active: "Đang hoạt động",
-  PendingActivation: "Chờ bắt đầu đàm phán",
-};
+const LINK_STATE_LABELS: Record<string, { label: string; className: string }> =
+  {
+    Active: {
+      label: "Đang hoạt động",
+      className:
+        "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400",
+    },
+    PendingActivation: {
+      label: "Chờ bắt đầu đàm phán",
+      className:
+        "border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-500/20 dark:bg-yellow-500/10 dark:text-yellow-400",
+    },
+    Hidden: {
+      label: "Đã ẩn",
+      className:
+        "border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400",
+    },
+  };
 
 const getErrorMessage = (error: any, fallback: string) =>
   error?.response?.data?.message ||
@@ -114,6 +132,7 @@ export function ContractSignature({
   const [isLoadingPhones, setIsLoadingPhones] = useState(true);
   const [isSavingPhone, setIsSavingPhone] = useState(false);
   const [phoneLoadError, setPhoneLoadError] = useState<string | null>(null);
+  const [phoneHistoryPage, setPhoneHistoryPage] = useState(1);
 
   const [activeLink, setActiveLink] =
     useState<ContractCustomerAccessLinkResponse | null>(null);
@@ -128,12 +147,22 @@ export function ContractSignature({
     () => phones.find((phone) => phone.isCurrent) ?? null,
     [phones],
   );
+  const phoneHistoryTotalPages = Math.ceil(
+    phones.length / PHONE_HISTORY_PAGE_SIZE,
+  );
+  const paginatedPhones = phones.slice(
+    (phoneHistoryPage - 1) * PHONE_HISTORY_PAGE_SIZE,
+    phoneHistoryPage * PHONE_HISTORY_PAGE_SIZE,
+  );
 
   const canCreateLink =
     Boolean(currentPhone) &&
     !hasUnsavedChanges &&
     (contract.status === ContractStatus.Draft ||
       contract.status === ContractStatus.Negotiating);
+  const linkStateBadge =
+    LINK_STATE_LABELS[activeLink?.state ?? "Hidden"] ??
+    LINK_STATE_LABELS.Hidden;
 
   useEffect(() => {
     const shouldClearOneTimeUrl =
@@ -177,6 +206,14 @@ export function ContractSignature({
   useEffect(() => {
     void loadPhones();
   }, [loadPhones]);
+
+  useEffect(() => {
+    if (phoneHistoryTotalPages > 0) {
+      setPhoneHistoryPage((currentPage) =>
+        Math.min(Math.max(currentPage, 1), phoneHistoryTotalPages),
+      );
+    }
+  }, [phoneHistoryTotalPages]);
 
   const refetchAfterMutation = async () => {
     try {
@@ -229,6 +266,7 @@ export function ContractSignature({
         setOneTimePublicUrl(null);
         onCustomerAccessLinkChange(null);
       }
+      setPhoneHistoryPage(1);
       await Promise.all([loadPhones(), refetchAfterMutation()]);
       toast.success("Đã cập nhật số điện thoại xác minh.");
     } catch (error: any) {
@@ -412,7 +450,9 @@ export function ContractSignature({
               </Alert>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div
+              className={`grid gap-4 ${phoneSource === "Manual" ? "sm:grid-cols-2" : "sm:grid-cols-1"}`}
+            >
               <div className="space-y-2">
                 <Label htmlFor="verification-phone-source">Nguồn số</Label>
                 <Select
@@ -535,7 +575,7 @@ export function ContractSignature({
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {phones.map((phone) => (
+                  {paginatedPhones.map((phone) => (
                     <div
                       key={phone.verificationPhoneId}
                       className="flex flex-col gap-2 rounded-lg border px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
@@ -556,6 +596,38 @@ export function ContractSignature({
                       </div>
                     </div>
                   ))}
+
+                  {phoneHistoryTotalPages > 1 && (
+                    <div className="flex items-center justify-between gap-3 border-t pt-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setPhoneHistoryPage((page) => Math.max(1, page - 1))
+                        }
+                        disabled={phoneHistoryPage === 1}
+                      >
+                        <ChevronLeft className="size-4" />
+                        Trước
+                      </Button>
+                      <span className="text-xs font-medium text-muted-foreground">
+                        Trang {phoneHistoryPage} / {phoneHistoryTotalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setPhoneHistoryPage((page) =>
+                            Math.min(phoneHistoryTotalPages, page + 1),
+                          )
+                        }
+                        disabled={phoneHistoryPage === phoneHistoryTotalPages}
+                      >
+                        Sau
+                        <ChevronRight className="size-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -570,78 +642,108 @@ export function ContractSignature({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {oneTimePublicUrl && (
+            {oneTimePublicUrl ? (
               <Alert className="border-primary/40 bg-primary/5">
                 <Link2 className="size-4" />
-                <AlertTitle className="pr-8">
-                  Sao chép URL ngay — URL chỉ hiển thị lần này
+                <AlertTitle className="flex items-center justify-between gap-2">
+                  Sao chép URL ngay
+                  <Badge variant="outline" className={linkStateBadge.className}>
+                    {linkStateBadge.label}
+                  </Badge>
                 </AlertTitle>
                 <AlertDescription className="space-y-3">
-                  <p className="break-all rounded-md border bg-background p-3 font-mono text-xs text-foreground">
+                  <p className="break-all rounded-md border bg-background p-3 font-mono text-xs text-foreground w-full">
                     {oneTimePublicUrl}
                   </p>
+                  {activeLink && (
+                    <p className="text-sm text-muted-foreground">
+                      Hết hạn: {formatDateTime(activeLink.expiresAt)}
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     <Button size="sm" onClick={handleCopyLink}>
                       <Copy /> Sao chép link
                     </Button>
-                    <Button
+                    {activeLink && (
+                      <>
+                        <Button
+                          variant="outline"
+                          onClick={() => setLinkAction("replace")}
+                          disabled={hasUnsavedChanges}
+                        >
+                          <RefreshCw /> Thay link mới
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={() => setLinkAction("revoke")}
+                          disabled={hasUnsavedChanges}
+                        >
+                          <Trash2 /> Thu hồi
+                        </Button>
+                      </>
+                    )}
+                    {/* <Button
                       size="sm"
                       variant="ghost"
                       onClick={() => setOneTimePublicUrl(null)}
                     >
                       <X /> Đã lưu, ẩn URL
-                    </Button>
+                    </Button> */}
                   </div>
+                  {!activeLink && (
+                    <div className="rounded-xl border border-dashed p-5 text-center">
+                      <Link2 className="mx-auto size-8 text-muted-foreground" />
+                      <p className="mt-3 font-medium">
+                        Chưa tạo link trong phiên này
+                      </p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Link chỉ tạo được khi hợp đồng ở trạng thái Nháp hoặc
+                        Đang đàm phán và đã có số xác minh.
+                      </p>
+                    </div>
+                  )}
                 </AlertDescription>
               </Alert>
-            )}
-
-            {activeLink ? (
-              <div className="space-y-4 rounded-xl border bg-muted/30 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Hết hạn: {formatDateTime(activeLink.expiresAt)}
-                    </p>
-                  </div>
-                  <Badge variant="outline">
-                    {LINK_STATE_LABELS[activeLink.state] ?? activeLink.state}
-                  </Badge>
-                </div>
-                {!oneTimePublicUrl && (
-                  <p className="text-xs text-muted-foreground">
-                    URL đã được ẩn và không thể lấy lại. Hãy thay link nếu bạn
-                    chưa lưu URL.
-                  </p>
-                )}
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setLinkAction("replace")}
-                    disabled={hasUnsavedChanges}
-                  >
-                    <RefreshCw /> Thay link
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    onClick={() => setLinkAction("revoke")}
-                    disabled={hasUnsavedChanges}
-                  >
-                    <Trash2 /> Thu hồi
-                  </Button>
-                </div>
-              </div>
             ) : (
-              <div className="rounded-xl border border-dashed p-5 text-center">
-                <Link2 className="mx-auto size-8 text-muted-foreground" />
-                <p className="mt-3 font-medium">
-                  Chưa tạo link trong phiên này
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Link chỉ tạo được khi hợp đồng ở trạng thái Nháp hoặc Đang đàm
-                  phán và đã có số xác minh.
-                </p>
-              </div>
+              activeLink && (
+                <div className="space-y-4 rounded-xl border bg-muted/30 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Hết hạn: {formatDateTime(activeLink.expiresAt)}
+                      </p>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className={linkStateBadge.className}
+                    >
+                      {linkStateBadge.label}
+                    </Badge>
+                  </div>
+                  {!oneTimePublicUrl && (
+                    <p className="text-xs text-muted-foreground">
+                      URL đã được ẩn và không thể lấy lại. Hãy thay link nếu bạn
+                      chưa lưu URL.
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setLinkAction("replace")}
+                      disabled={hasUnsavedChanges}
+                    >
+                      <RefreshCw /> Thay link
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => setLinkAction("revoke")}
+                      disabled={hasUnsavedChanges}
+                    >
+                      <Trash2 /> Thu hồi
+                    </Button>
+                  </div>
+                </div>
+              )
             )}
 
             {!activeLink && (
@@ -658,11 +760,18 @@ export function ContractSignature({
                 Tạo link truy cập
               </Button>
             )}
+            {!canCreateLink && (
+              <p className="text-xs text-muted-foreground italic">
+                Không thể tạo link. Đảm bảo rằng đã có số điện thoại được xác
+                minh, hợp đồng ở trạng thái "Nháp" hoăc "Đang đàm phán", và
+                không có thay đổi chưa được lưu!
+              </p>
+            )}
 
             {contract.status === ContractStatus.Draft && (
-              <p className="text-xs text-muted-foreground">
-                Ở trạng thái Nháp, link sẽ chờ kích hoạt cho tới khi bắt đầu đàm
-                phán.
+              <p className="text-sm text-muted-foreground font-semibold underline">
+                Ở trạng thái Nháp, link sẽ không hoạt động cho tới khi bắt đầu
+                đàm phán.
               </p>
             )}
           </CardContent>

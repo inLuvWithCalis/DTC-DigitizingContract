@@ -119,7 +119,14 @@ public partial class ContractService
                             ? ContractAuditActionTypes.VerificationPhoneSelected
                             : ContractAuditActionTypes.VerificationPhoneChanged,
                         ContractAuditResults.Succeeded,
-                        now)
+                        now,
+                        Reason: reason,
+                        SubjectType: ContractAuditSubjectTypes.Contract,
+                        SubjectId: contract.ContractId,
+                        NewValues: ContractAuditValues.Create(
+                            ("VerificationPhoneId", phone.VerificationPhoneId),
+                            ("PhoneSource", phone.PhoneSource),
+                            ("LinkState", "NoActiveLink")))
                 ]);
                 await _dbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -223,7 +230,22 @@ public partial class ContractService
                         employeeId,
                         ContractAuditActionTypes.CustomerAccessLinkRevoked,
                         ContractAuditResults.Succeeded,
-                        now)
+                        now,
+                        Reason: reason,
+                        SubjectType: ContractAuditSubjectTypes.CustomerAccessLink,
+                        SubjectId: link.CustomerAccessLinkId,
+                        PreviousValues: ContractAuditValues.Create(
+                            ("VerificationPhoneId", link.VerificationPhoneId),
+                            ("LinkId", link.CustomerAccessLinkId),
+                            ("CurrentVersionId", link.VersionId),
+                            ("ExpiresAt", link.ExpiresAt),
+                            ("LinkState", "Active")),
+                        NewValues: ContractAuditValues.Create(
+                            ("VerificationPhoneId", link.VerificationPhoneId),
+                            ("LinkId", link.CustomerAccessLinkId),
+                            ("CurrentVersionId", link.VersionId),
+                            ("ExpiresAt", link.ExpiresAt),
+                            ("LinkState", "Revoked")))
                 ]);
                 await _dbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -351,7 +373,15 @@ public partial class ContractService
                             ? ContractAuditActionTypes.CustomerCommentReplyCreated
                             : ContractAuditActionTypes.CustomerCommentCreated,
                         ContractAuditResults.Succeeded,
-                        now)
+                        now,
+                        SubjectType: ContractAuditSubjectTypes.NegotiationComment,
+                        SubjectId: comment.CommentId,
+                        NewValues: ContractAuditValues.Create(
+                            ("Source", comment.Source),
+                            ("Target", comment.TermId.HasValue ? "Term" : "Contract"),
+                            ("TermId", comment.TermId),
+                            ("ParentCommentId", comment.ParentCommentId),
+                            ("State", "Open")))
                 ]);
                 await _dbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -476,7 +506,16 @@ public partial class ContractService
                         employeeId,
                         auditAction,
                         ContractAuditResults.Succeeded,
-                        now)
+                        now,
+                        Reason: replacementReason,
+                        SubjectType: ContractAuditSubjectTypes.CustomerAccessLink,
+                        SubjectId: link.CustomerAccessLinkId,
+                        NewValues: ContractAuditValues.Create(
+                            ("VerificationPhoneId", link.VerificationPhoneId),
+                            ("LinkId", link.CustomerAccessLinkId),
+                            ("CurrentVersionId", link.VersionId),
+                            ("ExpiresAt", link.ExpiresAt),
+                            ("LinkState", link.ActivatedAt.HasValue ? "Active" : "Pending")))
                 ]);
                 await _dbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -584,6 +623,23 @@ public partial class ContractService
         {
             session.RevokedAt = now;
             session.RevocationReason = reason;
+            _contractAuditWriter.StageEmployeeAudits(
+            [
+                new EmployeeContractAuditWriteRequest(
+                    link.ContractId,
+                    session.VersionId,
+                    revokedByEmployeeId,
+                    ContractAuditActionTypes.CustomerSessionRevoked,
+                    ContractAuditResults.Succeeded,
+                    now,
+                    Reason: reason,
+                    SubjectType: ContractAuditSubjectTypes.CustomerAccessSession,
+                    SubjectId: session.CustomerAccessSessionId,
+                    NewValues: ContractAuditValues.Create(
+                        ("CustomerAccessSessionId", session.CustomerAccessSessionId),
+                        ("SessionState", "Revoked"),
+                        ("RevocationReasonCode", "AccessInvalidated")))
+            ]);
         }
     }
 

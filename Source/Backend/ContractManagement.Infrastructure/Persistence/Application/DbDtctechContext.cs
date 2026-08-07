@@ -389,6 +389,14 @@ public partial class DbDtctechContext : DbContext
                     "[VersionId] IS NULL OR [VersionId] > 0");
 
                 table.HasCheckConstraint(
+                    "CK_tbl_ContractAudit_Subject",
+                    "([SubjectType] IS NULL AND [SubjectId] IS NULL) OR " +
+                    "([SubjectType] IN ('Contract', 'ContractVersion', " +
+                    "'NegotiationComment', 'CustomerAccessLink', " +
+                    "'CustomerOtpChallenge', 'CustomerAccessSession') " +
+                    "AND [SubjectId] > 0)");
+
+                table.HasCheckConstraint(
                     "CK_tbl_ContractAudit_ActorType",
                     "LEN(LTRIM(RTRIM([ActorType]))) > 0");
 
@@ -425,6 +433,23 @@ public partial class DbDtctechContext : DbContext
                 table.HasCheckConstraint(
                     "CK_tbl_ContractAudit_CorrelationId",
                     "LEN(LTRIM(RTRIM([CorrelationId]))) > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractAudit_PreviousValuesJson",
+                    "[PreviousValuesJson] IS NULL OR " +
+                    "(ISJSON([PreviousValuesJson]) = 1 AND " +
+                    "LEFT(LTRIM([PreviousValuesJson]), 1) = '{')");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractAudit_NewValuesJson",
+                    "[NewValuesJson] IS NULL OR " +
+                    "(ISJSON([NewValuesJson]) = 1 AND " +
+                    "LEFT(LTRIM([NewValuesJson]), 1) = '{')");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractAudit_FailureCode",
+                    "[FailureCode] IS NULL OR " +
+                    "LEN(LTRIM(RTRIM([FailureCode]))) > 0");
             });
 
             entity.HasIndex(e => new
@@ -435,6 +460,22 @@ public partial class DbDtctechContext : DbContext
                 })
                 .HasDatabaseName(
                     "IX_tbl_ContractAudit_TenantId_ContractId_OccurredAt");
+
+            entity.HasIndex(e => new
+                {
+                    e.TenantId,
+                    e.OccurredAt,
+                    e.ContractAuditId
+                })
+                .IsDescending(false, true, true)
+                .HasDatabaseName(
+                    "IX_tbl_ContractAudit_TenantId_OccurredAt_ContractAuditId");
+
+            entity.Property(e => e.SubjectType)
+                .HasMaxLength(64)
+                .IsUnicode(false);
+
+            entity.Property(e => e.SubjectId);
 
             entity.Property(e => e.ActorType)
                 .HasMaxLength(32)
@@ -452,6 +493,16 @@ public partial class DbDtctechContext : DbContext
 
             entity.Property(e => e.Reason)
                 .HasMaxLength(1000);
+
+            entity.Property(e => e.PreviousValuesJson)
+                .HasColumnType("nvarchar(max)");
+
+            entity.Property(e => e.NewValuesJson)
+                .HasColumnType("nvarchar(max)");
+
+            entity.Property(e => e.FailureCode)
+                .HasMaxLength(64)
+                .IsUnicode(false);
 
             entity.Property(e => e.OccurredAt)
                 .HasColumnType("datetime2");

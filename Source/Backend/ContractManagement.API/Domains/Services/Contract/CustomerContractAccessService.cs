@@ -73,8 +73,25 @@ public sealed class CustomerContractAccessService : ICustomerContractAccessServi
                         && x.TokenHash == _cryptography.HashSecret(linkToken),
                         cancellationToken);
 
-                if (link is null || !IsLinkActive(link, now))
+                if (link is null)
                 {
+                    await transaction.CommitAsync(cancellationToken);
+                    return response;
+                }
+
+                if (!IsLinkActive(link, now))
+                {
+                    StageSystemAudit(
+                        link,
+                        ContractAuditActionTypes.PublicAccessDenied,
+                        now,
+                        ContractAuditResults.Denied,
+                        GetLinkFailureCode(link),
+                        newValues: ContractAuditValues.Create(
+                            ("LinkId", link.CustomerAccessLinkId),
+                            ("CurrentVersionId", link.VersionId),
+                            ("LinkState", "Inactive")));
+                    await _dbContext.SaveChangesAsync(cancellationToken);
                     await transaction.CommitAsync(cancellationToken);
                     return response;
                 }
@@ -88,7 +105,16 @@ public sealed class CustomerContractAccessService : ICustomerContractAccessServi
                 if (phone is null
                     || !string.Equals(phone.PhoneNumberNormalized, normalizedPhone, StringComparison.Ordinal))
                 {
-                    StageSystemAudit(link, ContractAuditActionTypes.PublicAccessDenied, now, "Denied");
+                    StageSystemAudit(
+                        link,
+                        ContractAuditActionTypes.PublicAccessDenied,
+                        now,
+                        ContractAuditResults.Denied,
+                        ContractAuditFailureCodes.VerificationPhoneMismatch,
+                        newValues: ContractAuditValues.Create(
+                            ("LinkId", link.CustomerAccessLinkId),
+                            ("CurrentVersionId", link.VersionId),
+                            ("LinkState", "Active")));
                     await _dbContext.SaveChangesAsync(cancellationToken);
                     await transaction.CommitAsync(cancellationToken);
                     return response;
@@ -103,7 +129,16 @@ public sealed class CustomerContractAccessService : ICustomerContractAccessServi
                 if (recent.Count >= RollingSendLimit
                     || recent.FirstOrDefault()?.CreatedDate >= now - ResendInterval)
                 {
-                    StageSystemAudit(link, ContractAuditActionTypes.PublicAccessDenied, now, "RateLimited");
+                    StageSystemAudit(
+                        link,
+                        ContractAuditActionTypes.PublicAccessDenied,
+                        now,
+                        ContractAuditResults.RateLimited,
+                        ContractAuditFailureCodes.OtpRateLimited,
+                        newValues: ContractAuditValues.Create(
+                            ("LinkId", link.CustomerAccessLinkId),
+                            ("CurrentVersionId", link.VersionId),
+                            ("LinkState", "Active")));
                     await _dbContext.SaveChangesAsync(cancellationToken);
                     await transaction.CommitAsync(cancellationToken);
                     return response;
@@ -149,7 +184,19 @@ public sealed class CustomerContractAccessService : ICustomerContractAccessServi
                         NextAttemptAt = now,
                         CreatedDate = now
                     });
-                StageSystemAudit(link, ContractAuditActionTypes.CustomerOtpRequested, now, "Succeeded");
+                StageSystemAudit(
+                    link,
+                    ContractAuditActionTypes.CustomerOtpRequested,
+                    now,
+                    ContractAuditResults.Succeeded,
+                    subjectType: ContractAuditSubjectTypes.CustomerOtpChallenge,
+                    subjectId: challengeToCreate.CustomerOtpChallengeId,
+                    newValues: ContractAuditValues.Create(
+                        ("LinkId", link.CustomerAccessLinkId),
+                        ("CustomerOtpChallengeId", challengeToCreate.CustomerOtpChallengeId),
+                        ("CurrentVersionId", link.VersionId),
+                        ("ExpiresAt", challengeToCreate.ExpiresAt),
+                        ("ChallengeState", "PendingDelivery")));
                 await _dbContext.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 return response;
@@ -192,8 +239,26 @@ public sealed class CustomerContractAccessService : ICustomerContractAccessServi
                     .SingleOrDefaultAsync(x => x.TenantId == tenantId
                         && x.TokenHash == _cryptography.HashSecret(linkToken),
                         cancellationToken);
-                if (link is null || !IsLinkActive(link, now))
+                if (link is null)
                 {
+                    throw new UnauthorizedAccessException("OTP verification failed.");
+                }
+
+                if (!IsLinkActive(link, now))
+                {
+                    StageSystemAudit(
+                        link,
+                        ContractAuditActionTypes.PublicAccessDenied,
+                        now,
+                        ContractAuditResults.Denied,
+                        GetLinkFailureCode(link),
+                        newValues: ContractAuditValues.Create(
+                            ("LinkId", link.CustomerAccessLinkId),
+                            ("CurrentVersionId", link.VersionId),
+                            ("LinkState", "Inactive")));
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
+                    committed = true;
                     throw new UnauthorizedAccessException("OTP verification failed.");
                 }
 
@@ -204,7 +269,16 @@ public sealed class CustomerContractAccessService : ICustomerContractAccessServi
                     || contract.Status == (byte)ContractStatus.Cancelled
                     || contract.CurrentVersionId != link.VersionId)
                 {
-                    StageSystemAudit(link, ContractAuditActionTypes.PublicAccessDenied, now, "Denied");
+                    StageSystemAudit(
+                        link,
+                        ContractAuditActionTypes.PublicAccessDenied,
+                        now,
+                        ContractAuditResults.Denied,
+                        ContractAuditFailureCodes.VersionNoLongerCurrent,
+                        newValues: ContractAuditValues.Create(
+                            ("LinkId", link.CustomerAccessLinkId),
+                            ("CurrentVersionId", link.VersionId),
+                            ("LinkState", "Invalid")));
                     await _dbContext.SaveChangesAsync(cancellationToken);
                     await transaction.CommitAsync(cancellationToken);
                     committed = true;
@@ -220,6 +294,26 @@ public sealed class CustomerContractAccessService : ICustomerContractAccessServi
 
                 if (challenge is null || !IsChallengeUsable(challenge, now))
                 {
+                    StageSystemAudit(
+                        link,
+                        ContractAuditActionTypes.CustomerOtpVerified,
+                        now,
+                        ContractAuditResults.Denied,
+                        ContractAuditFailureCodes.ChallengeUnavailable,
+                        subjectType: challenge is null
+                            ? ContractAuditSubjectTypes.CustomerAccessLink
+                            : ContractAuditSubjectTypes.CustomerOtpChallenge,
+                        subjectId: challenge?.CustomerOtpChallengeId,
+                        newValues: ContractAuditValues.Create(
+                            ("LinkId", link.CustomerAccessLinkId),
+                            ("CustomerOtpChallengeId", challenge?.CustomerOtpChallengeId),
+                            ("CurrentVersionId", link.VersionId),
+                            ("ExpiresAt", challenge?.ExpiresAt),
+                            ("ChallengeState", "Unavailable"),
+                            ("FailedAttemptCount", challenge?.FailedAttemptCount)));
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
+                    committed = true;
                     throw new UnauthorizedAccessException("OTP verification failed.");
                 }
 
@@ -229,11 +323,39 @@ public sealed class CustomerContractAccessService : ICustomerContractAccessServi
                         Encoding.ASCII.GetBytes(suppliedHash)))
                 {
                     challenge.FailedAttemptCount++;
-                    StageSystemAudit(link, ContractAuditActionTypes.CustomerOtpFailed, now, "Denied");
+                    StageSystemAudit(
+                        link,
+                        ContractAuditActionTypes.CustomerOtpFailed,
+                        now,
+                        ContractAuditResults.Denied,
+                        ContractAuditFailureCodes.OtpMismatch,
+                        subjectType: ContractAuditSubjectTypes.CustomerOtpChallenge,
+                        subjectId: challenge.CustomerOtpChallengeId,
+                        newValues: ContractAuditValues.Create(
+                            ("LinkId", link.CustomerAccessLinkId),
+                            ("CustomerOtpChallengeId", challenge.CustomerOtpChallengeId),
+                            ("CurrentVersionId", link.VersionId),
+                            ("ExpiresAt", challenge.ExpiresAt),
+                            ("ChallengeState", "Failed"),
+                            ("FailedAttemptCount", challenge.FailedAttemptCount)));
                     if (challenge.FailedAttemptCount >= MaxOtpAttempts)
                     {
                         challenge.LockedAt = now;
-                        StageSystemAudit(link, ContractAuditActionTypes.CustomerOtpLocked, now, "Denied");
+                        StageSystemAudit(
+                            link,
+                            ContractAuditActionTypes.CustomerOtpLocked,
+                            now,
+                            ContractAuditResults.Denied,
+                            ContractAuditFailureCodes.OtpLocked,
+                            subjectType: ContractAuditSubjectTypes.CustomerOtpChallenge,
+                            subjectId: challenge.CustomerOtpChallengeId,
+                            newValues: ContractAuditValues.Create(
+                                ("LinkId", link.CustomerAccessLinkId),
+                                ("CustomerOtpChallengeId", challenge.CustomerOtpChallengeId),
+                                ("CurrentVersionId", link.VersionId),
+                                ("ExpiresAt", challenge.ExpiresAt),
+                                ("ChallengeState", "Locked"),
+                                ("FailedAttemptCount", challenge.FailedAttemptCount)));
                     }
 
                     await _dbContext.SaveChangesAsync(cancellationToken);
@@ -260,7 +382,20 @@ public sealed class CustomerContractAccessService : ICustomerContractAccessServi
                     HardExpiresAt = hardExpiresAt
                 };
                 _dbContext.TblContractCustomerAccessSessions.Add(session);
-                StageSystemAudit(link, ContractAuditActionTypes.CustomerOtpVerified, now, "Succeeded");
+                StageSystemAudit(
+                    link,
+                    ContractAuditActionTypes.CustomerOtpVerified,
+                    now,
+                    ContractAuditResults.Succeeded,
+                    subjectType: ContractAuditSubjectTypes.CustomerOtpChallenge,
+                    subjectId: challenge.CustomerOtpChallengeId,
+                    newValues: ContractAuditValues.Create(
+                        ("LinkId", link.CustomerAccessLinkId),
+                        ("CustomerOtpChallengeId", challenge.CustomerOtpChallengeId),
+                        ("CurrentVersionId", link.VersionId),
+                        ("ExpiresAt", challenge.ExpiresAt),
+                        ("ChallengeState", "Verified"),
+                        ("FailedAttemptCount", challenge.FailedAttemptCount)));
                 await _dbContext.SaveChangesAsync(cancellationToken);
 
                 _auditWriter.StageAudits(
@@ -273,7 +408,14 @@ public sealed class CustomerContractAccessService : ICustomerContractAccessServi
                         session.CustomerAccessSessionId,
                         ContractAuditActionTypes.CustomerSessionCreated,
                         ContractAuditResults.Succeeded,
-                        now)
+                        now,
+                        SubjectType: ContractAuditSubjectTypes.CustomerAccessSession,
+                        SubjectId: session.CustomerAccessSessionId,
+                        NewValues: ContractAuditValues.Create(
+                            ("CustomerAccessSessionId", session.CustomerAccessSessionId),
+                            ("SessionState", "Active"),
+                            ("IdleExpiresAt", session.IdleExpiresAt),
+                            ("HardExpiresAt", session.HardExpiresAt)))
                 ]);
                 await _dbContext.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
@@ -307,6 +449,20 @@ public sealed class CustomerContractAccessService : ICustomerContractAccessServi
             || contract.CurrentVersionId != version.VersionId
             || version.IsLocked)
         {
+            StageSystemAudit(
+                context.Link,
+                ContractAuditActionTypes.PublicAccessDenied,
+                DateTime.UtcNow,
+                ContractAuditResults.Denied,
+                ContractAuditFailureCodes.VersionNoLongerCurrent,
+                subjectType: ContractAuditSubjectTypes.CustomerAccessSession,
+                subjectId: context.Session.CustomerAccessSessionId,
+                newValues: ContractAuditValues.Create(
+                    ("LinkId", context.Link.CustomerAccessLinkId),
+                    ("CurrentVersionId", version.VersionId),
+                    ("LinkState", "Invalid"),
+                    ("SessionState", "Active")));
+            await _dbContext.SaveChangesAsync(cancellationToken);
             throw new UnauthorizedAccessException("Customer access is no longer available.");
         }
 
@@ -335,7 +491,12 @@ public sealed class CustomerContractAccessService : ICustomerContractAccessServi
                 context.Session.CustomerAccessSessionId,
                 ContractAuditActionTypes.PublicVersionViewed,
                 ContractAuditResults.Succeeded,
-                now)
+                now,
+                SubjectType: ContractAuditSubjectTypes.CustomerAccessSession,
+                SubjectId: context.Session.CustomerAccessSessionId,
+                NewValues: ContractAuditValues.Create(
+                    ("CurrentVersionId", version.VersionId),
+                    ("SessionState", "Active")))
         ]);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -401,9 +562,21 @@ public sealed class CustomerContractAccessService : ICustomerContractAccessServi
             .SingleOrDefaultAsync(x => x.TenantId == tenantId
                 && x.SessionTokenHash == _cryptography.HashSecret(sessionSecret),
                 cancellationToken);
-        if (session is null || session.RevokedAt.HasValue
+        if (session is null)
+        {
+            throw new UnauthorizedAccessException("Customer access session is invalid.");
+        }
+
+        if (session.RevokedAt.HasValue
             || session.IdleExpiresAt <= now || session.HardExpiresAt <= now)
         {
+            await PersistSessionDeniedAuditAsync(
+                session,
+                session.RevokedAt.HasValue
+                    ? ContractAuditFailureCodes.SessionRevoked
+                    : ContractAuditFailureCodes.SessionExpired,
+                now,
+                cancellationToken);
             throw new UnauthorizedAccessException("Customer access session is invalid.");
         }
 
@@ -415,6 +588,23 @@ public sealed class CustomerContractAccessService : ICustomerContractAccessServi
             || link.VersionId != session.VersionId
             || link.VerificationPhoneId != session.VerificationPhoneId)
         {
+            if (link is not null)
+            {
+                StageSystemAudit(
+                    link,
+                    ContractAuditActionTypes.PublicAccessDenied,
+                    now,
+                    ContractAuditResults.Denied,
+                    GetLinkFailureCode(link),
+                    subjectType: ContractAuditSubjectTypes.CustomerAccessSession,
+                    subjectId: session.CustomerAccessSessionId,
+                    newValues: ContractAuditValues.Create(
+                        ("LinkId", link.CustomerAccessLinkId),
+                        ("CurrentVersionId", link.VersionId),
+                        ("LinkState", "Inactive"),
+                        ("SessionState", "Invalid")));
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
             throw new UnauthorizedAccessException("Customer access session is invalid.");
         }
 
@@ -427,6 +617,38 @@ public sealed class CustomerContractAccessService : ICustomerContractAccessServi
         link.ActivatedAt.HasValue
         && !link.RevokedAt.HasValue
         && link.ExpiresAt > now;
+
+    private static string GetLinkFailureCode(
+        TblContractCustomerAccessLink link) => link.RevokedAt.HasValue
+        ? ContractAuditFailureCodes.LinkRevoked
+        : ContractAuditFailureCodes.LinkExpired;
+
+    private async Task PersistSessionDeniedAuditAsync(
+        TblContractCustomerAccessSession session,
+        string failureCode,
+        DateTime occurredAt,
+        CancellationToken cancellationToken)
+    {
+        _auditWriter.StageAudits(
+        [
+            new ContractAuditWriteRequest(
+                session.ContractId,
+                session.VersionId,
+                ContractAuditActorTypes.System,
+                null,
+                null,
+                ContractAuditActionTypes.PublicAccessDenied,
+                ContractAuditResults.Denied,
+                occurredAt,
+                SubjectType: ContractAuditSubjectTypes.CustomerAccessSession,
+                SubjectId: session.CustomerAccessSessionId,
+                NewValues: ContractAuditValues.Create(
+                    ("CurrentVersionId", session.VersionId),
+                    ("SessionState", "Inactive")),
+                FailureCode: failureCode)
+        ]);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
 
     private static bool IsChallengeUsable(
         TblContractCustomerOtpChallenge challenge,
@@ -450,7 +672,12 @@ public sealed class CustomerContractAccessService : ICustomerContractAccessServi
         TblContractCustomerAccessLink link,
         string actionType,
         DateTime occurredAt,
-        string result)
+        string result,
+        string? failureCode = null,
+        string? subjectType = null,
+        int? subjectId = null,
+        IReadOnlyDictionary<string, object?>? previousValues = null,
+        IReadOnlyDictionary<string, object?>? newValues = null)
     {
         _auditWriter.StageAudits(
         [
@@ -462,7 +689,12 @@ public sealed class CustomerContractAccessService : ICustomerContractAccessServi
                 null,
                 actionType,
                 result,
-                occurredAt)
+                occurredAt,
+                SubjectType: subjectType ?? ContractAuditSubjectTypes.CustomerAccessLink,
+                SubjectId: subjectId ?? link.CustomerAccessLinkId,
+                PreviousValues: previousValues,
+                NewValues: newValues,
+                FailureCode: failureCode)
         ]);
     }
 

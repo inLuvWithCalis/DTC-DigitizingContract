@@ -623,7 +623,20 @@ namespace ContractManagement.Domains.Services.Contract
                             now,
                             NewContractStatus: contract.Status,
                             NewResponsibleEmployeeId:
-                                responsibleEmployeeId),
+                                responsibleEmployeeId,
+                            SubjectType: ContractAuditSubjectTypes.Contract,
+                            SubjectId: contract.ContractId,
+                            NewValues: ContractAuditValues.Create(
+                                ("Status", contract.Status),
+                                ("ResponsibleEmployeeId", responsibleEmployeeId),
+                                ("CurrentVersionId", contractVersion.VersionId),
+                                ("ContractName", contract.ContractName),
+                                ("EffectiveDate", contract.EffectiveDate),
+                                ("ExpireDate", contract.ExpireDate),
+                                ("CurrencyCode", contract.CurrencyCode),
+                                ("TotalAmount", contract.TotalAmount),
+                                ("ItemCount", contractItems.Count),
+                                ("TermCount", contractTerms.Count))),
 
                         new EmployeeContractAuditWriteRequest(
                             contract.ContractId,
@@ -636,7 +649,20 @@ namespace ContractManagement.Domains.Services.Contract
                             PreviousResponsibleEmployeeId: null,
                             NewResponsibleEmployeeId:
                                 responsibleEmployeeId,
-                            Reason: null)
+                            Reason: null,
+                            SubjectType: ContractAuditSubjectTypes.Contract,
+                            SubjectId: contract.ContractId,
+                            NewValues: ContractAuditValues.Create(
+                                ("Status", contract.Status),
+                                ("ResponsibleEmployeeId", responsibleEmployeeId),
+                                ("CurrentVersionId", contractVersion.VersionId),
+                                ("ContractName", contract.ContractName),
+                                ("EffectiveDate", contract.EffectiveDate),
+                                ("ExpireDate", contract.ExpireDate),
+                                ("CurrencyCode", contract.CurrencyCode),
+                                ("TotalAmount", contract.TotalAmount),
+                                ("ItemCount", contractItems.Count),
+                                ("TermCount", contractTerms.Count)))
                     ]);
 
                     await _dbContext.SaveChangesAsync();
@@ -866,7 +892,17 @@ namespace ContractManagement.Domains.Services.Contract
                                     previousResponsibleEmployeeId,
                                 NewResponsibleEmployeeId:
                                     request.NewResponsibleEmployeeId,
-                                Reason: reason)
+                                Reason: reason,
+                                SubjectType: ContractAuditSubjectTypes.Contract,
+                                SubjectId: contract.ContractId,
+                                PreviousValues: ContractAuditValues.Create(
+                                    ("Status", contract.Status),
+                                    ("ResponsibleEmployeeId", previousResponsibleEmployeeId),
+                                    ("CurrentVersionId", contract.CurrentVersionId)),
+                                NewValues: ContractAuditValues.Create(
+                                    ("Status", contract.Status),
+                                    ("ResponsibleEmployeeId", request.NewResponsibleEmployeeId),
+                                    ("CurrentVersionId", contract.CurrentVersionId)))
                         ]);
 
                         await _dbContext.SaveChangesAsync();
@@ -962,7 +998,10 @@ namespace ContractManagement.Domains.Services.Contract
                                 .ResponsibilityTransferred,
                             ContractAuditResults
                                 .ConcurrencyConflict,
-                            occurredAt)
+                            occurredAt,
+                            SubjectType: ContractAuditSubjectTypes.Contract,
+                            SubjectId: contractId,
+                            FailureCode: ContractAuditFailureCodes.StaleRowVersion)
                     ]);
 
                     await _dbContext.SaveChangesAsync();
@@ -993,6 +1032,46 @@ namespace ContractManagement.Domains.Services.Contract
                         .Capture(exception)
                         .Throw();
 
+                    throw;
+                }
+            });
+        }
+
+        private async Task PersistContractConcurrencyAuditAsync(
+            int contractId,
+            int? versionId,
+            int actorEmployeeId,
+            string requestedActionType,
+            DateTime occurredAt)
+        {
+            var strategy = _dbContext.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _dbContext.Database
+                    .BeginTransactionAsync();
+                try
+                {
+                    _contractAuditWriter.StageEmployeeAudits(
+                    [
+                        new EmployeeContractAuditWriteRequest(
+                            contractId,
+                            versionId,
+                            actorEmployeeId,
+                            requestedActionType,
+                            ContractAuditResults.ConcurrencyConflict,
+                            occurredAt,
+                            SubjectType: versionId.HasValue
+                                ? ContractAuditSubjectTypes.ContractVersion
+                                : ContractAuditSubjectTypes.Contract,
+                            SubjectId: versionId ?? contractId,
+                            FailureCode: ContractAuditFailureCodes.StaleRowVersion)
+                    ]);
+                    await _dbContext.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                }
+                catch
+                {
+                    await RollbackAndClearAsync(transaction);
                     throw;
                 }
             });
@@ -1282,13 +1361,15 @@ namespace ContractManagement.Domains.Services.Contract
              */
             var strategy = _dbContext.Database.CreateExecutionStrategy();
 
-            await strategy.ExecuteAsync(async () =>
+            try
             {
-                await using var transaction =
-                    await _dbContext.Database.BeginTransactionAsync();
-
-                try
+                await strategy.ExecuteAsync(async () =>
                 {
+                    await using var transaction =
+                        await _dbContext.Database.BeginTransactionAsync();
+
+                    try
+                    {
                     /*
                      * Lọc EmployeeId ngay từ truy vấn để bảo vệ dữ liệu:
                      * người khác không được cập nhật hợp đồng.
@@ -1421,6 +1502,18 @@ namespace ContractManagement.Domains.Services.Contract
                             x.ContractId == contract.ContractId
                             && x.VersionId == version.VersionId)
                         .ToListAsync();
+
+                    var previousAuditValues = ContractAuditValues.Create(
+                        ("Status", contract.Status),
+                        ("ResponsibleEmployeeId", contract.EmployeeId),
+                        ("CurrentVersionId", contract.CurrentVersionId),
+                        ("ContractName", contract.ContractName),
+                        ("EffectiveDate", contract.EffectiveDate),
+                        ("ExpireDate", contract.ExpireDate),
+                        ("CurrencyCode", contract.CurrencyCode),
+                        ("TotalAmount", contract.TotalAmount),
+                        ("ItemCount", existingItems.Count),
+                        ("TermCount", existingTerms.Count));
 
                     var existingItemById = existingItems
                         .ToDictionary(x => x.ContractItemId);
@@ -1656,24 +1749,66 @@ namespace ContractManagement.Domains.Services.Contract
                     contract.UpdatedEmployeeId = employeeId;
                     contract.UpdateDate = now;
 
+                    _contractAuditWriter.StageEmployeeAudits(
+                    [
+                        new EmployeeContractAuditWriteRequest(
+                            contract.ContractId,
+                            version.VersionId,
+                            employeeId,
+                            ContractAuditActionTypes.DraftUpdated,
+                            ContractAuditResults.Succeeded,
+                            now,
+                            PreviousContractStatus: contract.Status,
+                            NewContractStatus: contract.Status,
+                            SubjectType: ContractAuditSubjectTypes.Contract,
+                            SubjectId: contract.ContractId,
+                            PreviousValues: previousAuditValues,
+                            NewValues: ContractAuditValues.Create(
+                                ("Status", contract.Status),
+                                ("ResponsibleEmployeeId", contract.EmployeeId),
+                                ("CurrentVersionId", contract.CurrentVersionId),
+                                ("ContractName", contract.ContractName),
+                                ("EffectiveDate", contract.EffectiveDate),
+                                ("ExpireDate", contract.ExpireDate),
+                                ("CurrencyCode", contract.CurrencyCode),
+                                ("TotalAmount", contract.TotalAmount),
+                                ("ItemCount", request.Items.Count),
+                                ("TermCount", request.Terms.Count)))
+                    ]);
+
                     await _dbContext.SaveChangesAsync();
                     await transaction.CommitAsync();
                 }
-                catch (DbUpdateConcurrencyException exception)
-                {
-                    await transaction.RollbackAsync();
+                    catch (DbUpdateConcurrencyException exception)
+                    {
+                        await transaction.RollbackAsync();
 
-                    throw new DbUpdateConcurrencyException(
-                        "Hợp đồng đã được người khác cập nhật. " +
-                        "Vui lòng tải lại dữ liệu trước khi lưu.",
-                        exception);
-                }
-                catch
-                {
-                    await transaction.RollbackAsync();
-                    throw;
-                }
-            });
+                        throw new DbUpdateConcurrencyException(
+                            "Hợp đồng đã được người khác cập nhật. " +
+                            "Vui lòng tải lại dữ liệu trước khi lưu.",
+                            exception);
+                    }
+                    catch
+                    {
+                        await transaction.RollbackAsync();
+                        throw;
+                    }
+                });
+            }
+            catch (DbUpdateConcurrencyException exception)
+            {
+                _dbContext.ChangeTracker.Clear();
+                await PersistContractConcurrencyAuditAsync(
+                    contractId,
+                    request.CurrentVersionId,
+                    employeeId,
+                    ContractAuditActionTypes.DraftUpdated,
+                    DateTime.UtcNow);
+                throw new DbUpdateConcurrencyException(
+                    "Hợp đồng đã được người khác cập nhật. " +
+                    "Vui lòng tải lại dữ liệu trước khi lưu.",
+                    exception);
+            }
 
             /*
              * Đọc lại dữ liệu sau khi transaction hoàn tất để trả:
@@ -1745,6 +1880,7 @@ namespace ContractManagement.Domains.Services.Contract
                     .OriginalValue = expectedRowVersion;
 
                 var now = DateTime.UtcNow;
+                var previousStatus = contract.Status;
                 contract.Status =
                     (byte)ContractStatus.Negotiating;
 
@@ -1771,15 +1907,59 @@ namespace ContractManagement.Domains.Services.Contract
                                 employeeId,
                                 ContractAuditActionTypes.CustomerAccessLinkActivated,
                                 ContractAuditResults.Succeeded,
-                                now)
+                                now,
+                                SubjectType: ContractAuditSubjectTypes.CustomerAccessLink,
+                                SubjectId: pendingLink.CustomerAccessLinkId,
+                                PreviousValues: ContractAuditValues.Create(
+                                    ("VerificationPhoneId", pendingLink.VerificationPhoneId),
+                                    ("LinkId", pendingLink.CustomerAccessLinkId),
+                                    ("CurrentVersionId", pendingLink.VersionId),
+                                    ("ExpiresAt", pendingLink.ExpiresAt),
+                                    ("LinkState", "Pending")),
+                                NewValues: ContractAuditValues.Create(
+                                    ("VerificationPhoneId", pendingLink.VerificationPhoneId),
+                                    ("LinkId", pendingLink.CustomerAccessLinkId),
+                                    ("CurrentVersionId", pendingLink.VersionId),
+                                    ("ExpiresAt", pendingLink.ExpiresAt),
+                                    ("LinkState", "Active")))
                         ]);
                     }
                 }
+
+                _contractAuditWriter.StageEmployeeAudits(
+                [
+                    new EmployeeContractAuditWriteRequest(
+                        contract.ContractId,
+                        contract.CurrentVersionId,
+                        employeeId,
+                        ContractAuditActionTypes.NegotiationStarted,
+                        ContractAuditResults.Succeeded,
+                        now,
+                        PreviousContractStatus: previousStatus,
+                        NewContractStatus: contract.Status,
+                        SubjectType: ContractAuditSubjectTypes.Contract,
+                        SubjectId: contract.ContractId,
+                        PreviousValues: ContractAuditValues.Create(
+                            ("Status", previousStatus),
+                            ("ResponsibleEmployeeId", contract.EmployeeId),
+                            ("CurrentVersionId", contract.CurrentVersionId)),
+                        NewValues: ContractAuditValues.Create(
+                            ("Status", contract.Status),
+                            ("ResponsibleEmployeeId", contract.EmployeeId),
+                            ("CurrentVersionId", contract.CurrentVersionId)))
+                ]);
 
                 await _dbContext.SaveChangesAsync();
             }
             catch (DbUpdateConcurrencyException exception)
             {
+                _dbContext.ChangeTracker.Clear();
+                await PersistContractConcurrencyAuditAsync(
+                    contractId,
+                    versionId: null,
+                    employeeId,
+                    ContractAuditActionTypes.NegotiationStarted,
+                    DateTime.UtcNow);
                 throw new DbUpdateConcurrencyException(
                     "Hợp đồng đã được cập nhật. " +
                     "Vui lòng tải lại dữ liệu.",
@@ -1828,17 +2008,19 @@ namespace ContractManagement.Domains.Services.Contract
 
             var strategy = _dbContext.Database.CreateExecutionStrategy();
 
-            return await strategy.ExecuteAsync(async () =>
+            try
             {
-                await using var transaction =
-                    await _dbContext.Database.BeginTransactionAsync();
-
-                try
+                return await strategy.ExecuteAsync(async () =>
                 {
-                    var contract = await _dbContext.TblContracts
-                        .FirstOrDefaultAsync(x =>
-                            x.ContractId == contractId
-                            && x.EmployeeId == employeeId);
+                    await using var transaction =
+                        await _dbContext.Database.BeginTransactionAsync();
+
+                    try
+                    {
+                        var contract = await _dbContext.TblContracts
+                            .FirstOrDefaultAsync(x =>
+                                x.ContractId == contractId
+                                && x.EmployeeId == employeeId);
 
                     if (contract == null)
                     {
@@ -2058,7 +2240,14 @@ namespace ContractManagement.Domains.Services.Contract
                                 employeeId,
                                 ContractAuditActionTypes.CustomerAccessLinkInvalidated,
                                 ContractAuditResults.Succeeded,
-                                now)
+                                now,
+                                Reason: "New negotiation round",
+                                SubjectType: ContractAuditSubjectTypes.CustomerAccessLink,
+                                SubjectId: sourceLinkId,
+                                NewValues: ContractAuditValues.Create(
+                                    ("LinkId", sourceLinkId),
+                                    ("CurrentVersionId", sourceVersion.VersionId),
+                                    ("LinkState", "Invalidated")))
                         ]);
                     }
 
@@ -2074,7 +2263,24 @@ namespace ContractManagement.Domains.Services.Contract
                             now,
                             PreviousContractStatus: contract.Status,
                             NewContractStatus: contract.Status,
-                            Reason: changeNote)
+                            Reason: changeNote,
+                            SubjectType: ContractAuditSubjectTypes.ContractVersion,
+                            SubjectId: newVersion.VersionId,
+                            PreviousValues: ContractAuditValues.Create(
+                                ("SourceVersionId", sourceVersion.VersionId),
+                                ("CurrentVersionId", sourceVersion.VersionId),
+                                ("SourceVersionLocked", false),
+                                ("ItemCount", sourceItems.Count),
+                                ("TermCount", sourceTerms.Count),
+                                ("TotalAmount", sourceVersion.TotalAmount)),
+                            NewValues: ContractAuditValues.Create(
+                                ("SourceVersionId", sourceVersion.VersionId),
+                                ("NewVersionId", newVersion.VersionId),
+                                ("CurrentVersionId", newVersion.VersionId),
+                                ("SourceVersionLocked", true),
+                                ("ItemCount", copiedItems.Count),
+                                ("TermCount", copiedTerms.Count),
+                                ("TotalAmount", newVersion.TotalAmount)))
                     ]);
 
                     await _dbContext.SaveChangesAsync();
@@ -2101,20 +2307,33 @@ namespace ContractManagement.Domains.Services.Contract
                         }
                     };
                 }
-                catch
-                {
-                    try
+                    catch
                     {
-                        await transaction.RollbackAsync();
-                    }
-                    finally
-                    {
-                        _dbContext.ChangeTracker.Clear();
-                    }
+                        try
+                        {
+                            await transaction.RollbackAsync();
+                        }
+                        finally
+                        {
+                            _dbContext.ChangeTracker.Clear();
+                        }
 
-                    throw;
-                }
-            });
+                        throw;
+                    }
+                });
+            }
+            catch (DbUpdateConcurrencyException exception)
+            {
+                await PersistContractConcurrencyAuditAsync(
+                    contractId,
+                    request.CurrentVersionId,
+                    employeeId,
+                    ContractAuditActionTypes.NegotiationRoundCreated,
+                    DateTime.UtcNow);
+                throw new DbUpdateConcurrencyException(
+                    "Vòng đàm phán không thể tạo vì dữ liệu đã thay đổi.",
+                    exception);
+            }
         }
 
         /// <summary>
@@ -2345,6 +2564,9 @@ namespace ContractManagement.Domains.Services.Contract
                                 OccurredAt = now
                             };
 
+                        SetSyntheticCommentRowVersionIfNeeded(comment);
+                        await _dbContext.SaveChangesAsync();
+
                         _contractAuditWriter.StageEmployeeAudits(
                         [
                             new EmployeeContractAuditWriteRequest(
@@ -2357,11 +2579,16 @@ namespace ContractManagement.Domains.Services.Contract
                                     : ContractAuditActionTypes
                                         .ExternalFeedbackCreated,
                                 ContractAuditResults.Succeeded,
-                                now)
+                                now,
+                                SubjectType: ContractAuditSubjectTypes.NegotiationComment,
+                                SubjectId: comment.CommentId,
+                                NewValues: ContractAuditValues.Create(
+                                    ("Source", comment.Source),
+                                    ("Target", comment.TermId.HasValue ? "Term" : "Contract"),
+                                    ("TermId", comment.TermId),
+                                    ("ParentCommentId", comment.ParentCommentId),
+                                    ("State", "Open")))
                         ]);
-
-                        SetSyntheticCommentRowVersionIfNeeded(comment);
-                        await _dbContext.SaveChangesAsync();
 
                         // Event không có physical FK nên phải gán ID trước khi lưu.
                         createdEvent.CommentId = comment.CommentId;
@@ -2379,7 +2606,10 @@ namespace ContractManagement.Domains.Services.Contract
                             contractId,
                             request.CurrentVersionId,
                             employeeId,
-                            DateTime.UtcNow);
+                            DateTime.UtcNow,
+                            request.ParentCommentId.HasValue
+                                ? ContractAuditActionTypes.NegotiationReplyCreated
+                                : ContractAuditActionTypes.ExternalFeedbackCreated);
 
                         throw new DbUpdateConcurrencyException(
                             "Comment không thể ghi vì Contract hoặc Version đã thay đổi.",
@@ -2717,7 +2947,23 @@ namespace ContractManagement.Domains.Services.Contract
                             ContractAuditResults.Succeeded,
                             now,
                             PreviousContractStatus: contract.Status,
-                            NewContractStatus: contract.Status)
+                            NewContractStatus: contract.Status,
+                            SubjectType: ContractAuditSubjectTypes.NegotiationComment,
+                            SubjectId: comment.CommentId,
+                            PreviousValues: ContractAuditValues.Create(
+                                ("Source", comment.Source),
+                                ("Target", comment.TermId.HasValue ? "Term" : "Contract"),
+                                ("TermId", comment.TermId),
+                                ("ParentCommentId", comment.ParentCommentId),
+                                ("State", previousState == 0 ? "Open" : "Resolved")),
+                            NewValues: ContractAuditValues.Create(
+                                ("Source", comment.Source),
+                                ("Target", comment.TermId.HasValue ? "Term" : "Contract"),
+                                ("TermId", comment.TermId),
+                                ("ParentCommentId", comment.ParentCommentId),
+                                ("State", targetState == ContractNegotiationCommentState.Open
+                                    ? "Open"
+                                    : "Resolved")))
                     ]);
 
                     RotateCommentRowVersionForInMemory(
@@ -2733,11 +2979,12 @@ namespace ContractManagement.Domains.Services.Contract
                 {
                     var versionId = comment?.VersionId;
                     await RollbackAndClearAsync(transaction);
-                    await PersistNegotiationCommentConflictAuditAsync(
-                        contractId,
-                        versionId,
-                        employeeId,
-                        DateTime.UtcNow);
+                        await PersistNegotiationCommentConflictAuditAsync(
+                            contractId,
+                            versionId,
+                            employeeId,
+                            DateTime.UtcNow,
+                            auditActionType);
 
                     throw new DbUpdateConcurrencyException(
                         "Comment đã được cập nhật hoặc không còn đủ điều kiện lifecycle.",
@@ -2755,7 +3002,8 @@ namespace ContractManagement.Domains.Services.Contract
             int contractId,
             int? versionId,
             int actorEmployeeId,
-            DateTime occurredAt)
+            DateTime occurredAt,
+            string requestedActionType)
         {
             var strategy = _dbContext.Database.CreateExecutionStrategy();
 
@@ -2772,9 +3020,12 @@ namespace ContractManagement.Domains.Services.Contract
                             contractId,
                             versionId,
                             actorEmployeeId,
-                            ContractAuditActionTypes.ConcurrencyConflict,
+                            requestedActionType,
                             ContractAuditResults.ConcurrencyConflict,
-                            occurredAt)
+                            occurredAt,
+                            SubjectType: ContractAuditSubjectTypes.Contract,
+                            SubjectId: contractId,
+                            FailureCode: ContractAuditFailureCodes.StaleRowVersion)
                     ]);
 
                     await _dbContext.SaveChangesAsync();

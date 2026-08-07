@@ -1,0 +1,47 @@
+using System.Text.Json;
+
+namespace ContractManagement.API.Domains.DTOs.Responses.Contract;
+
+/// <summary>
+/// Một bản ghi audit đã được lọc an toàn cho nhân viên có quyền xem.
+/// Các trường before/after chỉ chứa allowlist scalar, không có nội dung comment,
+/// số điện thoại, token, OTP, cookie hay payload nội bộ.
+/// </summary>
+public sealed class ContractAuditResponse
+{
+    public int ContractAuditId { get; set; }
+
+    public int ContractId { get; set; }
+
+    public int? VersionId { get; set; }
+
+    public string SubjectType { get; set; } = string.Empty;
+
+    public int SubjectId { get; set; }
+
+    public string ActorType { get; set; } = string.Empty;
+
+    public int? ActorEmployeeId { get; set; }
+
+    public int? ActorCustomerAccessSessionId { get; set; }
+
+    public string ActionType { get; set; } = string.Empty;
+
+    public string Result { get; set; } = string.Empty;
+
+    public string? FailureCode { get; set; }
+
+    public Dictionary<string, JsonElement>? PreviousValues { get; set; }
+
+    public Dictionary<string, JsonElement>? NewValues { get; set; }
+
+    public string? Reason { get; set; }
+
+    public DateTime OccurredAt { get; set; }
+
+    public string? IpAddress { get; set; }
+
+    public string? UserAgent { get; set; }
+
+    public string CorrelationId { get; set; } = string.Empty;
+}

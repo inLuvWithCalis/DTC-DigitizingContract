@@ -246,6 +246,10 @@ builder.Services.AddScoped<
     IContractAuditWriter,
     ContractAuditWriter>();
 
+builder.Services.AddScoped<
+    IContractAuditQueryService,
+    ContractAuditQueryService>();
+
 #endregion
 
 #region 8. AutoMapper

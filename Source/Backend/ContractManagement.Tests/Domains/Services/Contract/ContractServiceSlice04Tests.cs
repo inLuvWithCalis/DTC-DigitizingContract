@@ -245,7 +245,12 @@ public sealed class ContractServiceSlice04Tests
         Assert.Single(context.TblContractVersions);
         Assert.Single(context.TblContractItems);
         Assert.Single(context.TblContractTerms);
-        Assert.Empty(context.TblContractAudits);
+        var audit = Assert.Single(context.TblContractAudits);
+        Assert.Equal(
+            ContractAuditActionTypes.NegotiationRoundCreated,
+            audit.ActionType);
+        Assert.Equal(ContractAuditResults.ConcurrencyConflict, audit.Result);
+        Assert.Equal(ContractAuditFailureCodes.StaleRowVersion, audit.FailureCode);
     }
 
     private static DbDtctechContext CreateContext()

@@ -20,6 +20,7 @@ import { MockContractTerm } from "@/services/contract-templates-mock";
 interface CreateContractTermsMockProps {
   terms: MockContractTerm[];
   templateName?: string;
+  isBilingual?: boolean;
   onChange: (terms: MockContractTerm[]) => void;
 }
 
@@ -33,6 +34,7 @@ function reorderTerms(terms: MockContractTerm[]) {
 export function CreateContractTermsMock({
   terms,
   templateName,
+  isBilingual = false,
   onChange,
 }: CreateContractTermsMockProps) {
   const updateTerm = (
@@ -49,11 +51,20 @@ export function CreateContractTermsMock({
 
   const addTerm = () => {
     const nextOrder = terms.length + 1;
+    const existingCodes = new Set(
+      terms.map((term) => term.termCode.toLocaleUpperCase()),
+    );
+    let customCodeIndex = 1;
+
+    while (existingCodes.has(`CUSTOM_${customCodeIndex}`)) {
+      customCodeIndex += 1;
+    }
+
     onChange([
       ...terms,
       {
         id: `custom-${Date.now()}`,
-        termCode: `CUSTOM_${nextOrder}`,
+        termCode: `CUSTOM_${customCodeIndex}`,
         termTitle: `Điều ${nextOrder}. Điều khoản mới`,
         termContent: "",
         isNegotiable: true,
@@ -196,6 +207,46 @@ export function CreateContractTermsMock({
                   }
                 />
               </div>
+
+              {isBilingual && (
+                <div className="grid gap-4 rounded-xl border border-dashed p-3">
+                  <div className="space-y-2">
+                    <Label htmlFor={`term-title-en-${term.id}`}>
+                      Tiêu đề tiếng Anh
+                    </Label>
+                    <Input
+                      id={`term-title-en-${term.id}`}
+                      value={term.termTitleEn ?? ""}
+                      placeholder="Để trống để giữ tiêu đề từ template"
+                      onChange={(event) =>
+                        updateTerm(
+                          term.id,
+                          "termTitleEn",
+                          event.target.value,
+                        )
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor={`term-content-en-${term.id}`}>
+                      Nội dung tiếng Anh
+                    </Label>
+                    <Textarea
+                      id={`term-content-en-${term.id}`}
+                      value={term.termContentEn ?? ""}
+                      className="min-h-24 resize-y"
+                      placeholder="Để trống để giữ nội dung từ template"
+                      onChange={(event) =>
+                        updateTerm(
+                          term.id,
+                          "termContentEn",
+                          event.target.value,
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+              )}
 
               <button
                 type="button"

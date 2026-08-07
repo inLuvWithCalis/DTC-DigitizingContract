@@ -4,7 +4,9 @@ export interface MockContractTerm {
   id: string;
   termCode: string;
   termTitle: string;
+  termTitleEn?: string;
   termContent: string;
+  termContentEn?: string;
   isNegotiable: boolean;
   displayOrder: number;
 }

@@ -14,6 +14,7 @@ import {
   LogOut,
   Menu,
   Package,
+  ScrollText,
   Settings,
   Tags,
   User,
@@ -29,11 +30,25 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/hooks/use-auth-store";
+import { EmployeeType } from "@/services/employees-api";
 import { useSidebar } from "./sidebar-context";
 
-const navItems = [
+interface NavItem {
+  label: string;
+  icon: typeof LayoutDashboard;
+  href: string;
+  allowedEmployeeTypes?: EmployeeType[];
+}
+
+const navItems: NavItem[] = [
   { label: "Tổng quan", icon: LayoutDashboard, href: "/dashboard" },
   { label: "Hợp đồng", icon: FileText, href: "/contracts" },
+  {
+    label: "Nhật ký hợp đồng",
+    icon: ScrollText,
+    href: "/contract-audits",
+    allowedEmployeeTypes: [EmployeeType.Manager, EmployeeType.AdminOfficer],
+  },
   { label: "Báo giá", icon: FileSignature, href: "/quotations" },
   { label: "Khách hàng", icon: Users, href: "/customers" },
   { label: "Danh mục", icon: FolderTree, href: "/catalog/categories" },
@@ -63,48 +78,56 @@ export function Sidebar() {
 
   const renderNavItems = () => (
     <nav className="flex-1 px-3 py-4 space-y-1.5 flex flex-col items-stretch overflow-y-auto">
-      {navItems.map((item) => {
-        const Icon = item.icon;
-        const isActive =
-          item.href === "/dashboard"
-            ? pathname === "/dashboard"
-            : pathname?.startsWith(item.href);
+      {navItems
+        .filter(
+          (item) =>
+            !item.allowedEmployeeTypes ||
+            (user?.employeeType !== null &&
+              user?.employeeType !== undefined &&
+              item.allowedEmployeeTypes.includes(user.employeeType)),
+        )
+        .map((item) => {
+          const Icon = item.icon;
+          const isActive =
+            item.href === "/dashboard"
+              ? pathname === "/dashboard"
+              : pathname?.startsWith(item.href);
 
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`flex items-center py-2.5 rounded-xl transition-all duration-200 group relative ${
-              isExpanded ? "gap-3 px-3" : "justify-center px-0 lg:px-0 px-3"
-            } ${
-              isActive
-                ? "bg-primary/10 text-primary font-semibold shadow-sm"
-                : "text-muted-foreground hover:bg-accent hover:text-foreground"
-            } ${isMobileOpen && "justify-start gap-5"}`}
-          >
-            {isActive && (
-              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-r-full" />
-            )}
-
-            <Icon
-              className={`h-5 w-5 flex-shrink-0 transition-colors ${
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex items-center py-2.5 rounded-xl transition-all duration-200 group relative ${
+                isExpanded ? "gap-3 px-3" : "justify-center px-0 lg:px-0 px-3"
+              } ${
                 isActive
-                  ? "text-primary"
-                  : "text-muted-foreground/70 group-hover:text-foreground"
-              }`}
-            />
-            <span
-              className={`text-sm whitespace-nowrap transition-all duration-300 lg:block ${
-                isExpanded
-                  ? "opacity-100 translate-x-0"
-                  : "lg:opacity-0 lg:-translate-x-2 lg:hidden lg:w-0"
-              } opacity-100 translate-x-0 block`}
+                  ? "bg-primary/10 text-primary font-semibold shadow-sm"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+              } ${isMobileOpen && "justify-start gap-5"}`}
             >
-              {item.label}
-            </span>
-          </Link>
-        );
-      })}
+              {isActive && (
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-r-full" />
+              )}
+
+              <Icon
+                className={`h-5 w-5 flex-shrink-0 transition-colors ${
+                  isActive
+                    ? "text-primary"
+                    : "text-muted-foreground/70 group-hover:text-foreground"
+                }`}
+              />
+              <span
+                className={`text-sm whitespace-nowrap transition-all duration-300 lg:block ${
+                  isExpanded
+                    ? "opacity-100 translate-x-0"
+                    : "lg:opacity-0 lg:-translate-x-2 lg:hidden lg:w-0"
+                } opacity-100 translate-x-0 block`}
+              >
+                {item.label}
+              </span>
+            </Link>
+          );
+        })}
     </nav>
   );
 

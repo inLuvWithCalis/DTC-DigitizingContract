@@ -20,9 +20,14 @@ export interface DateRange {
 interface DateRangeFilterProps {
   dateRange: DateRange;
   onChange: (range: DateRange) => void;
+  buttonClassName?: string;
 }
 
-export function DateRangeFilter({ dateRange, onChange }: DateRangeFilterProps) {
+export function DateRangeFilter({
+  dateRange,
+  onChange,
+  buttonClassName = "bg-background",
+}: DateRangeFilterProps) {
   const isMobile = useMediaQuery("(max-width: 767px)");
 
   return (
@@ -32,7 +37,8 @@ export function DateRangeFilter({ dateRange, onChange }: DateRangeFilterProps) {
           <Button
             variant="outline"
             className={cn(
-              "justify-start text-left font-normal h-9 bg-background shadow-sm flex-1",
+              "justify-start text-left font-normal h-9 shadow-sm flex-1",
+              buttonClassName,
               !dateRange.from && "text-muted-foreground",
             )}
           >
@@ -61,7 +67,8 @@ export function DateRangeFilter({ dateRange, onChange }: DateRangeFilterProps) {
           <Button
             variant="outline"
             className={cn(
-              "justify-start text-left font-normal h-9 bg-background shadow-sm flex-1",
+              "justify-start text-left font-normal h-9 shadow-sm flex-1",
+              buttonClassName,
               !dateRange.to && "text-muted-foreground",
             )}
           >

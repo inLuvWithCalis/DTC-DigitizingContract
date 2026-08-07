@@ -53,6 +53,7 @@ import { ContractNegotiation } from "@/components/contracts/contract-negotiation
 import { ContractSignature } from "@/components/contracts/contract-signature";
 import { ContractDocuments } from "@/components/contracts/contract-attachments";
 import { ContractClosing } from "@/components/contracts/contract-closing";
+import { ContractAuditLog } from "@/components/contracts/contract-audit-log";
 import { TransferResponsibilityModal } from "@/components/contracts/transfer-responsibility-modal";
 
 const CONTRACT_TABS = [
@@ -62,6 +63,7 @@ const CONTRACT_TABS = [
   "signature",
   "documents",
   "closing",
+  "activity",
 ] as const;
 
 type ContractTab = (typeof CONTRACT_TABS)[number];
@@ -683,11 +685,11 @@ export default function ContractDetailPage() {
         {isCurrentVersionShared && (
           <Alert className="border-amber-300 bg-amber-50/60 dark:bg-amber-950/20">
             <LockKeyhole className="size-4 text-amber-700" />
-            <AlertTitle>Version đang được chia sẻ với khách hàng</AlertTitle>
+            <AlertTitle>Phiên bản đang được chia sẻ với khách hàng</AlertTitle>
             <AlertDescription>
               Nội dung được chuyển sang chế độ chỉ xem để tránh thay đổi trực
-              tiếp dữ liệu khách hàng đang xem. Muốn chỉnh sửa, hãy vào tab “Đàm
-              phán” và tạo vòng mới.
+              tiếp dữ liệu khách hàng đang xem. Muốn chỉnh sửa, hãy tạo vòng
+              mới!
             </AlertDescription>
           </Alert>
         )}
@@ -704,6 +706,7 @@ export default function ContractDetailPage() {
             <TabsTrigger value="signature">Truy cập khách hàng</TabsTrigger>
             <TabsTrigger value="documents">Chứng từ</TabsTrigger>
             <TabsTrigger value="closing">Đóng hợp đồng</TabsTrigger>
+            <TabsTrigger value="activity">Lịch sử hoạt động</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
@@ -751,6 +754,10 @@ export default function ContractDetailPage() {
 
           <TabsContent value="closing">
             <ContractClosing contract={contract} />
+          </TabsContent>
+
+          <TabsContent value="activity">
+            <ContractAuditLog contractId={contract.contractId} />
           </TabsContent>
         </Tabs>
 

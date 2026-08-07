@@ -683,11 +683,11 @@ export default function ContractDetailPage() {
         {isCurrentVersionShared && (
           <Alert className="border-amber-300 bg-amber-50/60 dark:bg-amber-950/20">
             <LockKeyhole className="size-4 text-amber-700" />
-            <AlertTitle>Version đang được chia sẻ với khách hàng</AlertTitle>
+            <AlertTitle>Phiên bản đang được chia sẻ với khách hàng</AlertTitle>
             <AlertDescription>
               Nội dung được chuyển sang chế độ chỉ xem để tránh thay đổi trực
-              tiếp dữ liệu khách hàng đang xem. Muốn chỉnh sửa, hãy vào tab “Đàm
-              phán” và tạo vòng mới.
+              tiếp dữ liệu khách hàng đang xem. Muốn chỉnh sửa, hãy tạo vòng
+              mới!
             </AlertDescription>
           </Alert>
         )}

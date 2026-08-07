@@ -1,20 +1,12 @@
 "use client";
 
-import {
-  ArrowDown,
-  ArrowUp,
-  LockKeyhole,
-  Plus,
-  ShieldCheck,
-  Trash2,
-  UnlockKeyhole,
-} from "lucide-react";
+import { Plus, ShieldCheck } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import {
+  ContractTermCard,
+  type ContractTermEditableField,
+} from "@/components/contracts/contract-term-card";
 import { MockContractTerm } from "@/services/contract-templates-mock";
 
 interface CreateContractTermsMockProps {
@@ -39,7 +31,7 @@ export function CreateContractTermsMock({
 }: CreateContractTermsMockProps) {
   const updateTerm = (
     id: string,
-    field: keyof MockContractTerm,
+    field: ContractTermEditableField,
     value: string | boolean,
   ) => {
     onChange(
@@ -118,154 +110,20 @@ export function CreateContractTermsMock({
 
       <div className="space-y-3">
         {terms.map((term, index) => (
-          <div
+          <ContractTermCard
             key={term.id}
-            className="rounded-2xl border bg-background p-4 shadow-xs"
-          >
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">Điều {term.displayOrder}</Badge>
-                <Badge
-                  variant={term.isNegotiable ? "secondary" : "destructive"}
-                  className={
-                    term.isNegotiable
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
-                      : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300"
-                  }
-                >
-                  {term.isNegotiable ? (
-                    <UnlockKeyhole className="mr-1 size-3" />
-                  ) : (
-                    <LockKeyhole className="mr-1 size-3" />
-                  )}
-                  {term.isNegotiable ? "Có thể đàm phán" : "Điều khoản cố định"}
-                </Badge>
-                <span className="font-mono text-xs text-muted-foreground">
-                  {term.termCode}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-1">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Chuyển điều khoản lên"
-                  disabled={index === 0}
-                  onClick={() => moveTerm(index, -1)}
-                >
-                  <ArrowUp className="size-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Chuyển điều khoản xuống"
-                  disabled={index === terms.length - 1}
-                  onClick={() => moveTerm(index, 1)}
-                >
-                  <ArrowDown className="size-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Xóa điều khoản"
-                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  onClick={() => removeTerm(term.id)}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-            </div>
-
-            <div className="grid gap-4">
-              <div className="space-y-2">
-                <Label htmlFor={`term-title-${term.id}`}>
-                  Tiêu đề điều khoản
-                </Label>
-                <Input
-                  id={`term-title-${term.id}`}
-                  value={term.termTitle}
-                  onChange={(event) =>
-                    updateTerm(term.id, "termTitle", event.target.value)
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor={`term-content-${term.id}`}>
-                  Nội dung điều khoản
-                </Label>
-                <Textarea
-                  id={`term-content-${term.id}`}
-                  value={term.termContent}
-                  className="min-h-24 resize-y"
-                  placeholder="Nhập nội dung điều khoản..."
-                  onChange={(event) =>
-                    updateTerm(term.id, "termContent", event.target.value)
-                  }
-                />
-              </div>
-
-              {isBilingual && (
-                <div className="grid gap-4 rounded-xl border border-dashed p-3">
-                  <div className="space-y-2">
-                    <Label htmlFor={`term-title-en-${term.id}`}>
-                      Tiêu đề tiếng Anh
-                    </Label>
-                    <Input
-                      id={`term-title-en-${term.id}`}
-                      value={term.termTitleEn ?? ""}
-                      placeholder="Để trống để giữ tiêu đề từ template"
-                      onChange={(event) =>
-                        updateTerm(
-                          term.id,
-                          "termTitleEn",
-                          event.target.value,
-                        )
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor={`term-content-en-${term.id}`}>
-                      Nội dung tiếng Anh
-                    </Label>
-                    <Textarea
-                      id={`term-content-en-${term.id}`}
-                      value={term.termContentEn ?? ""}
-                      className="min-h-24 resize-y"
-                      placeholder="Để trống để giữ nội dung từ template"
-                      onChange={(event) =>
-                        updateTerm(
-                          term.id,
-                          "termContentEn",
-                          event.target.value,
-                        )
-                      }
-                    />
-                  </div>
-                </div>
-              )}
-
-              <button
-                type="button"
-                className="flex w-fit items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-                onClick={() =>
-                  updateTerm(term.id, "isNegotiable", !term.isNegotiable)
-                }
-              >
-                {term.isNegotiable ? (
-                  <UnlockKeyhole className="size-4 text-emerald-600" />
-                ) : (
-                  <LockKeyhole className="size-4 text-amber-600" />
-                )}
-                {term.isNegotiable
-                  ? "Cho phép chỉnh sửa khi đàm phán"
-                  : "Khóa nội dung khi đàm phán"}
-              </button>
-            </div>
-          </div>
+            term={term}
+            inputId={term.id}
+            editable
+            isBilingual={isBilingual}
+            canMoveUp={index > 0}
+            canMoveDown={index < terms.length - 1}
+            englishTitlePlaceholder="Để trống để giữ tiêu đề từ template"
+            englishContentPlaceholder="Để trống để giữ nội dung từ template"
+            onChange={(field, value) => updateTerm(term.id, field, value)}
+            onMove={(direction) => moveTerm(index, direction)}
+            onRemove={() => removeTerm(term.id)}
+          />
         ))}
       </div>
 

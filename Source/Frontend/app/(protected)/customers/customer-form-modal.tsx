@@ -25,7 +25,7 @@ import {
 interface CustomerFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (createdCustomer?: CustomerResponse) => void;
   item?: CustomerResponse | null;
   viewOnly?: boolean;
 }
@@ -92,11 +92,15 @@ export function CustomerFormModal({
     if (!customerFullName.trim()) {
       newErrors.customerFullName = "Vui lòng nhập tên khách hàng / đối tác";
     }
-    if (
-      customerEmail.trim() &&
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())
-    ) {
+    if (!customerEmail.trim()) {
+      newErrors.customerEmail = "Vui lòng nhập email";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
       newErrors.customerEmail = "Email không hợp lệ";
+    }
+    if (!customerMobile.trim()) {
+      newErrors.customerMobile = "Vui lòng nhập số di động";
+    } else if (!/^[0-9+\-\s().]{8,15}$/.test(customerMobile.trim())) {
+      newErrors.customerMobile = "Số di động không hợp lệ";
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -106,6 +110,8 @@ export function CustomerFormModal({
     if (viewOnly || !validate()) return;
     setIsSaving(true);
     try {
+      let createdCustomer: CustomerResponse | undefined;
+
       if (isEditMode && item) {
         const payload: UpdateCustomerRequest = {
           customerCode: customerCode.trim() || null,
@@ -138,10 +144,10 @@ export function CustomerFormModal({
           customerWebsite: customerWebsite.trim() || null,
           customerNotes: customerNotes.trim() || null,
         };
-        await customerApi.create(payload);
+        createdCustomer = await customerApi.create(payload);
         toast.success("Thêm khách hàng mới thành công");
       }
-      onSuccess();
+      onSuccess(createdCustomer);
       onClose();
     } catch (error: any) {
       const message =
@@ -238,7 +244,9 @@ export function CustomerFormModal({
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="customerEmail">Email</Label>
+              <Label htmlFor="customerEmail">
+                Email {!viewOnly && <span className="text-destructive">*</span>}
+              </Label>
               <Input
                 id="customerEmail"
                 type="email"
@@ -256,15 +264,24 @@ export function CustomerFormModal({
               )}
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="customerMobile">Số di động</Label>
+              <Label htmlFor="customerMobile">
+                Số di động{" "}
+                {!viewOnly && <span className="text-destructive">*</span>}
+              </Label>
               <Input
                 id="customerMobile"
                 placeholder="0912345678"
                 value={customerMobile}
                 onChange={(e) => setCustomerMobile(e.target.value)}
                 disabled={viewOnly}
+                aria-invalid={!!errors.customerMobile}
                 maxLength={15}
               />
+              {errors.customerMobile && (
+                <p className="text-xs text-destructive">
+                  {errors.customerMobile}
+                </p>
+              )}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="customerPhone">Điện thoại cố định</Label>

@@ -53,6 +53,7 @@ import { ContractNegotiation } from "@/components/contracts/contract-negotiation
 import { ContractSignature } from "@/components/contracts/contract-signature";
 import { ContractDocuments } from "@/components/contracts/contract-attachments";
 import { ContractClosing } from "@/components/contracts/contract-closing";
+import { ContractAuditLog } from "@/components/contracts/contract-audit-log";
 import { TransferResponsibilityModal } from "@/components/contracts/transfer-responsibility-modal";
 
 const CONTRACT_TABS = [
@@ -62,6 +63,7 @@ const CONTRACT_TABS = [
   "signature",
   "documents",
   "closing",
+  "activity",
 ] as const;
 
 type ContractTab = (typeof CONTRACT_TABS)[number];
@@ -704,6 +706,7 @@ export default function ContractDetailPage() {
             <TabsTrigger value="signature">Truy cập khách hàng</TabsTrigger>
             <TabsTrigger value="documents">Chứng từ</TabsTrigger>
             <TabsTrigger value="closing">Đóng hợp đồng</TabsTrigger>
+            <TabsTrigger value="activity">Lịch sử hoạt động</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
@@ -751,6 +754,10 @@ export default function ContractDetailPage() {
 
           <TabsContent value="closing">
             <ContractClosing contract={contract} />
+          </TabsContent>
+
+          <TabsContent value="activity">
+            <ContractAuditLog contractId={contract.contractId} />
           </TabsContent>
         </Tabs>
 

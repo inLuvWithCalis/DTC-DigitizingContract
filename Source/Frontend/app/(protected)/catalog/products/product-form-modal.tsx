@@ -26,7 +26,7 @@ import {
 interface ProductFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (createdProduct?: ProductResponse) => void;
   item?: ProductResponse | null;
   viewOnly?: boolean;
 }
@@ -162,6 +162,8 @@ export function ProductFormModal({
     if (viewOnly || !validate()) return;
     setIsSaving(true);
     try {
+      let createdProduct: ProductResponse | undefined;
+
       const priceVal = productPrice ? Number(productPrice) : null;
       const orderVal = productOrder ? Number(productOrder) : 1;
       const categoryIdVal = categoryId ? Number(categoryId) : null;
@@ -190,10 +192,10 @@ export function ProductFormModal({
         await productApi.update(item.productId, commonPayload);
         toast.success("Cập nhật sản phẩm thành công");
       } else {
-        await productApi.create(commonPayload);
+        createdProduct = await productApi.create(commonPayload);
         toast.success("Thêm sản phẩm mới thành công");
       }
-      onSuccess();
+      onSuccess(createdProduct);
       onClose();
     } catch (error: any) {
       const message =

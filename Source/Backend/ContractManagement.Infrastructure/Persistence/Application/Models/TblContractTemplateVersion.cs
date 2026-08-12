@@ -42,6 +42,27 @@ public partial class TblContractTemplateVersion
     /// </summary>
     public string? DocumentHash { get; set; }
 
+    /// <summary>
+    /// Logical reference tới tbl_FileStorage.FileId của DOCX preview hiện hành.
+    /// Null kèm PreviewSourceHash còn lại nghĩa là preview đã stale và artifact cũ đã được dọn.
+    /// </summary>
+    public int? PreviewFileId { get; set; }
+
+    /// <summary>
+    /// Logical reference tới tbl_FileStorage.FileId của PDF preview đã publish.
+    /// Artifact này bất biến và được giữ lại cả sau khi version retired.
+    /// </summary>
+    public int? PublishedPreviewPdfFileId { get; set; }
+
+    /// <summary>
+    /// SHA-256 của DocumentHash, catalog version, preview dataset version và LanguageMode.
+    /// </summary>
+    public string? PreviewSourceHash { get; set; }
+
+    public DateTime? PreviewedAt { get; set; }
+
+    public int? PreviewedByEmployeeId { get; set; }
+
     public int? ValidatedByEmployeeId { get; set; }
 
     public DateTime? ValidatedDate { get; set; }

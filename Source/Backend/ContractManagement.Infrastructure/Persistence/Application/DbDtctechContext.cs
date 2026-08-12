@@ -28,6 +28,9 @@ public partial class DbDtctechContext : DbContext
 
     public virtual DbSet<TblContractAudit> TblContractAudits { get; set; }
 
+    public virtual DbSet<TblContractTemplateAudit>
+        TblContractTemplateAudits { get; set; }
+
     public virtual DbSet<TblContractCustomerVerificationPhone>
         TblContractCustomerVerificationPhones { get; set; }
 
@@ -519,6 +522,82 @@ public partial class DbDtctechContext : DbContext
                 .IsUnicode(false);
         });
 
+        modelBuilder.Entity<TblContractTemplateAudit>(entity =>
+        {
+            entity.HasKey(e => e.ContractTemplateAuditId)
+                .HasName("PK_tbl_ContractTemplateAudit");
+
+            entity.ToTable("tbl_ContractTemplateAudit", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractTemplateAudit_TenantId", "[TenantId] > 0");
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractTemplateAudit_TemplateId", "[TemplateId] > 0");
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractTemplateAudit_TemplateVersionId",
+                    "[TemplateVersionId] > 0");
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractTemplateAudit_ActorEmployeeId",
+                    "[ActorEmployeeId] > 0");
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractTemplateAudit_ActionType",
+                    "LEN(LTRIM(RTRIM([ActionType]))) > 0");
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractTemplateAudit_Result",
+                    "LEN(LTRIM(RTRIM([Result]))) > 0");
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractTemplateAudit_CorrelationId",
+                    "LEN(LTRIM(RTRIM([CorrelationId]))) > 0");
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractTemplateAudit_PreviousValuesJson",
+                    "[PreviousValuesJson] IS NULL OR " +
+                    "(ISJSON([PreviousValuesJson]) = 1 AND " +
+                    "LEFT(LTRIM([PreviousValuesJson]), 1) = '{')");
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractTemplateAudit_NewValuesJson",
+                    "[NewValuesJson] IS NULL OR " +
+                    "(ISJSON([NewValuesJson]) = 1 AND " +
+                    "LEFT(LTRIM([NewValuesJson]), 1) = '{')");
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractTemplateAudit_FailureCode",
+                    "[FailureCode] IS NULL OR " +
+                    "LEN(LTRIM(RTRIM([FailureCode]))) > 0");
+            });
+
+            entity.HasIndex(e => new
+                {
+                    e.TenantId,
+                    e.TemplateVersionId,
+                    e.OccurredAt
+                })
+                .HasDatabaseName(
+                    "IX_tbl_ContractTemplateAudit_TenantId_Version_OccurredAt");
+
+            entity.Property(e => e.ActionType)
+                .HasMaxLength(64)
+                .IsUnicode(false);
+            entity.Property(e => e.Result)
+                .HasMaxLength(32)
+                .IsUnicode(false);
+            entity.Property(e => e.FailureCode)
+                .HasMaxLength(64)
+                .IsUnicode(false);
+            entity.Property(e => e.PreviousValuesJson)
+                .HasColumnType("nvarchar(max)");
+            entity.Property(e => e.NewValuesJson)
+                .HasColumnType("nvarchar(max)");
+            entity.Property(e => e.OccurredAt)
+                .HasColumnType("datetime2");
+            entity.Property(e => e.IpAddress)
+                .HasMaxLength(45)
+                .IsUnicode(false);
+            entity.Property(e => e.UserAgent)
+                .HasMaxLength(1024);
+            entity.Property(e => e.CorrelationId)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+        });
+
         modelBuilder.Entity<TblContractNegotiationComment>(entity =>
         {
             entity.HasKey(e => e.CommentId)
@@ -934,6 +1013,24 @@ public partial class DbDtctechContext : DbContext
                     "AND LEN([DocumentHash]) = 64)");
 
                 /*
+                 * Preview chỉ giữ metadata của artifact đã sinh. Khi một DOCX
+                 * mới được upload, FileId được clear sau commit nhưng hash/thời
+                 * điểm cũ được giữ để nhận diện trạng thái stale an toàn.
+                 */
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractTemplateVersion_Preview",
+                    "([PreviewSourceHash] IS NULL " +
+                    "AND [PreviewedAt] IS NULL " +
+                    "AND [PreviewedByEmployeeId] IS NULL " +
+                    "AND [PreviewFileId] IS NULL) " +
+                    "OR " +
+                    "([PreviewSourceHash] IS NOT NULL " +
+                    "AND LEN([PreviewSourceHash]) = 64 " +
+                    "AND [PreviewedAt] IS NOT NULL " +
+                    "AND [PreviewedByEmployeeId] > 0 " +
+                    "AND ([PreviewFileId] IS NULL OR [PreviewFileId] > 0))");
+
+                /*
                  * NotValidated: chưa có thông tin người/thời điểm validate.
                  * Valid: đã lưu người và thời điểm validate.
                  * Invalid: ngoài audit còn phải có thông báo lỗi.
@@ -963,12 +1060,15 @@ public partial class DbDtctechContext : DbContext
                     "CK_tbl_ContractTemplateVersion_PublishState",
                     "([Status] = 0 " +
                     "AND [PublishedByEmployeeId] IS NULL " +
-                    "AND [PublishedDate] IS NULL) " +
+                    "AND [PublishedDate] IS NULL " +
+                    "AND [PublishedPreviewPdfFileId] IS NULL) " +
                     "OR " +
                     "([Status] IN (1, 2) " +
                     "AND [ValidationStatus] = 1 " +
                     "AND [DocumentFileId] IS NOT NULL " +
                     "AND [DocumentHash] IS NOT NULL " +
+                    "AND [PreviewFileId] IS NOT NULL " +
+                    "AND [PublishedPreviewPdfFileId] > 0 " +
                     "AND [PublishedByEmployeeId] IS NOT NULL " +
                     "AND [PublishedDate] IS NOT NULL)");
             });
@@ -992,6 +1092,18 @@ public partial class DbDtctechContext : DbContext
                 .HasDatabaseName(
                     "UX_tbl_ContractTemplateVersion_DocumentFileId");
 
+            entity.HasIndex(e => e.PreviewFileId)
+                .IsUnique()
+                .HasFilter("[PreviewFileId] IS NOT NULL")
+                .HasDatabaseName(
+                    "UX_tbl_ContractTemplateVersion_PreviewFileId");
+
+            entity.HasIndex(e => e.PublishedPreviewPdfFileId)
+                .IsUnique()
+                .HasFilter("[PublishedPreviewPdfFileId] IS NOT NULL")
+                .HasDatabaseName(
+                    "UX_tbl_ContractTemplateVersion_PublishedPreviewPdfFileId");
+
             entity.Property(e => e.ChangeNote)
                 .HasMaxLength(2000);
 
@@ -1012,6 +1124,14 @@ public partial class DbDtctechContext : DbContext
                 .HasMaxLength(64)
                 .IsUnicode(false)
                 .IsFixedLength();
+
+            entity.Property(e => e.PreviewSourceHash)
+                .HasMaxLength(64)
+                .IsUnicode(false)
+                .IsFixedLength();
+
+            entity.Property(e => e.PreviewedAt)
+                .HasColumnType("datetime2");
 
             entity.Property(e => e.ValidatedDate)
                 .HasColumnType("datetime2");

@@ -4,16 +4,19 @@ using ContractManagement.Infrastructure.Persistence.Application;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace ContractManagement.Migrations
+namespace ContractManagement.Infrastructure.Migrations.Application
 {
     [DbContext(typeof(DbDtctechContext))]
-    partial class DbDtctechContextModelSnapshot : ModelSnapshot
+    [Migration("20260810073512_Phase6_Slice10TemplatePreview")]
+    partial class Phase6_Slice10TemplatePreview
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1726,9 +1729,6 @@ namespace ContractManagement.Migrations
                     b.Property<DateTime?>("PublishedDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<int?>("PublishedPreviewPdfFileId")
-                        .HasColumnType("int");
-
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -1780,11 +1780,6 @@ namespace ContractManagement.Migrations
                         .HasDatabaseName("UX_tbl_ContractTemplateVersion_PreviewFileId")
                         .HasFilter("[PreviewFileId] IS NOT NULL");
 
-                    b.HasIndex("PublishedPreviewPdfFileId")
-                        .IsUnique()
-                        .HasDatabaseName("UX_tbl_ContractTemplateVersion_PublishedPreviewPdfFileId")
-                        .HasFilter("[PublishedPreviewPdfFileId] IS NOT NULL");
-
                     b.HasIndex("TemplateId", "Status")
                         .HasDatabaseName("IX_tbl_ContractTemplateVersion_TemplateId_Status");
 
@@ -1798,7 +1793,7 @@ namespace ContractManagement.Migrations
 
                             t.HasCheckConstraint("CK_tbl_ContractTemplateVersion_Preview", "([PreviewSourceHash] IS NULL AND [PreviewedAt] IS NULL AND [PreviewedByEmployeeId] IS NULL AND [PreviewFileId] IS NULL) OR ([PreviewSourceHash] IS NOT NULL AND LEN([PreviewSourceHash]) = 64 AND [PreviewedAt] IS NOT NULL AND [PreviewedByEmployeeId] > 0 AND ([PreviewFileId] IS NULL OR [PreviewFileId] > 0))");
 
-                            t.HasCheckConstraint("CK_tbl_ContractTemplateVersion_PublishState", "([Status] = 0 AND [PublishedByEmployeeId] IS NULL AND [PublishedDate] IS NULL AND [PublishedPreviewPdfFileId] IS NULL) OR ([Status] IN (1, 2) AND [ValidationStatus] = 1 AND [DocumentFileId] IS NOT NULL AND [DocumentHash] IS NOT NULL AND [PreviewFileId] IS NOT NULL AND [PublishedPreviewPdfFileId] > 0 AND [PublishedByEmployeeId] IS NOT NULL AND [PublishedDate] IS NOT NULL)");
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateVersion_PublishState", "([Status] = 0 AND [PublishedByEmployeeId] IS NULL AND [PublishedDate] IS NULL) OR ([Status] IN (1, 2) AND [ValidationStatus] = 1 AND [DocumentFileId] IS NOT NULL AND [DocumentHash] IS NOT NULL AND [PublishedByEmployeeId] IS NOT NULL AND [PublishedDate] IS NOT NULL)");
 
                             t.HasCheckConstraint("CK_tbl_ContractTemplateVersion_Status", "[Status] IN (0, 1, 2)");
 

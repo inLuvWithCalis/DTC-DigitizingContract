@@ -11,6 +11,7 @@ import {
   FileText,
   FolderTree,
   LayoutDashboard,
+  LibraryBig,
   LogOut,
   Menu,
   Package,
@@ -43,6 +44,12 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: "Tổng quan", icon: LayoutDashboard, href: "/dashboard" },
   { label: "Hợp đồng", icon: FileText, href: "/contracts" },
+  {
+    label: "Mẫu hợp đồng",
+    icon: LibraryBig,
+    href: "/admin/contract-templates",
+    allowedEmployeeTypes: [EmployeeType.AdminOfficer],
+  },
   {
     label: "Nhật ký hợp đồng",
     icon: ScrollText,

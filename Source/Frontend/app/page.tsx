@@ -10,7 +10,7 @@ import {
   EyeOff,
   Building,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { authApi } from "@/services/auth-api";
 

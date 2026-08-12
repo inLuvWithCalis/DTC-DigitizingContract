@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 export type ContractTermEditableField =
   | "termTitle"
@@ -35,6 +36,7 @@ export interface ContractTermCardValue {
 interface ContractTermCardProps {
   term: ContractTermCardValue;
   inputId: string;
+  className?: string;
   editable?: boolean;
   isBilingual?: boolean;
   canMoveUp?: boolean;
@@ -53,6 +55,7 @@ interface ContractTermCardProps {
 export function ContractTermCard({
   term,
   inputId,
+  className,
   editable = false,
   isBilingual = false,
   canMoveUp = false,
@@ -65,7 +68,12 @@ export function ContractTermCard({
   children,
 }: ContractTermCardProps) {
   return (
-    <div className="rounded-2xl border bg-background p-4 shadow-xs">
+    <div
+      className={cn(
+        "rounded-2xl border bg-white p-4 shadow-xs transition-[border-color,box-shadow]",
+        className,
+      )}
+    >
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline">Điều {term.displayOrder}</Badge>
@@ -189,9 +197,10 @@ export function ContractTermCard({
             </div>
           )}
 
-          <button
+          <Button
+            variant="link"
             type="button"
-            className="flex w-fit items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="flex w-fit items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground cursor-pointer"
             onClick={() => onChange?.("isNegotiable", !term.isNegotiable)}
           >
             {term.isNegotiable ? (
@@ -202,7 +211,7 @@ export function ContractTermCard({
             {term.isNegotiable
               ? "Cho phép chỉnh sửa khi đàm phán"
               : "Khóa nội dung khi đàm phán"}
-          </button>
+          </Button>
         </div>
       ) : (
         <div>

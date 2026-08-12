@@ -15,7 +15,7 @@ import {
   Send,
   ShieldCheck,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 
 import { PublicContractDiscussionModal } from "@/components/contracts/public-contract-comments";
 import { ThemeToggle } from "@/components/theme-toggle";

@@ -1,4 +1,4 @@
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { useEffect, useRef, useState } from "react";
 
 interface ConfirmToastProps {

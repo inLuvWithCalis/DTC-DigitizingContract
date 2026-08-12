@@ -41,7 +41,7 @@ import {
   UpdateContractDraftRequest,
 } from "@/services/contract-api";
 import { roundContractMoney } from "@/lib/contract-finance";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 
 import {
   ContractStatusBadge,

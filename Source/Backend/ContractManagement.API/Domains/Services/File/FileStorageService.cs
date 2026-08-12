@@ -108,10 +108,32 @@ namespace ContractManagement.Domains.Services.File
                 UploadedDate = DateTime.Now
             };
 
-            _dbContext.TblFileStorages.Add(fileEntity);
-            await _dbContext.SaveChangesAsync();
+            try
+            {
+                _dbContext.TblFileStorages.Add(fileEntity);
+                await _dbContext.SaveChangesAsync();
+                return MapToResponse(fileEntity);
+            }
+            catch
+            {
+                // Disk is not transactional. If metadata cannot be persisted,
+                // remove the just-written artifact before preserving the error.
+                _dbContext.Entry(fileEntity).State = EntityState.Detached;
+                try
+                {
+                    if (System.IO.File.Exists(physicalPath))
+                    {
+                        System.IO.File.Delete(physicalPath);
+                    }
+                }
+                catch
+                {
+                    // The caller keeps the persistence failure; orphan cleanup
+                    // is intentionally best-effort in this shared service.
+                }
 
-            return MapToResponse(fileEntity);
+                throw;
+            }
         }
 
         public async Task<(Stream Stream, string FileName)?> DownloadAsync(int fileId)
@@ -182,30 +204,57 @@ namespace ContractManagement.Domains.Services.File
                 throw new KeyNotFoundException("Không tìm thấy file.");
             }
 
-            // 1. Xóa file vật lý nếu tồn tại
-            if (!string.IsNullOrWhiteSpace(file.FilePath))
-            {
-                var webRootPath = _environment.WebRootPath;
-
-                if (string.IsNullOrWhiteSpace(webRootPath))
-                {
-                    webRootPath = Path.Combine(_environment.ContentRootPath, "wwwroot");
-                }
-
-                var relativePath = file.FilePath.TrimStart('/')
-                    .Replace('/', Path.DirectorySeparatorChar);
-
-                var physicalPath = Path.Combine(webRootPath, relativePath);
-
-                if (System.IO.File.Exists(physicalPath))
-                {
-                    System.IO.File.Delete(physicalPath);
-                }
-            }
+            DeletePhysicalFile(file.FilePath);
 
             // 2. Xóa metadata trong DB
             _dbContext.TblFileStorages.Remove(file);
             await _dbContext.SaveChangesAsync();
+        }
+
+        public async Task DeleteUploadedArtifactAsync(FileStorageResponse file)
+        {
+            ArgumentNullException.ThrowIfNull(file);
+
+            // Transaction SQL có thể đã rollback metadata, nhưng physical file
+            // không transactional nên phải được dọn từ safe relative path này.
+            DeletePhysicalFile(file.FilePath);
+
+            if (file.FileId <= 0)
+            {
+                return;
+            }
+
+            var metadata = await _dbContext.TblFileStorages
+                .FirstOrDefaultAsync(candidate => candidate.FileId == file.FileId);
+            if (metadata is null)
+            {
+                return;
+            }
+
+            _dbContext.TblFileStorages.Remove(metadata);
+            await _dbContext.SaveChangesAsync();
+        }
+
+        private void DeletePhysicalFile(string? filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                return;
+            }
+
+            var webRootPath = _environment.WebRootPath;
+            if (string.IsNullOrWhiteSpace(webRootPath))
+            {
+                webRootPath = Path.Combine(_environment.ContentRootPath, "wwwroot");
+            }
+
+            var relativePath = filePath.TrimStart('/')
+                .Replace('/', Path.DirectorySeparatorChar);
+            var physicalPath = Path.Combine(webRootPath, relativePath);
+            if (System.IO.File.Exists(physicalPath))
+            {
+                System.IO.File.Delete(physicalPath);
+            }
         }
 
         private static FileStorageResponse MapToResponse(TblFileStorage file)

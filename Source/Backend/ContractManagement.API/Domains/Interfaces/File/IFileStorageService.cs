@@ -21,5 +21,12 @@ namespace ContractManagement.Domains.Interfaces.File
             int objectId);
 
         Task DeleteAsync(int fileId);
+
+        /// <summary>
+        /// Bù trừ artifact vừa upload khi transaction nghiệp vụ không thể commit.
+        /// Dùng FilePath đã được storage sinh ra, nên vẫn dọn physical file khi
+        /// metadata đã bị database rollback.
+        /// </summary>
+        Task DeleteUploadedArtifactAsync(FileStorageResponse file);
     }
 }

@@ -7,6 +7,46 @@ public class ContractTemplatePolicyTests
 {
     private static string ValidSha256Hash => new('a', 64);
 
+    [Fact]
+    public void SoftwareSupplyPlaceholderCatalog_V1_HasExpectedShape()
+    {
+        var catalog = SoftwareSupplyPlaceholderCatalog.All;
+
+        Assert.Equal("V1", SoftwareSupplyPlaceholderCatalog.Version);
+        Assert.Equal(25, catalog.Count);
+        Assert.Equal(17, catalog.Count(item => item.IsRequired));
+        Assert.Equal(8, catalog.Count(item => !item.IsRequired));
+        Assert.Equal(
+            catalog.Count,
+            catalog.Select(item => item.Key).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(catalog, item =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(item.Key));
+            Assert.False(string.IsNullOrWhiteSpace(item.DataSource));
+        });
+    }
+
+    [Theory]
+    [InlineData("CONTRACT_TERMS", TemplatePlaceholderDataKind.DynamicBlock, true, TemplatePlaceholderMultiplicity.ExactlyOne)]
+    [InlineData("CONTRACT_ITEM_TABLE", TemplatePlaceholderDataKind.DynamicBlock, true, TemplatePlaceholderMultiplicity.ExactlyOne)]
+    [InlineData("SIGNATURE_PROVIDER", TemplatePlaceholderDataKind.DynamicBlock, true, TemplatePlaceholderMultiplicity.ExactlyOne)]
+    [InlineData("SIGNATURE_CUSTOMER", TemplatePlaceholderDataKind.DynamicBlock, true, TemplatePlaceholderMultiplicity.ExactlyOne)]
+    [InlineData("PAYMENT_SCHEDULE_TABLE", TemplatePlaceholderDataKind.DynamicBlock, false, TemplatePlaceholderMultiplicity.ZeroOrOne)]
+    public void SoftwareSupplyPlaceholderCatalog_SpecialPlaceholdersHaveFixedMultiplicity(
+        string key,
+        TemplatePlaceholderDataKind expectedKind,
+        bool expectedRequired,
+        TemplatePlaceholderMultiplicity expectedMultiplicity)
+    {
+        var item = Assert.Single(
+            SoftwareSupplyPlaceholderCatalog.All,
+            candidate => candidate.Key == key);
+
+        Assert.Equal(expectedKind, item.DataKind);
+        Assert.Equal(expectedRequired, item.IsRequired);
+        Assert.Equal(expectedMultiplicity, item.Multiplicity);
+    }
+
     // =========================================================
     // OUTPUT KIND
     // =========================================================

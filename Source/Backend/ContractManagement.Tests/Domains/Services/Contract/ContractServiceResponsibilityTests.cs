@@ -113,6 +113,56 @@ public class ContractServiceResponsibilityTests
     }
 
     [Fact]
+    public async Task CreateAsync_UsesOnlyCurrentPublishedTemplateVersion_AndRejectsItAfterRetire()
+    {
+        await using var context = CreateContext();
+        await SeedCreateDependenciesAsync(context);
+        const int replacementVersionId = TemplateVersionId + 1;
+        context.TblContractTemplateVersions.Add(new TblContractTemplateVersion
+        {
+            TemplateVersionId = replacementVersionId,
+            TemplateId = TemplateId,
+            VersionNo = 2,
+            Status = (byte)TemplateVersionStatus.Published,
+            ValidationStatus = (byte)TemplateValidationStatus.Valid,
+            CreatedEmployeeId = CreatorEmployeeId,
+            CreatedDate = DateTime.UtcNow,
+            RowVersion = []
+        });
+        context.TblContractTemplateTerms.Add(new TblContractTemplateTerm
+        {
+            TemplateVersionId = replacementVersionId,
+            TermCode = "GENERAL",
+            TermTitle = "Replacement term",
+            TermContent = "Replacement published template term.",
+            IsNegotiable = true,
+            DisplayOrder = 1,
+            CreatedEmployeeId = CreatorEmployeeId,
+            CreatedDate = DateTime.UtcNow,
+            RowVersion = []
+        });
+        var template = await context.TblContractTemplates.SingleAsync();
+        template.CurrentPublishedVersionId = replacementVersionId;
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context);
+        var request = CreateRequest();
+        request.TemplateVersionId = replacementVersionId;
+        var created = await service.CreateAsync(request, CreatorEmployeeId);
+        Assert.Equal(replacementVersionId, created.TemplateVersionId);
+
+        var replacement = await context.TblContractTemplateVersions
+            .SingleAsync(version => version.TemplateVersionId == replacementVersionId);
+        replacement.Status = (byte)TemplateVersionStatus.Retired;
+        template.CurrentPublishedVersionId = null;
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CreateAsync(request, CreatorEmployeeId));
+    }
+
+    [Fact]
     public async Task CreateAsync_ShouldRejectMissingResponsibleEmployee()
     {
         await using var context = CreateContext();

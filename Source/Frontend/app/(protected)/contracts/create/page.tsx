@@ -22,7 +22,7 @@ import {
   Plus,
   Search,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 
 // Các import UI component
 import { Header } from "@/components/ui/custom/header";

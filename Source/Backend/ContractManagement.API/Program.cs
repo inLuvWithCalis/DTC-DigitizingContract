@@ -7,6 +7,7 @@ using ContractManagement.API.Domains.Services.Customer;
 using ContractManagement.API.Domains.Services.CustomerInteraction;
 using ContractManagement.API.Domains.Services.Department;
 using ContractManagement.API.Domains.Services.Employee;
+using ContractManagement.Domains.Interfaces.ContractTemplate;
 using ContractManagement.Domains.Interfaces.Contract;
 using ContractManagement.Domains.Interfaces.Employee;
 using ContractManagement.Domains.Interfaces.File;
@@ -16,6 +17,7 @@ using ContractManagement.Domains.Services.Catalog;
 using ContractManagement.Domains.Services.Contract;
 using ContractManagement.Domains.Services.File;
 using ContractManagement.Domains.Services.Quotation;
+using ContractManagement.Domains.Services.ContractTemplate;
 using ContractManagement.Infrastructure.DatabaseScripts.SeedData;
 using ContractManagement.Infrastructure.MultiTenancy.DI;
 using ContractManagement.Infrastructure.Persistence.Application.Models;
@@ -249,6 +251,33 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IContractAuditQueryService,
     ContractAuditQueryService>();
+
+builder.Services.AddScoped<
+    IContractTemplateDocumentValidator,
+    ContractTemplateDocumentValidator>();
+
+builder.Services.AddScoped<
+    IContractTemplateAuditWriter,
+    ContractTemplateAuditWriter>();
+
+builder.Services.AddScoped<
+    IContractTemplatePreviewRenderer,
+    ContractTemplatePreviewRenderer>();
+
+builder.Services.AddOptions<TemplatePdfRenderingOptions>()
+    .Bind(builder.Configuration.GetSection(TemplatePdfRenderingOptions.SectionName))
+    .Validate(options => options.TimeoutSeconds is > 0 and <= 60,
+        "Template PDF conversion timeout must be between 1 and 60 seconds.")
+    .Validate(options => options.MaxOutputBytes is > 0 and <= 25 * 1024 * 1024,
+        "Template PDF output limit must be at most 25 MiB.")
+    .ValidateOnStart();
+
+builder.Services.AddSingleton<IContractTemplatePdfRenderer,
+    LibreOfficeContractTemplatePdfRenderer>();
+
+builder.Services.AddScoped<
+    IContractTemplateService,
+    ContractTemplateService>();
 
 #endregion
 

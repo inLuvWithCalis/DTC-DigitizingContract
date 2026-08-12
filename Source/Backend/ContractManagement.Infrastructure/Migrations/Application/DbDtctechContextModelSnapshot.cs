@@ -1414,6 +1414,97 @@ namespace ContractManagement.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplateAudit", b =>
+                {
+                    b.Property<int>("ContractTemplateAuditId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ContractTemplateAuditId"));
+
+                    b.Property<string>("ActionType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<int>("ActorEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CorrelationId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("FailureCode")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(45)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(45)");
+
+                    b.Property<string>("NewValuesJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PreviousValuesJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Result")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<int>("TemplateId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TemplateVersionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
+                    b.HasKey("ContractTemplateAuditId")
+                        .HasName("PK_tbl_ContractTemplateAudit");
+
+                    b.HasIndex("TenantId", "TemplateVersionId", "OccurredAt")
+                        .HasDatabaseName("IX_tbl_ContractTemplateAudit_TenantId_Version_OccurredAt");
+
+                    b.ToTable("tbl_ContractTemplateAudit", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateAudit_ActionType", "LEN(LTRIM(RTRIM([ActionType]))) > 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateAudit_ActorEmployeeId", "[ActorEmployeeId] > 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateAudit_CorrelationId", "LEN(LTRIM(RTRIM([CorrelationId]))) > 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateAudit_FailureCode", "[FailureCode] IS NULL OR LEN(LTRIM(RTRIM([FailureCode]))) > 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateAudit_NewValuesJson", "[NewValuesJson] IS NULL OR (ISJSON([NewValuesJson]) = 1 AND LEFT(LTRIM([NewValuesJson]), 1) = '{')");
+
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateAudit_PreviousValuesJson", "[PreviousValuesJson] IS NULL OR (ISJSON([PreviousValuesJson]) = 1 AND LEFT(LTRIM([PreviousValuesJson]), 1) = '{')");
+
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateAudit_Result", "LEN(LTRIM(RTRIM([Result]))) > 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateAudit_TemplateId", "[TemplateId] > 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateAudit_TemplateVersionId", "[TemplateVersionId] > 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateAudit_TenantId", "[TenantId] > 0");
+                        });
+                });
+
             modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplateField", b =>
                 {
                     b.Property<int>("TemplateFieldId")
@@ -1614,11 +1705,29 @@ namespace ContractManagement.Migrations
                         .HasColumnType("char(64)")
                         .IsFixedLength();
 
+                    b.Property<int?>("PreviewFileId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PreviewSourceHash")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime?>("PreviewedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("PreviewedByEmployeeId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("PublishedByEmployeeId")
                         .HasColumnType("int");
 
                     b.Property<DateTime?>("PublishedDate")
                         .HasColumnType("datetime2");
+
+                    b.Property<int?>("PublishedPreviewPdfFileId")
+                        .HasColumnType("int");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -1666,6 +1775,16 @@ namespace ContractManagement.Migrations
                         .HasDatabaseName("UX_tbl_ContractTemplateVersion_DocumentFileId")
                         .HasFilter("[DocumentFileId] IS NOT NULL");
 
+                    b.HasIndex("PreviewFileId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_tbl_ContractTemplateVersion_PreviewFileId")
+                        .HasFilter("[PreviewFileId] IS NOT NULL");
+
+                    b.HasIndex("PublishedPreviewPdfFileId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_tbl_ContractTemplateVersion_PublishedPreviewPdfFileId")
+                        .HasFilter("[PublishedPreviewPdfFileId] IS NOT NULL");
+
                     b.HasIndex("TemplateId", "Status")
                         .HasDatabaseName("IX_tbl_ContractTemplateVersion_TemplateId_Status");
 
@@ -1677,7 +1796,9 @@ namespace ContractManagement.Migrations
                         {
                             t.HasCheckConstraint("CK_tbl_ContractTemplateVersion_Document", "([DocumentFileId] IS NULL AND [DocumentHash] IS NULL) OR ([DocumentFileId] > 0 AND [DocumentHash] IS NOT NULL AND LEN([DocumentHash]) = 64)");
 
-                            t.HasCheckConstraint("CK_tbl_ContractTemplateVersion_PublishState", "([Status] = 0 AND [PublishedByEmployeeId] IS NULL AND [PublishedDate] IS NULL) OR ([Status] IN (1, 2) AND [ValidationStatus] = 1 AND [DocumentFileId] IS NOT NULL AND [DocumentHash] IS NOT NULL AND [PublishedByEmployeeId] IS NOT NULL AND [PublishedDate] IS NOT NULL)");
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateVersion_Preview", "([PreviewSourceHash] IS NULL AND [PreviewedAt] IS NULL AND [PreviewedByEmployeeId] IS NULL AND [PreviewFileId] IS NULL) OR ([PreviewSourceHash] IS NOT NULL AND LEN([PreviewSourceHash]) = 64 AND [PreviewedAt] IS NOT NULL AND [PreviewedByEmployeeId] > 0 AND ([PreviewFileId] IS NULL OR [PreviewFileId] > 0))");
+
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateVersion_PublishState", "([Status] = 0 AND [PublishedByEmployeeId] IS NULL AND [PublishedDate] IS NULL AND [PublishedPreviewPdfFileId] IS NULL) OR ([Status] IN (1, 2) AND [ValidationStatus] = 1 AND [DocumentFileId] IS NOT NULL AND [DocumentHash] IS NOT NULL AND [PreviewFileId] IS NOT NULL AND [PublishedPreviewPdfFileId] > 0 AND [PublishedByEmployeeId] IS NOT NULL AND [PublishedDate] IS NOT NULL)");
 
                             t.HasCheckConstraint("CK_tbl_ContractTemplateVersion_Status", "[Status] IN (0, 1, 2)");
 

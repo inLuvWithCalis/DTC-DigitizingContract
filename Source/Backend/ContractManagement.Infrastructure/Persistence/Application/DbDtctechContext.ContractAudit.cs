@@ -18,6 +18,7 @@ public partial class DbDtctechContext
         RevokeCustomerAccessForCancelledContracts();
         AssignSyntheticRowVersionsForInMemory();
         ValidateContractAuditEntries();
+        ValidateContractTemplateAuditEntries();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
@@ -36,6 +37,7 @@ public partial class DbDtctechContext
         RevokeCustomerAccessForCancelledContracts();
         AssignSyntheticRowVersionsForInMemory();
         ValidateContractAuditEntries();
+        ValidateContractTemplateAuditEntries();
         return base.SaveChangesAsync(
             acceptAllChangesOnSuccess,
             cancellationToken);

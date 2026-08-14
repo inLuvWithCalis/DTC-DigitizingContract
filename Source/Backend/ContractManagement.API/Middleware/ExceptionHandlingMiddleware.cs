@@ -1,4 +1,6 @@
 ﻿using ContractManagement.API.Common.Responses;
+using ContractManagement.API.Common.Security;
+using ContractManagement.API.Domains.Interfaces.Security;
 using Microsoft.EntityFrameworkCore;
 using System.Net;
 using System.Text.Json;
@@ -50,13 +52,31 @@ namespace ContractManagement.Middleware
             var statusCode = HttpStatusCode.InternalServerError;
             var message = "Có lỗi xảy ra trong hệ thống.";
 
+            if (exception is RbacOperationException rbacException)
+            {
+                await TryWriteTenantDeniedAuditAsync(
+                    context,
+                    rbacException.Code);
+                context.Response.ContentType = "application/json";
+                context.Response.StatusCode = rbacException.StatusCode;
+                await context.Response.WriteAsJsonAsync(
+                    new AuthorizationErrorResponse(
+                        rbacException.Code,
+                        rbacException.Message));
+                return;
+            }
+
             // Mapping một số exception phổ biến sang HTTP status phù hợp
             switch (exception)
             {
                 case KeyNotFoundException:
-                    statusCode = HttpStatusCode.NotFound;
-                    message = exception.Message;
-                    break;
+                    context.Response.ContentType = "application/json";
+                    context.Response.StatusCode = StatusCodes.Status404NotFound;
+                    await context.Response.WriteAsJsonAsync(
+                        new AuthorizationErrorResponse(
+                            AuthorizationErrorCodes.ResourceNotFound,
+                            exception.Message));
+                    return;
 
                 case InvalidOperationException:
                     statusCode = HttpStatusCode.BadRequest;
@@ -76,7 +96,13 @@ namespace ContractManagement.Middleware
                 case DbUpdateConcurrencyException:
                     statusCode = HttpStatusCode.Conflict;
                     message = exception.Message;
-                    break;
+                    context.Response.ContentType = "application/json";
+                    context.Response.StatusCode = (int)statusCode;
+                    await context.Response.WriteAsJsonAsync(
+                        new AuthorizationErrorResponse(
+                            AuthorizationErrorCodes.StaleRowVersion,
+                            message));
+                    return;
             }
 
             context.Response.ContentType = "application/json";
@@ -92,6 +118,32 @@ namespace ContractManagement.Middleware
                 });
 
             await context.Response.WriteAsync(json);
+        }
+
+        private static async Task TryWriteTenantDeniedAuditAsync(
+            HttpContext context,
+            string failureCode)
+        {
+            var target = SecurityAuditEndpointClassifier.GetTenantTarget(context);
+            if (target is null)
+            {
+                return;
+            }
+
+            var writer = context.RequestServices
+                .GetService<ITenantAuthorizationAuditWriter>();
+            if (writer is null)
+            {
+                return;
+            }
+
+            await writer.TryWriteDeniedAsync(
+                context,
+                SecurityAuditHttpContextItems.GetDeniedActorEmployeeId(context),
+                target.TargetType,
+                target.TargetId,
+                failureCode,
+                context.RequestAborted);
         }
     }
 }

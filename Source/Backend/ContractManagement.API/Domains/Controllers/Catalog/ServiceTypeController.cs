@@ -1,4 +1,5 @@
 ﻿using ContractManagement.API.Common.Responses;
+using ContractManagement.API.Common.Security;
 using ContractManagement.API.Domains.DTOs.Requests.Catalog;
 using ContractManagement.API.Domains.Interfaces.Catalog;
 using ContractManagement.Domains.DTOs.Responses.Catalog;
@@ -24,6 +25,7 @@ namespace ContractManagement.Domains.Controllers.Catalog
         }
 
         [HttpGet]
+        [SessionAuthorize(RbacPermissions.CatalogRead)]
         public async Task<IActionResult> GetList(
             [FromQuery] ServiceTypeFilterRequest filter)
         {
@@ -35,6 +37,7 @@ namespace ContractManagement.Domains.Controllers.Catalog
         }
 
         [HttpGet("{id:int}")]
+        [SessionAuthorize(RbacPermissions.CatalogRead)]
         public async Task<IActionResult> GetById(int id)
         {
             var serviceTypeId = ValidateServiceTypeId(id);
@@ -47,6 +50,7 @@ namespace ContractManagement.Domains.Controllers.Catalog
         }
 
         [HttpPost]
+        [SessionAuthorize(RbacPermissions.CatalogManage)]
         public async Task<IActionResult> Create(
             [FromBody] CreateServiceTypeRequest request)
         {
@@ -61,6 +65,7 @@ namespace ContractManagement.Domains.Controllers.Catalog
         }
 
         [HttpPut("{id:int}")]
+        [SessionAuthorize(RbacPermissions.CatalogManage)]
         public async Task<IActionResult> Update(
             int id,
             [FromBody] UpdateServiceTypeRequest request)
@@ -75,6 +80,7 @@ namespace ContractManagement.Domains.Controllers.Catalog
         }
 
         [HttpDelete("{id:int}")]
+        [SessionAuthorize(RbacPermissions.CatalogManage)]
         public async Task<IActionResult> Delete(int id)
         {
             var serviceTypeId = ValidateServiceTypeId(id);

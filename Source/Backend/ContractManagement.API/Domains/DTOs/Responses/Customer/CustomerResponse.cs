@@ -4,6 +4,19 @@
     /// Response trả về thông tin khách hàng.
     /// Không trả CustomerPassword ra ngoài API.
     /// </summary>
+    public sealed class CustomerLookupResponse
+    {
+        public int CustomerId { get; set; }
+
+        public string? CustomerCode { get; set; }
+
+        public string? CustomerFullName { get; set; }
+
+        public string? CustomerCompany { get; set; }
+
+        public byte? Status { get; set; }
+    }
+
     public class CustomerResponse
     {
         public int CustomerId { get; set; }

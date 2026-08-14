@@ -20,13 +20,16 @@ namespace ContractManagement.Domains.Services.Contract
     {
         private readonly DbDtctechContext _dbContext;
         private readonly IFileStorageService _fileStorageService;
+        private readonly IContractResourceAuthorizationService _contractAuthorization;
 
         public ContractAttachmentService(
             DbDtctechContext dbContext,
-            IFileStorageService fileStorageService)
+            IFileStorageService fileStorageService,
+            IContractResourceAuthorizationService contractAuthorization)
         {
             _dbContext = dbContext;
             _fileStorageService = fileStorageService;
+            _contractAuthorization = contractAuthorization;
         }
 
         public async Task<ContractAttachmentResponse> UploadAsync(
@@ -34,14 +37,9 @@ namespace ContractManagement.Domains.Services.Contract
             UploadContractAttachmentRequest request,
             int uploadedBy)
         {
-            // 1. Check hợp đồng tồn tại trong tenant DB hiện tại.
-            var contractExists = await _dbContext.TblContracts
-                .AnyAsync(x => x.ContractId == contractId);
-
-            if (!contractExists)
-            {
-                throw new KeyNotFoundException("Không tìm thấy hợp đồng.");
-            }
+            await _contractAuthorization.EnsureCanWriteAsync(
+                contractId,
+                uploadedBy);
 
             // 2. Check DocumentType có hợp lệ theo enum không.
             if (!Enum.IsDefined(typeof(DocumentType), request.DocumentType))
@@ -75,8 +73,13 @@ namespace ContractManagement.Domains.Services.Contract
         }
 
         public async Task<List<ContractAttachmentResponse>> GetByContractAsync(
-            int contractId)
+            int contractId,
+            int employeeId)
         {
+            await _contractAuthorization.EnsureCanReadAsync(
+                contractId,
+                employeeId);
+
             var attachments = await _dbContext.TblContractAttachments
                 .AsNoTracking()
                 .Where(x => x.ContractId == contractId)
@@ -86,8 +89,15 @@ namespace ContractManagement.Domains.Services.Contract
             return attachments.Select(MapToResponse).ToList();
         }
 
-        public async Task DeleteAsync(int contractId, int attachmentId)
+        public async Task DeleteAsync(
+            int contractId,
+            int attachmentId,
+            int employeeId)
         {
+            await _contractAuthorization.EnsureCanWriteAsync(
+                contractId,
+                employeeId);
+
             var attachment = await _dbContext.TblContractAttachments
                 .FirstOrDefaultAsync(x =>
                     x.AttachmentId == attachmentId &&

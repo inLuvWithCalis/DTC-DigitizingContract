@@ -1,4 +1,5 @@
 using ContractManagement.API.Common.Responses;
+using ContractManagement.API.Common.Security;
 using ContractManagement.API.Domains.DTOs.Requests.ContractTemplate;
 using ContractManagement.API.Domains.DTOs.Responses.ContractTemplate;
 using ContractManagement.Domains.Interfaces.ContractTemplate;
@@ -12,7 +13,7 @@ namespace ContractManagement.Domains.Controllers.ContractTemplate;
 /// </summary>
 [ApiController]
 [Route("api/contract-templates")]
-[SessionAuthorize]
+[SessionAuthorize(RbacPermissions.TemplateManage)]
 public sealed class ContractTemplateController : ControllerBase
 {
     private readonly IContractTemplateService _service;

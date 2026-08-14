@@ -49,7 +49,9 @@ namespace ContractManagement.Domains.Controllers.Contract
         [HttpGet]
         public async Task<IActionResult> GetByContract(int contractId)
         {
-            var result = await _service.GetByContractAsync(contractId);
+            var result = await _service.GetByContractAsync(
+                contractId,
+                GetEmployeeId());
 
             return Ok(
                 ApiResponse<List<ContractAttachmentResponse>>.Ok(
@@ -62,12 +64,27 @@ namespace ContractManagement.Domains.Controllers.Contract
             int contractId,
             int attachmentId)
         {
-            await _service.DeleteAsync(contractId, attachmentId);
+            await _service.DeleteAsync(
+                contractId,
+                attachmentId,
+                GetEmployeeId());
 
             return Ok(
                 ApiResponse<object>.Ok(
                     new { contractId, attachmentId },
                     "Xóa file đính kèm hợp đồng thành công."));
+        }
+
+        private int GetEmployeeId()
+        {
+            var employeeId = HttpContext.Session.GetInt32("EmployeeId");
+            if (employeeId is null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Bạn chưa đăng nhập hoặc session đã hết hạn.");
+            }
+
+            return employeeId.Value;
         }
     }
 }

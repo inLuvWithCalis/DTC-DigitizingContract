@@ -7,5 +7,7 @@
 /// </summary>
 public sealed record TenantProvisioningCommand(
     string TenantCode,
-    string TenantName
+    string TenantName,
+    InitialManagerProvisioningCommand InitialManager,
+    SecurityOperationContext SecurityContext
 );

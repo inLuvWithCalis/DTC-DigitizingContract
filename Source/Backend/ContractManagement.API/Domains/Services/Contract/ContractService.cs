@@ -58,7 +58,8 @@ namespace ContractManagement.Domains.Services.Contract
         /// </summary>
         public async Task<PagedResult<ContractListItemResponse>> GetListAsync(
             ContractFilterRequest filter,
-            int employeeId)
+            int employeeId,
+            bool canReadTenant = false)
         {
             if (employeeId <= 0)
             {
@@ -117,8 +118,7 @@ namespace ContractManagement.Domains.Services.Contract
                 join employee in _dbContext.TblEmployees.AsNoTracking()
                     on contract.EmployeeId equals employee.EmployeeId
 
-                // Hiện chưa có RBAC nên nhân viên chỉ xem hợp đồng của mình.
-                where contract.EmployeeId == employeeId
+                where canReadTenant || contract.EmployeeId == employeeId
 
                 select new
                 {
@@ -232,7 +232,8 @@ namespace ContractManagement.Domains.Services.Contract
         public async Task<PagedResult<EligibleParentContractResponse>>
             GetEligibleParentsAsync(
                 EligibleParentContractFilterRequest filter,
-                int employeeId)
+                int employeeId,
+                bool canReadTenant = false)
         {
             if (employeeId <= 0)
             {
@@ -286,7 +287,7 @@ namespace ContractManagement.Domains.Services.Contract
             var query = _dbContext.TblContracts
                 .AsNoTracking()
                 .Where(x =>
-                    x.EmployeeId == employeeId
+                    (canReadTenant || x.EmployeeId == employeeId)
                     && x.CustomerId == filter.CustomerId
                     && x.ContractType ==
                         (byte)ContractType.SoftwareSupply
@@ -1083,7 +1084,8 @@ namespace ContractManagement.Domains.Services.Contract
         /// </summary>
         public async Task<ContractDetailResponse> GetDetailAsync(
             int contractId,
-            int employeeId)
+            int employeeId,
+            bool canReadTenant = false)
         {
             if (contractId <= 0)
             {
@@ -1117,7 +1119,8 @@ namespace ContractManagement.Domains.Services.Contract
                     equals responsibleEmployee.EmployeeId
 
                 where contracts.ContractId == contractId
-                      && contracts.EmployeeId == employeeId
+                      && (canReadTenant
+                          || contracts.EmployeeId == employeeId)
 
                 select new
                 {
@@ -2342,12 +2345,14 @@ namespace ContractManagement.Domains.Services.Contract
         public async Task<IReadOnlyList<ContractNegotiationCommentResponse>>
             GetRootCommentsAsync(
                 int contractId,
-                int employeeId)
+                int employeeId,
+                bool canReadTenant = false)
         {
             ValidateContractEmployee(contractId, employeeId);
             await EnsureContractCommentReadAccessAsync(
                 contractId,
-                employeeId);
+                employeeId,
+                canReadTenant);
 
             var comments = await _dbContext
                 .TblContractNegotiationComments
@@ -2369,7 +2374,8 @@ namespace ContractManagement.Domains.Services.Contract
             GetCommentRepliesAsync(
                 int contractId,
                 int parentCommentId,
-                int employeeId)
+                int employeeId,
+                bool canReadTenant = false)
         {
             ValidateContractEmployee(contractId, employeeId);
 
@@ -2381,7 +2387,8 @@ namespace ContractManagement.Domains.Services.Contract
 
             await EnsureContractCommentReadAccessAsync(
                 contractId,
-                employeeId);
+                employeeId,
+                canReadTenant);
 
             var parentExists = await _dbContext
                 .TblContractNegotiationComments
@@ -2705,7 +2712,8 @@ namespace ContractManagement.Domains.Services.Contract
         public async Task<IReadOnlyList<ContractVersionHistoryResponse>>
             GetVersionHistoryAsync(
                 int contractId,
-                int employeeId)
+                int employeeId,
+                bool canReadTenant = false)
         {
             ValidateContractEmployee(contractId, employeeId);
 
@@ -2713,7 +2721,7 @@ namespace ContractManagement.Domains.Services.Contract
                 .AsNoTracking()
                 .FirstOrDefaultAsync(x =>
                     x.ContractId == contractId
-                    && x.EmployeeId == employeeId);
+                    && (canReadTenant || x.EmployeeId == employeeId));
 
             if (contract == null)
             {
@@ -2748,7 +2756,8 @@ namespace ContractManagement.Domains.Services.Contract
             GetVersionDetailAsync(
                 int contractId,
                 int versionId,
-                int employeeId)
+                int employeeId,
+                bool canReadTenant = false)
         {
             ValidateContractEmployee(contractId, employeeId);
 
@@ -2756,7 +2765,7 @@ namespace ContractManagement.Domains.Services.Contract
                 .AsNoTracking()
                 .FirstOrDefaultAsync(x =>
                     x.ContractId == contractId
-                    && x.EmployeeId == employeeId);
+                    && (canReadTenant || x.EmployeeId == employeeId));
 
             if (contract == null)
             {
@@ -3103,13 +3112,14 @@ namespace ContractManagement.Domains.Services.Contract
 
         private async Task EnsureContractCommentReadAccessAsync(
             int contractId,
-            int employeeId)
+            int employeeId,
+            bool canReadTenant)
         {
             var contractExists = await _dbContext.TblContracts
                 .AsNoTracking()
                 .AnyAsync(x =>
                     x.ContractId == contractId
-                    && x.EmployeeId == employeeId);
+                    && (canReadTenant || x.EmployeeId == employeeId));
 
             if (!contractExists)
             {

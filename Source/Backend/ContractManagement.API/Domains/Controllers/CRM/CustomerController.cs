@@ -1,4 +1,5 @@
 ﻿using ContractManagement.API.Common.Responses;
+using ContractManagement.API.Common.Security;
 using ContractManagement.API.Domains.DTOs.Requests.Customer;
 using ContractManagement.API.Domains.DTOs.Responses.Customer;
 using ContractManagement.API.Domains.Interfaces.Customer;
@@ -29,6 +30,7 @@ namespace ContractManagement.API.Domains.Controllers.CRM
         /// GET /api/customers?page=1&pageSize=20&keyword=abc&status=1
         /// </summary>
         [HttpGet]
+        [SessionAuthorize(RbacPermissions.CustomerManage)]
         public async Task<IActionResult> GetList(
             [FromQuery] CustomerFilterRequest filter)
         {
@@ -44,6 +46,7 @@ namespace ContractManagement.API.Domains.Controllers.CRM
         /// Lấy chi tiết một khách hàng.
         /// </summary>
         [HttpGet("{id:int}")]
+        [SessionAuthorize(RbacPermissions.CustomerManage)]
         public async Task<IActionResult> GetById(int id)
         {
             var result = await _service.GetByIdAsync(id);
@@ -59,6 +62,7 @@ namespace ContractManagement.API.Domains.Controllers.CRM
         /// Người tạo lấy từ Session EmployeeId.
         /// </summary>
         [HttpPost]
+        [SessionAuthorize(RbacPermissions.CustomerManage)]
         public async Task<IActionResult> Create(
             [FromBody] CreateCustomerRequest request)
         {
@@ -86,6 +90,7 @@ namespace ContractManagement.API.Domains.Controllers.CRM
         /// Cập nhật thông tin khách hàng.
         /// </summary>
         [HttpPut("{id:int}")]
+        [SessionAuthorize(RbacPermissions.CustomerManage)]
         public async Task<IActionResult> Update(
             int id,
             [FromBody] UpdateCustomerRequest request)
@@ -116,6 +121,7 @@ namespace ContractManagement.API.Domains.Controllers.CRM
         /// 0 = Inactive
         /// </summary>
         [HttpPatch("{id:int}/status")]
+        [SessionAuthorize(RbacPermissions.CustomerManage)]
         public async Task<IActionResult> SetStatus(
             int id,
             [FromQuery] byte status)
@@ -126,6 +132,22 @@ namespace ContractManagement.API.Domains.Controllers.CRM
                 ApiResponse<object>.Ok(
                     new { customerId = id, status },
                     "Cập nhật trạng thái khách hàng thành công."));
+        }
+
+        /// <summary>
+        /// Returns only the customer fields needed for contract selection.
+        /// </summary>
+        [HttpGet("lookup")]
+        [SessionAuthorize(RbacPermissions.CustomerLookup)]
+        public async Task<IActionResult> Lookup(
+            [FromQuery] string? keyword,
+            CancellationToken cancellationToken)
+        {
+            var result = await _service.GetLookupAsync(keyword, cancellationToken);
+
+            return Ok(ApiResponse<IReadOnlyList<CustomerLookupResponse>>.Ok(
+                result,
+                "Lấy danh sách chọn khách hàng thành công."));
         }
     }
 }

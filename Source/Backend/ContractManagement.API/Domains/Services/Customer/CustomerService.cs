@@ -86,6 +86,36 @@ namespace ContractManagement.API.Domains.Services.Customer
             };
         }
 
+        public async Task<IReadOnlyList<CustomerLookupResponse>> GetLookupAsync(
+            string? keyword,
+            CancellationToken cancellationToken = default)
+        {
+            var query = _dbContext.TblCustomers.AsNoTracking();
+            var normalizedKeyword = keyword?.Trim();
+
+            if (!string.IsNullOrWhiteSpace(normalizedKeyword))
+            {
+                query = query.Where(x =>
+                    (x.CustomerCode != null && x.CustomerCode.Contains(normalizedKeyword))
+                    || (x.CustomerFullName != null && x.CustomerFullName.Contains(normalizedKeyword))
+                    || (x.CustomerCompany != null && x.CustomerCompany.Contains(normalizedKeyword)));
+            }
+
+            return await query
+                .OrderBy(x => x.CustomerFullName ?? x.CustomerCompany ?? x.CustomerCode)
+                .ThenBy(x => x.CustomerId)
+                .Take(100)
+                .Select(x => new CustomerLookupResponse
+                {
+                    CustomerId = x.CustomerId,
+                    CustomerCode = x.CustomerCode,
+                    CustomerFullName = x.CustomerFullName,
+                    CustomerCompany = x.CustomerCompany,
+                    Status = x.Status
+                })
+                .ToListAsync(cancellationToken);
+        }
+
         public async Task<CustomerResponse> GetByIdAsync(int id)
         {
             var customer = await _dbContext.TblCustomers

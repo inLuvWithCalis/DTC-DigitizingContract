@@ -13,12 +13,29 @@ namespace ContractManagement.Domains.Interfaces.Employee
 
         Task<EmployeeResponse> GetByIdAsync(int id);
 
-        Task<EmployeeResponse> CreateAsync(CreateEmployeeRequest request);
+        Task<List<EmployeeDirectoryResponse>> GetDirectoryAsync();
 
-        Task UpdateAsync(int id, UpdateEmployeeRequest request);
+        Task<EmployeeResponse> CreateManagedEmployeeAsync(
+            int managerEmployeeId,
+            CreateEmployeeRequest request,
+            CancellationToken cancellationToken = default);
 
-        Task ChangePasswordAsync(int id, ChangePasswordRequest request);
+        Task UpdateManagedEmployeeAsync(
+            int managerEmployeeId,
+            int employeeId,
+            UpdateEmployeeRequest request,
+            CancellationToken cancellationToken = default);
 
-        Task SetStatusAsync(int id, byte status);
+        Task ResetManagedEmployeePasswordAsync(
+            int managerEmployeeId,
+            int employeeId,
+            ChangePasswordRequest request,
+            CancellationToken cancellationToken = default);
+
+        Task SetManagedEmployeeStatusAsync(
+            int managerEmployeeId,
+            int employeeId,
+            SetEmployeeStatusRequest request,
+            CancellationToken cancellationToken = default);
     }
 }

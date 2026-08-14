@@ -5,6 +5,7 @@ using ContractManagement.Domains.Interfaces.Employee;
 using ContractManagement.Filter;
 using Microsoft.AspNetCore.Mvc;
 using ContractManagement.API.Common.Enums;
+using ContractManagement.API.Common.Security;
 
 namespace ContractManagement.Domains.Controllers.Admin
 {
@@ -15,7 +16,7 @@ namespace ContractManagement.Domains.Controllers.Admin
     /// </summary>
     [Route("api/admin/employees")]
     [ApiController]
-    [SessionAuthorize]
+    [SessionAuthorize(RbacPermissions.EmployeeManage)]
     public class EmployeeController : ControllerBase
     {
         private readonly IEmployeeService _service;
@@ -64,7 +65,10 @@ namespace ContractManagement.Domains.Controllers.Admin
         public async Task<IActionResult> Create(
             [FromBody] CreateEmployeeRequest request)
         {
-            var result = await _service.CreateAsync(request);
+            var result = await _service.CreateManagedEmployeeAsync(
+                GetManagerEmployeeId(),
+                request,
+                HttpContext.RequestAborted);
 
             return CreatedAtAction(
                 nameof(GetById),
@@ -83,7 +87,11 @@ namespace ContractManagement.Domains.Controllers.Admin
             int id,
             [FromBody] UpdateEmployeeRequest request)
         {
-            await _service.UpdateAsync(id, request);
+            await _service.UpdateManagedEmployeeAsync(
+                GetManagerEmployeeId(),
+                id,
+                request,
+                HttpContext.RequestAborted);
 
             return Ok(
                 ApiResponse<object>.Ok(
@@ -99,7 +107,11 @@ namespace ContractManagement.Domains.Controllers.Admin
             int id,
             [FromBody] ChangePasswordRequest request)
         {
-            await _service.ChangePasswordAsync(id, request);
+            await _service.ResetManagedEmployeePasswordAsync(
+                GetManagerEmployeeId(),
+                id,
+                request,
+                HttpContext.RequestAborted);
 
             return Ok(
                 ApiResponse<object>.Ok(
@@ -116,14 +128,27 @@ namespace ContractManagement.Domains.Controllers.Admin
         [HttpPatch("{id:int}/status")]
         public async Task<IActionResult> SetStatus(
             int id,
-            [FromQuery] byte status)
+            [FromBody] SetEmployeeStatusRequest request)
         {
-            await _service.SetStatusAsync(id, status);
+            await _service.SetManagedEmployeeStatusAsync(
+                GetManagerEmployeeId(),
+                id,
+                request,
+                HttpContext.RequestAborted);
 
             return Ok(
                 ApiResponse<object>.Ok(
-                    new { employeeId = id, status },
+                    new { employeeId = id, status = request.Status },
                     "Cập nhật trạng thái nhân viên thành công."));
+        }
+
+        private int GetManagerEmployeeId()
+        {
+            return EmployeeAuthorizationContext.GetEmployee(HttpContext)?.EmployeeId
+                ?? throw new RbacOperationException(
+                    StatusCodes.Status401Unauthorized,
+                    AuthorizationErrorCodes.AuthenticationRequired,
+                    "Employee login is required.");
         }
     }
 }

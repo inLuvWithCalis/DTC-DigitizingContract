@@ -13,8 +13,10 @@ namespace ContractManagement.Domains.Interfaces.Contract
             UploadContractAttachmentRequest request,
             int uploadedBy);
 
-        Task<List<ContractAttachmentResponse>> GetByContractAsync(int contractId);
+        Task<List<ContractAttachmentResponse>> GetByContractAsync(
+            int contractId,
+            int employeeId);
 
-        Task DeleteAsync(int contractId, int attachmentId);
+        Task DeleteAsync(int contractId, int attachmentId, int employeeId);
     }
 }

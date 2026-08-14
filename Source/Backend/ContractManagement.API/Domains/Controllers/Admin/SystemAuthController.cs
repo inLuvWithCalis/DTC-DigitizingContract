@@ -1,8 +1,11 @@
 ﻿using ContractManagement.Attributes;
+using ContractManagement.API.Common.Security;
+using ContractManagement.API.Domains.Interfaces.Security;
 using ContractManagement.Domains.DTOs.Requests.SystemAuth;
 using ContractManagement.Filter;
 using ContractManagement.Infrastructure.Persistence.Central;
 using ContractManagement.Infrastructure.Persistence.Central.Entities;
+using ContractManagement.Infrastructure.Security;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -16,13 +19,16 @@ public sealed class SystemAuthController : ControllerBase
 {
     private readonly CentralDbContext _centralDbContext;
     private readonly IPasswordHasher<SystemAdmin> _passwordHasher;
+    private readonly ICentralSecurityAuditWriter _securityAuditWriter;
 
     public SystemAuthController(
         CentralDbContext centralDbContext,
-        IPasswordHasher<SystemAdmin> passwordHasher)
+        IPasswordHasher<SystemAdmin> passwordHasher,
+        ICentralSecurityAuditWriter securityAuditWriter)
     {
         _centralDbContext = centralDbContext;
         _passwordHasher = passwordHasher;
+        _securityAuditWriter = securityAuditWriter;
     }
 
     [HttpPost("login")]
@@ -38,10 +44,14 @@ public sealed class SystemAuthController : ControllerBase
 
         if (admin is null)
         {
-            return Unauthorized(new
-            {
-                message = "Invalid username or password."
-            });
+            await WriteLoginAuditAsync(
+                null,
+                AuthorizationAuditResultTypes.Denied,
+                AuthorizationErrorCodes.AuthenticationRequired,
+                cancellationToken);
+            return Unauthorized(new AuthorizationErrorResponse(
+                AuthorizationErrorCodes.AuthenticationRequired,
+                "Invalid username or password."));
         }
 
         var result = _passwordHasher.VerifyHashedPassword(
@@ -51,10 +61,14 @@ public sealed class SystemAuthController : ControllerBase
 
         if (result == PasswordVerificationResult.Failed)
         {
-            return Unauthorized(new
-            {
-                message = "Invalid username or password."
-            });
+            await WriteLoginAuditAsync(
+                admin.SystemAdminId,
+                AuthorizationAuditResultTypes.Denied,
+                AuthorizationErrorCodes.AuthenticationRequired,
+                cancellationToken);
+            return Unauthorized(new AuthorizationErrorResponse(
+                AuthorizationErrorCodes.AuthenticationRequired,
+                "Invalid username or password."));
         }
 
         HttpContext.Session.SetInt32(
@@ -65,6 +79,12 @@ public sealed class SystemAuthController : ControllerBase
             "SystemAdminName",
             admin.FullName);
 
+        await WriteLoginAuditAsync(
+            admin.SystemAdminId,
+            AuthorizationAuditResultTypes.Success,
+            null,
+            cancellationToken);
+
         return Ok(new
         {
             message = "System admin login successful.",
@@ -74,6 +94,7 @@ public sealed class SystemAuthController : ControllerBase
     }
 
     [HttpGet("me")]
+    [SystemAdminAuthorize]
     public async Task<IActionResult> Me(
         CancellationToken cancellationToken)
     {
@@ -106,6 +127,7 @@ public sealed class SystemAuthController : ControllerBase
     }
 
     [HttpPost("logout")]
+    [SystemAdminAuthorize]
     public IActionResult Logout()
     {
         HttpContext.Session.Remove("SystemAdminId");
@@ -116,4 +138,22 @@ public sealed class SystemAuthController : ControllerBase
             message = "System admin logout successful."
         });
     }
+
+    private Task WriteLoginAuditAsync(
+        int? systemAdminId,
+        string result,
+        string? failureCode,
+        CancellationToken cancellationToken) =>
+        _securityAuditWriter.TryWriteAsync(
+            HttpContext,
+            new CentralSecurityAuditWriteRequest(
+                systemAdminId,
+                null,
+                null,
+                AuthorizationAuditActionTypes.SystemAdminLogin,
+                result,
+                "SystemAdmin",
+                systemAdminId?.ToString(),
+                failureCode),
+            cancellationToken);
 }

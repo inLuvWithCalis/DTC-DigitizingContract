@@ -1,4 +1,5 @@
 ﻿using ContractManagement.API.Common.Responses;
+using ContractManagement.API.Common.Security;
 using ContractManagement.Domains.DTOs.Requests.File;
 using ContractManagement.Domains.DTOs.Responses.File;
 using ContractManagement.Domains.Interfaces.File;
@@ -13,14 +14,18 @@ namespace ContractManagement.Domains.Controllers.File
     /// </summary>
     [Route("api/files")]
     [ApiController]
-    [SessionAuthorize]
+    [SessionAuthorize(RbacPermissions.FileAccessByResource)]
     public class FileController : ControllerBase
     {
         private readonly IFileStorageService _fileStorageService;
+        private readonly IFileResourceAuthorizationService _fileAuthorizationService;
 
-        public FileController(IFileStorageService fileStorageService)
+        public FileController(
+            IFileStorageService fileStorageService,
+            IFileResourceAuthorizationService fileAuthorizationService)
         {
             _fileStorageService = fileStorageService;
+            _fileAuthorizationService = fileAuthorizationService;
         }
 
         /// <summary>
@@ -33,7 +38,6 @@ namespace ContractManagement.Domains.Controllers.File
         [HttpPost("upload")]
         public async Task<IActionResult> Upload([FromForm] UploadFileRequest request)
         {
-            Console.WriteLine("API login was called");
             if (!ModelState.IsValid)
             {
                 var errors = ModelState.Values
@@ -48,19 +52,19 @@ namespace ContractManagement.Domains.Controllers.File
             }
 
             // Lấy nhân viên đang login từ Session
-            var employeeId = HttpContext.Session.GetInt32("EmployeeId");
+            var employeeId = GetEmployeeId();
 
-            if (employeeId is null)
-            {
-                throw new UnauthorizedAccessException(
-                    "Bạn chưa đăng nhập hoặc session đã hết hạn.");
-            }
+            await _fileAuthorizationService.EnsureCanWriteByObjectAsync(
+                request.ObjectType,
+                request.ObjectId,
+                employeeId,
+                HttpContext.RequestAborted);
 
             var result = await _fileStorageService.UploadAsync(
                 request.File,
                 request.ObjectType,
                 request.ObjectId,
-                employeeId.Value);
+                employeeId);
 
             return Ok(
                 ApiResponse<FileStorageResponse>.Ok(
@@ -74,6 +78,11 @@ namespace ContractManagement.Domains.Controllers.File
         [HttpGet("{fileId:int}/download")]
         public async Task<IActionResult> Download(int fileId)
         {
+            await _fileAuthorizationService.EnsureCanReadFileAsync(
+                fileId,
+                GetEmployeeId(),
+                HttpContext.RequestAborted);
+
             var result = await _fileStorageService.DownloadAsync(fileId);
 
             if (result is null)
@@ -106,6 +115,12 @@ namespace ContractManagement.Domains.Controllers.File
                 throw new ArgumentException("ObjectId không hợp lệ.");
             }
 
+            await _fileAuthorizationService.EnsureCanReadByObjectAsync(
+                objectType,
+                objectId,
+                GetEmployeeId(),
+                HttpContext.RequestAborted);
+
             var result = await _fileStorageService.GetByObjectAsync(
                 objectType,
                 objectId);
@@ -123,12 +138,28 @@ namespace ContractManagement.Domains.Controllers.File
         [HttpDelete("{fileId:int}")]
         public async Task<IActionResult> Delete(int fileId)
         {
+            await _fileAuthorizationService.EnsureCanDeleteFileAsync(
+                fileId,
+                GetEmployeeId(),
+                HttpContext.RequestAborted);
             await _fileStorageService.DeleteAsync(fileId);
 
             return Ok(
                 ApiResponse<object>.Ok(
                     new { fileId },
                     "Xóa file thành công."));
+        }
+
+        private int GetEmployeeId()
+        {
+            var employeeId = HttpContext.Session.GetInt32("EmployeeId");
+            if (employeeId is null)
+            {
+                throw new UnauthorizedAccessException(
+                    "Bạn chưa đăng nhập hoặc session đã hết hạn.");
+            }
+
+            return employeeId.Value;
         }
     }
 }

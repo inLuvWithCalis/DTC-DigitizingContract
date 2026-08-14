@@ -12,6 +12,28 @@ public sealed class SoftwareSupplyPlaceholderCatalogResponse
     public IReadOnlyList<SoftwareSupplyPlaceholderDefinition> Items { get; set; } = [];
 }
 
+/// <summary>
+/// Minimal current published template version that may be selected for a new contract.
+/// </summary>
+public sealed class AvailableContractTemplateVersionResponse
+{
+    public int TemplateId { get; set; }
+
+    public string TemplateCode { get; set; } = string.Empty;
+
+    public string TemplateName { get; set; } = string.Empty;
+
+    public string? TemplateNameEn { get; set; }
+
+    public TemplateDocumentType DocumentType { get; set; }
+
+    public ContractLanguageMode LanguageMode { get; set; }
+
+    public int TemplateVersionId { get; set; }
+
+    public int VersionNo { get; set; }
+}
+
 public class ContractTemplateResponse
 {
     public int TemplateId { get; set; }

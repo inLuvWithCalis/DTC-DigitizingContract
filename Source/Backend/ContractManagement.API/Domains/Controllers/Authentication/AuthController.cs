@@ -1,4 +1,7 @@
 ﻿using ContractManagement.Domains.DTOs.Requests.Authentication;
+using ContractManagement.API.Common.Security;
+using ContractManagement.API.Domains.DTOs.Responses.Authentication;
+using ContractManagement.Filter;
 using ContractManagement.Infrastructure.MultiTenancy.Interfaces;
 using ContractManagement.Infrastructure.Persistence.Application;
 using ContractManagement.Infrastructure.Persistence.Application.Models;
@@ -37,7 +40,9 @@ namespace ContractManagement.Domains.Controllers.Authentication
             var employee = await _dbDtctechContext.TblEmployees.FirstOrDefaultAsync(e => e.EmployeeAccount == request.AccountName);
 
             // 2. Check if employee exists
-            if (employee == null || string.IsNullOrEmpty(request.Password))
+            if (employee == null
+                || string.IsNullOrEmpty(employee.EmployeePassword)
+                || string.IsNullOrEmpty(request.Password))
             {
                 return Unauthorized(new
                 {
@@ -54,6 +59,24 @@ namespace ContractManagement.Domains.Controllers.Authentication
                 {
                     message = "Invalid account name or password."
                 });
+            }
+
+            if (employee.Status != 1)
+            {
+                return Unauthorized(new AuthorizationErrorResponse(
+                    AuthorizationErrorCodes.EmployeeInactive,
+                    "Employee account is inactive."));
+            }
+
+            if (!EmployeePermissionCatalog.TryGetPermissions(
+                    employee.EmployeeType,
+                    out _))
+            {
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    new AuthorizationErrorResponse(
+                        AuthorizationErrorCodes.PermissionDenied,
+                        "Employee role is not valid for RBAC v1."));
             }
 
             // 4. Set up session or token (this is a placeholder, implement your own logic)
@@ -78,26 +101,31 @@ namespace ContractManagement.Domains.Controllers.Authentication
         }
 
         [HttpGet("me")]
-        public async Task<IActionResult> GetCurrentUsers()
+        [SessionAuthorize]
+        public IActionResult GetCurrentUsers()
         {
-            // 1. Get employee ID from session
-            var employeeId = HttpContext.Session.GetInt32("EmployeeId");
+            var employee = EmployeeAuthorizationContext.GetEmployee(HttpContext);
 
-            // 2. Check if employee ID exists in session
-            if (employeeId == null)
+            if (employee is null)
             {
-                return Unauthorized(new
-                {
-                    message = "User is not logged in."
-                });
+                return Unauthorized(new AuthorizationErrorResponse(
+                    AuthorizationErrorCodes.AuthenticationRequired,
+                    "Employee login is required."));
             }
 
-            // 3. Get employee details from database
-            var employee = await _dbDtctechContext.TblEmployees
-                                                  .FirstOrDefaultAsync(e => e.EmployeeId == employeeId.Value);
+            var tenant = _currentTenant.GetRequiredTenant();
 
-            // 4. Return results
-            return employee == null ? Unauthorized("User not found!") : Ok(employee);
+            return Ok(new AuthMeResponse(
+                employee.EmployeeId,
+                employee.Account,
+                employee.FullName,
+                (byte)employee.EmployeeType,
+                employee.EmployeeType.ToString(),
+                tenant.TenantId,
+                tenant.TenantCode,
+                tenant.TenantName,
+                RbacPermissions.Version,
+                employee.Permissions));
         }
 
         [HttpPost("logout")]

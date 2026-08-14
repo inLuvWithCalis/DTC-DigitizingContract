@@ -56,4 +56,6 @@ public partial class TblEmployee
     public string? UserRoles { get; set; }
 
     public int? WorkTypeId { get; set; }
+
+    public byte[] RowVersion { get; set; } = null!;
 }

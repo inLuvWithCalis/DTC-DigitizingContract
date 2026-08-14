@@ -1,4 +1,6 @@
 ﻿using ContractManagement.API.Common.Responses;
+using ContractManagement.API.Common.Enums;
+using ContractManagement.API.Common.Security;
 using ContractManagement.API.Domains.DTOs.Requests.Contract;
 using ContractManagement.API.Domains.DTOs.Responses.Contract;
 using ContractManagement.Domains.Interfaces.Contract;
@@ -52,7 +54,8 @@ namespace ContractManagement.Domains.Controllers.Contract
 
             var result = await _contractService.GetListAsync(
                 filter,
-                employeeId.Value);
+                employeeId.Value,
+                CanReadTenantContracts());
 
             return Ok(
                 ApiResponse<PagedResult<ContractListItemResponse>>.Ok(
@@ -93,7 +96,8 @@ namespace ContractManagement.Domains.Controllers.Contract
             var result =
                 await _contractService.GetEligibleParentsAsync(
                     filter,
-                    employeeId.Value);
+                    employeeId.Value,
+                    CanReadTenantContracts());
 
             return Ok(
                 ApiResponse<
@@ -256,7 +260,8 @@ namespace ContractManagement.Domains.Controllers.Contract
 
             var result = await _contractService.GetDetailAsync(
                 contractId,
-                employeeId.Value);
+                employeeId.Value,
+                CanReadTenantContracts());
 
             return Ok(
                 ApiResponse<ContractDetailResponse>.Ok(
@@ -404,7 +409,8 @@ namespace ContractManagement.Domains.Controllers.Contract
 
             var result = await _contractService.GetRootCommentsAsync(
                 contractId,
-                employeeId.Value);
+                employeeId.Value,
+                CanReadTenantContracts());
 
             return Ok(
                 ApiResponse<
@@ -442,7 +448,8 @@ namespace ContractManagement.Domains.Controllers.Contract
             var result = await _contractService.GetCommentRepliesAsync(
                 contractId,
                 parentCommentId,
-                employeeId.Value);
+                employeeId.Value,
+                CanReadTenantContracts());
 
             return Ok(
                 ApiResponse<
@@ -591,7 +598,8 @@ namespace ContractManagement.Domains.Controllers.Contract
 
             var result = await _contractService.GetVersionHistoryAsync(
                 contractId,
-                employeeId.Value);
+                employeeId.Value,
+                CanReadTenantContracts());
 
             return Ok(
                 ApiResponse<IReadOnlyList<ContractVersionHistoryResponse>>.Ok(
@@ -628,7 +636,8 @@ namespace ContractManagement.Domains.Controllers.Contract
             var result = await _contractService.GetVersionDetailAsync(
                 contractId,
                 versionId,
-                employeeId.Value);
+                employeeId.Value,
+                CanReadTenantContracts());
 
             return Ok(
                 ApiResponse<ContractVersionDetailResponse>.Ok(
@@ -809,5 +818,9 @@ namespace ContractManagement.Domains.Controllers.Contract
 
         private string GetPublicBaseUrl() =>
             $"{Request.Scheme}://{Request.Host.Value}";
+
+        private bool CanReadTenantContracts() =>
+            EmployeeAuthorizationContext.GetEmployee(HttpContext)?.EmployeeType
+            == EmployeeType.Manager;
     }
 }

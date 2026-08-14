@@ -22,6 +22,93 @@ namespace ContractManagement.Infrastructure.Migrations.Central
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Central.Entities.CentralSecurityAudit", b =>
+                {
+                    b.Property<long>("CentralSecurityAuditId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("CentralSecurityAuditId"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<int?>("ActorSystemAdminId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CorrelationId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("FailureCode")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(45)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(45)");
+
+                    b.Property<byte?>("NewEmployeeType")
+                        .HasColumnType("tinyint");
+
+                    b.Property<byte?>("NewStatus")
+                        .HasColumnType("tinyint");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<byte?>("PreviousEmployeeType")
+                        .HasColumnType("tinyint");
+
+                    b.Property<byte?>("PreviousStatus")
+                        .HasColumnType("tinyint");
+
+                    b.Property<string>("Result")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("TargetId")
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("TargetType")
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<string>("TenantCode")
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<int?>("TenantId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
+                    b.HasKey("CentralSecurityAuditId");
+
+                    b.HasIndex("ActorSystemAdminId");
+
+                    b.HasIndex("OccurredAt");
+
+                    b.HasIndex("TenantId", "OccurredAt");
+
+                    b.ToTable("CentralSecurityAudits", (string)null);
+                });
+
             modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Central.Entities.SystemAdmin", b =>
                 {
                     b.Property<int>("SystemAdminId")

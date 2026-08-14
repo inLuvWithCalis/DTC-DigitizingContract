@@ -12,6 +12,10 @@ namespace ContractManagement.API.Domains.Interfaces.Customer
     {
         Task<PagedResult<CustomerResponse>> GetListAsync(CustomerFilterRequest filter);
 
+        Task<IReadOnlyList<CustomerLookupResponse>> GetLookupAsync(
+            string? keyword,
+            CancellationToken cancellationToken = default);
+
         Task<CustomerResponse> GetByIdAsync(int id);
 
         Task<CustomerResponse> CreateAsync(CreateCustomerRequest request, int createdBy);

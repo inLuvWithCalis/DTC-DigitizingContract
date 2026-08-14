@@ -19,6 +19,7 @@ public partial class DbDtctechContext
         AssignSyntheticRowVersionsForInMemory();
         ValidateContractAuditEntries();
         ValidateContractTemplateAuditEntries();
+        ValidateAuthorizationAuditEntries();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
@@ -38,6 +39,7 @@ public partial class DbDtctechContext
         AssignSyntheticRowVersionsForInMemory();
         ValidateContractAuditEntries();
         ValidateContractTemplateAuditEntries();
+        ValidateAuthorizationAuditEntries();
         return base.SaveChangesAsync(
             acceptAllChangesOnSuccess,
             cancellationToken);
@@ -60,6 +62,13 @@ public partial class DbDtctechContext
                 property.CurrentValue = BitConverter.GetBytes(
                     Interlocked.Increment(ref _syntheticRowVersionSeed));
             }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<TblEmployee>()
+                     .Where(x => x.State == EntityState.Modified))
+        {
+            entry.Entity.RowVersion = BitConverter.GetBytes(
+                Interlocked.Increment(ref _syntheticRowVersionSeed));
         }
     }
 
@@ -135,6 +144,16 @@ public partial class DbDtctechContext
                      .Where(entry => entry.State == EntityState.Added))
         {
             ValidateNewContractAudit(entry.Entity);
+        }
+    }
+
+    private void ValidateAuthorizationAuditEntries()
+    {
+        if (ChangeTracker.Entries<TblAuthorizationAudit>().Any(entry =>
+                entry.State is EntityState.Modified or EntityState.Deleted))
+        {
+            throw new InvalidOperationException(
+                "Authorization audit is append-only and cannot be updated or deleted.");
         }
     }
 

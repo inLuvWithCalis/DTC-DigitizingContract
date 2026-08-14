@@ -1,4 +1,5 @@
 using ContractManagement.API.Common.Responses;
+using ContractManagement.API.Common.Security;
 using ContractManagement.API.Domains.DTOs.Requests.Catalog;
 using ContractManagement.API.Domains.DTOs.Responses.Catalog;
 using ContractManagement.API.Domains.Interfaces.Catalog;
@@ -23,6 +24,7 @@ namespace ContractManagement.API.Domains.Controllers.Catalog
         }
 
         [HttpGet]
+        [SessionAuthorize(RbacPermissions.CatalogRead)]
         public async Task<IActionResult> GetList(
             [FromQuery] CategoryFilterRequest filter)
         {
@@ -37,6 +39,7 @@ namespace ContractManagement.API.Domains.Controllers.Catalog
         /// Lấy danh sách danh mục cha có danh mục con.
         /// </summary>
         [HttpGet("parents")]
+        [SessionAuthorize(RbacPermissions.CatalogRead)]
         public async Task<IActionResult> GetParents([FromQuery] CategoryFilterRequest filter)
         {
             var result = await _service.GetParentsAsync(filter);
@@ -47,6 +50,7 @@ namespace ContractManagement.API.Domains.Controllers.Catalog
         }
 
         [HttpGet("{id:int}")]
+        [SessionAuthorize(RbacPermissions.CatalogRead)]
         public async Task<IActionResult> GetById(int id)
         {
             var categoryId = ValidateCategoryId(id);
@@ -59,6 +63,7 @@ namespace ContractManagement.API.Domains.Controllers.Catalog
         }
 
         [HttpPost]
+        [SessionAuthorize(RbacPermissions.CatalogManage)]
         public async Task<IActionResult> Create(
             [FromBody] CreateCategoryRequest request)
         {
@@ -73,6 +78,7 @@ namespace ContractManagement.API.Domains.Controllers.Catalog
         }
 
         [HttpPut("{id:int}")]
+        [SessionAuthorize(RbacPermissions.CatalogManage)]
         public async Task<IActionResult> Update(
             int id,
             [FromBody] UpdateCategoryRequest request)
@@ -87,6 +93,7 @@ namespace ContractManagement.API.Domains.Controllers.Catalog
         }
 
         [HttpDelete("{id:int}")]
+        [SessionAuthorize(RbacPermissions.CatalogManage)]
         public async Task<IActionResult> Delete(int id)
         {
             var categoryId = ValidateCategoryId(id);

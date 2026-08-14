@@ -99,6 +99,10 @@ public static class DependencyInjection
             ITenantDatabaseInitializer,
             EfCoreTenantDatabaseInitializer>();
 
+        services.AddSingleton<
+            ITenantDbContextFactory,
+            TenantDbContextFactory>();
+
         services.AddScoped<
             ITenantProvisioningService,
             TenantProvisioningService>();

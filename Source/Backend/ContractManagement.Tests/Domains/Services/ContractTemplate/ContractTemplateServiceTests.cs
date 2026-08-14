@@ -175,6 +175,73 @@ public sealed class ContractTemplateServiceTests
     }
 
     [Fact]
+    public async Task AvailableLookup_ReturnsOnlyActiveCurrentPublishedVersions()
+    {
+        await using var context = CreateContext();
+        await SeedEmployeesAsync(context);
+        await SeedPublishedTemplateAsync(context);
+
+        context.TblContractTemplates.AddRange(
+            new TblContractTemplate
+            {
+                TemplateId = 10,
+                TemplateCode = "INACTIVE",
+                TemplateName = "Inactive template",
+                DocumentType = (byte)TemplateDocumentType.SoftwareSupplyContract,
+                LanguageMode = (byte)ContractLanguageMode.Vietnamese,
+                IsActive = false,
+                CurrentPublishedVersionId = 11,
+                CreatedEmployeeId = AdminOfficerId,
+                CreatedDate = DateTime.UtcNow,
+                RowVersion = [10, 10, 10, 10, 10, 10, 10, 10]
+            },
+            new TblContractTemplate
+            {
+                TemplateId = 20,
+                TemplateCode = "STALE",
+                TemplateName = "Stale current version",
+                DocumentType = (byte)TemplateDocumentType.SoftwareSupplyContract,
+                LanguageMode = (byte)ContractLanguageMode.Vietnamese,
+                IsActive = true,
+                CurrentPublishedVersionId = 21,
+                CreatedEmployeeId = AdminOfficerId,
+                CreatedDate = DateTime.UtcNow,
+                RowVersion = [20, 20, 20, 20, 20, 20, 20, 20]
+            });
+        context.TblContractTemplateVersions.AddRange(
+            new TblContractTemplateVersion
+            {
+                TemplateVersionId = 11,
+                TemplateId = 10,
+                VersionNo = 1,
+                Status = (byte)TemplateVersionStatus.Published,
+                ValidationStatus = (byte)TemplateValidationStatus.Valid,
+                CreatedEmployeeId = AdminOfficerId,
+                CreatedDate = DateTime.UtcNow,
+                RowVersion = [11, 11, 11, 11, 11, 11, 11, 11]
+            },
+            new TblContractTemplateVersion
+            {
+                TemplateVersionId = 21,
+                TemplateId = 20,
+                VersionNo = 1,
+                Status = (byte)TemplateVersionStatus.Retired,
+                ValidationStatus = (byte)TemplateValidationStatus.Valid,
+                CreatedEmployeeId = AdminOfficerId,
+                CreatedDate = DateTime.UtcNow,
+                RowVersion = [21, 21, 21, 21, 21, 21, 21, 21]
+            });
+        await context.SaveChangesAsync();
+
+        var result = await CreateService(context).ListAvailableAsync();
+
+        var available = Assert.Single(result);
+        Assert.Equal(1, available.TemplateId);
+        Assert.Equal(2, available.TemplateVersionId);
+        Assert.Equal("PUBLISHED", available.TemplateCode);
+    }
+
+    [Fact]
     public async Task ReorderRejectsMissingDuplicateAndStaleRows()
     {
         await using var context = CreateContext();

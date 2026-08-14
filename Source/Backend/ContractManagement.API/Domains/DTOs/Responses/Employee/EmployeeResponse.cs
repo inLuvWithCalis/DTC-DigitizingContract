@@ -30,5 +30,7 @@
         public DateTime? DateCreated { get; set; }
 
         public DateTime? DateModified { get; set; }
+
+        public string RowVersion { get; set; } = string.Empty;
     }
 }

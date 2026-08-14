@@ -2,6 +2,7 @@
 using ContractManagement.API.Domains.DTOs.Responses.Department;
 using ContractManagement.API.Domains.Interfaces.Department;
 using ContractManagement.API.Common.Responses;
+using ContractManagement.API.Common.Security;
 using ContractManagement.Filter;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,7 +10,7 @@ namespace ContractManagement.API.Domains.Controllers.Admin
 {
     [Route("api/admin/departments")]
     [ApiController]
-    [SessionAuthorize]
+    [SessionAuthorize(RbacPermissions.DepartmentManage)]
     public class DepartmentController : ControllerBase
     {
         private readonly IDepartmentService _service;

@@ -58,6 +58,31 @@ public sealed class ContractTemplateService : IContractTemplateService
         _logger = logger;
     }
 
+    public async Task<IReadOnlyList<AvailableContractTemplateVersionResponse>>
+        ListAvailableAsync(CancellationToken cancellationToken = default)
+    {
+        return await (
+            from version in _dbContext.TblContractTemplateVersions.AsNoTracking()
+            join template in _dbContext.TblContractTemplates.AsNoTracking()
+                on version.TemplateId equals template.TemplateId
+            where template.IsActive
+                  && template.CurrentPublishedVersionId == version.TemplateVersionId
+                  && version.Status == (byte)TemplateVersionStatus.Published
+            orderby template.TemplateCode, version.VersionNo
+            select new AvailableContractTemplateVersionResponse
+            {
+                TemplateId = template.TemplateId,
+                TemplateCode = template.TemplateCode,
+                TemplateName = template.TemplateName,
+                TemplateNameEn = template.TemplateNameEn,
+                DocumentType = (TemplateDocumentType)template.DocumentType,
+                LanguageMode = (ContractLanguageMode)template.LanguageMode,
+                TemplateVersionId = version.TemplateVersionId,
+                VersionNo = version.VersionNo
+            })
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<SoftwareSupplyPlaceholderCatalogResponse>
         GetPlaceholderCatalogAsync(
         int employeeId,

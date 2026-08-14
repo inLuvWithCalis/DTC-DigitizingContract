@@ -69,6 +69,7 @@ interface ContractAttachmentsProps {
   contractId: number;
   initialAttachments?: ContractAttachmentItem[];
   mockMode?: boolean;
+  canManage?: boolean;
 }
 
 function getExtension(fileName: string) {
@@ -120,6 +121,7 @@ export function ContractAttachments({
   contractId,
   initialAttachments = [],
   mockMode = true,
+  canManage = true,
 }: ContractAttachmentsProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [attachments, setAttachments] =
@@ -153,6 +155,7 @@ export function ContractAttachments({
   }, [loadAttachments]);
 
   const validateAndSelectFile = (file?: File) => {
+    if (!canManage) return;
     if (!file) return;
 
     if (file.size === 0) {
@@ -181,10 +184,12 @@ export function ContractAttachments({
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsDragging(false);
+    if (!canManage) return;
     validateAndSelectFile(event.dataTransfer.files?.[0]);
   };
 
   const handleUpload = async () => {
+    if (!canManage) return;
     if (!selectedFile) {
       toast.error("Vui lòng chọn file cần đính kèm.");
       return;
@@ -241,6 +246,7 @@ export function ContractAttachments({
   };
 
   const handleDelete = async (attachment: ContractAttachmentItem) => {
+    if (!canManage) return;
     setDeletingId(attachment.id);
     try {
       if (!mockMode) {
@@ -324,6 +330,7 @@ export function ContractAttachments({
               </p>
               <Button
                 className="mt-5"
+                disabled={!canManage}
                 onClick={() => inputRef.current?.click()}
               >
                 <Plus className="size-4" />
@@ -386,7 +393,7 @@ export function ContractAttachments({
                         size="icon"
                         title="Xóa tài liệu"
                         className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        disabled={deletingId === attachment.id}
+                        disabled={!canManage || deletingId === attachment.id}
                         onClick={() => handleDelete(attachment)}
                       >
                         {deletingId === attachment.id ? (
@@ -415,19 +422,24 @@ export function ContractAttachments({
             className="hidden"
             accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip"
             onChange={handleFileChange}
+            disabled={!canManage}
           />
 
           <div
             role="button"
-            tabIndex={0}
+            tabIndex={canManage ? 0 : -1}
+            aria-disabled={!canManage}
             className={`rounded-2xl border-2 border-dashed p-6 text-center transition-colors ${
               isDragging
                 ? "border-primary bg-primary/5"
                 : "border-border hover:border-primary/50 hover:bg-muted/30"
             }`}
-            onClick={() => inputRef.current?.click()}
+            onClick={() => canManage && inputRef.current?.click()}
             onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
+              if (
+                canManage &&
+                (event.key === "Enter" || event.key === " ")
+              ) {
                 inputRef.current?.click();
               }
             }}
@@ -482,6 +494,7 @@ export function ContractAttachments({
             <p className="text-sm font-medium">Loại chứng từ</p>
             <Select
               value={String(documentType)}
+              disabled={!canManage}
               onValueChange={(value) =>
                 setDocumentType(Number(value) as ContractDocumentType)
               }
@@ -501,7 +514,7 @@ export function ContractAttachments({
 
           <Button
             className="w-full"
-            disabled={!selectedFile || isUploading}
+            disabled={!canManage || !selectedFile || isUploading}
             onClick={handleUpload}
           >
             {isUploading ? (
@@ -527,12 +540,15 @@ import { ContractDetailResponse } from "@/services/contract-api";
 
 export function ContractDocuments({
   contract,
+  canManage,
 }: {
   contract: ContractDetailResponse;
+  canManage: boolean;
 }) {
   return (
     <ContractAttachments
       contractId={contract.contractId}
+      canManage={canManage}
       mockMode={false}
     />
   );

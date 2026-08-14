@@ -45,6 +45,8 @@ import {
   ServiceTypeResponse,
 } from "@/services/catalog/service-types-api";
 import { ServiceFormModal } from "./service-form-modal";
+import { usePermission } from "@/hooks/use-permission";
+import { RBAC_PERMISSIONS } from "@/lib/rbac";
 
 function ServiceBulkActions({
   selectedRows,
@@ -82,6 +84,8 @@ function ServiceBulkActions({
 }
 
 export default function ServiceListPage() {
+  const { can } = usePermission();
+  const canManage = can(RBAC_PERMISSIONS.catalogManage);
   const [services, setServices] = useState<ServiceResponse[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -336,7 +340,7 @@ export default function ServiceListPage() {
               primaryIcon={<Eye className="w-4 h-4" />}
               onPrimaryClick={() => setViewingItem(item)}
               isLoading={loadingId === item.serviceId}
-              menuItems={[
+              menuItems={canManage ? [
                 {
                   label: "Chỉnh sửa",
                   icon: <UserCog className="w-4 h-4" />,
@@ -356,13 +360,13 @@ export default function ServiceListPage() {
                   isDestructive: true,
                   onClick: () => setDeleteId(item.serviceId),
                 },
-              ]}
+              ] : []}
             />
           );
         },
       },
     ],
-    [loadingId],
+    [canManage, loadingId],
   );
 
   const activeCount = useMemo(
@@ -432,14 +436,14 @@ export default function ServiceListPage() {
             </p>
           </div>
 
-          <Button
+          {canManage && <Button
             onClick={() => {
               setEditingItem(null);
               setIsFormOpen(true);
             }}
           >
             <Plus className="w-4 h-4 mr-2" /> Thêm mới
-          </Button>
+          </Button>}
         </div>
 
         <SummaryCards items={summaryItems} isLoading={isLoading} />
@@ -459,12 +463,12 @@ export default function ServiceListPage() {
               onRowClick={(row) => setViewingItem(row)}
               searchValue={searchTerm}
               onSearchChange={(value) => setSearchTerm(value)}
-              bulkActions={(selectedRows, resetSelection) => (
+              bulkActions={canManage ? (selectedRows, resetSelection) => (
                 <ServiceBulkActions
                   selectedRows={selectedRows}
                   resetSelection={resetSelection}
                 />
-              )}
+              ) : undefined}
               mobileCardRenderer={(row, { isSelected, actionCell }) => {
                 const item = row.original;
                 const isActive = item.status === ServiceStatus.Active;
@@ -541,7 +545,7 @@ export default function ServiceListPage() {
           titleClassName="text-destructive"
         />
 
-        <ServiceFormModal
+        {canManage && <ServiceFormModal
           isOpen={isFormOpen}
           onClose={() => {
             setIsFormOpen(false);
@@ -549,7 +553,7 @@ export default function ServiceListPage() {
           }}
           onSuccess={fetchServices}
           item={editingItem}
-        />
+        />}
 
         <ServiceFormModal
           isOpen={!!viewingItem}

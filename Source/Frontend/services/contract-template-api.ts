@@ -190,6 +190,17 @@ export interface ContractTemplateResponse {
   rowVersion: string;
 }
 
+export interface AvailableContractTemplateVersionResponse {
+  templateId: number;
+  templateCode: string;
+  templateName: string;
+  templateNameEn?: string | null;
+  documentType: TemplateDocumentType;
+  languageMode: ContractLanguageMode;
+  templateVersionId: number;
+  versionNo: number;
+}
+
 export interface ContractTemplateVersionSummaryResponse {
   templateVersionId: number;
   versionNo: number;
@@ -268,6 +279,10 @@ export interface PagedResult<T> {
 const BASE_URL = "/api/contract-templates";
 
 export const contractTemplateApi = {
+  getAvailable: () =>
+    axiosClient.get<unknown, AvailableContractTemplateVersionResponse[]>(
+      `${BASE_URL}/available`,
+    ),
   getPlaceholderCatalog: () =>
     axiosClient.get<unknown, SoftwareSupplyPlaceholderCatalogResponse>(
       `${BASE_URL}/placeholder-catalog`,

@@ -1,19 +1,13 @@
 "use client";
 
-import { ScrollText, ShieldAlert } from "lucide-react";
+import { ScrollText } from "lucide-react";
 
 import { ContractAuditLog } from "@/components/contracts/contract-audit-log";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Header } from "@/components/ui/custom/header";
-import { useAuthStore } from "@/hooks/use-auth-store";
-import { EmployeeType } from "@/services/employees-api";
+import { PermissionGuard } from "@/components/auth/permission-guard";
+import { RBAC_PERMISSIONS } from "@/lib/rbac";
 
 export default function ContractAuditsPage() {
-  const user = useAuthStore((state) => state.user);
-  const canViewTenantAudits =
-    user?.employeeType === EmployeeType.Manager ||
-    user?.employeeType === EmployeeType.AdminOfficer;
-
   return (
     <>
       <Header title="Nhật ký hợp đồng" />
@@ -34,19 +28,9 @@ export default function ContractAuditsPage() {
             </div>
           </div>
 
-          {canViewTenantAudits ? (
+          <PermissionGuard permission={RBAC_PERMISSIONS.contractAuditReadTenant}>
             <ContractAuditLog mode="tenant" />
-          ) : (
-            <Alert variant="destructive">
-              <ShieldAlert />
-              <AlertTitle>Không có quyền truy cập</AlertTitle>
-              <AlertDescription>
-                Chỉ Manager hoặc Admin Officer có thể xem nhật ký hợp đồng toàn
-                đơn vị. Bạn vẫn có thể xem lịch sử trong từng hợp đồng mình phụ
-                trách.
-              </AlertDescription>
-            </Alert>
-          )}
+          </PermissionGuard>
         </div>
       </div>
     </>

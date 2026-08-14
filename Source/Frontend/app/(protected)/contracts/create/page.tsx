@@ -10,7 +10,6 @@ import {
   FileSignature,
   FileText,
   Package,
-  Pencil,
   Save,
   ShieldCheck,
   Sparkles,
@@ -46,7 +45,6 @@ import { DateRangeFilter } from "@/components/ui/custom/date-range-filter";
 import { DecimalInput } from "@/components/ui/custom/decimal-input";
 import { IntegerInput } from "@/components/ui/custom/integer-input";
 import { format } from "date-fns";
-import { CreateContractTermsMock } from "@/components/contracts/create-contract-terms-mock";
 import { CustomerFormModal } from "@/app/(protected)/customers/customer-form-modal";
 import { ProductFormModal } from "@/app/(protected)/catalog/products/product-form-modal";
 
@@ -66,19 +64,32 @@ import {
   calculateContractItemAmounts,
   calculateContractTotals,
 } from "@/lib/contract-finance";
-import { customerApi, CustomerResponse } from "@/services/customers-api";
-import { employeeApi, EmployeeResponse } from "@/services/employees-api";
+import {
+  customerApi,
+  CustomerResponse,
+  type CustomerLookupResponse,
+  CustomerStatus,
+} from "@/services/customers-api";
+import {
+  employeeApi,
+  type EmployeeDirectoryResponse,
+} from "@/services/employees-api";
 import {
   productApi,
   ProductResponse,
 } from "@/services/catalog/products-api";
-import { serviceApi } from "@/services/catalog/services-api";
 import {
-  cloneMockTerms,
-  MockContractTerm,
-  mockContractTemplates,
-} from "@/services/contract-templates-mock";
+  serviceApi,
+  type ServiceResponse,
+} from "@/services/catalog/services-api";
+import {
+  contractTemplateApi,
+  TemplateDocumentType,
+  type AvailableContractTemplateVersionResponse,
+} from "@/services/contract-template-api";
 import { useAuthStore } from "@/hooks/use-auth-store";
+import { usePermission } from "@/hooks/use-permission";
+import { RBAC_PERMISSIONS } from "@/lib/rbac";
 
 const steps = [
   { title: "Khách hàng & Mẫu", description: "Thiết lập cơ bản" },
@@ -102,6 +113,32 @@ type CatalogItem = {
   vatPercent: number;
 };
 
+type CustomerOption = CustomerLookupResponse;
+type EmployeeOption = EmployeeDirectoryResponse;
+
+type AvailableTemplateView = AvailableContractTemplateVersionResponse & {
+  versionId: number;
+  name: string;
+  version: string;
+  description: string;
+  contractType: ContractType;
+};
+
+const getContractTypeFromTemplateDocument = (
+  documentType: TemplateDocumentType,
+): ContractType | null => {
+  switch (documentType) {
+    case TemplateDocumentType.SoftwareSupplyContract:
+      return ContractType.SoftwareSupply;
+    case TemplateDocumentType.SoftwareMaintenanceContract:
+      return ContractType.SoftwareMaintenance;
+    case TemplateDocumentType.SoftwareUpkeepContract:
+      return ContractType.SoftwareUpkeep;
+    default:
+      return null;
+  }
+};
+
 const mapProductToCatalogItem = (product: ProductResponse): CatalogItem => ({
   id: `p-${product.productId}`,
   originalId: product.productId,
@@ -117,13 +154,25 @@ const mapProductToCatalogItem = (product: ProductResponse): CatalogItem => ({
   vatPercent: 10,
 });
 
-const formatCustomerOption = (customer: CustomerResponse) =>
+const mapServiceToCatalogItem = (service: ServiceResponse): CatalogItem => ({
+  id: `s-${service.serviceId}`,
+  originalId: service.serviceId,
+  itemName: service.serviceName || "Dịch vụ không tên",
+  itemNameEn: "",
+  itemType: ContractItemType.Service,
+  unitPrice: service.servicePrice || 0,
+  quantity: 1,
+  discountMode: ContractItemDiscountMode.None,
+  discountPercent: 0,
+  fixedDiscountAmount: 0,
+  isTaxable: true,
+  vatPercent: 10,
+});
+
+const formatCustomerOption = (customer: CustomerOption) =>
   [
-    customer.customerTaxCode ? `MST: ${customer.customerTaxCode}` : null,
+    customer.customerCode || null,
     customer.customerCompany || customer.customerFullName || "Chưa có tên",
-    customer.customerMobile || customer.customerPhone
-      ? `ĐT: ${customer.customerMobile || customer.customerPhone}`
-      : null,
   ]
     .filter(Boolean)
     .join(" • ");
@@ -146,63 +195,68 @@ const formatCurrency = (amount: number, currencyCode: string) => {
 export default function CreateContractPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
+  const { can } = usePermission();
+  const canManageCustomers = can(RBAC_PERMISSIONS.customerManage);
+  const canManageCatalog = can(RBAC_PERMISSIONS.catalogManage);
 
   // -- STATES --
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [customers, setCustomers] = useState<CustomerResponse[]>([]);
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
 
-  const [employees, setEmployees] = useState<EmployeeResponse[]>([]);
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(true);
 
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
+  const [catalogResultIds, setCatalogResultIds] = useState<string[]>([]);
   const [isLoadingCatalog, setIsLoadingCatalog] = useState(true);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [availableTemplates, setAvailableTemplates] = useState<
+    AvailableTemplateView[]
+  >([]);
 
   // Fetch data
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [customerRes, productRes, serviceRes, employeeRes] =
-          await Promise.all([
-            customerApi.getList({ page: 1, pageSize: 100 }),
-            productApi.getList({ page: 1, pageSize: 100 }),
-            serviceApi.getList({ page: 1, pageSize: 100 }),
-            employeeApi.getList({ page: 1, pageSize: 100 }),
-          ]);
+        const [customerRes, employeeRes, templateRes] = await Promise.all([
+          customerApi.lookup(),
+          employeeApi.getDirectory(),
+          contractTemplateApi.getAvailable(),
+        ]);
 
-        setCustomers(customerRes.items);
-        setEmployees(employeeRes.items || []);
-
-        const mappedProducts: CatalogItem[] = productRes.items.map(
-          mapProductToCatalogItem,
+        setCustomers(
+          customerRes.filter((customer) => customer.status === CustomerStatus.Active),
+        );
+        setEmployees(employeeRes);
+        setAvailableTemplates(
+          templateRes.flatMap((template) => {
+            const mappedContractType = getContractTypeFromTemplateDocument(
+              template.documentType,
+            );
+            return mappedContractType === null
+              ? []
+              : [
+                  {
+                    ...template,
+                    versionId: template.templateVersionId,
+                    name: template.templateName,
+                    version: String(template.versionNo),
+                    description: "Phiên bản đã phát hành, sẵn sàng tạo hợp đồng.",
+                    contractType: mappedContractType,
+                  },
+                ];
+          }),
         );
 
-        const mappedServices: CatalogItem[] = serviceRes.items.map((s) => ({
-          id: `s-${s.serviceId}`,
-          originalId: s.serviceId,
-          itemName: s.serviceName || "Dịch vụ không tên",
-          itemNameEn: "",
-          itemType: ContractItemType.Service,
-          unitPrice: s.servicePrice || 0,
-          quantity: 1,
-          discountMode: ContractItemDiscountMode.None,
-          discountPercent: 0,
-          fixedDiscountAmount: 0,
-          isTaxable: true,
-          vatPercent: 10,
-        }));
-
-        setCatalogItems([...mappedProducts, ...mappedServices]);
       } catch (err) {
         console.error("Failed to fetch data:", err);
       } finally {
         setIsLoadingCustomers(false);
         setIsLoadingEmployees(false);
-        setIsLoadingCatalog(false);
       }
     };
     fetchData();
@@ -229,28 +283,10 @@ export default function CreateContractPage() {
   const handleAssignToMe = () => {
     if (!user?.employeeId) return;
 
-    setEmployees((currentEmployees) => {
-      const currentUserExists = currentEmployees.some(
-        (employee) => employee.employeeId === user.employeeId,
-      );
-
-      if (currentUserExists) return currentEmployees;
-
-      return [
-        {
-          employeeId: user.employeeId,
-          employeeCode: user.employeeCode,
-          employeeAccount: user.employeeAccount,
-          employeeFullName: user.employeeFullName,
-          employeeMobile: user.employeeMobile,
-          employeeEmail: user.employeeEmail,
-          departmentId: user.departmentId,
-          status: user.status,
-        },
-        ...currentEmployees,
-      ];
-    });
-    setResponsibleEmployeeId(String(user.employeeId));
+    const currentUserExists = employees.some(
+      (employee) => employee.employeeId === user.employeeId,
+    );
+    if (currentUserExists) setResponsibleEmployeeId(String(user.employeeId));
   };
   const [contractType, setContractType] = useState<ContractType>(
     ContractType.SoftwareSupply,
@@ -273,15 +309,13 @@ export default function CreateContractPage() {
     "Triển khai hệ thống quản lý hợp đồng điện tử",
   );
   const [contractTitleEn, setContractTitleEn] = useState("");
-  const [draftTerms, setDraftTerms] = useState<MockContractTerm[]>([]);
-  const [hasEditedTerms, setHasEditedTerms] = useState(false);
 
   const filteredTemplates = useMemo(() => {
     const normalizedSearch = templateSearch.trim().toLocaleLowerCase("vi");
 
-    if (!normalizedSearch) return mockContractTemplates;
+    if (!normalizedSearch) return availableTemplates;
 
-    return mockContractTemplates.filter((template) =>
+    return availableTemplates.filter((template) =>
       [
         template.name,
         template.templateCode,
@@ -292,7 +326,7 @@ export default function CreateContractPage() {
         value.toLocaleLowerCase("vi").includes(normalizedSearch),
       ),
     );
-  }, [templateSearch]);
+  }, [availableTemplates, templateSearch]);
 
   const templateTotalPages = Math.max(
     1,
@@ -340,8 +374,84 @@ export default function CreateContractPage() {
   const [itemFilter, setItemFilter] = useState<"all" | "product" | "service">(
     "all",
   );
+  const [catalogSearch, setCatalogSearch] = useState("");
+  const [debouncedCatalogSearch, setDebouncedCatalogSearch] = useState("");
   const [catalogPage, setCatalogPage] = useState(1);
   const catalogPageSize = 5;
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedCatalogSearch(catalogSearch.trim());
+    }, 400);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [catalogSearch]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const fetchCatalogItems = async () => {
+      setIsLoadingCatalog(true);
+      setCatalogResultIds([]);
+
+      try {
+        const requestParams = {
+          page: 1,
+          pageSize: 100,
+          keyword: debouncedCatalogSearch || undefined,
+        };
+        let fetchedItems: CatalogItem[] = [];
+
+        if (itemFilter === "product") {
+          const response = await productApi.getList(requestParams);
+          fetchedItems = response.items.map(mapProductToCatalogItem);
+        } else if (itemFilter === "service") {
+          const response = await serviceApi.getList(requestParams);
+          fetchedItems = response.items.map(mapServiceToCatalogItem);
+        } else {
+          const [productResponse, serviceResponse] = await Promise.all([
+            productApi.getList(requestParams),
+            serviceApi.getList(requestParams),
+          ]);
+          fetchedItems = [
+            ...productResponse.items.map(mapProductToCatalogItem),
+            ...serviceResponse.items.map(mapServiceToCatalogItem),
+          ];
+        }
+
+        if (isCancelled) return;
+
+        setCatalogItems((currentItems) => {
+          const currentById = new Map(
+            currentItems.map((item) => [item.id, item]),
+          );
+          const fetchedIds = new Set(fetchedItems.map((item) => item.id));
+          const mergedFetchedItems = fetchedItems.map(
+            (item) => currentById.get(item.id) ?? item,
+          );
+
+          return [
+            ...mergedFetchedItems,
+            ...currentItems.filter((item) => !fetchedIds.has(item.id)),
+          ];
+        });
+        setCatalogResultIds(fetchedItems.map((item) => item.id));
+      } catch (error) {
+        if (!isCancelled) {
+          console.error("Failed to fetch catalog items:", error);
+          toast.error("Không thể tải danh sách sản phẩm và dịch vụ.");
+        }
+      } finally {
+        if (!isCancelled) setIsLoadingCatalog(false);
+      }
+    };
+
+    void fetchCatalogItems();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [debouncedCatalogSearch, itemFilter]);
 
   const handleProductCreated = (createdProduct?: ProductResponse) => {
     if (!createdProduct) return;
@@ -355,25 +465,26 @@ export default function CreateContractPage() {
       catalogItem.id,
       ...currentItems.filter((id) => id !== catalogItem.id),
     ]);
+    setCatalogResultIds((currentItems) => [
+      catalogItem.id,
+      ...currentItems.filter((id) => id !== catalogItem.id),
+    ]);
+    setCatalogSearch("");
     setItemFilter("product");
     setCatalogPage(1);
   };
 
   useEffect(() => {
     setCatalogPage(1);
-  }, [itemFilter]);
+  }, [catalogSearch, itemFilter]);
 
   const filteredCatalog = useMemo(() => {
-    if (itemFilter === "product")
-      return catalogItems.filter(
-        (i) => i.itemType === ContractItemType.Product,
-      );
-    if (itemFilter === "service")
-      return catalogItems.filter(
-        (i) => i.itemType === ContractItemType.Service,
-      );
-    return catalogItems;
-  }, [catalogItems, itemFilter]);
+    const catalogById = new Map(catalogItems.map((item) => [item.id, item]));
+    return catalogResultIds.flatMap((id) => {
+      const item = catalogById.get(id);
+      return item ? [item] : [];
+    });
+  }, [catalogItems, catalogResultIds]);
 
   const catalogTotalPages = Math.ceil(filteredCatalog.length / catalogPageSize);
 
@@ -383,8 +494,11 @@ export default function CreateContractPage() {
   }, [filteredCatalog, catalogPage]);
 
   // Step 3: Terms & Dates
-  const [effectiveDate, setEffectiveDate] = useState("2026-08-01");
-  const [expiredDate, setExpiredDate] = useState("2027-08-01");
+  const [effectiveDate, setEffectiveDate] = useState("");
+  const [expiredDate, setExpiredDate] = useState("");
+  const hasValidContractDateRange =
+    Boolean(effectiveDate && expiredDate) &&
+    new Date(effectiveDate).getTime() <= new Date(expiredDate).getTime();
   // -- COMPUTED VALUES --
   const selectedCustomer = customers.find(
     (item) => item.customerId === Number(customerId),
@@ -395,7 +509,7 @@ export default function CreateContractPage() {
   const selectedParentContract = eligibleParents.find(
     (item) => item.contractId === Number(parentContractId),
   );
-  const selectedTemplate = mockContractTemplates.find(
+  const selectedTemplate = availableTemplates.find(
     (item) => item.versionId === Number(templateVersionId),
   );
 
@@ -432,20 +546,7 @@ export default function CreateContractPage() {
         (languageMode !== ContractLanguageMode.Bilingual ||
           selectedCatalogItems.every((item) => item.itemNameEn.trim()))
       );
-    if (stepIdx === 2)
-      return (
-        !!effectiveDate &&
-        !!expiredDate &&
-        draftTerms.length > 0 &&
-        draftTerms.every(
-          (term) =>
-            term.termTitle.trim() &&
-            term.termContent.trim() &&
-            (languageMode !== ContractLanguageMode.Bilingual ||
-              !term.id.startsWith("custom-") ||
-              (term.termTitleEn?.trim() && term.termContentEn?.trim())),
-        )
-      );
+    if (stepIdx === 2) return hasValidContractDateRange;
     return false;
   };
 
@@ -466,7 +567,6 @@ export default function CreateContractPage() {
     selectedCatalogItems,
     effectiveDate,
     expiredDate,
-    draftTerms,
   ]);
 
   const handleContractTypeChange = (value: string) => {
@@ -477,25 +577,16 @@ export default function CreateContractPage() {
 
     if (selectedTemplate?.contractType !== nextType) {
       setTemplateVersionId("");
-      setDraftTerms([]);
-      setHasEditedTerms(false);
     }
   };
 
   const handleTemplateSelect = (versionId: number) => {
-    const template = mockContractTemplates.find(
+    const template = availableTemplates.find(
       (item) => item.versionId === versionId,
     );
     if (!template) return;
 
     setTemplateVersionId(String(versionId));
-    setDraftTerms(cloneMockTerms(template.terms));
-    setHasEditedTerms(false);
-  };
-
-  const handleDraftTermsChange = (terms: MockContractTerm[]) => {
-    setDraftTerms(terms);
-    setHasEditedTerms(true);
   };
 
   const toggleCatalogItem = (id: string) => {
@@ -608,40 +699,11 @@ export default function CreateContractPage() {
     }
 
     // 3. Validate Step 2: Điều khoản
-    if (!effectiveDate || !expiredDate) {
+    if (!hasValidContractDateRange) {
       toast.error("Vui lòng chọn thời hạn hiệu lực của hợp đồng.");
       setCurrentStep(2);
       return;
     }
-    if (draftTerms.length === 0) {
-      toast.error("Hợp đồng phải có ít nhất một điều khoản.");
-      setCurrentStep(2);
-      return;
-    }
-    if (
-      draftTerms.some(
-        (term) => !term.termTitle.trim() || !term.termContent.trim(),
-      )
-    ) {
-      toast.error("Vui lòng nhập đầy đủ tiêu đề và nội dung điều khoản.");
-      setCurrentStep(2);
-      return;
-    }
-    if (
-      languageMode === ContractLanguageMode.Bilingual &&
-      draftTerms.some(
-        (term) =>
-          term.id.startsWith("custom-") &&
-          (!term.termTitleEn?.trim() || !term.termContentEn?.trim()),
-      )
-    ) {
-      toast.error(
-        "Điều khoản thêm mới trong hợp đồng song ngữ phải có đầy đủ nội dung tiếng Anh.",
-      );
-      setCurrentStep(2);
-      return;
-    }
-
     setIsSubmitting(true);
     try {
       const itemsPayload: CreateContractItemRequest[] =
@@ -666,18 +728,9 @@ export default function CreateContractPage() {
           displayOrder: index + 1,
         }));
 
-      const intendedResponsibleEmployeeId = Number(responsibleEmployeeId);
-      const shouldAssignResponsibilityAfterTermUpdate = Boolean(
-        hasEditedTerms &&
-          user?.employeeId &&
-          intendedResponsibleEmployeeId !== user.employeeId,
-      );
-
       const payload: CreateContractRequest = {
         customerId: Number(customerId),
-        responsibleEmployeeId: shouldAssignResponsibilityAfterTermUpdate
-          ? (user?.employeeId ?? intendedResponsibleEmployeeId)
-          : intendedResponsibleEmployeeId,
+        responsibleEmployeeId: Number(responsibleEmployeeId),
         contractType: contractType,
         templateVersionId: Number(templateVersionId),
         parentContractId:
@@ -700,112 +753,8 @@ export default function CreateContractPage() {
 
       const response = await contractApi.create(payload);
 
-      if (hasEditedTerms) {
-        try {
-          const createdContract = await contractApi.getDetail(
-            response.contractId,
-          );
-          const savedItems = createdContract.currentVersion.items;
-          const savedTerms = createdContract.currentVersion.terms;
-
-          const updateItems = itemsPayload.map((item) => {
-            const savedItem = savedItems.find(
-              (candidate) =>
-                candidate.itemType === item.itemType &&
-                candidate.sourceProductId === item.sourceProductId &&
-                candidate.sourceServiceId === item.sourceServiceId,
-            );
-
-            if (!savedItem) {
-              throw new Error(
-                `Không tìm thấy item "${item.itemName}" vừa được tạo.`,
-              );
-            }
-
-            return {
-              ...item,
-              contractItemId: savedItem.contractItemId,
-              rowVersion: savedItem.rowVersion,
-              itemCode: savedItem.itemCode,
-            };
-          });
-
-          const updateTerms = draftTerms.map((term, index) => {
-            const savedTerm = savedTerms.find(
-              (candidate) =>
-                candidate.termCode.toLocaleLowerCase() ===
-                term.termCode.toLocaleLowerCase(),
-            );
-
-            return {
-              termId: savedTerm?.termId ?? null,
-              rowVersion: savedTerm?.rowVersion ?? null,
-              termCode: term.termCode,
-              termTitle: term.termTitle.trim(),
-              termTitleEn:
-                term.termTitleEn?.trim() || savedTerm?.termTitleEn || null,
-              termContent: term.termContent.trim() || null,
-              termContentEn:
-                term.termContentEn?.trim() || savedTerm?.termContentEn || null,
-              isNegotiable: term.isNegotiable,
-              displayOrder: index + 1,
-            };
-          });
-
-          const updatedContract = await contractApi.updateDraft(
-            response.contractId,
-            {
-              rowVersion: createdContract.rowVersion,
-              currentVersionId: createdContract.currentVersion.versionId,
-              currentVersionRowVersion:
-                createdContract.currentVersion.rowVersion,
-              customerId: payload.customerId,
-              contractName: payload.contractName,
-              contractNameEn: payload.contractNameEn,
-              effectiveDate: payload.effectiveDate,
-              expireDate: payload.expireDate,
-              currencyCode: payload.currencyCode,
-              items: updateItems,
-              terms: updateTerms,
-            },
-          );
-
-          if (shouldAssignResponsibilityAfterTermUpdate) {
-            try {
-              await contractApi.transferResponsibility(response.contractId, {
-                newResponsibleEmployeeId: intendedResponsibleEmployeeId,
-                reason: "Gán người phụ trách khi tạo hợp đồng",
-                rowVersion: updatedContract.rowVersion,
-              });
-            } catch (assignmentError) {
-              console.error(
-                "Failed to assign contract responsibility:",
-                assignmentError,
-              );
-              toast.warning(
-                "Hợp đồng và điều khoản đã được lưu nhưng chưa gán được nhân viên phụ trách đã chọn. Vui lòng chuyển người phụ trách tại trang chi tiết.",
-              );
-              router.push(`/contracts/${response.contractId}#overview`);
-              return;
-            }
-          }
-        } catch (termUpdateError) {
-          console.error(
-            "Failed to save edited contract terms:",
-            termUpdateError,
-          );
-          toast.warning(
-            shouldAssignResponsibilityAfterTermUpdate
-              ? "Hợp đồng đã được tạo nhưng chưa lưu được điều khoản đã sửa và chưa chuyển cho nhân viên phụ trách đã chọn. Vui lòng kiểm tra lại tại trang chi tiết."
-              : "Hợp đồng đã được tạo nhưng chưa lưu được phần điều khoản đã sửa. Vui lòng kiểm tra lại tại trang chi tiết.",
-          );
-          router.push(`/contracts/${response.contractId}#terms`);
-          return;
-        }
-      }
-
       toast.success(`Tạo hợp đồng thành công! Mã HĐ: ${response.contractCode}`);
-      router.push("/contracts");
+      router.push(`/contracts/${response.contractId}#terms`);
     } catch (error: any) {
       const data = error?.response?.data;
       let errorMessage = "Đã xảy ra lỗi khi tạo hợp đồng.";
@@ -958,17 +907,19 @@ export default function CreateContractPage() {
                           ))}
                         </SelectContent>
                       </Select>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="shrink-0"
-                        onClick={() => setIsCustomerModalOpen(true)}
-                        aria-label="Tạo nhanh khách hàng"
-                        title="Tạo nhanh khách hàng"
-                      >
-                        <Plus className="size-4" />
-                      </Button>
+                      {canManageCustomers && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="shrink-0"
+                          onClick={() => setIsCustomerModalOpen(true)}
+                          aria-label="Tạo nhanh khách hàng"
+                          title="Tạo nhanh khách hàng"
+                        >
+                          <Plus className="size-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
 
@@ -1006,7 +957,7 @@ export default function CreateContractPage() {
                             key={emp.employeeId}
                             value={String(emp.employeeId)}
                           >
-                            {emp.employeeCode} - {emp.employeeFullName}
+                            {emp.employeeFullName} · {emp.departmentName || "Chưa có phòng ban"} · {emp.employeeTypeName}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -1197,13 +1148,13 @@ export default function CreateContractPage() {
                             </p>
 
                             <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                              <span>{template.terms.length} điều khoản</span>
+                              <span>{getContractLanguageModeLabel(template.languageMode)}</span>
                               <span>•</span>
                               <span>{template.templateCode}</span>
                             </div>
                             <p className="mt-2 text-xs text-muted-foreground">
                               {compatible
-                                ? `Cập nhật ${template.updatedAt}`
+                                ? "Phiên bản đã phát hành"
                                 : getContractTypeLabel(template.contractType)}
                             </p>
                           </button>
@@ -1316,6 +1267,20 @@ export default function CreateContractPage() {
               {/* STEP 2: ITEMS, FILTER, PAGINATION */}
               {currentStep === 1 && (
                 <div className="space-y-4">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={catalogSearch}
+                      onChange={(event) => setCatalogSearch(event.target.value)}
+                      className="pl-9 pr-10"
+                      placeholder="Tìm theo mã, tên hoặc mô tả sản phẩm/dịch vụ..."
+                      aria-label="Tìm sản phẩm hoặc dịch vụ"
+                    />
+                    {isLoadingCatalog && (
+                      <Loader2 className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
+
                   {/* Filter Tabs */}
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b pb-2">
                     <div className="flex bg-muted p-1 rounded-lg">
@@ -1357,15 +1322,17 @@ export default function CreateContractPage() {
                           {selectedItems.length}
                         </span>
                       </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setIsProductModalOpen(true)}
-                      >
-                        <Plus className="size-4" />
-                        Tạo nhanh sản phẩm
-                      </Button>
+                      {canManageCatalog && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setIsProductModalOpen(true)}
+                        >
+                          <Plus className="size-4" />
+                          Tạo nhanh sản phẩm
+                        </Button>
+                      )}
                     </div>
                   </div>
 
@@ -1744,14 +1711,15 @@ export default function CreateContractPage() {
                     </div>
                   </div>
 
-                  <CreateContractTermsMock
-                    terms={draftTerms}
-                    templateName={selectedTemplate?.name}
-                    isBilingual={
-                      languageMode === ContractLanguageMode.Bilingual
-                    }
-                    onChange={handleDraftTermsChange}
-                  />
+                  <Alert>
+                    <LayoutTemplate className="size-4" />
+                    <AlertTitle>Điều khoản lấy từ template đã phát hành</AlertTitle>
+                    <AlertDescription>
+                      Backend sẽ sao chép điều khoản của template khi tạo hợp
+                      đồng. Sau khi tạo, người phụ trách có thể chỉnh sửa tại
+                      tab Điều khoản khi hợp đồng còn ở trạng thái Nháp.
+                    </AlertDescription>
+                  </Alert>
                 </div>
               )}
 
@@ -1762,8 +1730,8 @@ export default function CreateContractPage() {
                     <FileSignature className="size-4" />
                     <AlertTitle>Sẵn sàng khởi tạo</AlertTitle>
                     <AlertDescription>
-                      Thông tin cơ bản, sản phẩm và các thay đổi trong bộ điều
-                      khoản sẽ được lưu vào bản nháp hợp đồng.
+                      Thông tin cơ bản và sản phẩm sẽ được lưu vào bản nháp;
+                      điều khoản được sao chép từ template đã chọn.
                     </AlertDescription>
                   </Alert>
 
@@ -1796,11 +1764,9 @@ export default function CreateContractPage() {
                         <p className="text-sm text-muted-foreground">
                           {selectedCustomer?.customerFullName}
                         </p>
-                        {selectedCustomer?.customerTaxCode && (
-                          <p className="text-sm text-muted-foreground">
-                            MST: {selectedCustomer.customerTaxCode}
-                          </p>
-                        )}
+                        <p className="text-sm text-muted-foreground">
+                          Mã KH: {selectedCustomer?.customerCode || "Chưa có"}
+                        </p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">
@@ -1809,16 +1775,9 @@ export default function CreateContractPage() {
                         <p className="font-semibold">
                           {selectedEmployee?.employeeFullName || "Chưa chọn"}
                         </p>
-                        {selectedEmployee?.employeeCode && (
-                          <p className="text-sm text-muted-foreground">
-                            Mã NV: {selectedEmployee.employeeCode}
-                          </p>
-                        )}
-                        {selectedEmployee?.employeeMobile && (
-                          <p className="text-sm text-muted-foreground">
-                            Điện thoại: {selectedEmployee.employeeMobile}
-                          </p>
-                        )}
+                        <p className="text-sm text-muted-foreground">
+                          {selectedEmployee?.departmentName || "Chưa có phòng ban"} · {selectedEmployee?.employeeTypeName || "Chưa có vai trò"}
+                        </p>
                       </div>
                       {selectedParentContract && (
                         <div>
@@ -1958,51 +1917,15 @@ export default function CreateContractPage() {
                     <Separator className="my-5" />
 
                     <div>
-                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-sm font-semibold">
-                          Điều khoản hợp đồng ({draftTerms.length})
-                        </p>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentStep(2)}
-                        >
-                          <Pencil className="size-4" />
-                          Sửa điều khoản
-                        </Button>
-                      </div>
-                      <div className="space-y-2">
-                        {draftTerms.map((term) => (
-                          <div
-                            key={term.id}
-                            className="rounded-xl bg-background p-3"
-                          >
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                              <div>
-                                <p className="text-sm font-semibold">
-                                  {term.termTitle}
-                                </p>
-                                <p className="mt-1 line-clamp-2 text-sm leading-6 text-muted-foreground">
-                                  {term.termContent}
-                                </p>
-                              </div>
-                              <Badge
-                                variant="outline"
-                                className={
-                                  term.isNegotiable
-                                    ? "shrink-0 text-emerald-700"
-                                    : "shrink-0 text-amber-700"
-                                }
-                              >
-                                {term.isNegotiable
-                                  ? "Có thể đàm phán"
-                                  : "Cố định"}
-                              </Badge>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                      <p className="mb-2 text-sm font-semibold">Điều khoản hợp đồng</p>
+                      <Alert>
+                        <FileText className="size-4" />
+                        <AlertDescription>
+                          Điều khoản sẽ được sao chép từ phiên bản template đã
+                          chọn. Sau khi tạo, bạn được chuyển thẳng đến tab Điều
+                          khoản để kiểm tra và chỉnh sửa bản nháp.
+                        </AlertDescription>
+                      </Alert>
                     </div>
                   </div>
                 </div>
@@ -2064,7 +1987,7 @@ export default function CreateContractPage() {
                         "Chưa chọn khách hàng"}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {selectedCustomer?.customerEmail || "Chọn khách ở bước 1"}
+                      {selectedCustomer?.customerCode || "Chọn khách ở bước 1"}
                     </p>
                   </div>
                 </div>
@@ -2089,11 +2012,10 @@ export default function CreateContractPage() {
                   </div>
                   <div>
                     <p className="text-sm font-medium">
-                      {draftTerms.length} điều khoản
+                      Theo template đã chọn
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {draftTerms.filter((term) => term.isNegotiable).length}{" "}
-                      điều khoản có thể đàm phán
+                      Chỉnh sửa tại trang chi tiết sau khi tạo
                     </p>
                   </div>
                 </div>
@@ -2142,17 +2064,21 @@ export default function CreateContractPage() {
         </div>
       </div>
 
-      <CustomerFormModal
-        isOpen={isCustomerModalOpen}
-        onClose={() => setIsCustomerModalOpen(false)}
-        onSuccess={handleCustomerCreated}
-      />
+      {canManageCustomers && (
+        <CustomerFormModal
+          isOpen={isCustomerModalOpen}
+          onClose={() => setIsCustomerModalOpen(false)}
+          onSuccess={handleCustomerCreated}
+        />
+      )}
 
-      <ProductFormModal
-        isOpen={isProductModalOpen}
-        onClose={() => setIsProductModalOpen(false)}
-        onSuccess={handleProductCreated}
-      />
+      {canManageCatalog && (
+        <ProductFormModal
+          isOpen={isProductModalOpen}
+          onClose={() => setIsProductModalOpen(false)}
+          onSuccess={handleProductCreated}
+        />
+      )}
     </>
   );
 }

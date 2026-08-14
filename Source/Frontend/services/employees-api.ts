@@ -63,7 +63,7 @@ export interface CreateEmployeeRequest {
   employeeMobile?: string | null;
   employeeEmail?: string | null;
   departmentId?: number | null;
-  employeeType?: EmployeeType | number | null;
+  employeeType: EmployeeType | number;
 }
 
 export interface UpdateEmployeeRequest {
@@ -72,11 +72,18 @@ export interface UpdateEmployeeRequest {
   employeeMobile?: string | null;
   employeeEmail?: string | null;
   departmentId?: number | null;
-  employeeType?: EmployeeType | number | null;
+  employeeType: EmployeeType | number;
+  rowVersion: string;
 }
 
 export interface ChangePasswordRequest {
   newPassword: string;
+  rowVersion: string;
+}
+
+export interface SetEmployeeStatusRequest {
+  status: EmployeeStatus | number;
+  rowVersion: string;
 }
 
 export interface EmployeeResponse {
@@ -94,6 +101,17 @@ export interface EmployeeResponse {
   dateCreated?: string | null;
   createdDate?: string | null;
   dateModified?: string | null;
+  rowVersion: string;
+}
+
+export interface EmployeeDirectoryResponse {
+  employeeId: number;
+  employeeFullName?: string | null;
+  departmentId?: number | null;
+  departmentName?: string | null;
+  employeeType: EmployeeType;
+  employeeTypeName: string;
+  status: EmployeeStatus;
 }
 
 export interface PagedResult<T> {
@@ -105,8 +123,12 @@ export interface PagedResult<T> {
 }
 
 const BASE_URL = "/api/admin/employees";
+const DIRECTORY_URL = "/api/employees/directory";
 
 export const employeeApi = {
+  getDirectory: () => {
+    return axiosClient.get<any, EmployeeDirectoryResponse[]>(DIRECTORY_URL);
+  },
   getList: (params: EmployeeFilterParams) => {
     return axiosClient.get<any, PagedResult<EmployeeResponse>>(BASE_URL, {
       params,
@@ -135,13 +157,10 @@ export const employeeApi = {
     );
   },
 
-  setStatus: (id: number, status: number) => {
+  setStatus: (id: number, data: SetEmployeeStatusRequest) => {
     return axiosClient.patch<any, { employeeId: number; status: number }>(
       `${BASE_URL}/${id}/status`,
-      null,
-      {
-        params: { status },
-      },
+      data,
     );
   },
 };

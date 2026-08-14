@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Header } from "@/components/ui/custom/header";
+import { PermissionGuard } from "@/components/auth/permission-guard";
+import { RBAC_PERMISSIONS } from "@/lib/rbac";
 import {
   CheckCircle2,
   Lock,
@@ -43,7 +45,6 @@ import {
   SummaryCardItem,
   SummaryCards,
 } from "@/components/ui/custom/summary-cards";
-import { PageHeaderSkeleton } from "@/components/ui/custom/table-skeleton";
 import { CustomerFormModal } from "./customer-form-modal";
 import { useRouter } from "next/navigation";
 
@@ -98,7 +99,7 @@ const CUSTOMER_STATUS_OPTIONS = [
   { label: "Ngừng hoạt động", value: String(CustomerStatus.Inactive) },
 ];
 
-export default function CustomerListPage() {
+function CustomerListPageContent() {
   const [customers, setCustomers] = useState<CustomerResponse[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -579,5 +580,13 @@ export default function CustomerListPage() {
         /> */}
       </div>
     </>
+  );
+}
+
+export default function CustomerListPage() {
+  return (
+    <PermissionGuard permission={RBAC_PERMISSIONS.customerManage}>
+      <CustomerListPageContent />
+    </PermissionGuard>
   );
 }

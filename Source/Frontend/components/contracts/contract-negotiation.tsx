@@ -61,6 +61,7 @@ export function ContractNegotiation({
   contract,
   setContract,
   hasUnsavedChanges,
+  canManage,
   onNegotiationRoundCreated,
 }: {
   contract: ContractDetailResponse;
@@ -68,6 +69,7 @@ export function ContractNegotiation({
     React.SetStateAction<ContractDetailResponse | null>
   >;
   hasUnsavedChanges: boolean;
+  canManage: boolean;
   onNegotiationRoundCreated?: () => void;
 }) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -89,9 +91,13 @@ export function ContractNegotiation({
 
   const currentVersion = contract.currentVersion;
   const canCreateRound =
-    contract.status === ContractStatus.Negotiating && !currentVersion.isLocked;
+    canManage &&
+    contract.status === ContractStatus.Negotiating &&
+    !currentVersion.isLocked;
   const canWriteGeneralComments =
-    contract.status === ContractStatus.Negotiating && !currentVersion.isLocked;
+    canManage &&
+    contract.status === ContractStatus.Negotiating &&
+    !currentVersion.isLocked;
 
   const loadVersionHistory = useCallback(async () => {
     if (contract.status !== ContractStatus.Negotiating) {

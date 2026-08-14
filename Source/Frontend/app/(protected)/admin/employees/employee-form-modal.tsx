@@ -31,6 +31,7 @@ import {
   getEmployeeTypeLabel,
 } from "@/services/employees-api";
 import { departmentApi, DepartmentResponse } from "@/services/departments-api";
+import { getApiErrorMessage, isStaleRowVersion } from "@/lib/api-error";
 
 interface EmployeeFormModalProps {
   isOpen: boolean;
@@ -41,7 +42,7 @@ interface EmployeeFormModalProps {
 }
 
 const EMPLOYEE_TYPE_OPTIONS = Object.values(EmployeeType)
-  .filter((v) => typeof v === "number")
+  .filter((v) => typeof v === "number" && v !== EmployeeType.Manager)
   .map((v) => ({
     label: getEmployeeTypeLabel(v as EmployeeType),
     value: String(v),
@@ -171,7 +172,8 @@ export function EmployeeFormModal({
           employeeMobile: employeeMobile.trim() || null,
           employeeEmail: employeeEmail.trim() || null,
           departmentId: departmentId ? Number(departmentId) : null,
-          employeeType: employeeType ? Number(employeeType) : null,
+          employeeType: Number(employeeType),
+          rowVersion: employee.rowVersion,
         };
         await employeeApi.update(employee.employeeId, updateData);
         toast.success("Cập nhật nhân viên thành công");
@@ -185,7 +187,7 @@ export function EmployeeFormModal({
           employeeMobile: employeeMobile.trim() || null,
           employeeEmail: employeeEmail.trim() || null,
           departmentId: departmentId ? Number(departmentId) : null,
-          employeeType: employeeType ? Number(employeeType) : null,
+          employeeType: Number(employeeType),
         };
         await employeeApi.create(createData);
         toast.success("Thêm nhân viên thành công");
@@ -193,13 +195,22 @@ export function EmployeeFormModal({
       onSuccess();
       onClose();
     } catch (error: any) {
-      const message =
-        error?.response?.data?.message ||
-        error?.message ||
-        (isEditMode
-          ? "Không thể cập nhật nhân viên"
-          : "Không thể thêm nhân viên");
-      toast.error(message);
+      if (isStaleRowVersion(error)) {
+        toast.error(
+          "Dữ liệu nhân viên đã thay đổi. Danh sách sẽ được tải lại; vui lòng mở lại để sửa.",
+        );
+        onSuccess();
+        onClose();
+        return;
+      }
+      toast.error(
+        getApiErrorMessage(
+          error,
+          isEditMode
+            ? "Không thể cập nhật nhân viên"
+            : "Không thể thêm nhân viên",
+        ),
+      );
     } finally {
       setIsSaving(false);
     }
@@ -272,7 +283,7 @@ export function EmployeeFormModal({
             <div className="grid gap-2">
               <Label htmlFor="employeeCode">
                 Mã nhân viên{" "}
-                {isCreateMode && <span className="text-destructive">*</span>}
+                {!isViewMode && <span className="text-destructive">*</span>}
               </Label>
               <Input
                 id="employeeCode"
@@ -317,7 +328,7 @@ export function EmployeeFormModal({
             <div className="grid gap-2">
               <Label htmlFor="employeeMobile">
                 Số điện thoại{" "}
-                {isCreateMode && <span className="text-destructive">*</span>}
+                {!isViewMode && <span className="text-destructive">*</span>}
               </Label>
               <Input
                 id="employeeMobile"
@@ -337,7 +348,7 @@ export function EmployeeFormModal({
             <div className="grid gap-2">
               <Label htmlFor="employeeEmail">
                 Email{" "}
-                {isCreateMode && <span className="text-destructive">*</span>}
+                {!isViewMode && <span className="text-destructive">*</span>}
               </Label>
               <Input
                 id="employeeEmail"
@@ -361,7 +372,7 @@ export function EmployeeFormModal({
             <div className="grid gap-2">
               <Label>
                 Phòng ban{" "}
-                {isCreateMode && <span className="text-destructive">*</span>}
+                {!isViewMode && <span className="text-destructive">*</span>}
               </Label>
               <Select
                 value={departmentId}
@@ -397,7 +408,7 @@ export function EmployeeFormModal({
             <div className="grid gap-2">
               <Label>
                 Vai trò{" "}
-                {isCreateMode && <span className="text-destructive">*</span>}
+                {!isViewMode && <span className="text-destructive">*</span>}
               </Label>
               <Select
                 value={employeeType}
@@ -406,7 +417,7 @@ export function EmployeeFormModal({
               >
                 <SelectTrigger
                   className={`w-full cursor-pointer ${
-                    errors.departmentId
+                    errors.employeeType
                       ? "border-destructive text-destructive focus:ring-destructive"
                       : ""
                   }`}

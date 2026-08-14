@@ -114,12 +114,14 @@ export function ContractSignature({
   onContractRefetch,
   knownLink,
   hasUnsavedChanges,
+  canManage,
   onCustomerAccessLinkChange,
 }: {
   contract: ContractDetailResponse;
   onContractRefetch: () => Promise<void>;
   knownLink: KnownCustomerAccessLink | null;
   hasUnsavedChanges: boolean;
+  canManage: boolean;
   onCustomerAccessLinkChange: (link: KnownCustomerAccessLink | null) => void;
 }) {
   const [phones, setPhones] = useState<
@@ -156,6 +158,7 @@ export function ContractSignature({
   );
 
   const canCreateLink =
+    canManage &&
     Boolean(currentPhone) &&
     !hasUnsavedChanges &&
     (contract.status === ContractStatus.Draft ||
@@ -226,6 +229,7 @@ export function ContractSignature({
   };
 
   const handleUpdatePhone = async () => {
+    if (!canManage) return;
     if (hasUnsavedChanges) {
       toast.error("Vui lòng lưu thay đổi hợp đồng trước khi quản lý truy cập.");
       return;
@@ -279,6 +283,7 @@ export function ContractSignature({
   };
 
   const handleCreateLink = async () => {
+    if (!canManage) return;
     if (hasUnsavedChanges) {
       toast.error("Vui lòng lưu thay đổi hợp đồng trước khi tạo link.");
       return;
@@ -323,6 +328,7 @@ export function ContractSignature({
   };
 
   const handleLinkAction = async () => {
+    if (!canManage) return;
     if (!activeLink || !linkAction) return;
     if (hasUnsavedChanges) {
       toast.error("Vui lòng lưu thay đổi hợp đồng trước khi quản lý link.");
@@ -463,6 +469,7 @@ export function ContractSignature({
                     )
                   }
                   disabled={
+                    !canManage ||
                     isSavingPhone ||
                     hasUnsavedChanges ||
                     contract.status === ContractStatus.Cancelled
@@ -502,6 +509,7 @@ export function ContractSignature({
                       setManualPhoneNumber(event.target.value)
                     }
                     disabled={
+                      !canManage ||
                       isSavingPhone ||
                       hasUnsavedChanges ||
                       contract.status === ContractStatus.Cancelled
@@ -522,6 +530,7 @@ export function ContractSignature({
                 onChange={(event) => setPhoneReason(event.target.value)}
                 maxLength={1000}
                 disabled={
+                  !canManage ||
                   isSavingPhone ||
                   hasUnsavedChanges ||
                   contract.status === ContractStatus.Cancelled
@@ -532,6 +541,7 @@ export function ContractSignature({
             <Button
               onClick={handleUpdatePhone}
               disabled={
+                !canManage ||
                 isSavingPhone ||
                 hasUnsavedChanges ||
                 contract.status === ContractStatus.Cancelled
@@ -669,14 +679,14 @@ export function ContractSignature({
                         <Button
                           variant="outline"
                           onClick={() => setLinkAction("replace")}
-                          disabled={hasUnsavedChanges}
+                          disabled={!canManage || hasUnsavedChanges}
                         >
                           <RefreshCw /> Thay link mới
                         </Button>
                         <Button
                           variant="destructive"
                           onClick={() => setLinkAction("revoke")}
-                          disabled={hasUnsavedChanges}
+                          disabled={!canManage || hasUnsavedChanges}
                         >
                           <Trash2 /> Thu hồi
                         </Button>
@@ -730,14 +740,14 @@ export function ContractSignature({
                     <Button
                       variant="outline"
                       onClick={() => setLinkAction("replace")}
-                      disabled={hasUnsavedChanges}
+                      disabled={!canManage || hasUnsavedChanges}
                     >
                       <RefreshCw /> Thay link
                     </Button>
                     <Button
                       variant="destructive"
                       onClick={() => setLinkAction("revoke")}
-                      disabled={hasUnsavedChanges}
+                      disabled={!canManage || hasUnsavedChanges}
                     >
                       <Trash2 /> Thu hồi
                     </Button>
@@ -850,7 +860,9 @@ export function ContractSignature({
             <Button
               variant={linkAction === "revoke" ? "destructive" : "default"}
               onClick={handleLinkAction}
-              disabled={isSubmittingLinkAction || hasUnsavedChanges}
+              disabled={
+                !canManage || isSubmittingLinkAction || hasUnsavedChanges
+              }
             >
               {isSubmittingLinkAction ? (
                 <Loader2 className="animate-spin" />

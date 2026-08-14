@@ -25,10 +25,14 @@ import { ConfirmDialog } from "@/components/ui/custom/confirm-dialog";
 import { SplitActionMenu } from "@/components/ui/custom/split-action-menu";
 import { CategoryFormModal } from "./category-form-modal";
 import { showConfirmToast } from "@/components/ui/custom/confirm-toast";
+import { usePermission } from "@/hooks/use-permission";
+import { RBAC_PERMISSIONS } from "@/lib/rbac";
 
 export type CategoryTreeNode = CategoryResponse;
 
 export default function CategoryListPage() {
+  const { can } = usePermission();
+  const canManage = can(RBAC_PERMISSIONS.catalogManage);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -191,7 +195,7 @@ export default function CategoryListPage() {
                 primaryIcon={<Eye className="w-4 h-4" />}
                 onPrimaryClick={() => setViewingItem(item)}
                 isLoading={loadingId === item.categoryId}
-                menuItems={[
+                menuItems={canManage ? [
                   {
                     label: "Chỉnh sửa",
                     icon: <UserCog className="w-4 h-4" />,
@@ -215,14 +219,14 @@ export default function CategoryListPage() {
                     isDestructive: true,
                     onClick: () => setDeleteId(item.categoryId),
                   },
-                ]}
+                ] : []}
               />
             </div>
           );
         },
       },
     ],
-    [loadingId],
+    [canManage, loadingId],
   );
 
   const currentDeleteItem = useMemo(
@@ -243,7 +247,7 @@ export default function CategoryListPage() {
               Hỗ trợ phân cấp không giới hạn.
             </p>
           </div>
-          <Button
+          {canManage && <Button
             className="shadow-sm"
             onClick={() => {
               setEditingItem(null);
@@ -252,7 +256,7 @@ export default function CategoryListPage() {
             }}
           >
             <Plus className="w-4 h-4 mr-2" /> Thêm mới
-          </Button>
+          </Button>}
         </div>
 
         <Card className="border-border shadow-sm bg-card min-h-[500px] flex flex-col gap-0 p-0">
@@ -275,7 +279,7 @@ export default function CategoryListPage() {
                 setSearchTerm(val);
                 setPagination((prev) => ({ ...prev, pageIndex: 0 }));
               }}
-              bulkActions={(selectedItems, resetSelection) => (
+              bulkActions={canManage ? (selectedItems, resetSelection) => (
                 <Button
                   size="sm"
                   variant="destructive"
@@ -314,7 +318,7 @@ export default function CategoryListPage() {
                 >
                   {isDeleting ? "Đang xóa..." : "Xóa tất cả"}
                 </Button>
-              )}
+              ) : undefined}
               searchPlaceholder="Tìm tên danh mục..."
               mobileCardRenderer={(row, { isSelected, actionCell }) => {
                 const item = row.original;
@@ -387,7 +391,7 @@ export default function CategoryListPage() {
           titleClassName="text-destructive"
         />
 
-        <CategoryFormModal
+        {canManage && <CategoryFormModal
           isOpen={isFormOpen}
           onClose={() => {
             setIsFormOpen(false);
@@ -397,7 +401,7 @@ export default function CategoryListPage() {
           onSuccess={fetchData}
           item={editingItem}
           initialParentId={initialParentId}
-        />
+        />}
 
         <CategoryFormModal
           isOpen={!!viewingItem}

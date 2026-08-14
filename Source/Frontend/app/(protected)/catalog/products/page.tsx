@@ -41,6 +41,8 @@ import {
 } from "@/components/ui/custom/summary-cards";
 import { PageHeaderSkeleton } from "@/components/ui/custom/table-skeleton";
 import { ProductFormModal } from "./product-form-modal";
+import { usePermission } from "@/hooks/use-permission";
+import { RBAC_PERMISSIONS } from "@/lib/rbac";
 
 function ProductBulkActions({
   selectedRows,
@@ -115,6 +117,8 @@ const PRODUCT_STATUS_OPTIONS = [
 ];
 
 export default function ProductListPage() {
+  const { can } = usePermission();
+  const canManage = can(RBAC_PERMISSIONS.catalogManage);
   const [products, setProducts] = useState<ProductResponse[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -344,7 +348,7 @@ export default function ProductListPage() {
               primaryIcon={<Eye className="w-4 h-4" />}
               onPrimaryClick={() => setViewingItem(item)}
               isLoading={loadingId === item.productId}
-              menuItems={[
+              menuItems={canManage ? [
                 {
                   label: "Chỉnh sửa",
                   icon: <UserCog className="w-4 h-4" />,
@@ -369,13 +373,13 @@ export default function ProductListPage() {
                   isDestructive: true,
                   onClick: () => setDeleteId(item.productId),
                 },
-              ]}
+              ] : []}
             />
           );
         },
       },
     ],
-    [loadingId],
+    [canManage, loadingId],
   );
 
   const activeCount = useMemo(
@@ -451,14 +455,14 @@ export default function ProductListPage() {
             </p>
           </div>
 
-          <Button
+          {canManage && <Button
             onClick={() => {
               setEditingItem(null);
               setIsFormOpen(true);
             }}
           >
             <Plus className="w-4 h-4 mr-2" /> Thêm mới
-          </Button>
+          </Button>}
         </div>
 
         <SummaryCards items={summaryItems} isLoading={isLoading} />
@@ -478,12 +482,12 @@ export default function ProductListPage() {
               onRowClick={(row) => setViewingItem(row)}
               searchValue={searchTerm}
               onSearchChange={(value) => setSearchTerm(value)}
-              bulkActions={(selectedRows, resetSelection) => (
+              bulkActions={canManage ? (selectedRows, resetSelection) => (
                 <ProductBulkActions
                   selectedRows={selectedRows}
                   resetSelection={resetSelection}
                 />
-              )}
+              ) : undefined}
               mobileCardRenderer={(row, { isSelected, actionCell }) => {
                 const item = row.original;
                 return (
@@ -579,7 +583,7 @@ export default function ProductListPage() {
           isLoading={isDeleting}
         />
 
-        <ProductFormModal
+        {canManage && <ProductFormModal
           isOpen={isFormOpen}
           onClose={() => {
             setIsFormOpen(false);
@@ -587,7 +591,7 @@ export default function ProductListPage() {
           }}
           onSuccess={fetchProducts}
           item={editingItem}
-        />
+        />}
 
         <ProductFormModal
           isOpen={!!viewingItem}

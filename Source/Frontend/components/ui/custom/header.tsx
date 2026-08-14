@@ -52,7 +52,7 @@ export function Header({ title }: { title?: string }) {
                 size="icon"
                 className="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-primary/80 hover:opacity-90 text-primary-foreground shadow-sm transition-transform hover:scale-105"
               >
-                {user?.employeeFullName?.[0]?.toUpperCase() ?? ""}
+                {user?.fullName?.[0]?.toUpperCase() ?? ""}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
@@ -63,10 +63,12 @@ export function Header({ title }: { title?: string }) {
               <DropdownMenuLabel className="font-normal px-2 py-2.5">
                 <div className="flex flex-col space-y-1.5">
                   <p className="text-sm font-semibold leading-none text-foreground truncate">
-                    {user?.employeeFullName || "Người dùng"}
+                    {user?.fullName || "Người dùng"}
                   </p>
                   <p className="text-xs leading-none text-muted-foreground truncate">
-                    {user?.employeeEmail || "Chưa cập nhật email"}
+                    {[user?.roleName, user?.tenantName]
+                      .filter(Boolean)
+                      .join(" • ") || "Chưa cập nhật vai trò"}
                   </p>
                 </div>
               </DropdownMenuLabel>

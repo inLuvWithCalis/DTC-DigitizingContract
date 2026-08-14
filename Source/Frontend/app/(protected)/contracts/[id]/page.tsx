@@ -41,6 +41,13 @@ import {
   UpdateContractDraftRequest,
 } from "@/services/contract-api";
 import { roundContractMoney } from "@/lib/contract-finance";
+import { useAuthStore } from "@/hooks/use-auth-store";
+import { hasPermission, RBAC_PERMISSIONS } from "@/lib/rbac";
+import {
+  getApiErrorMessage,
+  isResourceNotFound,
+  isStaleRowVersion,
+} from "@/lib/api-error";
 import { toast } from "@/components/ui/sonner";
 
 import {
@@ -117,6 +124,7 @@ const isContractTab = (value: string): value is ContractTab =>
 export default function ContractDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const user = useAuthStore((state) => state.user);
 
   const [contract, setContract] = useState<ContractDetailResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -187,7 +195,14 @@ export default function ContractDetailPage() {
       } catch (err: any) {
         console.error("Lỗi lấy chi tiết hợp đồng:", err);
         if (showLoading) {
-          setError("Không thể lấy dữ liệu hợp đồng. Vui lòng thử lại sau.");
+          setError(
+            isResourceNotFound(err)
+              ? "Không tìm thấy hợp đồng hoặc bạn không có quyền truy cập."
+              : getApiErrorMessage(
+                  err,
+                  "Không thể lấy dữ liệu hợp đồng. Vui lòng thử lại sau.",
+                ),
+          );
         }
         throw err;
       } finally {
@@ -291,7 +306,7 @@ export default function ContractDetailPage() {
   }
 
   const handleUpdateDraft = async () => {
-    if (!contract || !contract.currentVersion) return;
+    if (!contract || !contract.currentVersion || !canManageContract) return;
 
     if (!contract.contractName.trim()) {
       toast.error("Tên hợp đồng không được để trống.");
@@ -455,20 +470,19 @@ export default function ContractDetailPage() {
       toast.success("Cập nhật bản nháp thành công!");
     } catch (err: any) {
       console.error("Lỗi cập nhật bản nháp:", err);
-      const data = err?.response?.data;
-      const message =
-        data?.message ||
-        data?.title ||
-        (typeof data === "string" ? data : null) ||
-        "Cập nhật bản nháp thất bại. Vui lòng thử lại.";
-      toast.error(message);
+      if (isStaleRowVersion(err)) {
+        await fetchContractDetail(false).catch(() => undefined);
+        toast.error("Hợp đồng đã được thay đổi ở nơi khác. Dữ liệu mới nhất đã được tải lại.");
+      } else {
+        toast.error(getApiErrorMessage(err, "Cập nhật bản nháp thất bại. Vui lòng thử lại."));
+      }
     } finally {
       setIsUpdating(false);
     }
   };
 
   const handleStartNegotiation = async () => {
-    if (!contract) return;
+    if (!contract || !canManageContract) return;
     if (hasUnsavedChanges) {
       toast.error("Vui lòng lưu các thay đổi trước khi bắt đầu đàm phán.");
       return;
@@ -485,18 +499,19 @@ export default function ContractDetailPage() {
       toast.success("Hợp đồng đã chuyển sang trạng thái Đàm phán!");
     } catch (err: any) {
       console.error("Lỗi bắt đầu đàm phán:", err);
-      const errorData = err?.response?.data;
-      const message = errorData?.errors
-        ? Object.values(errorData.errors).flat().join("; ")
-        : errorData?.title || "Không thể bắt đầu đàm phán. Vui lòng thử lại.";
-      toast.error(message);
+      if (isStaleRowVersion(err)) {
+        await fetchContractDetail(false).catch(() => undefined);
+        toast.error("Hợp đồng đã thay đổi. Dữ liệu mới nhất đã được tải lại.");
+      } else {
+        toast.error(getApiErrorMessage(err, "Không thể bắt đầu đàm phán. Vui lòng thử lại."));
+      }
     } finally {
       setIsStartingNegotiation(false);
     }
   };
 
   const handleSubmitApproval = () => {
-    if (!contract || !contract.currentVersion) return;
+    if (!contract || !contract.currentVersion || !canManageContract) return;
     if (hasUnsavedChanges) {
       toast.error("Vui lòng lưu các thay đổi trước khi gửi duyệt.");
       return;
@@ -528,11 +543,12 @@ export default function ContractDetailPage() {
           toast.success("Hợp đồng đã được gửi duyệt!");
         } catch (err: any) {
           console.error("Lỗi gửi duyệt hợp đồng:", err);
-          const errorData = err?.response?.data;
-          const message = errorData?.errors
-            ? Object.values(errorData.errors).flat().join("; ")
-            : errorData?.title || "Không thể gửi duyệt. Vui lòng thử lại.";
-          toast.error(message);
+          if (isStaleRowVersion(err)) {
+            await fetchContractDetail(false).catch(() => undefined);
+            toast.error("Hợp đồng đã thay đổi. Dữ liệu mới nhất đã được tải lại.");
+          } else {
+            toast.error(getApiErrorMessage(err, "Không thể gửi duyệt. Vui lòng thử lại."));
+          }
         } finally {
           setIsSubmittingApproval(false);
         }
@@ -543,7 +559,13 @@ export default function ContractDetailPage() {
   const isCurrentVersionShared =
     contract.status === ContractStatus.Negotiating &&
     knownCustomerAccessLink !== null;
+  const isResponsibleEmployee =
+    user?.employeeId === contract.responsibleEmployee?.employeeId;
+  const canManageContract =
+    isResponsibleEmployee &&
+    hasPermission(user?.permissions, RBAC_PERMISSIONS.contractManageOwn);
   const canUpdateDraft =
+    canManageContract &&
     (contract.status === ContractStatus.Draft ||
       contract.status === ContractStatus.Negotiating) &&
     !contract.currentVersion.isLocked &&
@@ -591,7 +613,7 @@ export default function ContractDetailPage() {
                 Lưu thay đổi
               </Button>
             )}
-            {contract.status === ContractStatus.Draft && (
+            {canManageContract && contract.status === ContractStatus.Draft && (
               <Button
                 onClick={handleStartNegotiation}
                 disabled={isStartingNegotiation || hasUnsavedChanges}
@@ -605,7 +627,8 @@ export default function ContractDetailPage() {
                 Bắt đầu đàm phán
               </Button>
             )}
-            {contract.status === ContractStatus.Negotiating && (
+            {canManageContract &&
+              contract.status === ContractStatus.Negotiating && (
               <Button
                 onClick={handleSubmitApproval}
                 disabled={isSubmittingApproval || hasUnsavedChanges}
@@ -667,14 +690,16 @@ export default function ContractDetailPage() {
                 <Clock className="size-4" />
                 Người phụ trách
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-xs text-primary hover:bg-primary/10"
-                onClick={() => setIsTransferModalOpen(true)}
-              >
-                Chuyển giao
-              </Button>
+              {canManageContract && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs text-primary hover:bg-primary/10"
+                  onClick={() => setIsTransferModalOpen(true)}
+                >
+                  Chuyển giao
+                </Button>
+              )}
             </div>
             <div className="mt-2 font-semibold text-foreground">
               {contract.responsibleEmployee?.employeeFullName || "Chưa gán"}
@@ -690,6 +715,17 @@ export default function ContractDetailPage() {
               Nội dung được chuyển sang chế độ chỉ xem để tránh thay đổi trực
               tiếp dữ liệu khách hàng đang xem. Muốn chỉnh sửa, hãy tạo vòng
               mới!
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {!canManageContract && (
+          <Alert>
+            <LockKeyhole className="size-4" />
+            <AlertTitle>Chế độ chỉ xem</AlertTitle>
+            <AlertDescription>
+              Bạn có thể xem hợp đồng này, nhưng chỉ người phụ trách mới được
+              chỉnh sửa hoặc thực hiện các thao tác nghiệp vụ.
             </AlertDescription>
           </Alert>
         )}
@@ -731,6 +767,7 @@ export default function ContractDetailPage() {
             <ContractNegotiation
               contract={contract}
               setContract={setContract}
+              canManage={canManageContract}
               hasUnsavedChanges={hasUnsavedChanges}
               onNegotiationRoundCreated={() =>
                 handleCustomerAccessLinkChange(null)
@@ -744,12 +781,16 @@ export default function ContractDetailPage() {
               onContractRefetch={() => fetchContractDetail(false)}
               knownLink={knownCustomerAccessLink}
               hasUnsavedChanges={hasUnsavedChanges}
+              canManage={canManageContract}
               onCustomerAccessLinkChange={handleCustomerAccessLinkChange}
             />
           </TabsContent>
 
           <TabsContent value="documents">
-            <ContractDocuments contract={contract} />
+            <ContractDocuments
+              contract={contract}
+              canManage={canManageContract}
+            />
           </TabsContent>
 
           <TabsContent value="closing">
@@ -761,15 +802,17 @@ export default function ContractDetailPage() {
           </TabsContent>
         </Tabs>
 
-        <TransferResponsibilityModal
-          isOpen={isTransferModalOpen}
-          onClose={() => setIsTransferModalOpen(false)}
-          contractId={contract.contractId}
-          rowVersion={contract.rowVersion}
-          currentEmployeeId={contract.responsibleEmployee?.employeeId}
-          currentEmployeeName={contract.responsibleEmployee?.employeeFullName}
-          onSuccess={(updated) => setContract(updated)}
-        />
+        {canManageContract && (
+          <TransferResponsibilityModal
+            isOpen={isTransferModalOpen}
+            onClose={() => setIsTransferModalOpen(false)}
+            contractId={contract.contractId}
+            rowVersion={contract.rowVersion}
+            currentEmployeeId={contract.responsibleEmployee?.employeeId}
+            currentEmployeeName={contract.responsibleEmployee?.employeeFullName}
+            onSuccess={(updated) => setContract(updated)}
+          />
+        )}
 
         {hasUnsavedChanges && canUpdateDraft && (
           <Alert

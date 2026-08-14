@@ -44,6 +44,9 @@ import {
 } from "@/components/ui/custom/summary-cards";
 import { PageHeaderSkeleton } from "@/components/ui/custom/table-skeleton";
 import { EmployeeFormModal } from "./employee-form-modal";
+import { getApiErrorMessage, isStaleRowVersion } from "@/lib/api-error";
+import { PermissionGuard } from "@/components/auth/permission-guard";
+import { RBAC_PERMISSIONS } from "@/lib/rbac";
 
 function EmployeeBulkActions({
   selectedRows,
@@ -79,7 +82,7 @@ function EmployeeBulkActions({
   );
 }
 
-export default function EmployeeListPage() {
+function EmployeeListPageContent() {
   const [employees, setEmployees] = useState<EmployeeResponse[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -158,17 +161,26 @@ export default function EmployeeListPage() {
           ? EmployeeStatus.Inactive
           : EmployeeStatus.Active;
 
-      await employeeApi.setStatus(toggleStatusId, newStatus);
-      toast.success("Cập nhật trạng thái nhân viên thành công");
+      if (!targetEmp?.rowVersion) {
+        toast.error("Không có rowVersion mới nhất của nhân viên.");
+        return;
+      }
 
-      setEmployees((prev) =>
-        prev.map((e) =>
-          e.employeeId === toggleStatusId ? { ...e, status: newStatus } : e,
-        ),
-      );
+      await employeeApi.setStatus(toggleStatusId, {
+        status: newStatus,
+        rowVersion: targetEmp.rowVersion,
+      });
+      toast.success("Cập nhật trạng thái nhân viên thành công");
+      await fetchEmployees();
       setToggleStatusId(null);
     } catch (error) {
-      toast.error("Không thể cập nhật trạng thái");
+      if (isStaleRowVersion(error)) {
+        toast.error("Dữ liệu nhân viên đã thay đổi. Danh sách đã được tải lại.");
+        await fetchEmployees();
+        setToggleStatusId(null);
+      } else {
+        toast.error(getApiErrorMessage(error, "Không thể cập nhật trạng thái"));
+      }
     } finally {
       setIsToggling(false);
     }
@@ -286,32 +298,37 @@ export default function EmployeeListPage() {
         cell: ({ row }) => {
           const item = row.original;
           const isActive = item.status === EmployeeStatus.Active;
+          const canMutate = item.employeeType !== EmployeeType.Manager;
           return (
             <SplitActionMenu
               primaryLabel="Hồ sơ"
               primaryIcon={<Eye className="w-4 h-4" />}
               onPrimaryClick={() => handleView(item)}
               isLoading={loadingId === item.employeeId}
-              menuItems={[
-                {
-                  label: "Chỉnh sửa",
-                  icon: <UserCog className="w-4 h-4" />,
-                  onClick: () => {
-                    setEditingEmployee(item);
-                    setIsFormOpen(true);
-                  },
-                },
-                {
-                  label: isActive ? "Khóa tài khoản" : "Mở khóa",
-                  icon: isActive ? (
-                    <Lock className="w-4 h-4" />
-                  ) : (
-                    <Unlock className="w-4 h-4" />
-                  ),
-                  isDestructive: isActive,
-                  onClick: () => setToggleStatusId(item.employeeId),
-                },
-              ]}
+              menuItems={
+                canMutate
+                  ? [
+                      {
+                        label: "Chỉnh sửa",
+                        icon: <UserCog className="w-4 h-4" />,
+                        onClick: () => {
+                          setEditingEmployee(item);
+                          setIsFormOpen(true);
+                        },
+                      },
+                      {
+                        label: isActive ? "Khóa tài khoản" : "Mở khóa",
+                        icon: isActive ? (
+                          <Lock className="w-4 h-4" />
+                        ) : (
+                          <Unlock className="w-4 h-4" />
+                        ),
+                        isDestructive: isActive,
+                        onClick: () => setToggleStatusId(item.employeeId),
+                      },
+                    ]
+                  : []
+              }
             />
           );
         },
@@ -533,5 +550,13 @@ export default function EmployeeListPage() {
         />
       </div>
     </>
+  );
+}
+
+export default function EmployeeListPage() {
+  return (
+    <PermissionGuard permission={RBAC_PERMISSIONS.employeeManage}>
+      <EmployeeListPageContent />
+    </PermissionGuard>
   );
 }

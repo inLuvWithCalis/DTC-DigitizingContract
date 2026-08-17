@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/ui/custom/header";
+import { PermissionGuard } from "@/components/auth/permission-guard";
+import { RBAC_PERMISSIONS } from "@/lib/rbac";
 import {
   CalendarDays,
   ArrowUp,
@@ -35,7 +37,7 @@ import {
 } from "@/components/ui/custom/summary-cards";
 import { PageHeaderSkeleton } from "@/components/ui/custom/table-skeleton";
 
-export default function DepartmentListPage() {
+function DepartmentListPageContent() {
   const router = useRouter();
 
   const [departments, setDepartments] = useState<DepartmentResponse[]>([]);
@@ -404,5 +406,13 @@ export default function DepartmentListPage() {
         />
       </div>
     </>
+  );
+}
+
+export default function DepartmentListPage() {
+  return (
+    <PermissionGuard permission={RBAC_PERMISSIONS.departmentManage}>
+      <DepartmentListPageContent />
+    </PermissionGuard>
   );
 }

@@ -3,19 +3,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef, PaginationState } from "@tanstack/react-table";
-import { Eye, Languages, LibraryBig, Plus, ShieldAlert } from "lucide-react";
+import { Eye, Languages, LibraryBig, Plus } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 
+import { PermissionGuard } from "@/components/auth/permission-guard";
 import { ContractTemplateFormDialog } from "@/components/contract-templates/contract-template-form-dialog";
 import { getContractTemplateErrorMessage } from "@/components/contract-templates/contract-template-utils";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable } from "@/components/ui/custom/data-table-server";
 import { Header } from "@/components/ui/custom/header";
-import { useAuthStore } from "@/hooks/use-auth-store";
+import { usePermission } from "@/hooks/use-permission";
+import { RBAC_PERMISSIONS } from "@/lib/rbac";
 import { formatDateTime } from "@/lib/format-date-time";
 import { ContractLanguageMode } from "@/services/contract-api";
 import {
@@ -24,12 +25,11 @@ import {
   type ContractTemplateDetailResponse,
   type ContractTemplateResponse,
 } from "@/services/contract-template-api";
-import { EmployeeType } from "@/services/employees-api";
 
 export default function ContractTemplateListPage() {
   const router = useRouter();
-  const user = useAuthStore((state) => state.user);
-  const canManage = user?.employeeType === EmployeeType.AdminOfficer;
+  const { can } = usePermission();
+  const canManage = can(RBAC_PERMISSIONS.templateManage);
   const [items, setItems] = useState<ContractTemplateResponse[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -239,15 +239,12 @@ export default function ContractTemplateListPage() {
             )}
           </div>
 
-          {!canManage ? (
-            <Alert variant="destructive">
-              <ShieldAlert />
-              <AlertTitle>Không có quyền truy cập</AlertTitle>
-              <AlertDescription>
-                Chỉ Admin Officer đang hoạt động được quản trị mẫu hợp đồng.
-              </AlertDescription>
-            </Alert>
-          ) : (
+          <PermissionGuard
+            permission={RBAC_PERMISSIONS.templateManage}
+            variant="card"
+            title="Không có quyền truy cập"
+            description="Chỉ Admin Officer đang hoạt động được quản trị mẫu hợp đồng."
+          >
             <Card className="flex min-h-[500px] flex-col gap-0 border-border bg-card p-0 shadow-sm">
               <CardContent className="flex flex-1 flex-col justify-between p-4 pb-0">
                 <DataTable
@@ -337,7 +334,7 @@ export default function ContractTemplateListPage() {
                 />
               </CardContent>
             </Card>
-          )}
+          </PermissionGuard>
         </div>
       </div>
 

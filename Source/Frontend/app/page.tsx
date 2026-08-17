@@ -57,10 +57,12 @@ export default function LoginPage() {
       const urlParams = new URLSearchParams(window.location.search);
       const error = urlParams.get("error");
 
-      if (error === "session_expired") {
+      if (error === "session_expired" || error === "employee_inactive") {
         const timer = setTimeout(() => {
           toast.error(
-            "Phiên đăng nhập đã hết hạn hoặc không tồn tại, vui lòng đăng nhập lại.",
+            error === "employee_inactive"
+              ? "Tài khoản nhân viên đã bị khóa. Vui lòng liên hệ quản lý."
+              : "Phiên đăng nhập đã hết hạn hoặc không tồn tại, vui lòng đăng nhập lại.",
           );
           window.history.replaceState(null, "", "/");
         }, 100);
@@ -159,12 +161,6 @@ export default function LoginPage() {
     }
 
     setIsLoading(true);
-
-    console.log({
-      accountName: email,
-      password,
-      tenantCode,
-    });
 
     try {
       const data = await authApi.login(

@@ -252,6 +252,7 @@ export function ContractTerms({
                     termTitle={term.termTitle}
                     comments={contract.currentVersion.comments || []}
                     canWrite={
+                      canEdit &&
                       contract.status === ContractStatus.Negotiating &&
                       !contract.currentVersion.isLocked
                     }

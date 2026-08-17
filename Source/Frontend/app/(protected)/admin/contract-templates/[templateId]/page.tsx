@@ -35,7 +35,8 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { useAuthStore } from "@/hooks/use-auth-store";
+import { usePermission } from "@/hooks/use-permission";
+import { RBAC_PERMISSIONS } from "@/lib/rbac";
 import { formatDateTime } from "@/lib/format-date-time";
 import { ContractLanguageMode } from "@/services/contract-api";
 import {
@@ -45,13 +46,12 @@ import {
   type ContractTemplateDetailResponse,
   type ContractTemplateVersionSummaryResponse,
 } from "@/services/contract-template-api";
-import { EmployeeType } from "@/services/employees-api";
 
 export default function ContractTemplateDetailPage() {
   const params = useParams<{ templateId: string }>();
   const router = useRouter();
-  const user = useAuthStore((state) => state.user);
-  const canManage = user?.employeeType === EmployeeType.AdminOfficer;
+  const { can } = usePermission();
+  const canManage = can(RBAC_PERMISSIONS.templateManage);
   const templateId = Number(params.templateId);
   const [template, setTemplate] =
     useState<ContractTemplateDetailResponse | null>(null);

@@ -26,6 +26,15 @@ const unwrapApiResponse = (response: AxiosResponse) => {
   return res;
 };
 
+const getEmployeeLoginError = (error: AxiosError) => {
+  const data = error.response?.data;
+  if (data && typeof data === "object" && "code" in data) {
+    const code = (data as { code?: unknown }).code;
+    if (code === "EmployeeInactive") return "employee_inactive";
+  }
+  return "session_expired";
+};
+
 axiosClient.interceptors.response.use(
   unwrapApiResponse,
 
@@ -33,7 +42,7 @@ axiosClient.interceptors.response.use(
     if (error.response?.status === 401) {
       if (typeof window !== "undefined") {
         if (window.location.pathname !== "/") {
-          window.location.replace("/?error=session_expired");
+          window.location.replace(`/?error=${getEmployeeLoginError(error)}`);
         }
       }
     }

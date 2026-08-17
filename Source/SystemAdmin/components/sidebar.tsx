@@ -56,10 +56,10 @@ const navItems = [
     disabled: true,
   },
   {
-    label: "Nhật ký hoạt động",
+    label: "Nhật ký bảo mật",
     icon: ScrollText,
     href: "/audit-logs",
-    disabled: true,
+    disabled: false,
   },
   {
     label: "Cấu hình",

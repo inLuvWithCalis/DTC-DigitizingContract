@@ -75,6 +75,14 @@ export interface CustomerResponse {
   totalContracts: number;
 }
 
+export interface CustomerLookupResponse {
+  customerId: number;
+  customerCode?: string | null;
+  customerFullName?: string | null;
+  customerCompany?: string | null;
+  status?: CustomerStatus | number | null;
+}
+
 export interface PagedResult<T> {
   items: T[];
   totalCount: number;
@@ -86,6 +94,12 @@ export interface PagedResult<T> {
 const BASE_URL = "/api/customers";
 
 export const customerApi = {
+  lookup: (keyword?: string) => {
+    return axiosClient.get<any, CustomerLookupResponse[]>(
+      `${BASE_URL}/lookup`,
+      { params: { keyword: keyword || undefined } },
+    );
+  },
   getList: (params: CustomerFilterParams) => {
     return axiosClient.get<any, PagedResult<CustomerResponse>>(BASE_URL, {
       params,

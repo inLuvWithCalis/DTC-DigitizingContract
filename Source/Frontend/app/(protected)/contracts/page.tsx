@@ -27,6 +27,8 @@ import {
   SummaryCards,
 } from "@/components/ui/custom/summary-cards";
 import { formatCurrency } from "@/lib/format-currency";
+import { useAuthStore } from "@/hooks/use-auth-store";
+import { hasPermission, RBAC_PERMISSIONS } from "@/lib/rbac";
 import {
   contractApi,
   ContractFilterRequest,
@@ -76,6 +78,11 @@ const CONTRACT_TYPE_FILTER_OPTIONS = [
 
 export default function ContractListPage() {
   const router = useRouter();
+  const user = useAuthStore((state) => state.user);
+  const canCreate = hasPermission(
+    user?.permissions,
+    RBAC_PERMISSIONS.contractCreate,
+  );
 
   const [data, setData] = useState<ContractListItemResponse[]>([]);
   const [rowCount, setRowCount] = useState<number>(0);
@@ -211,6 +218,25 @@ export default function ContractListPage() {
         ),
       },
       {
+        accessorKey: "responsibleEmployeeName",
+        header: "Người phụ trách",
+        cell: ({ row }) => {
+          const isMine = row.original.responsibleEmployeeId === user?.employeeId;
+          return (
+            <div className="min-w-36">
+              <p className="truncate text-sm font-medium">
+                {row.original.responsibleEmployeeName || `#${row.original.responsibleEmployeeId}`}
+              </p>
+              {!isMine && (
+                <Badge variant="outline" className="mt-1 text-[10px] text-muted-foreground">
+                  Chỉ xem
+                </Badge>
+              )}
+            </div>
+          );
+        },
+      },
+      {
         accessorKey: "totalAmount",
         header: () => <div className="text-right">Giá trị</div>,
         cell: ({ row }) => (
@@ -252,7 +278,7 @@ export default function ContractListPage() {
         },
       },
     ],
-    [loadingId],
+    [loadingId, user?.employeeId],
   );
 
   const totalValue = useMemo(
@@ -341,12 +367,12 @@ export default function ContractListPage() {
               Quản lý và theo dõi vòng đời hợp đồng: nháp, đàm phán, trình duyệt, ký và hoàn thành.
             </p>
           </div>
-          <Button
+          {canCreate && <Button
             className="shadow-sm"
             onClick={() => router.push("/contracts/create")}
           >
             <Plus className="mr-2 h-4 w-4" /> Tạo hợp đồng nháp
-          </Button>
+          </Button>}
         </div>
 
         <SummaryCards items={summaryItems} />
@@ -405,6 +431,13 @@ export default function ContractListPage() {
                         <p className="truncate font-semibold text-primary">
                           {formatCurrency(item.totalAmount)}
                         </p>
+                      </div>
+                      <div className="col-span-2 border-t pt-2">
+                        <p className="text-xs text-muted-foreground">Người phụ trách</p>
+                        <div className="flex items-center gap-2">
+                          <p className="truncate font-medium">{item.responsibleEmployeeName || `#${item.responsibleEmployeeId}`}</p>
+                          {item.responsibleEmployeeId !== user?.employeeId && <Badge variant="outline">Chỉ xem</Badge>}
+                        </div>
                       </div>
                     </div>
                     {actionCell}

@@ -74,7 +74,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { adminTenantsApi, TenantResponseDto } from "@/services/admin-tenants";
+import {
+  adminTenantsApi,
+  TenantDatabaseMode,
+  TenantResponseDto,
+  TenantStatus as TenantApiStatus,
+} from "@/services/admin-tenants";
 import {
   DatabaseHealth,
   MOCK_TENANTS,
@@ -258,6 +263,12 @@ function CreateTenantPanel({
 }) {
   const [tenantCode, setTenantCode] = useState("");
   const [tenantName, setTenantName] = useState("");
+  const [managerCode, setManagerCode] = useState("");
+  const [managerAccount, setManagerAccount] = useState("");
+  const [managerPassword, setManagerPassword] = useState("");
+  const [managerFullName, setManagerFullName] = useState("");
+  const [managerMobile, setManagerMobile] = useState("");
+  const [managerEmail, setManagerEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [createdTenant, setCreatedTenant] =
@@ -273,7 +284,13 @@ function CreateTenantPanel({
     !codeIsInvalid &&
     TENANT_CODE_PATTERN.test(normalizedCode) &&
     normalizedName.length > 0 &&
-    normalizedName.length <= 200;
+    normalizedName.length <= 200 &&
+    managerAccount.trim().length > 0 &&
+    managerAccount.trim().length <= 50 &&
+    managerPassword.length >= 6 &&
+    managerPassword.length <= 100 &&
+    managerFullName.trim().length > 0 &&
+    managerFullName.trim().length <= 100;
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -294,29 +311,51 @@ function CreateTenantPanel({
       return;
     }
 
+    if (
+      !managerAccount.trim() ||
+      managerAccount.trim().length > 50 ||
+      managerPassword.length < 6 ||
+      managerPassword.length > 100 ||
+      !managerFullName.trim() ||
+      managerFullName.trim().length > 100
+    ) {
+      setError("Vui lòng nhập đủ tài khoản, mật khẩu và họ tên của Manager đầu tiên.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const result = await adminTenantsApi.create({
         tenantCode: normalizedCode,
         tenantName: normalizedName,
+        initialManager: {
+          employeeCode: managerCode.trim() || null,
+          employeeAccount: managerAccount.trim(),
+          employeePassword: managerPassword,
+          employeeFullName: managerFullName.trim(),
+          employeeMobile: managerMobile.trim() || null,
+          employeeEmail: managerEmail.trim() || null,
+        },
       });
       setCreatedTenant(result);
       onCreated({
-        tenantId: result.tenantId,
+        tenantId: String(result.tenantId),
         tenantCode: result.tenantCode,
         tenantName: result.tenantName,
         status:
-          result.status === "Active"
+          result.status === TenantApiStatus.Active
             ? "Active"
-            : result.status === "Locked"
+            : result.status === TenantApiStatus.Suspended
               ? "Locked"
               : "Provisioning",
         plan: "Starter",
         databaseName: result.databaseName,
         databaseMode:
-          result.databaseMode === "Shared" ? "Shared" : "Dedicated",
+          result.databaseMode === TenantDatabaseMode.Shared
+            ? "Shared"
+            : "Dedicated",
         databaseHealth:
-          result.status === "Active" ? "Healthy" : "Provisioning",
+          result.status === TenantApiStatus.Active ? "Healthy" : "Provisioning",
         databaseServer: "Đang cập nhật",
         databaseVersion: "SQL Server 2022",
         region: "Southeast Asia",
@@ -325,8 +364,8 @@ function CreateTenantPanel({
         totalUsers: 1,
         activeUsers: 0,
         contractCount: 0,
-        ownerName: "Chưa thiết lập",
-        ownerEmail: "Chưa thiết lập",
+        ownerName: managerFullName.trim(),
+        ownerEmail: managerEmail.trim() || "Chưa thiết lập",
         domain: `${result.tenantCode}.econtract.local`,
         createdAt: new Intl.DateTimeFormat("vi-VN").format(new Date()),
         lastActivityAt: "Vừa tạo",
@@ -334,9 +373,16 @@ function CreateTenantPanel({
       });
       setTenantCode("");
       setTenantName("");
+      setManagerCode("");
+      setManagerAccount("");
+      setManagerPassword("");
+      setManagerFullName("");
+      setManagerMobile("");
+      setManagerEmail("");
     } catch (submitError) {
       setError(getErrorMessage(submitError));
     } finally {
+      setManagerPassword("");
       setIsSubmitting(false);
     }
   };
@@ -414,6 +460,41 @@ function CreateTenantPanel({
                 >
                   3–50 ký tự; chỉ dùng chữ thường, số và dấu gạch ngang.
                 </p>
+              </div>
+            </div>
+
+            <div className="space-y-4 rounded-xl border p-4">
+              <div>
+                <p className="font-semibold">Manager đầu tiên</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Tài khoản này được tạo cùng tenant và có quyền quản lý nhân viên.
+                </p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="managerFullName">Họ và tên <span className="text-destructive">*</span></Label>
+                  <Input id="managerFullName" value={managerFullName} onChange={(event) => setManagerFullName(event.target.value)} maxLength={100} disabled={isSubmitting} required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="managerCode">Mã nhân viên</Label>
+                  <Input id="managerCode" value={managerCode} onChange={(event) => setManagerCode(event.target.value)} maxLength={30} disabled={isSubmitting} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="managerAccount">Tài khoản <span className="text-destructive">*</span></Label>
+                  <Input id="managerAccount" value={managerAccount} onChange={(event) => setManagerAccount(event.target.value)} maxLength={50} autoComplete="off" disabled={isSubmitting} required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="managerPassword">Mật khẩu <span className="text-destructive">*</span></Label>
+                  <Input id="managerPassword" type="password" value={managerPassword} onChange={(event) => setManagerPassword(event.target.value)} minLength={6} maxLength={100} autoComplete="new-password" disabled={isSubmitting} required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="managerEmail">Email</Label>
+                  <Input id="managerEmail" type="email" value={managerEmail} onChange={(event) => setManagerEmail(event.target.value)} maxLength={100} disabled={isSubmitting} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="managerMobile">Số điện thoại</Label>
+                  <Input id="managerMobile" type="tel" value={managerMobile} onChange={(event) => setManagerMobile(event.target.value)} maxLength={15} disabled={isSubmitting} />
+                </div>
               </div>
             </div>
 

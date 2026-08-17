@@ -13,7 +13,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { employeeApi, EmployeeResponse } from "@/services/employees-api";
+import {
+  employeeApi,
+  type EmployeeDirectoryResponse,
+} from "@/services/employees-api";
 import { contractApi, ContractDetailResponse } from "@/services/contract-api";
 import { ConfirmDialog } from "@/components/ui/custom/confirm-dialog";
 import { showConfirmToast } from "@/components/ui/custom/confirm-toast";
@@ -40,7 +43,7 @@ export function TransferResponsibilityModal({
 }: TransferResponsibilityModalProps) {
   const router = useRouter();
 
-  const [employees, setEmployees] = useState<EmployeeResponse[]>([]);
+  const [employees, setEmployees] = useState<EmployeeDirectoryResponse[]>([]);
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
   const [newEmployeeId, setNewEmployeeId] = useState<string>("");
   const [reason, setReason] = useState<string>(
@@ -53,8 +56,8 @@ export function TransferResponsibilityModal({
       const fetchEmployees = async () => {
         setIsLoadingEmployees(true);
         try {
-          const res = await employeeApi.getList({ page: 1, pageSize: 100 });
-          setEmployees(res.items || []);
+          const res = await employeeApi.getDirectory();
+          setEmployees(res);
         } catch (error) {
           console.error("Lỗi khi tải danh sách nhân viên:", error);
           toast.error("Không thể tải danh sách nhân viên.");
@@ -144,8 +147,8 @@ export function TransferResponsibilityModal({
               .filter((emp) => emp.employeeId !== currentEmployeeId)
               .map((emp) => (
                 <SelectItem key={emp.employeeId} value={String(emp.employeeId)}>
-                  {emp.employeeFullName}{" "}
-                  {emp.employeeCode ? `(${emp.employeeCode})` : ""}
+                  {emp.employeeFullName || `Nhân viên #${emp.employeeId}`}
+                  {emp.departmentName ? ` • ${emp.departmentName}` : ""}
                 </SelectItem>
               ))}
           </SelectContent>

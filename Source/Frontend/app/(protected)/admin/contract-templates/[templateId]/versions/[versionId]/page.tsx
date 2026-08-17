@@ -42,7 +42,8 @@ import { Header } from "@/components/ui/custom/header";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useAuthStore } from "@/hooks/use-auth-store";
+import { usePermission } from "@/hooks/use-permission";
+import { RBAC_PERMISSIONS } from "@/lib/rbac";
 import { formatDateTime } from "@/lib/format-date-time";
 import { ContractLanguageMode } from "@/services/contract-api";
 import {
@@ -52,7 +53,6 @@ import {
   type ContractTemplateDetailResponse,
   type ContractTemplateVersionDetailResponse,
 } from "@/services/contract-template-api";
-import { EmployeeType } from "@/services/employees-api";
 
 const MAX_DOCX_SIZE = 10 * 1024 * 1024;
 const DOCX_MIME =
@@ -90,8 +90,8 @@ function RequirementRow({
 
 export default function ContractTemplateVersionWorkspacePage() {
   const params = useParams<{ templateId: string; versionId: string }>();
-  const user = useAuthStore((state) => state.user);
-  const canManage = user?.employeeType === EmployeeType.AdminOfficer;
+  const { can } = usePermission();
+  const canManage = can(RBAC_PERMISSIONS.templateManage);
   const templateId = Number(params.templateId);
   const versionId = Number(params.versionId);
   const fileInputRef = useRef<HTMLInputElement>(null);

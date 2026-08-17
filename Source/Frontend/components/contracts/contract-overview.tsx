@@ -38,7 +38,11 @@ import {
 import { productApi } from "@/services/catalog/products-api";
 import { serviceApi } from "@/services/catalog/services-api";
 
-import { customerApi, CustomerResponse } from "@/services/customers-api";
+import {
+  customerApi,
+  CustomerStatus,
+  type CustomerLookupResponse,
+} from "@/services/customers-api";
 import {
   Select,
   SelectContent,
@@ -119,13 +123,17 @@ export function ContractOverview({
     ? draftFinancialTotals
     : persistedFinancialTotals;
 
-  const [customers, setCustomers] = useState<CustomerResponse[]>([]);
+  const [customers, setCustomers] = useState<CustomerLookupResponse[]>([]);
 
   useEffect(() => {
     if (isEditable) {
       customerApi
-        .getList({ page: 1, pageSize: 100 })
-        .then((res) => setCustomers(res.items || []))
+        .lookup()
+        .then((items) =>
+          setCustomers(
+            items.filter((customer) => customer.status === CustomerStatus.Active),
+          ),
+        )
         .catch((err) => console.error(err));
     }
   }, [isEditable]);

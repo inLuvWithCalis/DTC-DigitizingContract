@@ -17,6 +17,7 @@ import {
   Package,
   ScrollText,
   Settings,
+  ShieldCheck,
   Tags,
   User,
   Users,
@@ -31,39 +32,97 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/hooks/use-auth-store";
-import { EmployeeType } from "@/services/employees-api";
+import {
+  hasAnyPermission,
+  RBAC_PERMISSIONS,
+  type RbacPermission,
+} from "@/lib/rbac";
 import { useSidebar } from "./sidebar-context";
 
 interface NavItem {
   label: string;
   icon: typeof LayoutDashboard;
   href: string;
-  allowedEmployeeTypes?: EmployeeType[];
+  requiredPermissions?: RbacPermission[];
 }
 
 const navItems: NavItem[] = [
   { label: "Tổng quan", icon: LayoutDashboard, href: "/dashboard" },
-  { label: "Hợp đồng", icon: FileText, href: "/contracts" },
+  {
+    label: "Hợp đồng",
+    icon: FileText,
+    href: "/contracts",
+    requiredPermissions: [
+      RBAC_PERMISSIONS.contractReadOwn,
+      RBAC_PERMISSIONS.contractReadTenant,
+    ],
+  },
   {
     label: "Mẫu hợp đồng",
     icon: LibraryBig,
     href: "/admin/contract-templates",
-    allowedEmployeeTypes: [EmployeeType.AdminOfficer],
+    requiredPermissions: [RBAC_PERMISSIONS.templateManage],
   },
   {
     label: "Nhật ký hợp đồng",
     icon: ScrollText,
     href: "/contract-audits",
-    allowedEmployeeTypes: [EmployeeType.Manager, EmployeeType.AdminOfficer],
+    requiredPermissions: [RBAC_PERMISSIONS.contractAuditReadTenant],
   },
-  { label: "Báo giá", icon: FileSignature, href: "/quotations" },
-  { label: "Khách hàng", icon: Users, href: "/customers" },
-  { label: "Danh mục", icon: FolderTree, href: "/catalog/categories" },
-  { label: "Sản phẩm", icon: Package, href: "/catalog/products" },
-  { label: "Dịch vụ", icon: BriefcaseBusiness, href: "/catalog/services" },
-  { label: "Loại dịch vụ", icon: Tags, href: "/catalog/service-types" },
-  { label: "Nhân viên", icon: User, href: "/admin/employees" },
-  { label: "Phòng ban", icon: Building2, href: "/admin/departments" },
+  {
+    label: "Nhật ký bảo mật",
+    icon: ShieldCheck,
+    href: "/security-audits",
+    requiredPermissions: [RBAC_PERMISSIONS.securityAuditReadTenant],
+  },
+  {
+    label: "Báo giá",
+    icon: FileSignature,
+    href: "/quotations",
+    requiredPermissions: [RBAC_PERMISSIONS.quotationManage],
+  },
+  {
+    label: "Khách hàng",
+    icon: Users,
+    href: "/customers",
+    requiredPermissions: [RBAC_PERMISSIONS.customerManage],
+  },
+  {
+    label: "Danh mục",
+    icon: FolderTree,
+    href: "/catalog/categories",
+    requiredPermissions: [RBAC_PERMISSIONS.catalogRead],
+  },
+  {
+    label: "Sản phẩm",
+    icon: Package,
+    href: "/catalog/products",
+    requiredPermissions: [RBAC_PERMISSIONS.catalogRead],
+  },
+  {
+    label: "Dịch vụ",
+    icon: BriefcaseBusiness,
+    href: "/catalog/services",
+    requiredPermissions: [RBAC_PERMISSIONS.catalogRead],
+  },
+  {
+    label: "Loại dịch vụ",
+    icon: Tags,
+    href: "/catalog/service-types",
+    requiredPermissions: [RBAC_PERMISSIONS.catalogRead],
+  },
+  {
+    label: "Nhân viên",
+    icon: User,
+    href: "/admin/employees",
+    requiredPermissions: [RBAC_PERMISSIONS.employeeManage],
+  },
+  {
+    label: "Phòng ban",
+    icon: Building2,
+    href: "/admin/departments",
+    requiredPermissions: [RBAC_PERMISSIONS.departmentManage],
+  },
   { label: "Cấu hình", icon: Settings, href: "/dashboard/settings" },
 ];
 
@@ -88,10 +147,8 @@ export function Sidebar() {
       {navItems
         .filter(
           (item) =>
-            !item.allowedEmployeeTypes ||
-            (user?.employeeType !== null &&
-              user?.employeeType !== undefined &&
-              item.allowedEmployeeTypes.includes(user.employeeType)),
+            !item.requiredPermissions ||
+            hasAnyPermission(user?.permissions, item.requiredPermissions),
         )
         .map((item) => {
           const Icon = item.icon;
@@ -230,14 +287,16 @@ export function Sidebar() {
                 <DropdownMenuTrigger asChild>
                   <button className="w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-accent transition-colors justify-start focus:outline-none">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-primary to-primary/80 flex items-center justify-center text-sm font-bold flex-shrink-0 text-primary-foreground shadow-sm">
-                      {user?.employeeFullName?.[0]?.toUpperCase() ?? "U"}
+                      {user?.fullName?.[0]?.toUpperCase() ?? "U"}
                     </div>
                     <div className="flex-1 text-left min-w-0">
                       <p className="text-sm font-semibold text-foreground truncate">
-                        {user?.employeeFullName || "Người dùng"}
+                        {user?.fullName || "Người dùng"}
                       </p>
                       <p className="text-xs text-muted-foreground truncate">
-                        {user?.employeeEmail || "Chưa cập nhật email"}
+                        {[user?.roleName, user?.tenantName]
+                          .filter(Boolean)
+                          .join(" • ") || "Chưa cập nhật vai trò"}
                       </p>
                     </div>
                   </button>

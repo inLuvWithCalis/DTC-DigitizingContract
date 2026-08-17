@@ -30,6 +30,8 @@ import {
 } from "@/components/ui/custom/summary-cards";
 import { PageHeaderSkeleton } from "@/components/ui/custom/table-skeleton";
 import { ServiceTypeFormModal } from "./service-type-form-modal";
+import { usePermission } from "@/hooks/use-permission";
+import { RBAC_PERMISSIONS } from "@/lib/rbac";
 
 function ServiceTypeBulkActions({
   selectedRows,
@@ -67,6 +69,8 @@ function ServiceTypeBulkActions({
 }
 
 export default function ServiceTypeListPage() {
+  const { can } = usePermission();
+  const canManage = can(RBAC_PERMISSIONS.catalogManage);
   const [serviceTypes, setServiceTypes] = useState<ServiceTypeResponse[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -205,7 +209,7 @@ export default function ServiceTypeListPage() {
               primaryIcon={<Eye className="w-4 h-4" />}
               onPrimaryClick={() => setViewingItem(item)}
               isLoading={loadingId === item.serviceTypeId}
-              menuItems={[
+              menuItems={canManage ? [
                 {
                   label: "Chỉnh sửa",
                   icon: <UserCog className="w-4 h-4" />,
@@ -220,13 +224,13 @@ export default function ServiceTypeListPage() {
                   isDestructive: true,
                   onClick: () => setDeleteId(item.serviceTypeId),
                 },
-              ]}
+              ] : []}
             />
           );
         },
       },
     ],
-    [loadingId],
+    [canManage, loadingId],
   );
 
   const totalServiceUsed = useMemo(
@@ -272,14 +276,14 @@ export default function ServiceTypeListPage() {
             </p>
           </div>
 
-          <Button
+          {canManage && <Button
             onClick={() => {
               setEditingItem(null);
               setIsFormOpen(true);
             }}
           >
             <Plus className="w-4 h-4 mr-2" /> Thêm mới
-          </Button>
+          </Button>}
         </div>
 
         <SummaryCards items={summaryItems} isLoading={isLoading} />
@@ -299,12 +303,12 @@ export default function ServiceTypeListPage() {
               onRowClick={(row) => setViewingItem(row)}
               searchValue={searchTerm}
               onSearchChange={(value) => setSearchTerm(value)}
-              bulkActions={(selectedRows, resetSelection) => (
+              bulkActions={canManage ? (selectedRows, resetSelection) => (
                 <ServiceTypeBulkActions
                   selectedRows={selectedRows}
                   resetSelection={resetSelection}
                 />
-              )}
+              ) : undefined}
               mobileCardRenderer={(row, { isSelected, actionCell }) => {
                 const item = row.original;
                 return (
@@ -359,7 +363,7 @@ export default function ServiceTypeListPage() {
           titleClassName="text-destructive"
         />
 
-        <ServiceTypeFormModal
+        {canManage && <ServiceTypeFormModal
           isOpen={isFormOpen}
           onClose={() => {
             setIsFormOpen(false);
@@ -367,7 +371,7 @@ export default function ServiceTypeListPage() {
           }}
           onSuccess={fetchServiceTypes}
           item={editingItem}
-        />
+        />}
 
         <ServiceTypeFormModal
           isOpen={!!viewingItem}

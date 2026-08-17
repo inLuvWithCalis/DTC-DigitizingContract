@@ -1,6 +1,8 @@
 import axiosClient from "@/lib/axios-interceptor";
+import type { RbacPermission } from "@/lib/rbac";
+import type { EmployeeType } from "@/services/employees-api";
 
-const BASE_URL = "/api/Auth";
+const BASE_URL = "/api/auth";
 
 export interface LoginRequestDto {
   accountName: string;
@@ -11,34 +13,22 @@ export interface LoginResponseDto {
   message: string;
   employeeId: number;
   employeeName: string | null;
+  tenantId: number;
+  tenantCode: string;
+  tenantName: string;
 }
 
 export interface UserProfileDto {
   employeeId: number;
-  employeeCode: string | null;
-  employeeAccount: string;
-  employeeFullName: string | null;
-  titleId: number | null;
-  employeeBirthDate: string | null;
-  maritalStatus: number | null;
-  gender: number | null;
-  employeeMobile: string | null;
-  employeePhone: string | null;
-  employeeEmail: string | null;
-  employeeAddress: string | null;
-  userCreated: number | null;
-  userModified: number | null;
-  dateCreated: string | null;
-  dateModified: string | null;
-  hireDate: string | null;
-  status: number | null;
-  departmentId: number | null;
-  others: string | null;
-  defaultPage: string | null;
-  employeeImageIcon: string | null;
-  employeeType: number | null;
-  userRoles: string | null;
-  workTypeId: number | null;
+  account: string | null;
+  fullName: string | null;
+  employeeType: EmployeeType;
+  roleName: string;
+  tenantId: number;
+  tenantCode: string;
+  tenantName: string;
+  permissionVersion: string;
+  permissions: RbacPermission[];
 }
 
 export const authApi = {

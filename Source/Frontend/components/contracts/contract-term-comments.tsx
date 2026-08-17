@@ -270,19 +270,25 @@ export function ContractTermComments({
     );
     if (employeeIds.length === 0) return;
 
-    const entries = await Promise.all(
-      employeeIds.map(async (employeeId) => {
-        try {
-          const employee = await employeeApi.getById(employeeId);
-          return [
-            employeeId,
-            employee.employeeFullName?.trim() || `Nhân viên #${employeeId}`,
-          ] as const;
-        } catch {
-          return [employeeId, `Nhân viên #${employeeId}`] as const;
-        }
-      }),
-    );
+    let entries: ReadonlyArray<readonly [number, string]> = [];
+    try {
+      const directory = await employeeApi.getDirectory();
+      const targetIds = new Set(employeeIds);
+      entries = directory
+        .filter((employee) => targetIds.has(employee.employeeId))
+        .map(
+          (employee) =>
+            [
+              employee.employeeId,
+              employee.employeeFullName?.trim() ||
+                `Nhân viên #${employee.employeeId}`,
+            ] as const,
+        );
+    } catch {
+      entries = employeeIds.map(
+        (employeeId) => [employeeId, `Nhân viên #${employeeId}`] as const,
+      );
+    }
 
     setEmployeeNames((current) => ({
       ...current,

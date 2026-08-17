@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Header } from "@/components/ui/custom/header";
+import { PermissionGuard } from "@/components/auth/permission-guard";
+import { RBAC_PERMISSIONS } from "@/lib/rbac";
 import {
   ArrowLeft,
   Phone,
@@ -237,7 +239,7 @@ function InteractionFormModal({
   );
 }
 
-export default function CustomerDetailPage() {
+function CustomerDetailPageContent() {
   const params = useParams();
   const router = useRouter();
   const customerId = Number(params.id);
@@ -861,5 +863,13 @@ export default function CustomerDetailPage() {
         item={editingInteraction}
       />
     </div>
+  );
+}
+
+export default function CustomerDetailPage() {
+  return (
+    <PermissionGuard permission={RBAC_PERMISSIONS.customerManage}>
+      <CustomerDetailPageContent />
+    </PermissionGuard>
   );
 }

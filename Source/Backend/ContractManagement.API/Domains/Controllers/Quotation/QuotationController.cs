@@ -1,4 +1,5 @@
 ﻿using ContractManagement.API.Common.Responses;
+using ContractManagement.API.Common.Security;
 using ContractManagement.Domains.DTOs.Requests.Quotation;
 using ContractManagement.Domains.DTOs.Responses.Quotation;
 using ContractManagement.Domains.Interfaces.Quotation;
@@ -10,7 +11,7 @@ namespace ContractManagement.Domains.Controllers.Quotation
 {
     [Route("api/[controller]")]
     [ApiController]
-    [SessionAuthorize]
+    [SessionAuthorize(RbacPermissions.QuotationManage)]
     public class QuotationController : ControllerBase
     {
         private readonly IQuotationService _service;

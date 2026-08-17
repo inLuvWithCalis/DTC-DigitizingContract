@@ -12,5 +12,8 @@ namespace ContractManagement.API.Domains.DTOs.Requests.Employee
         [MinLength(6)]
         [MaxLength(100)]
         public string NewPassword { get; set; } = string.Empty;
+
+        [Required]
+        public string RowVersion { get; set; } = string.Empty;
     }
 }

@@ -5,6 +5,7 @@ using ContractManagement.Infrastructure.MultiTenancy.Interfaces;
 using ContractManagement.Infrastructure.MultiTenancy.Options;
 using ContractManagement.Infrastructure.Persistence.Central;
 using ContractManagement.Infrastructure.Persistence.Central.Entities;
+using ContractManagement.Infrastructure.Security;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -119,11 +120,33 @@ public sealed class TenantProvisioningService
             
             await _tenantSeedData.InitializeAsync(
                 connectionString,
+                tenant.TenantId,
+                command.InitialManager,
+                command.SecurityContext,
                 cancellationToken);
 
             tenant.Status = TenantStatus.Active;
             tenant.ProvisioningError = null;
             tenant.UpdatedAt = DateTime.UtcNow;
+
+            _centralDbContext.SecurityAudits.Add(
+                AuthorizationAuditRecordFactory.CreateCentral(
+                    command.SecurityContext.SystemAdminId,
+                    tenant.TenantId,
+                    tenant.TenantCode,
+                    AuthorizationAuditActionTypes.TenantProvisioned,
+                    AuthorizationAuditResultTypes.Success,
+                    "Tenant",
+                    tenant.TenantId.ToString(),
+                    null,
+                    6,
+                    null,
+                    1,
+                    null,
+                    DateTime.UtcNow,
+                    command.SecurityContext.IpAddress,
+                    command.SecurityContext.UserAgent,
+                    command.SecurityContext.CorrelationId));
 
             await _centralDbContext.SaveChangesAsync(
                 cancellationToken);
@@ -147,6 +170,25 @@ public sealed class TenantProvisioningService
             tenant.UpdatedAt = DateTime.UtcNow;
             tenant.ProvisioningError =
                 Truncate(exception.Message, 2000);
+
+            _centralDbContext.SecurityAudits.Add(
+                AuthorizationAuditRecordFactory.CreateCentral(
+                    command.SecurityContext.SystemAdminId,
+                    tenant.TenantId,
+                    tenant.TenantCode,
+                    AuthorizationAuditActionTypes.TenantProvisioned,
+                    AuthorizationAuditResultTypes.Failed,
+                    "Tenant",
+                    tenant.TenantId.ToString(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    "ProvisioningFailed",
+                    DateTime.UtcNow,
+                    command.SecurityContext.IpAddress,
+                    command.SecurityContext.UserAgent,
+                    command.SecurityContext.CorrelationId));
 
             await _centralDbContext.SaveChangesAsync(
                 cancellationToken);

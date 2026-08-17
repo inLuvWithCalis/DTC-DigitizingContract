@@ -42,6 +42,6 @@ namespace ContractManagement.API.Domains.DTOs.Requests.Employee
         /// 6 = Manager
         /// </summary>
         [Range(1, 6)]
-        public byte? EmployeeType { get; set; }
+        public byte EmployeeType { get; set; }
     }
 }

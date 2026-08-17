@@ -6,6 +6,9 @@ namespace ContractManagement.Domains.Interfaces.ContractTemplate;
 
 public interface IContractTemplateService
 {
+    Task<IReadOnlyList<AvailableContractTemplateVersionResponse>>
+        ListAvailableAsync(CancellationToken cancellationToken = default);
+
     Task<SoftwareSupplyPlaceholderCatalogResponse> GetPlaceholderCatalogAsync(
         int employeeId,
         CancellationToken cancellationToken = default);

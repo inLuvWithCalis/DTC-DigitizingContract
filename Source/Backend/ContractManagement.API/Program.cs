@@ -2,11 +2,13 @@ using ContractManagement.API.Domains.Interfaces.Catalog;
 using ContractManagement.API.Domains.Interfaces.Customer;
 using ContractManagement.API.Domains.Interfaces.CustomerInteraction;
 using ContractManagement.API.Domains.Interfaces.Department;
+using ContractManagement.API.Domains.Interfaces.Security;
 using ContractManagement.API.Domains.Services.Catalog;
 using ContractManagement.API.Domains.Services.Customer;
 using ContractManagement.API.Domains.Services.CustomerInteraction;
 using ContractManagement.API.Domains.Services.Department;
 using ContractManagement.API.Domains.Services.Employee;
+using ContractManagement.API.Domains.Services.Security;
 using ContractManagement.Domains.Interfaces.ContractTemplate;
 using ContractManagement.Domains.Interfaces.Contract;
 using ContractManagement.Domains.Interfaces.Employee;
@@ -201,6 +203,30 @@ builder.Services.AddScoped<
     FileStorageService>();
 
 builder.Services.AddScoped<
+    IContractResourceAuthorizationService,
+    ContractResourceAuthorizationService>();
+
+builder.Services.AddScoped<
+    IFileResourceAuthorizationService,
+    FileResourceAuthorizationService>();
+
+builder.Services.AddScoped<
+    ITenantAuthorizationAuditWriter,
+    TenantAuthorizationAuditWriter>();
+
+builder.Services.AddScoped<
+    ICentralSecurityAuditWriter,
+    CentralSecurityAuditWriter>();
+
+builder.Services.AddScoped<
+    ITenantSecurityAuditQueryService,
+    TenantSecurityAuditQueryService>();
+
+builder.Services.AddScoped<
+    ICentralSecurityAuditQueryService,
+    CentralSecurityAuditQueryService>();
+
+builder.Services.AddScoped<
     IContractAttachmentService,
     ContractAttachmentService>();
 
@@ -211,6 +237,10 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IEmployeeService,
     EmployeeService>();
+
+builder.Services.AddScoped<
+    ISystemAdminManagerGovernanceService,
+    SystemAdminManagerGovernanceService>();
 
 builder.Services.AddScoped<
     ICustomerService,
@@ -365,6 +395,12 @@ app.UseSession();
  * 4. DbDtctechContext dùng connection string của tenant đó.
  */
 app.UseMiddleware<TenantResolutionMiddleware>();
+
+/*
+ * Ghi audit best-effort cho denial từ action/controller của tenant. Đặt sau
+ * tenant resolution để writer luôn có tenant scope chính xác.
+ */
+app.UseMiddleware<TenantDeniedAuthorizationAuditMiddleware>();
 
 /*
  * Kiểm tra quyền truy cập.

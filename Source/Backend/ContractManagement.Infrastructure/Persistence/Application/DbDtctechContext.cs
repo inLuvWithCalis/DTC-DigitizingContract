@@ -92,6 +92,8 @@ public partial class DbDtctechContext : DbContext
 
     public virtual DbSet<TblEmployee> TblEmployees { get; set; }
 
+    public virtual DbSet<TblAuthorizationAudit> TblAuthorizationAudits { get; set; }
+
     public virtual DbSet<TblFileStorage> TblFileStorages { get; set; }
 
     public virtual DbSet<TblInvoice> TblInvoices { get; set; }
@@ -1939,6 +1941,27 @@ public partial class DbDtctechContext : DbContext
             entity.Property(e => e.UserRoles)
                 .HasMaxLength(20)
                 .IsUnicode(false);
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+        });
+
+        modelBuilder.Entity<TblAuthorizationAudit>(entity =>
+        {
+            entity.HasKey(x => x.AuthorizationAuditId);
+            entity.ToTable("tbl_AuthorizationAudit");
+            entity.Property(x => x.ActorType).HasMaxLength(30).IsUnicode(false);
+            entity.Property(x => x.Action).HasMaxLength(100).IsUnicode(false);
+            entity.Property(x => x.Result).HasMaxLength(30).IsUnicode(false);
+            entity.Property(x => x.FailureCode).HasMaxLength(64).IsUnicode(false);
+            entity.Property(x => x.TargetType).HasMaxLength(50).IsUnicode(false);
+            entity.Property(x => x.TargetId).HasMaxLength(100).IsUnicode(false);
+            entity.Property(x => x.OccurredAt).HasColumnType("datetime2");
+            entity.Property(x => x.IpAddress).HasMaxLength(45).IsUnicode(false);
+            entity.Property(x => x.UserAgent).HasMaxLength(1024);
+            entity.Property(x => x.CorrelationId).HasMaxLength(100).IsUnicode(false);
+            entity.HasIndex(x => new { x.TenantId, x.OccurredAt });
+            entity.HasIndex(x => x.ActorEmployeeId);
         });
 
         modelBuilder.Entity<TblFileStorage>(entity =>

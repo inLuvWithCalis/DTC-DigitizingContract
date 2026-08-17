@@ -1,4 +1,5 @@
 ﻿using ContractManagement.API.Common.Responses;
+using ContractManagement.API.Common.Security;
 using ContractManagement.API.Domains.DTOs.Requests.Catalog;
 using ContractManagement.API.Domains.DTOs.Responses.Catalog;
 using ContractManagement.API.Domains.Interfaces.Catalog;
@@ -24,6 +25,7 @@ namespace ContractManagement.Domains.Controllers.Catalog
         }
 
         [HttpGet]
+        [SessionAuthorize(RbacPermissions.CatalogRead)]
         public async Task<IActionResult> GetList(
             [FromQuery] ProductFilterRequest filter)
         {
@@ -35,6 +37,7 @@ namespace ContractManagement.Domains.Controllers.Catalog
         }
 
         [HttpGet("{id:int}")]
+        [SessionAuthorize(RbacPermissions.CatalogRead)]
         public async Task<IActionResult> GetById(int id)
         {
             var result = await _service.GetByIdAsync(id);
@@ -45,6 +48,7 @@ namespace ContractManagement.Domains.Controllers.Catalog
         }
 
         [HttpPost]
+        [SessionAuthorize(RbacPermissions.CatalogManage)]
         public async Task<IActionResult> Create(
             [FromBody] CreateProductRequest request)
         {
@@ -59,6 +63,7 @@ namespace ContractManagement.Domains.Controllers.Catalog
         }
 
         [HttpPut("{id:int}")]
+        [SessionAuthorize(RbacPermissions.CatalogManage)]
         public async Task<IActionResult> Update(
             int id,
             [FromBody] UpdateProductRequest request)
@@ -71,6 +76,7 @@ namespace ContractManagement.Domains.Controllers.Catalog
         }
 
         [HttpPatch("{id:int}/status")]
+        [SessionAuthorize(RbacPermissions.CatalogManage)]
         public async Task<IActionResult> SetStatus(
             int id,
             [FromQuery] byte status)
@@ -83,6 +89,7 @@ namespace ContractManagement.Domains.Controllers.Catalog
         }
 
         [HttpDelete("{id:int}")]
+        [SessionAuthorize(RbacPermissions.CatalogManage)]
         public async Task<IActionResult> Delete(int id)
         {
             await _service.DeleteAsync(id);

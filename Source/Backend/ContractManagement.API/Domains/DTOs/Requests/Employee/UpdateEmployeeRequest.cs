@@ -25,6 +25,9 @@ namespace ContractManagement.API.Domains.DTOs.Requests.Employee
         public int? DepartmentId { get; set; }
 
         [Range(1, 6)]
-        public byte? EmployeeType { get; set; }
+        public byte EmployeeType { get; set; }
+
+        [Required]
+        public string RowVersion { get; set; } = string.Empty;
     }
 }

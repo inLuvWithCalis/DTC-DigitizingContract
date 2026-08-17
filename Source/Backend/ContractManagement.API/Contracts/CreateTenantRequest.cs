@@ -15,4 +15,7 @@ public sealed class CreateTenantRequest
     [Required]
     [MaxLength(200)]
     public string TenantName { get; set; } = null!;
+
+    [Required]
+    public InitialManagerRequest InitialManager { get; set; } = null!;
 }

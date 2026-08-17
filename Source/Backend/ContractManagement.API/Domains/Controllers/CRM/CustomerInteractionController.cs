@@ -1,4 +1,5 @@
 ﻿using ContractManagement.API.Common.Responses;
+using ContractManagement.API.Common.Security;
 using ContractManagement.API.Domains.DTOs.Requests.CustomerInteraction;
 using ContractManagement.API.Domains.DTOs.Responses.CustomerInteraction;
 using ContractManagement.API.Domains.Interfaces.CustomerInteraction;
@@ -9,7 +10,7 @@ namespace ContractManagement.Domains.Controllers.CRM
 {
     [Route("api/customers/{customerId:int}/interactions")]
     [ApiController]
-    [SessionAuthorize]
+    [SessionAuthorize(RbacPermissions.CustomerManage)]
     public class CustomerInteractionController : ControllerBase
     {
         private readonly ICustomerInteractionService _service;

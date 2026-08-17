@@ -1,4 +1,6 @@
 ﻿using ContractManagement.Attributes;
+using ContractManagement.API.Common.Security;
+using ContractManagement.Filter;
 using ContractManagement.Infrastructure.MultiTenancy.Interfaces;
 using ContractManagement.Infrastructure.MultiTenancy.Options;
 using Microsoft.AspNetCore.Http.Features;
@@ -51,6 +53,12 @@ public sealed class TenantResolutionMiddleware
             return;
         }
 
+        bool requiresEmployeeSession =
+            context.GetEndpoint()?
+                .Metadata
+                .GetMetadata<SessionAuthorizeAttribute>()
+            is not null;
+
         /*
          * Lấy tenant đã lưu trong Session.
          *
@@ -63,6 +71,18 @@ public sealed class TenantResolutionMiddleware
 
         string? tenantFromSession =
             session?.GetString("TenantCode");
+
+        if (requiresEmployeeSession
+            && (session?.GetInt32("EmployeeId") is null
+                || session.GetInt32("TenantId") is null))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            await context.Response.WriteAsJsonAsync(
+                new AuthorizationErrorResponse(
+                    AuthorizationErrorCodes.AuthenticationRequired,
+                    "Employee login is required."));
+            return;
+        }
 
         /*
          * Nếu sau này dùng ASP.NET Authentication/JWT,

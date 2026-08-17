@@ -16,7 +16,8 @@ namespace ContractManagement.Domains.Interfaces.Contract
         /// </summary>
         Task<PagedResult<ContractListItemResponse>> GetListAsync(
             ContractFilterRequest filter,
-            int employeeId);
+            int employeeId,
+            bool canReadTenant = false);
 
         /// <summary>
         /// Lấy các hợp đồng gốc đủ điều kiện cho dropdown
@@ -25,7 +26,8 @@ namespace ContractManagement.Domains.Interfaces.Contract
         Task<PagedResult<EligibleParentContractResponse>>
             GetEligibleParentsAsync(
                 EligibleParentContractFilterRequest filter,
-                int employeeId);
+                int employeeId,
+                bool canReadTenant = false);
 
         /// <summary>
         /// Tạo hợp đồng Draft cùng Version 1,
@@ -79,7 +81,8 @@ namespace ContractManagement.Domains.Interfaces.Contract
         /// </summary>
         Task<ContractDetailResponse> GetDetailAsync(
             int contractId,
-            int employeeId);
+            int employeeId,
+            bool canReadTenant = false);
 
         /// <summary>
         /// Cập nhật Contract, Items và Terms khi hợp đồng còn là Draft.
@@ -109,13 +112,15 @@ namespace ContractManagement.Domains.Interfaces.Contract
         Task<IReadOnlyList<ContractNegotiationCommentResponse>>
             GetRootCommentsAsync(
                 int contractId,
-                int employeeId);
+                int employeeId,
+                bool canReadTenant = false);
 
         Task<IReadOnlyList<ContractNegotiationCommentResponse>>
             GetCommentRepliesAsync(
                 int contractId,
                 int parentCommentId,
-                int employeeId);
+                int employeeId,
+                bool canReadTenant = false);
 
         Task<ContractNegotiationCommentResponse>
             RecordExternalFeedbackAsync(
@@ -161,13 +166,15 @@ namespace ContractManagement.Domains.Interfaces.Contract
         Task<IReadOnlyList<ContractVersionHistoryResponse>>
             GetVersionHistoryAsync(
                 int contractId,
-                int employeeId);
+                int employeeId,
+                bool canReadTenant = false);
 
         Task<ContractVersionDetailResponse>
             GetVersionDetailAsync(
                 int contractId,
                 int versionId,
-                int employeeId);
+                int employeeId,
+                bool canReadTenant = false);
 
         Task<SubmitContractForApprovalResponse> SubmitForApprovalAsync(
             int contractId,

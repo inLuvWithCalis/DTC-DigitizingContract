@@ -29,12 +29,13 @@ public sealed class LibreOfficeContractTemplatePdfRenderer
         ArgumentNullException.ThrowIfNull(previewDocx);
         VerifyOpenableDocx(previewDocx);
 
-        var executable = _options.ExecutablePath?.Trim();
-        if (string.IsNullOrWhiteSpace(executable) || !System.IO.File.Exists(executable))
+        var executable = ResolveExecutablePath(_options.ExecutablePath);
+        if (executable is null)
         {
             throw new ContractTemplatePdfRenderingException(
                 "PdfConverterUnavailable",
-                "LibreOffice executable chưa được cấu hình hoặc không khả dụng.");
+                "Không tìm thấy LibreOffice. Hãy cài LibreOffice hoặc cấu hình " +
+                "TemplatePdfRendering:ExecutablePath tới soffice executable.");
         }
 
         await ConversionGate.WaitAsync(cancellationToken);
@@ -165,6 +166,107 @@ public sealed class LibreOfficeContractTemplatePdfRenderer
         info.ArgumentList.Add(outputDirectory);
         info.ArgumentList.Add(inputPath);
         return info;
+    }
+
+    private static string? ResolveExecutablePath(string? configuredPath)
+    {
+        var configured = configuredPath?.Trim().Trim('"');
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            if (System.IO.File.Exists(configured))
+            {
+                return Path.GetFullPath(configured);
+            }
+
+            var configuredFromPath = FindOnPath(configured);
+            if (configuredFromPath is not null)
+            {
+                return configuredFromPath;
+            }
+        }
+
+        foreach (var candidate in GetDefaultExecutableCandidates())
+        {
+            if (System.IO.File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return FindOnPath(OperatingSystem.IsWindows()
+            ? "soffice.exe"
+            : "libreoffice");
+    }
+
+    private static IEnumerable<string> GetDefaultExecutableCandidates()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var programFiles = Environment.GetFolderPath(
+                Environment.SpecialFolder.ProgramFiles);
+            var programFilesX86 = Environment.GetFolderPath(
+                Environment.SpecialFolder.ProgramFilesX86);
+
+            if (!string.IsNullOrWhiteSpace(programFiles))
+            {
+                yield return Path.Combine(programFiles, "LibreOffice", "program",
+                    "soffice.exe");
+            }
+
+            if (!string.IsNullOrWhiteSpace(programFilesX86))
+            {
+                yield return Path.Combine(programFilesX86, "LibreOffice", "program",
+                    "soffice.exe");
+            }
+
+            yield break;
+        }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            yield return "/Applications/LibreOffice.app/Contents/MacOS/soffice";
+            yield break;
+        }
+
+        yield return "/usr/bin/libreoffice";
+        yield return "/usr/local/bin/libreoffice";
+        yield return "/snap/bin/libreoffice";
+    }
+
+    private static string? FindOnPath(string executableName)
+    {
+        if (Path.IsPathRooted(executableName) ||
+            executableName.IndexOfAny(new[] { Path.DirectorySeparatorChar,
+                Path.AltDirectorySeparatorChar }) >= 0)
+        {
+            return null;
+        }
+
+        var path = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        foreach (var directory in path.Split(Path.PathSeparator,
+                     StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            try
+            {
+                var candidate = Path.Combine(directory.Trim('"'), executableName);
+                if (System.IO.File.Exists(candidate))
+                {
+                    return Path.GetFullPath(candidate);
+                }
+            }
+            catch (Exception exception) when (exception is ArgumentException
+                or NotSupportedException or PathTooLongException)
+            {
+                // Ignore malformed PATH entries and continue with the remaining entries.
+            }
+        }
+
+        return null;
     }
 
     private static void VerifyOpenableDocx(byte[] document)

@@ -118,7 +118,7 @@ public sealed class ContractTemplateDocumentValidatorTests
     }
 
     [Fact]
-    public async Task MacroTrackedChangesAndComments_AreTechnicallyRejected()
+    public async Task MacroIsRejected_ButValidTrackedChangesAndCommentsAreAccepted()
     {
         var macro = await _validator.ValidateAsync(CreateFile(
             AddMacroPart(CreateDocument(RequiredTokens())), "template.docx"));
@@ -130,8 +130,34 @@ public sealed class ContractTemplateDocumentValidatorTests
             "template.docx"));
 
         Assert.Equal("MacroNotAllowed", macro.FailureCode);
-        Assert.Equal("TrackedChangesNotAllowed", tracked.FailureCode);
-        Assert.Equal("WordCommentsNotAllowed", comments.FailureCode);
+        Assert.True(tracked.IsTechnicallyAccepted,
+            $"Technical failure: {tracked.FailureCode}");
+        Assert.True(comments.IsTechnicallyAccepted,
+            $"Technical failure: {comments.FailureCode}");
+    }
+
+    [Fact]
+    public async Task ModernOfficeExtensionMetadata_IsAccepted()
+    {
+        var result = await _validator.ValidateAsync(CreateFile(
+            AddModernOfficeMetadata(CreateDocument(RequiredTokens())),
+            "template.docx"));
+
+        Assert.True(result.IsTechnicallyAccepted,
+            $"Technical failure: {result.FailureCode}");
+        Assert.True(result.IsCatalogValid);
+    }
+
+    [Fact]
+    public async Task MalformedMainDocumentXml_IsTechnicallyRejected()
+    {
+        var result = await _validator.ValidateAsync(CreateFile(
+            ReplaceMainDocumentXmlWithMalformedContent(
+                CreateDocument(RequiredTokens())),
+            "template.docx"));
+
+        Assert.False(result.IsTechnicallyAccepted);
+        Assert.Equal("OoxmlStructureInvalid", result.FailureCode);
     }
 
     [Fact]
@@ -280,6 +306,46 @@ public sealed class ContractTemplateDocumentValidatorTests
             using var macroStream = archive.CreateEntry("word/vbaProject.bin")
                 .Open();
             macroStream.WriteByte(0);
+        }
+
+        return stream.ToArray();
+    }
+
+    private static byte[] AddModernOfficeMetadata(byte[] documentBytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(documentBytes);
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update,
+                   leaveOpen: true))
+        {
+            var documentXml = ReadEntry(archive, "word/document.xml")
+                .Replace(
+                    "<w:document",
+                    "<w:document xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\" " +
+                    "xmlns:w14=\"http://schemas.microsoft.com/office/word/2010/wordml\" " +
+                    "mc:Ignorable=\"w14\"",
+                    StringComparison.Ordinal)
+                .Replace(
+                    "<w:p>",
+                    "<w:p w14:paraId=\"12345678\" w14:textId=\"77777777\">",
+                    StringComparison.Ordinal);
+            ReplaceEntry(archive, "word/document.xml", documentXml);
+        }
+
+        return stream.ToArray();
+    }
+
+    private static byte[] ReplaceMainDocumentXmlWithMalformedContent(
+        byte[] documentBytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(documentBytes);
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update,
+                   leaveOpen: true))
+        {
+            ReplaceEntry(archive, "word/document.xml", "<w:document>");
         }
 
         return stream.ToArray();

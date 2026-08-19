@@ -44,6 +44,7 @@ import { Switch } from "@/components/ui/switch";
 import { DateRangeFilter } from "@/components/ui/custom/date-range-filter";
 import { DecimalInput } from "@/components/ui/custom/decimal-input";
 import { IntegerInput } from "@/components/ui/custom/integer-input";
+import { ConfirmDialog } from "@/components/ui/custom/confirm-dialog";
 import { format } from "date-fns";
 import { CustomerFormModal } from "@/app/(protected)/customers/customer-form-modal";
 import { ProductFormModal } from "@/app/(protected)/catalog/products/product-form-modal";
@@ -55,6 +56,7 @@ import {
   ContractItemDiscountMode,
   CreateContractRequest,
   CreateContractItemRequest,
+  CreateContractResponse,
   EligibleParentContractResponse,
   contractApi,
   getContractTypeLabel,
@@ -202,6 +204,9 @@ export default function CreateContractPage() {
   // -- STATES --
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [createdContract, setCreatedContract] =
+    useState<CreateContractResponse | null>(null);
+  const [isOpeningPreview, setIsOpeningPreview] = useState(false);
 
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
@@ -754,7 +759,11 @@ export default function CreateContractPage() {
       const response = await contractApi.create(payload);
 
       toast.success(`Tạo hợp đồng thành công! Mã HĐ: ${response.contractCode}`);
-      router.push(`/contracts/${response.contractId}#terms`);
+      if (response.templateVersionId > 0) {
+        setCreatedContract(response);
+      } else {
+        router.push(`/contracts/${response.contractId}#terms`);
+      }
     } catch (error: any) {
       const data = error?.response?.data;
       let errorMessage = "Đã xảy ra lỗi khi tạo hợp đồng.";
@@ -772,6 +781,58 @@ export default function CreateContractPage() {
       toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const goToCreatedContractDetails = () => {
+    if (!createdContract || isOpeningPreview) return;
+
+    const contractId = createdContract.contractId;
+    setCreatedContract(null);
+    router.push(`/contracts/${contractId}#terms`);
+  };
+
+  const openTemplatePdfAndGoToDetails = async () => {
+    if (!createdContract || isOpeningPreview) return;
+
+    const { contractId, templateVersionId: createdTemplateVersionId } =
+      createdContract;
+    const previewWindow = window.open("about:blank", "_blank");
+
+    if (previewWindow) {
+      previewWindow.opener = null;
+      previewWindow.document.title = "Đang tải bản xem trước...";
+      previewWindow.document.body.textContent = "Đang tải bản PDF xem trước...";
+    }
+
+    setIsOpeningPreview(true);
+    try {
+      const pdf = await contractTemplateApi.downloadPublishedPreviewPdf(
+        createdTemplateVersionId,
+      );
+      const pdfUrl = URL.createObjectURL(
+        pdf.type === "application/pdf"
+          ? pdf
+          : new Blob([pdf], { type: "application/pdf" }),
+      );
+
+      if (previewWindow) {
+        previewWindow.location.replace(pdfUrl);
+        window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000);
+      } else {
+        URL.revokeObjectURL(pdfUrl);
+        toast.error(
+          "Trình duyệt đã chặn tab xem trước. Vui lòng cho phép cửa sổ bật lên.",
+        );
+      }
+    } catch (error) {
+      previewWindow?.close();
+      console.error("Failed to open contract template PDF preview:", error);
+      toast.error("Không thể mở bản PDF xem trước của template.");
+    } finally {
+      setIsOpeningPreview(false);
+      setCreatedContract(null);
+      router.push(`/contracts/${contractId}#terms`);
     }
   };
 
@@ -2079,6 +2140,23 @@ export default function CreateContractPage() {
           onSuccess={handleProductCreated}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={createdContract !== null}
+        onClose={goToCreatedContractDetails}
+        onConfirm={openTemplatePdfAndGoToDetails}
+        title="Xem trước hợp đồng"
+        description={
+          <>
+            Hợp đồng đã được tạo thành công từ template. Bạn có muốn mở bản
+            PDF xem trước trong tab mới không?
+          </>
+        }
+        icon={<FileText className="size-5 text-primary" />}
+        confirmText="Có, xem PDF"
+        cancelText="Không, xem chi tiết"
+        isLoading={isOpeningPreview}
+      />
     </>
   );
 }

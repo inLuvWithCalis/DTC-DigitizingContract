@@ -429,13 +429,18 @@ public sealed class ContractTemplateService : IContractTemplateService
             cancellationToken);
         if (!validation.IsTechnicallyAccepted)
         {
+            _logger?.LogWarning(
+                "Template DOCX upload rejected. VersionId={VersionId}, FailureCode={FailureCode}, FileSizeBytes={FileSizeBytes}",
+                versionId,
+                validation.FailureCode ?? "Unknown",
+                validation.FileSizeBytes);
             await RecordTechnicalRejectionAsync(
                 preflightVersion,
                 employeeId,
                 validation,
                 cancellationToken);
             throw new ArgumentException(
-                "Tệp DOCX bị từ chối do không đạt yêu cầu kỹ thuật hoặc an toàn.",
+                $"Tệp DOCX bị từ chối do không đạt yêu cầu kỹ thuật hoặc an toàn. Mã lỗi: {validation.FailureCode ?? "Unknown"}.",
                 nameof(request.File));
         }
 

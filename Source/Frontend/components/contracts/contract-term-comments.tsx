@@ -30,7 +30,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { employeeApi } from "@/services/employees-api";
 import {
   contractApi,
   ContractNegotiationCommentResponse,
@@ -195,9 +194,6 @@ export function ContractTermComments({
   const [rootPage, setRootPage] = useState(1);
   const [content, setContent] = useState("");
   const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
-  const [employeeNames, setEmployeeNames] = useState<Record<number, string>>(
-    {},
-  );
   const [isLoadingRoots, setIsLoadingRoots] = useState(false);
   const [isLoadingChildren, setIsLoadingChildren] = useState(false);
   const [rootError, setRootError] = useState<string | null>(null);
@@ -239,9 +235,6 @@ export function ContractTermComments({
     setRootPage((page) => Math.min(Math.max(page, 1), rootTotalPages));
   }, [rootTotalPages]);
 
-  const getEmployeeName = (employeeId: number) =>
-    employeeNames[employeeId] || `Nhân viên #${employeeId}`;
-
   const getCommentAuthorName = (
     comment: ContractNegotiationCommentResponse,
   ) => {
@@ -250,50 +243,8 @@ export function ContractTermComments({
 
     return comment.source === "Customer"
       ? "Khách hàng"
-      : getEmployeeName(comment.recordedByEmployeeId);
-  };
-
-  const loadEmployeeNames = async (
-    targetComments: ContractNegotiationCommentResponse[],
-  ) => {
-    const employeeIds = Array.from(
-      new Set(
-        targetComments
-          .filter(
-            (comment) =>
-              !dataSource?.getAuthorName?.(comment)?.trim() &&
-              comment.source !== "Customer" &&
-              comment.recordedByEmployeeId > 0,
-          )
-          .map((comment) => comment.recordedByEmployeeId),
-      ),
-    );
-    if (employeeIds.length === 0) return;
-
-    let entries: ReadonlyArray<readonly [number, string]> = [];
-    try {
-      const directory = await employeeApi.getDirectory();
-      const targetIds = new Set(employeeIds);
-      entries = directory
-        .filter((employee) => targetIds.has(employee.employeeId))
-        .map(
-          (employee) =>
-            [
-              employee.employeeId,
-              employee.employeeFullName?.trim() ||
-                `Nhân viên #${employee.employeeId}`,
-            ] as const,
-        );
-    } catch {
-      entries = employeeIds.map(
-        (employeeId) => [employeeId, `Nhân viên #${employeeId}`] as const,
-      );
-    }
-
-    setEmployeeNames((current) => ({
-      ...current,
-      ...Object.fromEntries(entries),
-    }));
+      : comment.recordedByDisplayName?.trim() ||
+          `Nhân viên #${comment.recordedByEmployeeId}`;
   };
 
   const loadRootComments = async () => {
@@ -304,7 +255,6 @@ export function ContractTermComments({
         ? await dataSource.getRootComments()
         : await contractApi.getRootComments(contractId);
       setRootComments(result);
-      await loadEmployeeNames(result);
     } catch (error: any) {
       console.error("Lỗi tải comment cha:", error);
       setRootError(
@@ -330,7 +280,6 @@ export function ContractTermComments({
         (comment) => comment.versionId === versionId && matchesTerm(comment),
       );
       setChildComments(termReplies);
-      await loadEmployeeNames(termReplies);
     } catch (error: any) {
       console.error("Lỗi tải comment con:", error);
       setChildError(
@@ -399,7 +348,6 @@ export function ContractTermComments({
           });
 
       onCommentChanged?.(createdComment);
-      await loadEmployeeNames([createdComment]);
       setContent("");
       setReplyTarget(null);
 

@@ -51,7 +51,7 @@ public sealed class SystemAuthController : ControllerBase
                 cancellationToken);
             return Unauthorized(new AuthorizationErrorResponse(
                 AuthorizationErrorCodes.AuthenticationRequired,
-                "Invalid username or password."));
+                "Sai tên đăng nhập hoặc mật khẩu."));
         }
 
         var result = _passwordHasher.VerifyHashedPassword(
@@ -68,7 +68,7 @@ public sealed class SystemAuthController : ControllerBase
                 cancellationToken);
             return Unauthorized(new AuthorizationErrorResponse(
                 AuthorizationErrorCodes.AuthenticationRequired,
-                "Invalid username or password."));
+                "Sai tên đăng nhập hoặc mật khẩu."));
         }
 
         HttpContext.Session.SetInt32(
@@ -87,7 +87,7 @@ public sealed class SystemAuthController : ControllerBase
 
         return Ok(new
         {
-            message = "System admin login successful.",
+            message = "System admin đăng nhập thành công.",
             systemAdminId = admin.SystemAdminId,
             fullName = admin.FullName
         });
@@ -135,7 +135,7 @@ public sealed class SystemAuthController : ControllerBase
 
         return Ok(new
         {
-            message = "System admin logout successful."
+            message = "System admin đăng xuất thành công."
         });
     }
 

@@ -370,6 +370,7 @@ export interface ContractNegotiationCommentResponse {
   source: ContractNegotiationCommentSource;
   externalFeedback: boolean;
   recordedByEmployeeId: number;
+  recordedByDisplayName?: string | null;
   createdEmployeeId: number;
   state: ContractNegotiationCommentState;
   createdDate: string;
@@ -513,6 +514,14 @@ export interface ContractCustomerAccessLinkResponse {
   state: string;
   expiresAt: string;
   publicUrl: string;
+}
+
+export interface CurrentContractCustomerAccessLinkResponse {
+  linkId: number;
+  state: string;
+  versionId: number;
+  createdAt: string;
+  expiresAt: string;
 }
 
 export interface ContractNegotiationRoundVersionResponse {
@@ -785,6 +794,12 @@ export const contractApi = {
       `${BASE_URL}/${id}/customer-access/links`,
       data,
     );
+  },
+  getCurrentCustomerAccessLink: (id: number) => {
+    return axiosClient.get<
+      any,
+      CurrentContractCustomerAccessLinkResponse | null
+    >(`${BASE_URL}/${id}/customer-access/links/current`);
   },
   replaceCustomerAccessLink: (
     id: number,

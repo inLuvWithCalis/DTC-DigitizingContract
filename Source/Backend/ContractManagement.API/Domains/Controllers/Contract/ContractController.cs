@@ -716,6 +716,27 @@ namespace ContractManagement.Domains.Controllers.Contract
         }
 
         /// <summary>
+        /// Lấy link customer access hiện tại mà không trả token hoặc public URL.
+        /// Trả data null nếu hợp đồng chưa có link hiện tại.
+        /// </summary>
+        [HttpGet("{contractId:int}/customer-access/links/current")]
+        public async Task<IActionResult> GetCurrentCustomerAccessLink(int contractId)
+        {
+            try
+            {
+                var result = await _contractService.GetCurrentCustomerAccessLinkAsync(
+                    contractId,
+                    GetEmployeeId());
+                return Ok(ApiResponse<CurrentContractCustomerAccessLinkResponse?>.Ok(result));
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden,
+                    ApiResponse<object>.Fail(exception.Message));
+            }
+        }
+
+        /// <summary>
         /// Thay public link hiện tại bằng link mới cho Current Version.
         /// Người phụ trách, Manager hoặc AdminOfficer được phép gọi. Link cũ, OTP challenge và customer session
         /// của link cũ ngừng hoạt động ngay; FE chỉ nhận raw public URL mới trong response này.

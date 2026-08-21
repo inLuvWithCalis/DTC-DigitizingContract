@@ -493,10 +493,10 @@ function SecurityAuditContent() {
                       <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
                         <span className="inline-flex items-center gap-1.5">
                           <UserRound className="size-3.5" />
-                          {audit.actorEmployeeId
-                            ? employeeNames.get(audit.actorEmployeeId) ||
-                              `Nhân viên #${audit.actorEmployeeId}`
-                            : audit.actorType}
+                          {audit.actorDisplayName ||
+                            (audit.actorEmployeeId
+                              ? `Nhân viên #${audit.actorEmployeeId}`
+                              : audit.actorType)}
                         </span>
                         <span className="inline-flex items-center gap-0">
                           <PencilLine className="size-3.5 text-muted-foreground shrink-0" />

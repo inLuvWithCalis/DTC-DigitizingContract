@@ -61,6 +61,11 @@ namespace ContractManagement.Domains.Interfaces.Contract
                 int employeeId,
                 string publicBaseUrl);
 
+        Task<CurrentContractCustomerAccessLinkResponse?>
+            GetCurrentCustomerAccessLinkAsync(
+                int contractId,
+                int employeeId);
+
         Task<ContractCustomerAccessLinkResponse>
             ReplaceCustomerAccessLinkAsync(
                 int contractId,

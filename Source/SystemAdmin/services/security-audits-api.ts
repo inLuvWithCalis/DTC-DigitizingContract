@@ -30,6 +30,7 @@ export interface CentralSecurityAuditFilterRequest {
 export interface CentralSecurityAuditResponse {
   centralSecurityAuditId: number;
   actorSystemAdminId?: number | null;
+  actorDisplayName?: string | null;
   tenantId?: number | null;
   tenantCode?: string | null;
   action: string;

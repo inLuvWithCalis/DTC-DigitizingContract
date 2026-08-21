@@ -57,6 +57,7 @@ public sealed class SecurityAuditSlice05Tests
         var item = Assert.Single(page.Items);
         Assert.Equal(101, item.TenantId);
         Assert.Equal("EmployeeStatusChanged", item.Action);
+        Assert.Equal("Employee 1", item.ActorDisplayName);
 
         var exception = await Assert.ThrowsAsync<RbacOperationException>(
             () => service.QueryAsync(new TenantSecurityAuditFilterRequest(), 2));
@@ -89,6 +90,7 @@ public sealed class SecurityAuditSlice05Tests
         var item = Assert.Single(page.Items);
         Assert.Equal("tenant-a", item.TenantCode);
         Assert.Equal("TenantProvisioned", item.Action);
+        Assert.Equal("System Admin", item.ActorDisplayName);
         Assert.DoesNotContain(
             typeof(CentralSecurityAuditResponse).GetProperties(),
             property => property.Name.Contains("Password", StringComparison.OrdinalIgnoreCase)

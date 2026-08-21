@@ -15,6 +15,10 @@ namespace ContractManagement.Domains.Interfaces.Employee
 
         Task<List<EmployeeDirectoryResponse>> GetDirectoryAsync();
 
+        Task<PagedResult<EmployeeDirectoryResponse>> SearchDirectoryAsync(
+            EmployeeDirectoryFilterRequest filter,
+            CancellationToken cancellationToken = default);
+
         Task<EmployeeResponse> CreateManagedEmployeeAsync(
             int managerEmployeeId,
             CreateEmployeeRequest request,

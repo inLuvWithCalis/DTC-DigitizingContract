@@ -1,6 +1,7 @@
 using ContractManagement.API.Common.Responses;
 using ContractManagement.API.Common.Security;
 using ContractManagement.API.Domains.DTOs.Responses.Employee;
+using ContractManagement.API.Domains.DTOs.Requests.Employee;
 using ContractManagement.Domains.Interfaces.Employee;
 using ContractManagement.Filter;
 using Microsoft.AspNetCore.Mvc;
@@ -26,5 +27,18 @@ public sealed class EmployeeDirectoryController : ControllerBase
         return Ok(ApiResponse<List<EmployeeDirectoryResponse>>.Ok(
             result,
             "Lấy employee directory thành công."));
+    }
+
+    [HttpGet("directory/search")]
+    public async Task<IActionResult> SearchDirectory(
+        [FromQuery] EmployeeDirectoryFilterRequest filter,
+        CancellationToken cancellationToken)
+    {
+        var result = await _employeeService.SearchDirectoryAsync(
+            filter,
+            cancellationToken);
+        return Ok(ApiResponse<PagedResult<EmployeeDirectoryResponse>>.Ok(
+            result,
+            "Tìm employee directory thành công."));
     }
 }

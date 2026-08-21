@@ -14,6 +14,12 @@
 
         public string? CustomerCompany { get; set; }
 
+        public string? CustomerTaxCode { get; set; }
+
+        public string? CustomerMobile { get; set; }
+
+        public string? CustomerPhone { get; set; }
+
         public byte? Status { get; set; }
     }
 

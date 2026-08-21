@@ -22,6 +22,8 @@ public sealed class ContractNegotiationCommentResponse
 
     public int RecordedByEmployeeId { get; set; }
 
+    public string? RecordedByDisplayName { get; set; }
+
     public int CreatedEmployeeId
     {
         get => RecordedByEmployeeId;

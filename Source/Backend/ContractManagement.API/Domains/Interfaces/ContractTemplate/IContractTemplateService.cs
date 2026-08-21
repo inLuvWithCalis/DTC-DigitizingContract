@@ -9,6 +9,15 @@ public interface IContractTemplateService
     Task<IReadOnlyList<AvailableContractTemplateVersionResponse>>
         ListAvailableAsync(CancellationToken cancellationToken = default);
 
+    Task<PagedResult<AvailableContractTemplateVersionResponse>>
+        SearchAvailableAsync(
+            AvailableContractTemplateFilterRequest filter,
+            CancellationToken cancellationToken = default);
+
+    Task<AvailableContractTemplateVersionDetailResponse> GetAvailableAsync(
+        int templateVersionId,
+        CancellationToken cancellationToken = default);
+
     Task<SoftwareSupplyPlaceholderCatalogResponse> GetPlaceholderCatalogAsync(
         int employeeId,
         CancellationToken cancellationToken = default);

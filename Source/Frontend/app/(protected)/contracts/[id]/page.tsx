@@ -32,7 +32,7 @@ import { formatCurrency } from "@/lib/format-currency";
 
 import {
   contractApi,
-  ContractCustomerAccessLinkResponse,
+  CurrentContractCustomerAccessLinkResponse,
   ContractDetailResponse,
   ContractItemDiscountMode,
   ContractLanguageMode,
@@ -75,48 +75,10 @@ const CONTRACT_TABS = [
 
 type ContractTab = (typeof CONTRACT_TABS)[number];
 
-type StoredCustomerAccessLink = Pick<
-  ContractCustomerAccessLinkResponse,
+type KnownCustomerAccessLink = Pick<
+  CurrentContractCustomerAccessLinkResponse,
   "linkId" | "state" | "expiresAt"
 >;
-
-const CUSTOMER_ACCESS_LINK_STORAGE_PREFIX = "contract-customer-access-link";
-
-const getCustomerAccessLinkStorageKey = (
-  contractId: number,
-  versionId: number,
-) => `${CUSTOMER_ACCESS_LINK_STORAGE_PREFIX}:${contractId}:${versionId}`;
-
-const readStoredCustomerAccessLink = (
-  contractId: number,
-  versionId: number,
-): StoredCustomerAccessLink | null => {
-  if (typeof window === "undefined") return null;
-
-  const storageKey = getCustomerAccessLinkStorageKey(contractId, versionId);
-  try {
-    const value = window.localStorage.getItem(storageKey);
-    if (!value) return null;
-
-    const parsed = JSON.parse(value) as StoredCustomerAccessLink;
-    const expiresAt = new Date(parsed.expiresAt).getTime();
-    if (
-      !Number.isInteger(parsed.linkId) ||
-      parsed.linkId <= 0 ||
-      !parsed.state ||
-      !parsed.expiresAt ||
-      !Number.isFinite(expiresAt) ||
-      expiresAt <= Date.now()
-    ) {
-      window.localStorage.removeItem(storageKey);
-      return null;
-    }
-
-    return parsed;
-  } catch {
-    return null;
-  }
-};
 
 const isContractTab = (value: string): value is ContractTab =>
   CONTRACT_TABS.some((tab) => tab === value);
@@ -136,9 +98,7 @@ export default function ContractDetailPage() {
   const [activeTab, setActiveTab] = useState<ContractTab>("overview");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [knownCustomerAccessLink, setKnownCustomerAccessLink] =
-    useState<StoredCustomerAccessLink | null>(null);
-  const currentContractId = contract?.contractId ?? null;
-  const currentVersionId = contract?.currentVersion.versionId ?? null;
+    useState<KnownCustomerAccessLink | null>(null);
 
   useEffect(() => {
     const syncTabFromHash = () => {
@@ -187,9 +147,13 @@ export default function ContractDetailPage() {
 
       try {
         if (showLoading) setIsLoading(true);
-        const res: any = await contractApi.getDetail(Number(params.id));
-        const contractData = res.data ? res.data : res;
-        setContract(contractData);
+        const contractId = Number(params.id);
+        const [res, currentLink] = await Promise.all([
+          contractApi.getDetail(contractId),
+          contractApi.getCurrentCustomerAccessLink(contractId),
+        ]);
+        setContract(res);
+        setKnownCustomerAccessLink(currentLink);
         setHasUnsavedChanges(false);
         setError(null);
       } catch (err: any) {
@@ -217,59 +181,19 @@ export default function ContractDetailPage() {
     void fetchContractDetail().catch(() => undefined);
   }, [fetchContractDetail]);
 
-  useEffect(() => {
-    if (!currentContractId || !currentVersionId) {
-      setKnownCustomerAccessLink(null);
-      return;
-    }
-
-    const storageKey = getCustomerAccessLinkStorageKey(
-      currentContractId,
-      currentVersionId,
-    );
-    const syncStoredLink = () =>
-      setKnownCustomerAccessLink(
-        readStoredCustomerAccessLink(currentContractId, currentVersionId),
-      );
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key === storageKey) syncStoredLink();
-    };
-
-    syncStoredLink();
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
-  }, [currentContractId, currentVersionId]);
-
   const handleCustomerAccessLinkChange = useCallback(
-    (link: StoredCustomerAccessLink | null) => {
-      if (!currentContractId || !currentVersionId) return;
-
-      const storageKey = getCustomerAccessLinkStorageKey(
-        currentContractId,
-        currentVersionId,
+    (link: KnownCustomerAccessLink | null) => {
+      setKnownCustomerAccessLink(
+        link
+          ? {
+              linkId: link.linkId,
+              state: link.state,
+              expiresAt: link.expiresAt,
+            }
+          : null,
       );
-      if (link) {
-        const storedLink: StoredCustomerAccessLink = {
-          linkId: link.linkId,
-          state: link.state,
-          expiresAt: link.expiresAt,
-        };
-        try {
-          window.localStorage.setItem(storageKey, JSON.stringify(storedLink));
-        } catch {
-          // State trong phiên hiện tại vẫn được cập nhật nếu storage bị chặn.
-        }
-        setKnownCustomerAccessLink(storedLink);
-      } else {
-        try {
-          window.localStorage.removeItem(storageKey);
-        } catch {
-          // Không có gì cần xử lý thêm khi storage bị chặn.
-        }
-        setKnownCustomerAccessLink(null);
-      }
     },
-    [currentContractId, currentVersionId],
+    [],
   );
 
   if (isLoading) {

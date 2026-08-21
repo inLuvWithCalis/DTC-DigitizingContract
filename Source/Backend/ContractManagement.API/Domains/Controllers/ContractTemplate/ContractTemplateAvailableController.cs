@@ -1,6 +1,7 @@
 using ContractManagement.API.Common.Responses;
 using ContractManagement.API.Common.Security;
 using ContractManagement.API.Domains.DTOs.Responses.ContractTemplate;
+using ContractManagement.API.Domains.DTOs.Requests.ContractTemplate;
 using ContractManagement.Domains.Interfaces.ContractTemplate;
 using ContractManagement.Filter;
 using Microsoft.AspNetCore.Mvc;
@@ -30,5 +31,29 @@ public sealed class ContractTemplateAvailableController : ControllerBase
         return Ok(ApiResponse<IReadOnlyList<AvailableContractTemplateVersionResponse>>.Ok(
             result,
             "Lấy template version có thể chọn thành công."));
+    }
+
+    [HttpGet("search")]
+    public async Task<IActionResult> Search(
+        [FromQuery] AvailableContractTemplateFilterRequest filter,
+        CancellationToken cancellationToken)
+    {
+        var result = await _service.SearchAvailableAsync(filter, cancellationToken);
+        return Ok(ApiResponse<PagedResult<AvailableContractTemplateVersionResponse>>.Ok(
+            result,
+            "Tìm template version có thể chọn thành công."));
+    }
+
+    [HttpGet("{templateVersionId:int}")]
+    public async Task<IActionResult> Get(
+        int templateVersionId,
+        CancellationToken cancellationToken)
+    {
+        var result = await _service.GetAvailableAsync(
+            templateVersionId,
+            cancellationToken);
+        return Ok(ApiResponse<AvailableContractTemplateVersionDetailResponse>.Ok(
+            result,
+            "Lấy chi tiết template version có thể chọn thành công."));
     }
 }

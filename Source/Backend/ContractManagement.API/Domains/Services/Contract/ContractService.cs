@@ -3102,11 +3102,29 @@ namespace ContractManagement.Domains.Services.Contract
                 .ThenBy(x => x.CommentEventId)
                 .ToListAsync();
 
+            var employeeIds = comments
+                .Where(comment => comment.RecordedByEmployeeId.HasValue)
+                .Select(comment => comment.RecordedByEmployeeId!.Value)
+                .Distinct()
+                .ToList();
+            var employeeNames = await _dbContext.TblEmployees
+                .AsNoTracking()
+                .Where(employee => employeeIds.Contains(employee.EmployeeId))
+                .ToDictionaryAsync(
+                    employee => employee.EmployeeId,
+                    employee => employee.EmployeeFullName);
+
             return comments
                 .Select(comment => MapCommentResponse(
                     comment,
                     events.Where(x =>
-                        x.CommentId == comment.CommentId)))
+                        x.CommentId == comment.CommentId),
+                    comment.RecordedByEmployeeId.HasValue
+                        && employeeNames.TryGetValue(
+                            comment.RecordedByEmployeeId.Value,
+                            out var displayName)
+                            ? displayName
+                            : null))
                 .ToList();
         }
 
@@ -3140,13 +3158,23 @@ namespace ContractManagement.Domains.Services.Contract
                 .ThenBy(x => x.CommentEventId)
                 .ToListAsync();
 
-            return MapCommentResponse(comment, events);
+            var displayName = comment.RecordedByEmployeeId.HasValue
+                ? await _dbContext.TblEmployees
+                    .AsNoTracking()
+                    .Where(employee =>
+                        employee.EmployeeId == comment.RecordedByEmployeeId.Value)
+                    .Select(employee => employee.EmployeeFullName)
+                    .SingleOrDefaultAsync()
+                : null;
+
+            return MapCommentResponse(comment, events, displayName);
         }
 
         private static ContractNegotiationCommentResponse
             MapCommentResponse(
                 TblContractNegotiationComment comment,
-                IEnumerable<TblContractNegotiationCommentEvent> events)
+                IEnumerable<TblContractNegotiationCommentEvent> events,
+                string? recordedByDisplayName = null)
         {
             return new ContractNegotiationCommentResponse
             {
@@ -3159,6 +3187,7 @@ namespace ContractManagement.Domains.Services.Contract
                 Source = comment.Source,
                 ExternalFeedback = comment.ExternalFeedback,
                 RecordedByEmployeeId = comment.RecordedByEmployeeId ?? 0,
+                RecordedByDisplayName = recordedByDisplayName,
                 State = (ContractNegotiationCommentState)comment.State,
                 CreatedDate = comment.CreatedDate,
                 UpdatedDate = comment.UpdatedDate,

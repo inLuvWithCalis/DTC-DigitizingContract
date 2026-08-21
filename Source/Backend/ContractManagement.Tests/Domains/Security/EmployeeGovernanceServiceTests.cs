@@ -103,6 +103,17 @@ public sealed class EmployeeGovernanceServiceTests
 
         Assert.Equal(new[] { 1, 2 }, directory.Select(x => x.EmployeeId).Order());
         Assert.All(directory, item => Assert.Equal((byte)1, item.Status));
+
+        var search = await service.SearchDirectoryAsync(
+            new EmployeeDirectoryFilterRequest
+            {
+                Keyword = "Employee 2",
+                Page = 1,
+                PageSize = 10
+            });
+        var matched = Assert.Single(search.Items);
+        Assert.Equal(2, matched.EmployeeId);
+        Assert.Equal(1, search.TotalCount);
     }
 
     [Fact]

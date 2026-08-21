@@ -88,6 +88,7 @@ import {
   contractTemplateApi,
   TemplateDocumentType,
   type AvailableContractTemplateVersionResponse,
+  type AvailableContractTemplateVersionDetailResponse,
 } from "@/services/contract-template-api";
 import { useAuthStore } from "@/hooks/use-auth-store";
 import { usePermission } from "@/hooks/use-permission";
@@ -138,6 +139,19 @@ const getContractTypeFromTemplateDocument = (
       return ContractType.SoftwareUpkeep;
     default:
       return null;
+  }
+};
+
+const getTemplateDocumentFromContractType = (
+  contractType: ContractType,
+): TemplateDocumentType => {
+  switch (contractType) {
+    case ContractType.SoftwareMaintenance:
+      return TemplateDocumentType.SoftwareMaintenanceContract;
+    case ContractType.SoftwareUpkeep:
+      return TemplateDocumentType.SoftwareUpkeepContract;
+    default:
+      return TemplateDocumentType.SoftwareSupplyContract;
   }
 };
 
@@ -207,13 +221,20 @@ export default function CreateContractPage() {
   const [createdContract, setCreatedContract] =
     useState<CreateContractResponse | null>(null);
   const [isOpeningPreview, setIsOpeningPreview] = useState(false);
+  const [customerId, setCustomerId] = useState<string>("");
+  const [responsibleEmployeeId, setResponsibleEmployeeId] =
+    useState<string>("");
 
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [debouncedCustomerSearch, setDebouncedCustomerSearch] = useState("");
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
 
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(true);
+  const [employeeSearch, setEmployeeSearch] = useState("");
+  const [debouncedEmployeeSearch, setDebouncedEmployeeSearch] = useState("");
 
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
   const [catalogResultIds, setCatalogResultIds] = useState<string[]>([]);
@@ -222,56 +243,111 @@ export default function CreateContractPage() {
   const [availableTemplates, setAvailableTemplates] = useState<
     AvailableTemplateView[]
   >([]);
+  const [templateTotalCount, setTemplateTotalCount] = useState(0);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(true);
+  const [debouncedTemplateSearch, setDebouncedTemplateSearch] = useState("");
+  const [selectedTemplateSnapshot, setSelectedTemplateSnapshot] =
+    useState<AvailableTemplateView | null>(null);
+  const [selectedTemplateDetail, setSelectedTemplateDetail] =
+    useState<AvailableContractTemplateVersionDetailResponse | null>(null);
+  const [isLoadingTemplateDetail, setIsLoadingTemplateDetail] = useState(false);
+  const [templateDetailError, setTemplateDetailError] = useState<string | null>(
+    null,
+  );
 
-  // Fetch data
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [customerRes, employeeRes, templateRes] = await Promise.all([
-          customerApi.lookup(),
-          employeeApi.getDirectory(),
-          contractTemplateApi.getAvailable(),
-        ]);
+    const timer = window.setTimeout(
+      () => setDebouncedCustomerSearch(customerSearch.trim()),
+      350,
+    );
+    return () => window.clearTimeout(timer);
+  }, [customerSearch]);
 
-        setCustomers(
-          customerRes.filter((customer) => customer.status === CustomerStatus.Active),
-        );
-        setEmployees(employeeRes);
-        setAvailableTemplates(
-          templateRes.flatMap((template) => {
-            const mappedContractType = getContractTypeFromTemplateDocument(
-              template.documentType,
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoadingCustomers(true);
+    customerApi
+      .lookup(debouncedCustomerSearch || undefined)
+      .then((result) => {
+        if (!cancelled) {
+          const activeCustomers = result.filter(
+            (customer) => customer.status === CustomerStatus.Active,
+          );
+          setCustomers((current) => {
+            const selected = current.find(
+              (customer) => customer.customerId === Number(customerId),
             );
-            return mappedContractType === null
-              ? []
-              : [
-                  {
-                    ...template,
-                    versionId: template.templateVersionId,
-                    name: template.templateName,
-                    version: String(template.versionNo),
-                    description: "Phiên bản đã phát hành, sẵn sàng tạo hợp đồng.",
-                    contractType: mappedContractType,
-                  },
-                ];
-          }),
-        );
-
-      } catch (err) {
-        console.error("Failed to fetch data:", err);
-      } finally {
-        setIsLoadingCustomers(false);
-        setIsLoadingEmployees(false);
-      }
+            return selected &&
+              !activeCustomers.some(
+                (customer) => customer.customerId === selected.customerId,
+              )
+              ? [selected, ...activeCustomers]
+              : activeCustomers;
+          });
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error("Failed to load customer lookup:", error);
+          toast.error("Không thể tải danh sách khách hàng.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingCustomers(false);
+      });
+    return () => {
+      cancelled = true;
     };
-    fetchData();
-  }, []);
+  }, [customerId, debouncedCustomerSearch]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setDebouncedEmployeeSearch(employeeSearch.trim()),
+      350,
+    );
+    return () => window.clearTimeout(timer);
+  }, [employeeSearch]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoadingEmployees(true);
+    employeeApi
+      .searchDirectory({
+        page: 1,
+        pageSize: 50,
+        keyword: debouncedEmployeeSearch || undefined,
+      })
+      .then((result) => {
+        if (!cancelled) {
+          setEmployees((current) => {
+            const selected = current.find(
+              (employee) =>
+                employee.employeeId === Number(responsibleEmployeeId),
+            );
+            return selected &&
+              !result.items.some(
+                (employee) => employee.employeeId === selected.employeeId,
+              )
+              ? [selected, ...result.items]
+              : result.items;
+          });
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error("Failed to load employee directory:", error);
+          toast.error("Không thể tải danh sách nhân viên.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingEmployees(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedEmployeeSearch, responsibleEmployeeId]);
 
   // Step 1: Customer & Basic Info
-  const [customerId, setCustomerId] = useState<string>("");
-  const [responsibleEmployeeId, setResponsibleEmployeeId] =
-    useState<string>("");
-
   const handleCustomerCreated = (createdCustomer?: CustomerResponse) => {
     if (!createdCustomer) return;
 
@@ -287,11 +363,7 @@ export default function CreateContractPage() {
 
   const handleAssignToMe = () => {
     if (!user?.employeeId) return;
-
-    const currentUserExists = employees.some(
-      (employee) => employee.employeeId === user.employeeId,
-    );
-    if (currentUserExists) setResponsibleEmployeeId(String(user.employeeId));
+    setResponsibleEmployeeId(String(user.employeeId));
   };
   const [contractType, setContractType] = useState<ContractType>(
     ContractType.SoftwareSupply,
@@ -315,33 +387,98 @@ export default function CreateContractPage() {
   );
   const [contractTitleEn, setContractTitleEn] = useState("");
 
-  const filteredTemplates = useMemo(() => {
-    const normalizedSearch = templateSearch.trim().toLocaleLowerCase("vi");
-
-    if (!normalizedSearch) return availableTemplates;
-
-    return availableTemplates.filter((template) =>
-      [
-        template.name,
-        template.templateCode,
-        template.description,
-        template.version,
-        getContractTypeLabel(template.contractType),
-      ].some((value) =>
-        value.toLocaleLowerCase("vi").includes(normalizedSearch),
-      ),
-    );
-  }, [availableTemplates, templateSearch]);
-
   const templateTotalPages = Math.max(
     1,
-    Math.ceil(filteredTemplates.length / templatePageSize),
+    Math.ceil(templateTotalCount / templatePageSize),
   );
+  const paginatedTemplates = availableTemplates;
 
-  const paginatedTemplates = useMemo(() => {
-    const startIndex = (templatePage - 1) * templatePageSize;
-    return filteredTemplates.slice(startIndex, startIndex + templatePageSize);
-  }, [filteredTemplates, templatePage]);
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setDebouncedTemplateSearch(templateSearch.trim()),
+      350,
+    );
+    return () => window.clearTimeout(timer);
+  }, [templateSearch]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoadingTemplates(true);
+    contractTemplateApi
+      .searchAvailable({
+        page: templatePage,
+        pageSize: templatePageSize,
+        keyword: debouncedTemplateSearch || undefined,
+        documentType: getTemplateDocumentFromContractType(contractType),
+      })
+      .then((response) => {
+        if (cancelled) return;
+        const mapped = response.items.flatMap((template) => {
+          const mappedContractType = getContractTypeFromTemplateDocument(
+            template.documentType,
+          );
+          return mappedContractType === null
+            ? []
+            : [
+                {
+                  ...template,
+                  versionId: template.templateVersionId,
+                  name: template.templateName,
+                  version: String(template.versionNo),
+                  description:
+                    "Phiên bản đã phát hành, sẵn sàng tạo hợp đồng.",
+                  contractType: mappedContractType,
+                },
+              ];
+        });
+        setAvailableTemplates(mapped);
+        setTemplateTotalCount(response.totalCount);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error("Failed to load available templates:", error);
+          setAvailableTemplates([]);
+          setTemplateTotalCount(0);
+          toast.error("Không thể tải danh sách template.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingTemplates(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [contractType, debouncedTemplateSearch, templatePage]);
+
+  useEffect(() => {
+    if (!templateVersionId) {
+      setSelectedTemplateDetail(null);
+      setTemplateDetailError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingTemplateDetail(true);
+    setTemplateDetailError(null);
+    contractTemplateApi
+      .getAvailableByVersionId(Number(templateVersionId))
+      .then((detail) => {
+        if (!cancelled) setSelectedTemplateDetail(detail);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error("Failed to load template terms:", error);
+          setSelectedTemplateDetail(null);
+          setTemplateDetailError("Không thể tải điều khoản của template.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingTemplateDetail(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [templateVersionId]);
 
   // Fetch eligible parent contracts when customer or contractType changes
   useEffect(() => {
@@ -516,7 +653,7 @@ export default function CreateContractPage() {
   );
   const selectedTemplate = availableTemplates.find(
     (item) => item.versionId === Number(templateVersionId),
-  );
+  ) ?? selectedTemplateSnapshot;
 
   const selectedCatalogItems = catalogItems.filter((item) =>
     selectedItems.includes(item.id),
@@ -582,6 +719,7 @@ export default function CreateContractPage() {
 
     if (selectedTemplate?.contractType !== nextType) {
       setTemplateVersionId("");
+      setSelectedTemplateSnapshot(null);
     }
   };
 
@@ -592,6 +730,7 @@ export default function CreateContractPage() {
     if (!template) return;
 
     setTemplateVersionId(String(versionId));
+    setSelectedTemplateSnapshot(template);
   };
 
   const toggleCatalogItem = (id: string) => {
@@ -940,6 +1079,11 @@ export default function CreateContractPage() {
                       Khách hàng / đối tác{" "}
                       <span className="text-red-500">*</span>
                     </Label>
+                    <Input
+                      value={customerSearch}
+                      onChange={(event) => setCustomerSearch(event.target.value)}
+                      placeholder="Tìm theo tên, mã, MST hoặc số điện thoại..."
+                    />
                     <div className="flex items-center gap-2">
                       <Select
                         value={customerId}
@@ -962,8 +1106,14 @@ export default function CreateContractPage() {
                             <SelectItem
                               key={customer.customerId}
                               value={String(customer.customerId)}
-                            >
+                          >
                               {formatCustomerOption(customer)}
+                              {customer.customerTaxCode
+                                ? ` · MST ${customer.customerTaxCode}`
+                                : ""}
+                              {customer.customerMobile || customer.customerPhone
+                                ? ` · ${customer.customerMobile || customer.customerPhone}`
+                                : ""}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -999,6 +1149,11 @@ export default function CreateContractPage() {
                         Gán cho tôi
                       </button>
                     </div>
+                    <Input
+                      value={employeeSearch}
+                      onChange={(event) => setEmployeeSearch(event.target.value)}
+                      placeholder="Tìm theo tên, mã hoặc phòng ban..."
+                    />
                     <Select
                       value={responsibleEmployeeId}
                       onValueChange={setResponsibleEmployeeId}
@@ -1018,6 +1173,7 @@ export default function CreateContractPage() {
                             key={emp.employeeId}
                             value={String(emp.employeeId)}
                           >
+                            {emp.employeeCode ? `${emp.employeeCode} · ` : ""}
                             {emp.employeeFullName} · {emp.departmentName || "Chưa có phòng ban"} · {emp.employeeTypeName}
                           </SelectItem>
                         ))}
@@ -1162,6 +1318,14 @@ export default function CreateContractPage() {
                       />
                     </div>
 
+                    {isLoadingTemplates && (
+                      <div className="flex items-center justify-center gap-2 rounded-2xl border border-dashed py-8 text-sm text-muted-foreground">
+                        <Loader2 className="size-4 animate-spin" />
+                        Đang tải template...
+                      </div>
+                    )}
+
+                    {!isLoadingTemplates && (
                     <div className="grid gap-3 lg:grid-cols-3">
                       {paginatedTemplates.map((template) => {
                         const selected =
@@ -1222,8 +1386,9 @@ export default function CreateContractPage() {
                         );
                       })}
                     </div>
+                    )}
 
-                    {filteredTemplates.length === 0 ? (
+                    {!isLoadingTemplates && templateTotalCount === 0 ? (
                       <div className="rounded-2xl border border-dashed px-4 py-8 text-center">
                         <LayoutTemplate className="mx-auto size-8 text-muted-foreground/60" />
                         <p className="mt-3 text-sm font-medium">
@@ -1233,15 +1398,15 @@ export default function CreateContractPage() {
                           Thử tìm bằng tên, mã template hoặc loại hợp đồng khác.
                         </p>
                       </div>
-                    ) : (
+                    ) : !isLoadingTemplates ? (
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-xs text-muted-foreground">
                           Hiển thị {(templatePage - 1) * templatePageSize + 1}–
                           {Math.min(
                             templatePage * templatePageSize,
-                            filteredTemplates.length,
+                            templateTotalCount,
                           )}{" "}
-                          trong {filteredTemplates.length} template
+                          trong {templateTotalCount} template
                         </p>
                         <div className="flex items-center gap-2">
                           <Button
@@ -1275,7 +1440,7 @@ export default function CreateContractPage() {
                           </Button>
                         </div>
                       </div>
-                    )}
+                    ) : null}
                   </div>
 
                   <div className="space-y-2">
@@ -1781,6 +1946,78 @@ export default function CreateContractPage() {
                       tab Điều khoản khi hợp đồng còn ở trạng thái Nháp.
                     </AlertDescription>
                   </Alert>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="font-semibold">Điều khoản template</h3>
+                        <p className="text-xs text-muted-foreground">
+                          Chỉ đọc tại bước tạo; có thể chỉnh sửa sau khi hợp đồng
+                          nháp được tạo.
+                        </p>
+                      </div>
+                      {selectedTemplateDetail && (
+                        <Badge variant="outline">
+                          {selectedTemplateDetail.terms.length} điều khoản
+                        </Badge>
+                      )}
+                    </div>
+
+                    {isLoadingTemplateDetail && (
+                      <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed py-8 text-sm text-muted-foreground">
+                        <Loader2 className="size-4 animate-spin" />
+                        Đang tải điều khoản...
+                      </div>
+                    )}
+
+                    {templateDetailError && (
+                      <Alert variant="destructive">
+                        <AlertTitle>Không thể tải điều khoản</AlertTitle>
+                        <AlertDescription>{templateDetailError}</AlertDescription>
+                      </Alert>
+                    )}
+
+                    {!isLoadingTemplateDetail &&
+                      !templateDetailError &&
+                      selectedTemplateDetail?.terms.map((term) => (
+                        <div
+                          key={term.templateTermId}
+                          className="rounded-xl border bg-background p-4"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="secondary">
+                              {term.termCode}
+                            </Badge>
+                            {term.isNegotiable && (
+                              <Badge variant="outline">Có thể đàm phán</Badge>
+                            )}
+                          </div>
+                          <h4 className="mt-3 font-semibold">
+                            {term.termTitle}
+                          </h4>
+                          {term.termContent && (
+                            <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
+                              {term.termContent}
+                            </p>
+                          )}
+                          {languageMode === ContractLanguageMode.Bilingual &&
+                            (term.termTitleEn || term.termContentEn) && (
+                              <div className="mt-3 border-t pt-3">
+                                {term.termTitleEn && (
+                                  <h5 className="font-medium">
+                                    {term.termTitleEn}
+                                  </h5>
+                                )}
+                                {term.termContentEn && (
+                                  <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
+                                    {term.termContentEn}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                        </div>
+                      ))}
+                  </div>
                 </div>
               )}
 
@@ -1827,6 +2064,15 @@ export default function CreateContractPage() {
                         </p>
                         <p className="text-sm text-muted-foreground">
                           Mã KH: {selectedCustomer?.customerCode || "Chưa có"}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          MST: {selectedCustomer?.customerTaxCode || "Chưa có"}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Điện thoại:{" "}
+                          {selectedCustomer?.customerMobile ||
+                            selectedCustomer?.customerPhone ||
+                            "Chưa có"}
                         </p>
                       </div>
                       <div>

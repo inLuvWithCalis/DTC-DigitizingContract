@@ -128,6 +128,7 @@ namespace ContractManagement.API.Domains.Services.Employee
                     select new
                     {
                         employee.EmployeeId,
+                        employee.EmployeeCode,
                         employee.EmployeeFullName,
                         employee.DepartmentId,
                         DepartmentName = department == null ? null : department.DepartmentName,
@@ -142,6 +143,7 @@ namespace ContractManagement.API.Domains.Services.Employee
                 .Select(row => new EmployeeDirectoryResponse
                 {
                     EmployeeId = row.EmployeeId,
+                    EmployeeCode = row.EmployeeCode,
                     EmployeeFullName = row.EmployeeFullName,
                     DepartmentId = row.DepartmentId,
                     DepartmentName = row.DepartmentName,
@@ -150,6 +152,86 @@ namespace ContractManagement.API.Domains.Services.Employee
                     Status = row.Status!.Value
                 })
                 .ToList();
+        }
+
+        public async Task<PagedResult<EmployeeDirectoryResponse>>
+            SearchDirectoryAsync(
+                EmployeeDirectoryFilterRequest filter,
+                CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(filter);
+            var page = filter.Page <= 0 ? 1 : filter.Page;
+            var pageSize = filter.PageSize <= 0 ? 20 : filter.PageSize;
+            if (pageSize > 100)
+            {
+                throw new ArgumentException("PageSize không được vượt quá 100.");
+            }
+
+            var query =
+                from employee in _dbContext.TblEmployees.AsNoTracking()
+                join department in _dbContext.TblDepartments.AsNoTracking()
+                    on employee.DepartmentId equals (int?)department.DepartmentId
+                    into departments
+                from department in departments.DefaultIfEmpty()
+                where employee.Status == 1
+                    && employee.EmployeeType >= (byte)EmployeeType.Sale
+                    && employee.EmployeeType <= (byte)EmployeeType.Manager
+                select new
+                {
+                    employee.EmployeeId,
+                    employee.EmployeeCode,
+                    employee.EmployeeFullName,
+                    employee.DepartmentId,
+                    DepartmentName = department == null
+                        ? null
+                        : department.DepartmentName,
+                    employee.EmployeeType,
+                    employee.Status
+                };
+
+            var keyword = filter.Keyword?.Trim();
+            if (!string.IsNullOrWhiteSpace(keyword))
+            {
+                query = query.Where(item =>
+                    (item.EmployeeFullName != null
+                        && item.EmployeeFullName.Contains(keyword))
+                    || (item.EmployeeCode != null
+                        && item.EmployeeCode.Contains(keyword))
+                    || (item.DepartmentName != null
+                        && item.DepartmentName.Contains(keyword)));
+            }
+
+            var totalCount = await query.CountAsync(cancellationToken);
+            var offset = ((long)page - 1) * pageSize;
+            if (offset > int.MaxValue)
+            {
+                throw new ArgumentException(
+                    "Requested employee page is outside the supported range.");
+            }
+            var rows = await query
+                .OrderBy(item => item.EmployeeFullName)
+                .ThenBy(item => item.EmployeeId)
+                .Skip((int)offset)
+                .Take(pageSize)
+                .ToListAsync(cancellationToken);
+
+            return new PagedResult<EmployeeDirectoryResponse>
+            {
+                Items = rows.Select(row => new EmployeeDirectoryResponse
+                {
+                    EmployeeId = row.EmployeeId,
+                    EmployeeCode = row.EmployeeCode,
+                    EmployeeFullName = row.EmployeeFullName,
+                    DepartmentId = row.DepartmentId,
+                    DepartmentName = row.DepartmentName,
+                    EmployeeType = row.EmployeeType!.Value,
+                    EmployeeTypeName = ((EmployeeType)row.EmployeeType.Value).ToString(),
+                    Status = row.Status!.Value
+                }).ToList(),
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize
+            };
         }
 
         public Task<EmployeeResponse> CreateManagedEmployeeAsync(

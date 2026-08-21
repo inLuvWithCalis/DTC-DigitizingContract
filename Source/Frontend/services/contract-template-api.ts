@@ -201,6 +201,30 @@ export interface AvailableContractTemplateVersionResponse {
   versionNo: number;
 }
 
+export interface AvailableContractTemplateTermResponse {
+  templateTermId: number;
+  termCode: string;
+  termTitle: string;
+  termTitleEn?: string | null;
+  termContent?: string | null;
+  termContentEn?: string | null;
+  isNegotiable: boolean;
+  displayOrder: number;
+}
+
+export interface AvailableContractTemplateVersionDetailResponse
+  extends AvailableContractTemplateVersionResponse {
+  terms: AvailableContractTemplateTermResponse[];
+}
+
+export interface AvailableContractTemplateFilterRequest {
+  page?: number;
+  pageSize?: number;
+  keyword?: string;
+  documentType?: TemplateDocumentType;
+  languageMode?: ContractLanguageMode;
+}
+
 export interface ContractTemplateVersionSummaryResponse {
   templateVersionId: number;
   versionNo: number;
@@ -283,6 +307,16 @@ export const contractTemplateApi = {
     axiosClient.get<unknown, AvailableContractTemplateVersionResponse[]>(
       `${BASE_URL}/available`,
     ),
+  searchAvailable: (params: AvailableContractTemplateFilterRequest) =>
+    axiosClient.get<
+      unknown,
+      PagedResult<AvailableContractTemplateVersionResponse>
+    >(`${BASE_URL}/available/search`, { params }),
+  getAvailableByVersionId: (templateVersionId: number) =>
+    axiosClient.get<
+      unknown,
+      AvailableContractTemplateVersionDetailResponse
+    >(`${BASE_URL}/available/${templateVersionId}`),
   getPlaceholderCatalog: () =>
     axiosClient.get<unknown, SoftwareSupplyPlaceholderCatalogResponse>(
       `${BASE_URL}/placeholder-catalog`,

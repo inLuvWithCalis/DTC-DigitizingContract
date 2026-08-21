@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using ContractManagement.API.Common.Enums;
+using ContractManagement.Common.Enums;
 
 namespace ContractManagement.API.Domains.DTOs.Requests.ContractTemplate;
 
@@ -10,6 +11,19 @@ public sealed class ContractTemplateFilterRequest
     public int PageSize { get; set; } = 20;
 
     public string? Keyword { get; set; }
+}
+
+public sealed class AvailableContractTemplateFilterRequest
+{
+    public int Page { get; set; } = 1;
+
+    public int PageSize { get; set; } = 20;
+
+    public string? Keyword { get; set; }
+
+    public TemplateDocumentType? DocumentType { get; set; }
+
+    public ContractLanguageMode? LanguageMode { get; set; }
 }
 
 public sealed class CreateContractTemplateRequest

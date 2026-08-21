@@ -80,6 +80,9 @@ export interface CustomerLookupResponse {
   customerCode?: string | null;
   customerFullName?: string | null;
   customerCompany?: string | null;
+  customerTaxCode?: string | null;
+  customerMobile?: string | null;
+  customerPhone?: string | null;
   status?: CustomerStatus | number | null;
 }
 

@@ -80,6 +80,11 @@ const LINK_STATE_LABELS: Record<string, { label: string; className: string }> =
       className:
         "border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-500/20 dark:bg-yellow-500/10 dark:text-yellow-400",
     },
+    Expired: {
+      label: "Đã hết hạn",
+      className:
+        "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400",
+    },
     Hidden: {
       label: "Đã ẩn",
       className:

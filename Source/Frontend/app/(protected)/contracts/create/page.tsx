@@ -931,11 +931,10 @@ export default function CreateContractPage() {
     router.push(`/contracts/${contractId}#terms`);
   };
 
-  const openTemplatePdfAndGoToDetails = async () => {
+  const openContractPdfAndGoToDetails = async () => {
     if (!createdContract || isOpeningPreview) return;
 
-    const { contractId, templateVersionId: createdTemplateVersionId } =
-      createdContract;
+    const { contractId } = createdContract;
     const previewWindow = window.open("about:blank", "_blank");
 
     if (previewWindow) {
@@ -946,9 +945,7 @@ export default function CreateContractPage() {
 
     setIsOpeningPreview(true);
     try {
-      const pdf = await contractTemplateApi.downloadPublishedPreviewPdf(
-        createdTemplateVersionId,
-      );
+      const pdf = await contractApi.downloadPreviewPdf(contractId);
       const pdfUrl = URL.createObjectURL(
         pdf.type === "application/pdf"
           ? pdf
@@ -966,8 +963,8 @@ export default function CreateContractPage() {
       }
     } catch (error) {
       previewWindow?.close();
-      console.error("Failed to open contract template PDF preview:", error);
-      toast.error("Không thể mở bản PDF xem trước của template.");
+      console.error("Failed to open contract PDF preview:", error);
+      toast.error("Không thể mở bản PDF xem trước của hợp đồng.");
     } finally {
       setIsOpeningPreview(false);
       setCreatedContract(null);
@@ -2085,6 +2082,9 @@ export default function CreateContractPage() {
                         <p className="text-sm text-muted-foreground">
                           {selectedEmployee?.departmentName || "Chưa có phòng ban"} · {selectedEmployee?.employeeTypeName || "Chưa có vai trò"}
                         </p>
+                        <p className="text-sm text-muted-foreground">
+                          Điện thoại: {selectedEmployee?.employeeMobile || "Chưa có"}
+                        </p>
                       </div>
                       {selectedParentContract && (
                         <div>
@@ -2390,7 +2390,7 @@ export default function CreateContractPage() {
       <ConfirmDialog
         isOpen={createdContract !== null}
         onClose={goToCreatedContractDetails}
-        onConfirm={openTemplatePdfAndGoToDetails}
+        onConfirm={openContractPdfAndGoToDetails}
         title="Xem trước hợp đồng"
         description={
           <>

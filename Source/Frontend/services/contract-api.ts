@@ -687,6 +687,11 @@ export const contractApi = {
   getDetail: (id: number) => {
     return axiosClient.get<any, ContractDetailResponse>(`${BASE_URL}/${id}`);
   },
+  downloadPreviewPdf: (id: number) => {
+    return axiosClient.get<any, Blob>(`${BASE_URL}/${id}/preview/pdf`, {
+      responseType: "blob",
+    });
+  },
   create: (data: CreateContractRequest) => {
     return axiosClient.post<any, CreateContractResponse>(
       BASE_URL,

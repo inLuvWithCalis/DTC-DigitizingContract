@@ -63,8 +63,11 @@ public sealed class ContractServiceSlice06Tests
                 || property.Name.Contains("Token", StringComparison.OrdinalIgnoreCase));
 
         var pendingToken = new Uri(link.PublicUrl).Segments.Last().Trim('/');
-        var pending = await customerAccess.RequestOtpAsync(pendingToken, "+84912345678");
-        Assert.NotEmpty(pending.PublicChallengeId);
+        var pendingError = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            customerAccess.RequestOtpAsync(pendingToken, "+84912345678"));
+        Assert.Equal(
+            "Chỉ có thể xem hợp đồng khi hợp đồng đang ở trạng thái đàm phán.",
+            pendingError.Message);
         Assert.Empty(context.TblContractCustomerOtpChallenges);
 
         await contractService.StartNegotiationAsync(

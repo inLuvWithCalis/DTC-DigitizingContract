@@ -12,6 +12,8 @@ import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Clock,
+  Download,
+  Eye,
   FileSignature,
   FileText,
   Loader2,
@@ -29,6 +31,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatCurrency } from "@/lib/format-currency";
+import { downloadBlob } from "@/components/contract-templates/contract-template-utils";
 
 import {
   contractApi,
@@ -94,6 +97,8 @@ export default function ContractDetailPage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isStartingNegotiation, setIsStartingNegotiation] = useState(false);
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
+  const [isOpeningPdf, setIsOpeningPdf] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<ContractTab>("overview");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -495,6 +500,56 @@ export default function ContractDetailPage() {
     !contract.currentVersion.isLocked &&
     !isCurrentVersionShared;
 
+  const viewContractPdf = async () => {
+    if (isOpeningPdf) return;
+
+    const previewWindow = window.open("about:blank", "_blank");
+    if (!previewWindow) {
+      toast.error(
+        "Trình duyệt đã chặn tab xem trước. Vui lòng cho phép cửa sổ bật lên.",
+      );
+      return;
+    }
+
+    previewWindow.opener = null;
+    previewWindow.document.title = "Đang tải hợp đồng...";
+    previewWindow.document.body.textContent = "Đang tải bản PDF hợp đồng...";
+
+    try {
+      setIsOpeningPdf(true);
+      const blob = await contractApi.downloadPreviewPdf(contract.contractId);
+      const pdfUrl = URL.createObjectURL(
+        blob.type === "application/pdf"
+          ? blob
+          : new Blob([blob], { type: "application/pdf" }),
+      );
+      previewWindow.location.replace(pdfUrl);
+      window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000);
+    } catch (error) {
+      previewWindow.close();
+      toast.error(getApiErrorMessage(error, "Không thể mở bản PDF hợp đồng."));
+    } finally {
+      setIsOpeningPdf(false);
+    }
+  };
+
+  const downloadContractPdf = async () => {
+    if (isDownloadingPdf) return;
+
+    try {
+      setIsDownloadingPdf(true);
+      const blob = await contractApi.downloadPreviewPdf(contract.contractId);
+      downloadBlob(
+        blob,
+        `${contract.contractCode || `contract-${contract.contractId}`}.pdf`,
+      );
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Không thể tải bản PDF hợp đồng."));
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
   return (
     <>
       <Header />
@@ -522,6 +577,30 @@ export default function ContractDetailPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={viewContractPdf}
+              disabled={isOpeningPdf}
+            >
+              {isOpeningPdf ? (
+                <Loader2 className="size-4 mr-2 animate-spin" />
+              ) : (
+                <Eye className="size-4 mr-2" />
+              )}
+              Xem hợp đồng PDF
+            </Button>
+            <Button
+              variant="outline"
+              onClick={downloadContractPdf}
+              disabled={isDownloadingPdf}
+            >
+              {isDownloadingPdf ? (
+                <Loader2 className="size-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="size-4 mr-2" />
+              )}
+              Tải hợp đồng
+            </Button>
             {canUpdateDraft && (
               <Button
                 variant="outline"

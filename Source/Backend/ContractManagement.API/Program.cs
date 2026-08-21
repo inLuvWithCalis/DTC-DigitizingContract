@@ -309,6 +309,10 @@ builder.Services.AddScoped<
     IContractTemplateService,
     ContractTemplateService>();
 
+builder.Services.AddScoped<
+    IContractDocumentPreviewService,
+    ContractDocumentPreviewService>();
+
 #endregion
 
 #region 8. AutoMapper

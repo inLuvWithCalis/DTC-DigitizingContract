@@ -107,7 +107,7 @@ export default function ContractTemplateVersionWorkspacePage() {
   const [isUploading, setIsUploading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDownloadingDocx, setIsDownloadingDocx] = useState(false);
-  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [isOpeningPdf, setIsOpeningPdf] = useState(false);
   const [isPublishOpen, setIsPublishOpen] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isRetireOpen, setIsRetireOpen] = useState(false);
@@ -266,23 +266,43 @@ export default function ContractTemplateVersionWorkspacePage() {
     }
   };
 
-  const downloadPublishedPdf = async () => {
-    if (!version) return;
+  const openPublishedPdf = async () => {
+    if (!version || isOpeningPdf) return;
+
+    const previewWindow = window.open("about:blank", "_blank");
+    if (!previewWindow) {
+      toast.error(
+        "Trình duyệt đã chặn tab xem trước. Vui lòng cho phép cửa sổ bật lên.",
+      );
+      return;
+    }
+
+    previewWindow.opener = null;
+    previewWindow.document.title = "Đang tải PDF phát hành...";
+    previewWindow.document.body.textContent = "Đang tải bản PDF phát hành...";
+
     try {
-      setIsDownloadingPdf(true);
+      setIsOpeningPdf(true);
       const blob = await contractTemplateApi.downloadPublishedPreviewPdf(
         version.templateVersionId,
       );
-      downloadBlob(blob, `${version.templateCode}-v${version.versionNo}.pdf`);
+      const pdfUrl = URL.createObjectURL(
+        blob.type === "application/pdf"
+          ? blob
+          : new Blob([blob], { type: "application/pdf" }),
+      );
+      previewWindow.location.replace(pdfUrl);
+      window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000);
     } catch (error) {
+      previewWindow.close();
       toast.error(
         getContractTemplateErrorMessage(
           error,
-          "Không thể tải bản PDF phát hành.",
+          "Không thể mở bản PDF phát hành.",
         ),
       );
     } finally {
-      setIsDownloadingPdf(false);
+      setIsOpeningPdf(false);
     }
   };
 
@@ -670,15 +690,15 @@ export default function ContractTemplateVersionWorkspacePage() {
                         {version.publishedPreviewPdfFileId && (
                           <Button
                             variant="outline"
-                            onClick={downloadPublishedPdf}
-                            disabled={isDownloadingPdf}
+                            onClick={openPublishedPdf}
+                            disabled={isOpeningPdf}
                           >
-                            {isDownloadingPdf ? (
+                            {isOpeningPdf ? (
                               <Loader2 className="size-4 animate-spin" />
                             ) : (
-                              <Download className="size-4" />
+                              <Eye className="size-4" />
                             )}{" "}
-                            Tải PDF phát hành
+                            Xem PDF phát hành
                           </Button>
                         )}
                       </div>

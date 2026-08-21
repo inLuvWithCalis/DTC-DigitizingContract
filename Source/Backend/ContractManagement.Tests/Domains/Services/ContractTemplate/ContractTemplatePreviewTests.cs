@@ -71,6 +71,44 @@ public sealed class ContractTemplatePreviewTests
             .Elements<W.Table>().Count() >= 2);
     }
 
+    [Fact]
+    public void Renderer_WithContractData_UsesProvidedSnapshotInsteadOfSampleDataset()
+    {
+        var scalarValues = SoftwareSupplyPlaceholderCatalog.GetAll()
+            .Where(item => item.DataKind == TemplatePlaceholderDataKind.Scalar)
+            .ToDictionary(item => item.Key, _ => string.Empty, StringComparer.Ordinal);
+        scalarValues["CONTRACT_CODE"] = "HD-REAL-001";
+        scalarValues["CUSTOMER_NAME"] = "Công ty Khách hàng Thật";
+        scalarValues["CUSTOMER_TAX_CODE"] = "0109999999";
+
+        var renderData = new ContractTemplateRenderData(
+            scalarValues,
+            [new ContractTemplateRenderItem(
+                1, "Sản phẩm", "Phần mềm thật", 2, 1_000_000m,
+                "10%", "8%", 1_944_000m)],
+            [],
+            [new ContractTemplateRenderTerm(
+                1, "Phạm vi thật", "Actual scope", "Nội dung thật", "Actual content")],
+            new ContractTemplateRenderSignature("ĐẠI DIỆN BÊN CUNG CẤP", "Nhân viên Thật"),
+            new ContractTemplateRenderSignature("ĐẠI DIỆN BÊN KHÁCH HÀNG", "Khách hàng Thật"),
+            string.Empty);
+
+        var rendered = new ContractTemplatePreviewRenderer().Render(
+            CreateSourceDocument(),
+            ContractLanguageMode.Bilingual,
+            renderData);
+
+        using var stream = new MemoryStream(rendered);
+        using var document = WordprocessingDocument.Open(stream, false);
+        var text = ReadAllText(document.MainDocumentPart!);
+        Assert.Contains("HD-REAL-001", text);
+        Assert.Contains("Công ty Khách hàng Thật", text);
+        Assert.Contains("Phần mềm thật", text);
+        Assert.Contains("Nhân viên Thật", text);
+        Assert.DoesNotContain("Nguyễn Minh An", text);
+        Assert.DoesNotContain("CUS-DEMO-2026", text);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

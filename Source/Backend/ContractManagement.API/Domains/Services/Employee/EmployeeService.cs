@@ -130,6 +130,7 @@ namespace ContractManagement.API.Domains.Services.Employee
                         employee.EmployeeId,
                         employee.EmployeeCode,
                         employee.EmployeeFullName,
+                        employee.EmployeeMobile,
                         employee.DepartmentId,
                         DepartmentName = department == null ? null : department.DepartmentName,
                         employee.EmployeeType,
@@ -145,6 +146,7 @@ namespace ContractManagement.API.Domains.Services.Employee
                     EmployeeId = row.EmployeeId,
                     EmployeeCode = row.EmployeeCode,
                     EmployeeFullName = row.EmployeeFullName,
+                    EmployeeMobile = row.EmployeeMobile,
                     DepartmentId = row.DepartmentId,
                     DepartmentName = row.DepartmentName,
                     EmployeeType = row.EmployeeType!.Value,
@@ -181,6 +183,7 @@ namespace ContractManagement.API.Domains.Services.Employee
                     employee.EmployeeId,
                     employee.EmployeeCode,
                     employee.EmployeeFullName,
+                    employee.EmployeeMobile,
                     employee.DepartmentId,
                     DepartmentName = department == null
                         ? null
@@ -222,6 +225,7 @@ namespace ContractManagement.API.Domains.Services.Employee
                     EmployeeId = row.EmployeeId,
                     EmployeeCode = row.EmployeeCode,
                     EmployeeFullName = row.EmployeeFullName,
+                    EmployeeMobile = row.EmployeeMobile,
                     DepartmentId = row.DepartmentId,
                     DepartmentName = row.DepartmentName,
                     EmployeeType = row.EmployeeType!.Value,

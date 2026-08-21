@@ -108,6 +108,7 @@ export interface EmployeeDirectoryResponse {
   employeeId: number;
   employeeCode?: string | null;
   employeeFullName?: string | null;
+  employeeMobile?: string | null;
   departmentId?: number | null;
   departmentName?: string | null;
   employeeType: EmployeeType;

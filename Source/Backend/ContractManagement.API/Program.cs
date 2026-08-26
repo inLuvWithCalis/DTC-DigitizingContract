@@ -3,14 +3,12 @@ using ContractManagement.API.Domains.Interfaces.Customer;
 using ContractManagement.API.Domains.Interfaces.CustomerInteraction;
 using ContractManagement.API.Domains.Interfaces.Department;
 using ContractManagement.API.Domains.Interfaces.Security;
-using ContractManagement.API.Domains.Interfaces.LegalProfiles;
 using ContractManagement.API.Domains.Services.Catalog;
 using ContractManagement.API.Domains.Services.Customer;
 using ContractManagement.API.Domains.Services.CustomerInteraction;
 using ContractManagement.API.Domains.Services.Department;
 using ContractManagement.API.Domains.Services.Employee;
 using ContractManagement.API.Domains.Services.Security;
-using ContractManagement.API.Domains.Services.LegalProfiles;
 using ContractManagement.Domains.Interfaces.ContractTemplate;
 using ContractManagement.Domains.Interfaces.Contract;
 using ContractManagement.Domains.Interfaces.Employee;
@@ -204,14 +202,6 @@ builder.Services.AddScoped<
     IFileStorageService,
     FileStorageService>();
 
-builder.Services.AddOptions<PrivateFileStorageOptions>()
-    .Bind(builder.Configuration.GetSection(PrivateFileStorageOptions.SectionName))
-    .Validate(
-        options => !string.IsNullOrWhiteSpace(options.RootPath),
-        "PrivateFileStorage:RootPath is required.")
-    .ValidateOnStart();
-builder.Services.AddSingleton<IPrivateFileStorage, LocalPrivateFileStorage>();
-
 builder.Services.AddScoped<
     IContractResourceAuthorizationService,
     ContractResourceAuthorizationService>();
@@ -318,10 +308,6 @@ builder.Services.AddSingleton<IContractTemplatePdfRenderer,
 builder.Services.AddScoped<
     IContractTemplateService,
     ContractTemplateService>();
-
-builder.Services.AddScoped<
-    ITenantLegalProfileService,
-    TenantLegalProfileService>();
 
 builder.Services.AddScoped<
     IContractDocumentPreviewService,

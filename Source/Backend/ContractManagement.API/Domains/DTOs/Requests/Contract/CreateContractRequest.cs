@@ -72,6 +72,13 @@ namespace ContractManagement.API.Domains.DTOs.Requests.Contract
         public List<CreateContractItemRequest> Items { get; set; } = [];
 
         /// <summary>
+        /// Danh sách điều khoản đã chỉnh trong wizard tạo hợp đồng.
+        /// Null giữ tương thích với client cũ và sao chép nguyên template;
+        /// danh sách rỗng không hợp lệ.
+        /// </summary>
+        public List<CreateContractTermRequest>? Terms { get; set; }
+
+        /// <summary>
         /// Kiểm tra những business rule liên quan giữa nhiều field.
         /// Các kiểm tra cần database sẽ được thực hiện trong ContractService.
         /// </summary>
@@ -107,6 +114,50 @@ namespace ContractManagement.API.Domains.DTOs.Requests.Contract
                         yield return new ValidationResult(
                             $"Item thứ {index + 1} phải có tên tiếng Anh.",
                             new[] { $"{nameof(Items)}[{index}].ItemNameEn" });
+                    }
+                }
+            }
+
+            if (Terms is { Count: 0 })
+            {
+                yield return new ValidationResult(
+                    "Hợp đồng phải có ít nhất một điều khoản.",
+                    new[] { nameof(Terms) });
+            }
+
+            if (Terms is not null)
+            {
+                var duplicateCode = Terms
+                    .Where(term => !string.IsNullOrWhiteSpace(term.TermCode))
+                    .GroupBy(
+                        term => term.TermCode.Trim(),
+                        StringComparer.OrdinalIgnoreCase)
+                    .FirstOrDefault(group => group.Count() > 1);
+                if (duplicateCode is not null)
+                {
+                    yield return new ValidationResult(
+                        $"Mã điều khoản '{duplicateCode.Key}' bị trùng.",
+                        new[] { nameof(Terms) });
+                }
+
+                if (LanguageMode == ContractLanguageMode.Bilingual)
+                {
+                    foreach (var term in Terms)
+                    {
+                        if (string.IsNullOrWhiteSpace(term.TermTitleEn))
+                        {
+                            yield return new ValidationResult(
+                                $"Điều khoản '{term.TermCode}' phải có tiêu đề tiếng Anh.",
+                                new[] { nameof(Terms) });
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(term.TermContent)
+                            && string.IsNullOrWhiteSpace(term.TermContentEn))
+                        {
+                            yield return new ValidationResult(
+                                $"Điều khoản '{term.TermCode}' phải có nội dung tiếng Anh.",
+                                new[] { nameof(Terms) });
+                        }
                     }
                 }
             }

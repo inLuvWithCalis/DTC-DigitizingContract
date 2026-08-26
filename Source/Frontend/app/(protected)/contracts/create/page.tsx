@@ -48,6 +48,10 @@ import { ConfirmDialog } from "@/components/ui/custom/confirm-dialog";
 import { format } from "date-fns";
 import { CustomerFormModal } from "@/app/(protected)/customers/customer-form-modal";
 import { ProductFormModal } from "@/app/(protected)/catalog/products/product-form-modal";
+import {
+  CreateContractTermsEditor,
+  type CreateContractTermDraft,
+} from "@/components/contracts/create-contract-terms-editor";
 
 import {
   ContractType,
@@ -56,6 +60,7 @@ import {
   ContractItemDiscountMode,
   CreateContractRequest,
   CreateContractItemRequest,
+  CreateContractTermRequest,
   CreateContractResponse,
   EligibleParentContractResponse,
   contractApi,
@@ -88,7 +93,6 @@ import {
   contractTemplateApi,
   TemplateDocumentType,
   type AvailableContractTemplateVersionResponse,
-  type AvailableContractTemplateVersionDetailResponse,
 } from "@/services/contract-template-api";
 import { useAuthStore } from "@/hooks/use-auth-store";
 import { usePermission } from "@/hooks/use-permission";
@@ -220,7 +224,6 @@ export default function CreateContractPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdContract, setCreatedContract] =
     useState<CreateContractResponse | null>(null);
-  const [isOpeningPreview, setIsOpeningPreview] = useState(false);
   const [customerId, setCustomerId] = useState<string>("");
   const [responsibleEmployeeId, setResponsibleEmployeeId] =
     useState<string>("");
@@ -248,8 +251,9 @@ export default function CreateContractPage() {
   const [debouncedTemplateSearch, setDebouncedTemplateSearch] = useState("");
   const [selectedTemplateSnapshot, setSelectedTemplateSnapshot] =
     useState<AvailableTemplateView | null>(null);
-  const [selectedTemplateDetail, setSelectedTemplateDetail] =
-    useState<AvailableContractTemplateVersionDetailResponse | null>(null);
+  const [contractTerms, setContractTerms] = useState<
+    CreateContractTermDraft[]
+  >([]);
   const [isLoadingTemplateDetail, setIsLoadingTemplateDetail] = useState(false);
   const [templateDetailError, setTemplateDetailError] = useState<string | null>(
     null,
@@ -452,7 +456,7 @@ export default function CreateContractPage() {
 
   useEffect(() => {
     if (!templateVersionId) {
-      setSelectedTemplateDetail(null);
+      setContractTerms([]);
       setTemplateDetailError(null);
       return;
     }
@@ -460,15 +464,32 @@ export default function CreateContractPage() {
     let cancelled = false;
     setIsLoadingTemplateDetail(true);
     setTemplateDetailError(null);
+    setContractTerms([]);
     contractTemplateApi
       .getAvailableByVersionId(Number(templateVersionId))
       .then((detail) => {
-        if (!cancelled) setSelectedTemplateDetail(detail);
+        if (!cancelled) {
+          setContractTerms(
+            [...detail.terms]
+              .sort((a, b) => a.displayOrder - b.displayOrder)
+              .map((term, index) => ({
+                clientId: `template-${term.templateTermId}`,
+                sourceTemplateTermId: term.templateTermId,
+                termCode: term.termCode,
+                termTitle: term.termTitle,
+                termTitleEn: term.termTitleEn,
+                termContent: term.termContent,
+                termContentEn: term.termContentEn,
+                isNegotiable: term.isNegotiable,
+                displayOrder: index + 1,
+              })),
+          );
+        }
       })
       .catch((error) => {
         if (!cancelled) {
           console.error("Failed to load template terms:", error);
-          setSelectedTemplateDetail(null);
+          setContractTerms([]);
           setTemplateDetailError("Không thể tải điều khoản của template.");
         }
       })
@@ -641,6 +662,48 @@ export default function CreateContractPage() {
   const hasValidContractDateRange =
     Boolean(effectiveDate && expiredDate) &&
     new Date(effectiveDate).getTime() <= new Date(expiredDate).getTime();
+  const contractTermsValidationError = useMemo(() => {
+    if (isLoadingTemplateDetail) return "Đang tải điều khoản của template.";
+    if (templateDetailError) return templateDetailError;
+    if (contractTerms.length === 0) {
+      return "Hợp đồng phải có ít nhất một điều khoản.";
+    }
+
+    const invalidTerm = contractTerms.find(
+      (term) => !term.termCode.trim() || !term.termTitle.trim(),
+    );
+    if (invalidTerm) {
+      return "Mã và tiêu đề điều khoản không được để trống.";
+    }
+
+    const codes = new Set<string>();
+    for (const term of contractTerms) {
+      const code = term.termCode.trim().toUpperCase();
+      if (codes.has(code)) return `Mã điều khoản '${code}' bị trùng.`;
+      codes.add(code);
+
+      if (
+        languageMode === ContractLanguageMode.Bilingual &&
+        !term.termTitleEn?.trim()
+      ) {
+        return `Điều khoản '${code}' phải có tiêu đề tiếng Anh.`;
+      }
+      if (
+        languageMode === ContractLanguageMode.Bilingual &&
+        term.termContent?.trim() &&
+        !term.termContentEn?.trim()
+      ) {
+        return `Điều khoản '${code}' phải có nội dung tiếng Anh.`;
+      }
+    }
+
+    return null;
+  }, [
+    contractTerms,
+    isLoadingTemplateDetail,
+    languageMode,
+    templateDetailError,
+  ]);
   // -- COMPUTED VALUES --
   const selectedCustomer = customers.find(
     (item) => item.customerId === Number(customerId),
@@ -688,7 +751,8 @@ export default function CreateContractPage() {
         (languageMode !== ContractLanguageMode.Bilingual ||
           selectedCatalogItems.every((item) => item.itemNameEn.trim()))
       );
-    if (stepIdx === 2) return hasValidContractDateRange;
+    if (stepIdx === 2)
+      return hasValidContractDateRange && !contractTermsValidationError;
     return false;
   };
 
@@ -709,6 +773,7 @@ export default function CreateContractPage() {
     selectedCatalogItems,
     effectiveDate,
     expiredDate,
+    contractTermsValidationError,
   ]);
 
   const handleContractTypeChange = (value: string) => {
@@ -848,6 +913,11 @@ export default function CreateContractPage() {
       setCurrentStep(2);
       return;
     }
+    if (contractTermsValidationError) {
+      toast.error(contractTermsValidationError);
+      setCurrentStep(2);
+      return;
+    }
     setIsSubmitting(true);
     try {
       const itemsPayload: CreateContractItemRequest[] =
@@ -893,6 +963,16 @@ export default function CreateContractPage() {
         currencyCode,
         languageMode: languageMode,
         items: itemsPayload,
+        terms: contractTerms.map<CreateContractTermRequest>((term, index) => ({
+          sourceTemplateTermId: term.sourceTemplateTermId ?? null,
+          termCode: term.termCode.trim().toUpperCase(),
+          termTitle: term.termTitle.trim(),
+          termTitleEn: term.termTitleEn?.trim() || null,
+          termContent: term.termContent?.trim() || null,
+          termContentEn: term.termContentEn?.trim() || null,
+          isNegotiable: term.isNegotiable,
+          displayOrder: index + 1,
+        })),
       };
 
       const response = await contractApi.create(payload);
@@ -924,52 +1004,16 @@ export default function CreateContractPage() {
   };
 
   const goToCreatedContractDetails = () => {
-    if (!createdContract || isOpeningPreview) return;
+    if (!createdContract) return;
 
     const contractId = createdContract.contractId;
     setCreatedContract(null);
     router.push(`/contracts/${contractId}#terms`);
   };
 
-  const openContractPdfAndGoToDetails = async () => {
-    if (!createdContract || isOpeningPreview) return;
-
-    const { contractId } = createdContract;
-    const previewWindow = window.open("about:blank", "_blank");
-
-    if (previewWindow) {
-      previewWindow.opener = null;
-      previewWindow.document.title = "Đang tải bản xem trước...";
-      previewWindow.document.body.textContent = "Đang tải bản PDF xem trước...";
-    }
-
-    setIsOpeningPreview(true);
-    try {
-      const pdf = await contractApi.downloadPreviewPdf(contractId);
-      const pdfUrl = URL.createObjectURL(
-        pdf.type === "application/pdf"
-          ? pdf
-          : new Blob([pdf], { type: "application/pdf" }),
-      );
-
-      if (previewWindow) {
-        previewWindow.location.replace(pdfUrl);
-        window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000);
-      } else {
-        URL.revokeObjectURL(pdfUrl);
-        toast.error(
-          "Trình duyệt đã chặn tab xem trước. Vui lòng cho phép cửa sổ bật lên.",
-        );
-      }
-    } catch (error) {
-      previewWindow?.close();
-      console.error("Failed to open contract PDF preview:", error);
-      toast.error("Không thể mở bản PDF xem trước của hợp đồng.");
-    } finally {
-      setIsOpeningPreview(false);
-      setCreatedContract(null);
-      router.push(`/contracts/${contractId}#terms`);
-    }
+  const goToContractsList = () => {
+    setCreatedContract(null);
+    router.push("/contracts");
   };
 
   return (
@@ -1934,87 +1978,42 @@ export default function CreateContractPage() {
                     </div>
                   </div>
 
-                  <Alert>
-                    <LayoutTemplate className="size-4" />
-                    <AlertTitle>Điều khoản lấy từ template đã phát hành</AlertTitle>
-                    <AlertDescription>
-                      Backend sẽ sao chép điều khoản của template khi tạo hợp
-                      đồng. Sau khi tạo, người phụ trách có thể chỉnh sửa tại
-                      tab Điều khoản khi hợp đồng còn ở trạng thái Nháp.
-                    </AlertDescription>
-                  </Alert>
-
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <h3 className="font-semibold">Điều khoản template</h3>
-                        <p className="text-xs text-muted-foreground">
-                          Chỉ đọc tại bước tạo; có thể chỉnh sửa sau khi hợp đồng
-                          nháp được tạo.
-                        </p>
-                      </div>
-                      {selectedTemplateDetail && (
-                        <Badge variant="outline">
-                          {selectedTemplateDetail.terms.length} điều khoản
-                        </Badge>
-                      )}
+                  {isLoadingTemplateDetail && (
+                    <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed py-8 text-sm text-muted-foreground">
+                      <Loader2 className="size-4 animate-spin" />
+                      Đang tải điều khoản...
                     </div>
+                  )}
 
-                    {isLoadingTemplateDetail && (
-                      <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed py-8 text-sm text-muted-foreground">
-                        <Loader2 className="size-4 animate-spin" />
-                        Đang tải điều khoản...
-                      </div>
-                    )}
+                  {templateDetailError && (
+                    <Alert variant="destructive">
+                      <AlertTitle>Không thể tải điều khoản</AlertTitle>
+                      <AlertDescription>{templateDetailError}</AlertDescription>
+                    </Alert>
+                  )}
 
-                    {templateDetailError && (
-                      <Alert variant="destructive">
-                        <AlertTitle>Không thể tải điều khoản</AlertTitle>
-                        <AlertDescription>{templateDetailError}</AlertDescription>
-                      </Alert>
-                    )}
-
-                    {!isLoadingTemplateDetail &&
-                      !templateDetailError &&
-                      selectedTemplateDetail?.terms.map((term) => (
-                        <div
-                          key={term.templateTermId}
-                          className="rounded-xl border bg-background p-4"
-                        >
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="secondary">
-                              {term.termCode}
-                            </Badge>
-                            {term.isNegotiable && (
-                              <Badge variant="outline">Có thể đàm phán</Badge>
-                            )}
-                          </div>
-                          <h4 className="mt-3 font-semibold">
-                            {term.termTitle}
-                          </h4>
-                          {term.termContent && (
-                            <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
-                              {term.termContent}
-                            </p>
-                          )}
-                          {languageMode === ContractLanguageMode.Bilingual &&
-                            (term.termTitleEn || term.termContentEn) && (
-                              <div className="mt-3 border-t pt-3">
-                                {term.termTitleEn && (
-                                  <h5 className="font-medium">
-                                    {term.termTitleEn}
-                                  </h5>
-                                )}
-                                {term.termContentEn && (
-                                  <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
-                                    {term.termContentEn}
-                                  </p>
-                                )}
-                              </div>
-                            )}
-                        </div>
-                      ))}
-                  </div>
+                  {!isLoadingTemplateDetail && !templateDetailError && (
+                    <>
+                      <CreateContractTermsEditor
+                        key={templateVersionId}
+                        terms={contractTerms}
+                        templateName={selectedTemplate?.name}
+                        isBilingual={
+                          languageMode === ContractLanguageMode.Bilingual
+                        }
+                        onChange={setContractTerms}
+                      />
+                      {contractTermsValidationError &&
+                        contractTerms.length > 0 && (
+                          <Alert variant="destructive">
+                            <AlertTitle>Điều khoản chưa hợp lệ</AlertTitle>
+                            <AlertDescription>
+                              {contractTermsValidationError}
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                    </>
+                  )}
                 </div>
               )}
 
@@ -2025,8 +2024,8 @@ export default function CreateContractPage() {
                     <FileSignature className="size-4" />
                     <AlertTitle>Sẵn sàng khởi tạo</AlertTitle>
                     <AlertDescription>
-                      Thông tin cơ bản và sản phẩm sẽ được lưu vào bản nháp;
-                      điều khoản được sao chép từ template đã chọn.
+                      Thông tin cơ bản, sản phẩm và {contractTerms.length} điều
+                      khoản đã chỉnh sửa sẽ được lưu vào cùng bản nháp.
                     </AlertDescription>
                   </Alert>
 
@@ -2224,13 +2223,15 @@ export default function CreateContractPage() {
                     <Separator className="my-5" />
 
                     <div>
-                      <p className="mb-2 text-sm font-semibold">Điều khoản hợp đồng</p>
+                      <p className="mb-2 text-sm font-semibold">
+                        Điều khoản hợp đồng
+                      </p>
                       <Alert>
                         <FileText className="size-4" />
                         <AlertDescription>
-                          Điều khoản sẽ được sao chép từ phiên bản template đã
-                          chọn. Sau khi tạo, bạn được chuyển thẳng đến tab Điều
-                          khoản để kiểm tra và chỉnh sửa bản nháp.
+                          {contractTerms.length} điều khoản trong danh sách hiện
+                          tại sẽ được lưu. Việc thêm, xóa, sửa hoặc sắp xếp ở
+                          bước trước không làm thay đổi template gốc.
                         </AlertDescription>
                       </Alert>
                     </div>
@@ -2389,19 +2390,18 @@ export default function CreateContractPage() {
 
       <ConfirmDialog
         isOpen={createdContract !== null}
-        onClose={goToCreatedContractDetails}
-        onConfirm={openContractPdfAndGoToDetails}
-        title="Xem trước hợp đồng"
+        onClose={goToContractsList}
+        onConfirm={goToCreatedContractDetails}
+        title="Đã tạo hợp đồng nháp"
         description={
           <>
-            Hợp đồng đã được tạo thành công từ template. Bạn có muốn mở bản
-            PDF xem trước trong tab mới không?
+            Sản phẩm và các điều khoản đã chỉnh sửa được lưu thành công. PDF
+            preview chỉ khả dụng sau khi bắt đầu đàm phán.
           </>
         }
         icon={<FileText className="size-5 text-primary" />}
-        confirmText="Có, xem PDF"
-        cancelText="Không, xem chi tiết"
-        isLoading={isOpeningPreview}
+        confirmText="Xem chi tiết hợp đồng"
+        cancelText="Về danh sách"
       />
     </>
   );

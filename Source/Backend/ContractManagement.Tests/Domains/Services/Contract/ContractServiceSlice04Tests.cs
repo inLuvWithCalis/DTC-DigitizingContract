@@ -132,6 +132,86 @@ public sealed class ContractServiceSlice04Tests
     }
 
     [Fact]
+    public async Task Create_ShouldPersistEditedAndCustomTermsAtomically()
+    {
+        await using var context = CreateContext();
+        await SeedCreateDependenciesAsync(context);
+        var request = CreateRequest("VND",
+        [
+            CreateItem(
+                ContractItemType.Product,
+                1m,
+                100m,
+                sourceProductId: ProductId)
+        ]);
+        request.Terms =
+        [
+            new CreateContractTermRequest
+            {
+                SourceTemplateTermId = 63,
+                TermCode = "GENERAL",
+                TermTitle = "Điều khoản chung đã sửa",
+                TermContent = "Nội dung được sửa trong wizard.",
+                IsNegotiable = false,
+                DisplayOrder = 2
+            },
+            new CreateContractTermRequest
+            {
+                TermCode = "CUSTOM_1",
+                TermTitle = "Điều khoản bổ sung",
+                TermContent = "Nội dung bổ sung.",
+                IsNegotiable = true,
+                DisplayOrder = 1
+            }
+        ];
+
+        var result = await CreateService(context)
+            .CreateAsync(request, EmployeeId);
+
+        var terms = await context.TblContractTerms
+            .AsNoTracking()
+            .OrderBy(term => term.DisplayOrder)
+            .ToListAsync();
+        Assert.Equal(2, result.TermCount);
+        Assert.Equal("CUSTOM_1", terms[0].TermCode);
+        Assert.Null(terms[0].SourceTemplateTermId);
+        Assert.Equal("Điều khoản chung đã sửa", terms[1].TermTitle);
+        Assert.Equal(63, terms[1].SourceTemplateTermId);
+        Assert.False(terms[1].IsNegotiable);
+    }
+
+    [Fact]
+    public async Task Create_ShouldRejectTermFromAnotherTemplate()
+    {
+        await using var context = CreateContext();
+        await SeedCreateDependenciesAsync(context);
+        var request = CreateRequest("VND",
+        [
+            CreateItem(
+                ContractItemType.Product,
+                1m,
+                100m,
+                sourceProductId: ProductId)
+        ]);
+        request.Terms =
+        [
+            new CreateContractTermRequest
+            {
+                SourceTemplateTermId = 99999,
+                TermCode = "FOREIGN",
+                TermTitle = "Không hợp lệ",
+                IsNegotiable = true,
+                DisplayOrder = 1
+            }
+        ];
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            CreateService(context).CreateAsync(request, EmployeeId));
+
+        Assert.Empty(context.TblContracts);
+    }
+
+    [Fact]
     public async Task Create_ShouldRejectMixedDiscountModes()
     {
         await using var context = CreateContext();

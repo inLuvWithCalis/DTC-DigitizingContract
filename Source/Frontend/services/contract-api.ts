@@ -214,6 +214,18 @@ export interface CreateContractRequest {
   currencyCode: string;
   languageMode: ContractLanguageMode;
   items: CreateContractItemRequest[];
+  terms?: CreateContractTermRequest[] | null;
+}
+
+export interface CreateContractTermRequest {
+  sourceTemplateTermId?: number | null;
+  termCode: string;
+  termTitle: string;
+  termTitleEn?: string | null;
+  termContent?: string | null;
+  termContentEn?: string | null;
+  isNegotiable: boolean;
+  displayOrder: number;
 }
 
 export interface UpdateContractTermRequest {

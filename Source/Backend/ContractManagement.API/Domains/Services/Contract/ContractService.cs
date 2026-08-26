@@ -396,6 +396,10 @@ namespace ContractManagement.Domains.Services.Contract
                             "Template version chưa có điều khoản để tạo hợp đồng.");
                     }
 
+                    ValidateCreateTermsAgainstTemplate(
+                        request,
+                        templateTerms);
+
                     var now = DateTime.UtcNow;
                     var currencyCode = NormalizeCurrencyCode(
                         request.CurrencyCode);
@@ -575,28 +579,50 @@ namespace ContractManagement.Domains.Services.Contract
                      * Bước 4: Snapshot điều khoản từ template.
                      * Template thay đổi sau này cũng không ảnh hưởng hợp đồng.
                      */
-                    var contractTerms = templateTerms
-                        .Select(templateTerm => new TblContractTerm
-                        {
-                            ContractId = contract.ContractId,
-                            VersionId = contractVersion.VersionId,
-
-                            SourceTemplateTermId =
-                                templateTerm.TemplateTermId,
-
-                            TermCode = templateTerm.TermCode,
-                            TermTitle = templateTerm.TermTitle,
-                            TermTitleEn = templateTerm.TermTitleEn,
-                            TermContent = templateTerm.TermContent,
-                            TermContentEn = templateTerm.TermContentEn,
-
-                            IsNegotiable = templateTerm.IsNegotiable,
-                            DisplayOrder = templateTerm.DisplayOrder,
-
-                            CreatedEmployeeId = createdEmployeeId,
-                            CreatedDate = now
-                        })
-                        .ToList();
+                    var contractTerms = request.Terms is null
+                        ? templateTerms
+                            .Select(templateTerm => new TblContractTerm
+                            {
+                                ContractId = contract.ContractId,
+                                VersionId = contractVersion.VersionId,
+                                SourceTemplateTermId = templateTerm.TemplateTermId,
+                                TermCode = templateTerm.TermCode,
+                                TermTitle = templateTerm.TermTitle,
+                                TermTitleEn = templateTerm.TermTitleEn,
+                                TermContent = templateTerm.TermContent,
+                                TermContentEn = templateTerm.TermContentEn,
+                                IsNegotiable = templateTerm.IsNegotiable,
+                                DisplayOrder = templateTerm.DisplayOrder,
+                                CreatedEmployeeId = createdEmployeeId,
+                                CreatedDate = now
+                            })
+                            .ToList()
+                        : request.Terms
+                            .Select((requestTerm, index) =>
+                                new TblContractTerm
+                                {
+                                    ContractId = contract.ContractId,
+                                    VersionId = contractVersion.VersionId,
+                                    SourceTemplateTermId =
+                                        requestTerm.SourceTemplateTermId,
+                                    TermCode = requestTerm.TermCode
+                                        .Trim()
+                                        .ToUpperInvariant(),
+                                    TermTitle = requestTerm.TermTitle.Trim(),
+                                    TermTitleEn = NormalizeOptional(
+                                        requestTerm.TermTitleEn),
+                                    TermContent = NormalizeOptional(
+                                        requestTerm.TermContent),
+                                    TermContentEn = NormalizeOptional(
+                                        requestTerm.TermContentEn),
+                                    IsNegotiable = requestTerm.IsNegotiable,
+                                    DisplayOrder = requestTerm.DisplayOrder > 0
+                                        ? requestTerm.DisplayOrder
+                                        : index + 1,
+                                    CreatedEmployeeId = createdEmployeeId,
+                                    CreatedDate = now
+                                })
+                            .ToList();
 
                     _dbContext.TblContractItems.AddRange(contractItems);
                     _dbContext.TblContractTerms.AddRange(contractTerms);
@@ -3720,6 +3746,89 @@ namespace ContractManagement.Domains.Services.Contract
                 }
 
                 ValidateFinanceItem(item);
+            }
+        }
+
+        private static void ValidateCreateTermsAgainstTemplate(
+            CreateContractRequest request,
+            IReadOnlyList<TblContractTemplateTerm> templateTerms)
+        {
+            if (request.Terms is null)
+            {
+                return;
+            }
+
+            if (request.Terms.Count == 0)
+            {
+                throw new ArgumentException(
+                    "Hợp đồng phải có ít nhất một điều khoản.");
+            }
+
+            var duplicatedCode = request.Terms
+                .GroupBy(
+                    term => term.TermCode?.Trim() ?? string.Empty,
+                    StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault(group => group.Count() > 1);
+            if (duplicatedCode is not null)
+            {
+                throw new ArgumentException(
+                    $"Mã điều khoản '{duplicatedCode.Key}' bị trùng.");
+            }
+
+            var duplicatedSource = request.Terms
+                .Where(term => term.SourceTemplateTermId.HasValue)
+                .GroupBy(term => term.SourceTemplateTermId!.Value)
+                .FirstOrDefault(group => group.Count() > 1);
+            if (duplicatedSource is not null)
+            {
+                throw new ArgumentException(
+                    $"Điều khoản nguồn {duplicatedSource.Key} bị sử dụng nhiều lần.");
+            }
+
+            var templateById = templateTerms.ToDictionary(
+                term => term.TemplateTermId);
+            foreach (var term in request.Terms)
+            {
+                if (string.IsNullOrWhiteSpace(term.TermCode)
+                    || string.IsNullOrWhiteSpace(term.TermTitle))
+                {
+                    throw new ArgumentException(
+                        "Mã và tiêu đề điều khoản không được để trống.");
+                }
+
+                if (term.SourceTemplateTermId is int sourceId)
+                {
+                    if (!templateById.TryGetValue(sourceId, out var source))
+                    {
+                        throw new ArgumentException(
+                            $"Điều khoản nguồn {sourceId} không thuộc template đã chọn.");
+                    }
+
+                    if (!string.Equals(
+                            source.TermCode,
+                            term.TermCode.Trim(),
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new ArgumentException(
+                            $"Không được thay đổi mã của điều khoản nguồn {sourceId}.");
+                    }
+                }
+
+                if (request.LanguageMode == ContractLanguageMode.Bilingual)
+                {
+                    if (string.IsNullOrWhiteSpace(term.TermTitleEn))
+                    {
+                        throw new ArgumentException(
+                            $"Điều khoản '{term.TermCode}' phải có tiêu đề tiếng Anh.");
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(term.TermContent)
+                        && string.IsNullOrWhiteSpace(term.TermContentEn))
+                    {
+                        throw new ArgumentException(
+                            $"Điều khoản '{term.TermCode}' phải có nội dung tiếng Anh.");
+                    }
+                }
             }
         }
 

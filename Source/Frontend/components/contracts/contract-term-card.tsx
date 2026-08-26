@@ -142,7 +142,10 @@ export function ContractTermCard({
       {editable ? (
         <div className="grid gap-4">
           <div className="space-y-2">
-            <Label htmlFor={`term-title-${inputId}`}>Tiêu đề điều khoản</Label>
+            <Label htmlFor={`term-title-${inputId}`}>
+              Tiêu đề điều khoản{" "}
+              <span className="text-destructive">*</span>
+            </Label>
             <Input
               id={`term-title-${inputId}`}
               value={term.termTitle}
@@ -169,7 +172,8 @@ export function ContractTermCard({
             <div className="grid gap-4 rounded-xl border border-dashed p-3">
               <div className="space-y-2">
                 <Label htmlFor={`term-title-en-${inputId}`}>
-                  Tiêu đề tiếng Anh
+                  Tiêu đề tiếng Anh{" "}
+                  <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   id={`term-title-en-${inputId}`}

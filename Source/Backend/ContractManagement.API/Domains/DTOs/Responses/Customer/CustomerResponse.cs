@@ -39,11 +39,17 @@
 
         public string? CustomerPhone { get; set; }
 
+        public string? CustomerFaxNumber { get; set; }
+
         public string? CustomerTaxCode { get; set; }
 
         public string? CustomerRepresentativeName { get; set; }
 
         public string? CustomerRepresentativeTitle { get; set; }
+
+        public string? CustomerBankAccountNumber { get; set; }
+
+        public string? CustomerBankName { get; set; }
 
         public string? CustomerAddress { get; set; }
 

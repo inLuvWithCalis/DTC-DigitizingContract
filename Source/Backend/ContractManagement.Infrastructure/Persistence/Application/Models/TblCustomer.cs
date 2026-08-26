@@ -37,6 +37,10 @@ public partial class TblCustomer
 
     public string? CustomerRepresentativeTitle { get; set; }
 
+    public string? CustomerBankAccountNumber { get; set; }
+
+    public string? CustomerBankName { get; set; }
+
     public string? CustomerCity { get; set; }
 
     public string? CustomerZipCode { get; set; }

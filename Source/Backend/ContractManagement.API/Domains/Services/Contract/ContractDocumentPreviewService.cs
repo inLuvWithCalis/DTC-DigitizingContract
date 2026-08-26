@@ -308,9 +308,9 @@ public sealed class ContractDocumentPreviewService : IContractDocumentPreviewSer
             ["CONTRACT_TOTAL_AMOUNT_IN_WORDS"] =
                 VietnameseMoneyTextFormatter.Format(version.TotalAmount, currency),
             ["CUSTOMER_CODE"] = Required(customer.CustomerCode, "Mã khách hàng"),
-            ["CUSTOMER_NAME"] = Required(
-                customer.CustomerFullName ?? customerSnapshot.LegalName,
-                "Tên khách hàng"),
+            ["CUSTOMER_NAME"] = customerSnapshot.RepresentativeName,
+            ["CUSTOMER_REPRESENTATIVE_TITLE"] =
+                customerSnapshot.RepresentativeTitle,
             ["CUSTOMER_COMPANY"] = Required(
                 customer.CustomerCompany ?? customerSnapshot.LegalName,
                 "Công ty khách hàng"),
@@ -320,9 +320,22 @@ public sealed class ContractDocumentPreviewService : IContractDocumentPreviewSer
             ["CUSTOMER_ADDRESS"] = customerSnapshot.Address,
             ["CUSTOMER_EMAIL"] = Required(customer.CustomerEmail, "Email khách hàng"),
             ["CUSTOMER_PHONE"] = Required(
-                customer.CustomerMobile ?? customer.CustomerPhone,
+                customerSnapshot.PhoneNumber,
                 "Điện thoại khách hàng"),
-            ["CUSTOMER_FAX"] = Value(customer.CustomerFaxNumber),
+            ["PROVIDER_LEGAL_NAME"] = tenant.LegalEntityName,
+            ["PROVIDER_TAX_CODE"] = tenant.TaxCode,
+            ["PROVIDER_ADDRESS"] = tenant.Address,
+            ["PROVIDER_REPRESENTATIVE_NAME"] = tenant.RepresentativeName,
+            ["PROVIDER_REPRESENTATIVE_TITLE"] = tenant.RepresentativeTitle,
+            ["CUSTOMER_FAX"] = Value(customerSnapshot.FaxNumber),
+            ["CUSTOMER_BANK_ACCOUNT_NUMBER"] =
+                Value(customerSnapshot.BankAccountNumber),
+            ["CUSTOMER_BANK_NAME"] = Value(customerSnapshot.BankName),
+            ["PROVIDER_PHONE"] = Value(snapshot.Tenant.PhoneNumber),
+            ["PROVIDER_FAX"] = Value(snapshot.Tenant.FaxNumber),
+            ["PROVIDER_BANK_ACCOUNT_NUMBER"] =
+                Value(snapshot.Tenant.BankAccountNumber),
+            ["PROVIDER_BANK_NAME"] = Value(snapshot.Tenant.BankName),
             ["CUSTOMER_WEBSITE"] = Value(customer.CustomerWebsite),
             ["CUSTOMER_CITY"] = Value(customer.CustomerCity),
             ["CUSTOMER_COUNTRY"] = Value(customer.CustomerCountry)

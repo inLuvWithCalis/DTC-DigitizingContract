@@ -22,6 +22,10 @@ public sealed class TenantLegalProfileServiceTests
 
         Assert.Equal(1, await context.TblTenantLegalProfiles.CountAsync());
         Assert.Equal("Công ty TNHH DTC Mới", updated.LegalEntityName);
+        Assert.Equal("02473000001", updated.PhoneNumber);
+        Assert.Equal("02473000002", updated.FaxNumber);
+        Assert.Equal("098765432109", updated.BankAccountNumber);
+        Assert.Equal("Ngân hàng DTC", updated.BankName);
         Assert.Equal(11, updated.CreatedByEmployeeId);
         Assert.Equal(12, updated.UpdatedByEmployeeId);
     }
@@ -60,7 +64,11 @@ public sealed class TenantLegalProfileServiceTests
         TaxCode = "0101234567",
         Address = "Hà Nội",
         RepresentativeName = "Nguyễn Văn A",
-        RepresentativeTitle = "Giám đốc"
+        RepresentativeTitle = "Giám đốc",
+        PhoneNumber = "02473000001",
+        FaxNumber = "02473000002",
+        BankAccountNumber = "098765432109",
+        BankName = "Ngân hàng DTC"
     };
 
     private static DbDtctechContext CreateContext(string? databaseName = null)

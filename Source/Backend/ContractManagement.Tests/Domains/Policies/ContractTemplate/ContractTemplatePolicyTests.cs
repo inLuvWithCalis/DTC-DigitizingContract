@@ -12,10 +12,10 @@ public class ContractTemplatePolicyTests
     {
         var catalog = SoftwareSupplyPlaceholderCatalog.All;
 
-        Assert.Equal("V1", SoftwareSupplyPlaceholderCatalog.Version);
-        Assert.Equal(25, catalog.Count);
-        Assert.Equal(17, catalog.Count(item => item.IsRequired));
-        Assert.Equal(8, catalog.Count(item => !item.IsRequired));
+        Assert.Equal("V2", SoftwareSupplyPlaceholderCatalog.Version);
+        Assert.Equal(37, catalog.Count);
+        Assert.Equal(23, catalog.Count(item => item.IsRequired));
+        Assert.Equal(14, catalog.Count(item => !item.IsRequired));
         Assert.Equal(
             catalog.Count,
             catalog.Select(item => item.Key).Distinct(StringComparer.Ordinal).Count());
@@ -24,6 +24,17 @@ public class ContractTemplatePolicyTests
             Assert.False(string.IsNullOrWhiteSpace(item.Key));
             Assert.False(string.IsNullOrWhiteSpace(item.DataSource));
         });
+        Assert.Equal(
+            "Customer.CustomerRepresentativeName",
+            SoftwareSupplyPlaceholderCatalog.Find("CUSTOMER_NAME")?.DataSource);
+        Assert.Equal(
+            "Customer.CustomerRepresentativeTitle",
+            SoftwareSupplyPlaceholderCatalog.Find(
+                "CUSTOMER_REPRESENTATIVE_TITLE")?.DataSource);
+        Assert.Equal(
+            "TenantLegalProfile.LegalEntityName",
+            SoftwareSupplyPlaceholderCatalog.Find(
+                "PROVIDER_LEGAL_NAME")?.DataSource);
     }
 
     [Theory]

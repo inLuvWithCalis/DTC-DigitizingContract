@@ -6,6 +6,11 @@ import { toast } from "@/components/ui/sonner";
 
 import { Button } from "@/components/ui/button";
 import {
+  CodeInput,
+  isValidCodeValue,
+  normalizeCodeValue,
+} from "@/components/ui/custom/code-input";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -59,20 +64,25 @@ export function ContractTemplateFormDialog({
     setTemplateCode(template?.templateCode ?? "");
     setTemplateName(template?.templateName ?? "");
     setTemplateNameEn(template?.templateNameEn ?? "");
-    setLanguageMode(
-      template?.languageMode ?? ContractLanguageMode.Vietnamese,
-    );
+    setLanguageMode(template?.languageMode ?? ContractLanguageMode.Vietnamese);
     setDescription(template?.description ?? "");
     setInitialChangeNote("");
   }, [isOpen, template]);
 
   const handleSubmit = async () => {
+    const normalizedTemplateCode = normalizeCodeValue(templateCode, true);
     if (!templateName.trim()) {
       toast.error("Vui lòng nhập tên mẫu hợp đồng.");
       return;
     }
-    if (!isEdit && !templateCode.trim()) {
+    if (!isEdit && !normalizedTemplateCode) {
       toast.error("Vui lòng nhập mã mẫu hợp đồng.");
+      return;
+    }
+    if (!isEdit && !isValidCodeValue(normalizedTemplateCode)) {
+      toast.error(
+        "Mã mẫu chỉ được gồm chữ cái không dấu, chữ số, dấu gạch ngang hoặc gạch dưới.",
+      );
       return;
     }
     if (
@@ -93,7 +103,7 @@ export function ContractTemplateFormDialog({
             rowVersion: template.rowVersion,
           })
         : await contractTemplateApi.create({
-            templateCode: templateCode.trim(),
+            templateCode: normalizedTemplateCode,
             templateName: templateName.trim(),
             templateNameEn: templateNameEn.trim() || null,
             languageMode,
@@ -101,7 +111,9 @@ export function ContractTemplateFormDialog({
             initialChangeNote: initialChangeNote.trim() || null,
           });
 
-      toast.success(isEdit ? "Đã cập nhật mẫu hợp đồng." : "Đã tạo mẫu hợp đồng.");
+      toast.success(
+        isEdit ? "Đã cập nhật mẫu hợp đồng." : "Đã tạo mẫu hợp đồng.",
+      );
       onSuccess(result);
       onClose();
     } catch (error) {
@@ -130,13 +142,19 @@ export function ContractTemplateFormDialog({
             <Label htmlFor="template-code">
               Mã mẫu <span className="text-destructive">*</span>
             </Label>
-            <Input
+            <CodeInput
               id="template-code"
               value={templateCode}
-              onChange={(event) => setTemplateCode(event.target.value)}
+              onValueChange={setTemplateCode}
               disabled={isEdit}
               placeholder="VD: SOFTWARE-SUPPLY-VI"
+              maxLength={50}
+              aria-describedby="template-code-help"
             />
+            <p
+              id="template-code-help"
+              className="text-xs leading-relaxed text-muted-foreground"
+            ></p>
           </div>
           <div className="space-y-2">
             <Label>

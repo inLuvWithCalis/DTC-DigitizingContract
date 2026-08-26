@@ -1830,6 +1830,11 @@ public partial class DbDtctechContext : DbContext
                 .HasMaxLength(200);
             entity.Property(e => e.CustomerRepresentativeTitle)
                 .HasMaxLength(200);
+            entity.Property(e => e.CustomerBankAccountNumber)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.CustomerBankName)
+                .HasMaxLength(500);
             entity.Property(e => e.CustomerWebsite).HasMaxLength(500);
             entity.Property(e => e.CustomerZipCode)
                 .HasMaxLength(15)
@@ -2030,6 +2035,17 @@ public partial class DbDtctechContext : DbContext
                 .HasMaxLength(200);
             entity.Property(x => x.RepresentativeTitle)
                 .HasMaxLength(200);
+            entity.Property(x => x.PhoneNumber)
+                .HasMaxLength(30)
+                .IsUnicode(false);
+            entity.Property(x => x.FaxNumber)
+                .HasMaxLength(30)
+                .IsUnicode(false);
+            entity.Property(x => x.BankAccountNumber)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(x => x.BankName)
+                .HasMaxLength(500);
             entity.Property(x => x.CreatedAt)
                 .HasColumnType("datetime2");
             entity.Property(x => x.UpdatedAt)

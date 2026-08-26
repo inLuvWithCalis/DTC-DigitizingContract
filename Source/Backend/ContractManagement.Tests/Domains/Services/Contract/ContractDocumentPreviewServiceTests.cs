@@ -54,8 +54,19 @@ public sealed class ContractDocumentPreviewServiceTests
         Assert.Contains("0107654321", text);
         Assert.Contains("TP. Hồ Chí Minh", text);
         Assert.Contains("Nguyễn Provider", text);
+        Assert.Contains("Tổng giám đốc", text);
+        Assert.Contains("02473000001", text);
+        Assert.Contains("02473000002", text);
+        Assert.Contains("098765432109", text);
+        Assert.Contains("Ngân hàng DTC", text);
         Assert.Contains("CÔNG TY KHÁCH HÀNG", text);
         Assert.Contains("Trần Customer", text);
+        Assert.Contains("Giám đốc", text);
+        Assert.Contains("02473000003", text);
+        Assert.Contains("02473000004", text);
+        Assert.Contains("012345678901", text);
+        Assert.Contains("Ngân hàng Khách hàng", text);
+        Assert.DoesNotContain("Nguyễn Người liên hệ", text);
         Assert.Contains("Phần mềm quản lý hợp đồng", text);
         Assert.Contains("Phạm vi cung cấp", text);
         Assert.Contains("USD", text);
@@ -211,14 +222,18 @@ public sealed class ContractDocumentPreviewServiceTests
         {
             CustomerId = 8201,
             CustomerCode = "CUS-8B",
-            CustomerFullName = "Trần Customer",
+            CustomerFullName = "Nguyễn Người liên hệ",
             CustomerCompany = "CÔNG TY KHÁCH HÀNG",
             CustomerTaxCode = "0101234567",
             CustomerAddress = "Hà Nội",
             CustomerEmail = "customer@example.com",
             CustomerMobile = "0901234567",
+            CustomerPhone = "02473000003",
+            CustomerFaxNumber = "02473000004",
             CustomerRepresentativeName = "Trần Customer",
             CustomerRepresentativeTitle = "Giám đốc",
+            CustomerBankAccountNumber = "012345678901",
+            CustomerBankName = "Ngân hàng Khách hàng",
             CustomerCountry = "Việt Nam"
         });
         context.TblTenantLegalProfiles.Add(new TblTenantLegalProfile
@@ -229,6 +244,10 @@ public sealed class ContractDocumentPreviewServiceTests
             Address = "TP. Hồ Chí Minh",
             RepresentativeName = "Nguyễn Provider",
             RepresentativeTitle = "Tổng giám đốc",
+            PhoneNumber = "02473000001",
+            FaxNumber = "02473000002",
+            BankAccountNumber = "098765432109",
+            BankName = "Ngân hàng DTC",
             CreatedByEmployeeId = OwnerId,
             UpdatedByEmployeeId = OwnerId,
             CreatedAt = DateTime.UtcNow,

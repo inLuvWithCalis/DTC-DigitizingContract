@@ -92,6 +92,10 @@ public sealed class TenantLegalProfileService : ITenantLegalProfileService
         profile.RepresentativeTitle = NormalizeRequired(
             request.RepresentativeTitle,
             "Chức danh người đại diện");
+        profile.PhoneNumber = NormalizeOptional(request.PhoneNumber);
+        profile.FaxNumber = NormalizeOptional(request.FaxNumber);
+        profile.BankAccountNumber = NormalizeOptional(request.BankAccountNumber);
+        profile.BankName = NormalizeOptional(request.BankName);
 
         try
         {
@@ -116,6 +120,12 @@ public sealed class TenantLegalProfileService : ITenantLegalProfileService
         }
 
         return normalized;
+    }
+
+    private static string? NormalizeOptional(string? value)
+    {
+        var normalized = value?.Trim();
+        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
     }
 
     private static byte[] DecodeRequiredRowVersion(string? rowVersion)
@@ -152,6 +162,10 @@ public sealed class TenantLegalProfileService : ITenantLegalProfileService
             Address = profile.Address,
             RepresentativeName = profile.RepresentativeName,
             RepresentativeTitle = profile.RepresentativeTitle,
+            PhoneNumber = profile.PhoneNumber,
+            FaxNumber = profile.FaxNumber,
+            BankAccountNumber = profile.BankAccountNumber,
+            BankName = profile.BankName,
             CreatedByEmployeeId = profile.CreatedByEmployeeId,
             CreatedAt = profile.CreatedAt,
             UpdatedByEmployeeId = profile.UpdatedByEmployeeId,

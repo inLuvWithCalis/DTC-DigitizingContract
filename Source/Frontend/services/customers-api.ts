@@ -32,9 +32,12 @@ export interface CreateCustomerRequest {
   customerEmail?: string | null;
   customerMobile?: string | null;
   customerPhone?: string | null;
+  customerFaxNumber?: string | null;
   customerTaxCode?: string | null;
   customerRepresentativeName?: string | null;
   customerRepresentativeTitle?: string | null;
+  customerBankAccountNumber?: string | null;
+  customerBankName?: string | null;
   customerAddress?: string | null;
   customerCity?: string | null;
   customerCountry?: string | null;
@@ -49,9 +52,12 @@ export interface UpdateCustomerRequest {
   customerEmail?: string | null;
   customerMobile?: string | null;
   customerPhone?: string | null;
+  customerFaxNumber?: string | null;
   customerTaxCode?: string | null;
   customerRepresentativeName?: string | null;
   customerRepresentativeTitle?: string | null;
+  customerBankAccountNumber?: string | null;
+  customerBankName?: string | null;
   customerAddress?: string | null;
   customerCity?: string | null;
   customerCountry?: string | null;
@@ -67,9 +73,12 @@ export interface CustomerResponse {
   customerEmail?: string | null;
   customerMobile?: string | null;
   customerPhone?: string | null;
+  customerFaxNumber?: string | null;
   customerTaxCode?: string | null;
   customerRepresentativeName?: string | null;
   customerRepresentativeTitle?: string | null;
+  customerBankAccountNumber?: string | null;
+  customerBankName?: string | null;
   customerAddress?: string | null;
   customerCity?: string | null;
   customerCountry?: string | null;

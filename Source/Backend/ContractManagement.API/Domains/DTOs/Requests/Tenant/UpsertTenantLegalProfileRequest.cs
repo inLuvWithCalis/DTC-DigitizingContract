@@ -24,6 +24,18 @@ public sealed class UpsertTenantLegalProfileRequest
     [MaxLength(200)]
     public string RepresentativeTitle { get; set; } = string.Empty;
 
+    [MaxLength(30)]
+    public string? PhoneNumber { get; set; }
+
+    [MaxLength(30)]
+    public string? FaxNumber { get; set; }
+
+    [MaxLength(100)]
+    public string? BankAccountNumber { get; set; }
+
+    [MaxLength(500)]
+    public string? BankName { get; set; }
+
     /// <summary>
     /// Bỏ trống ở lần tạo đầu tiên; bắt buộc và phải khớp khi cập nhật.
     /// </summary>

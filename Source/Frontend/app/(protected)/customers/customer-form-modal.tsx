@@ -45,11 +45,15 @@ export function CustomerFormModal({
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerMobile, setCustomerMobile] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [customerFaxNumber, setCustomerFaxNumber] = useState("");
   const [customerTaxCode, setCustomerTaxCode] = useState("");
   const [customerRepresentativeName, setCustomerRepresentativeName] =
     useState("");
   const [customerRepresentativeTitle, setCustomerRepresentativeTitle] =
     useState("");
+  const [customerBankAccountNumber, setCustomerBankAccountNumber] =
+    useState("");
+  const [customerBankName, setCustomerBankName] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
   const [customerCity, setCustomerCity] = useState("");
   const [customerCountry, setCustomerCountry] = useState("");
@@ -68,9 +72,12 @@ export function CustomerFormModal({
         setCustomerEmail(item.customerEmail || "");
         setCustomerMobile(item.customerMobile || "");
         setCustomerPhone(item.customerPhone || "");
+        setCustomerFaxNumber(item.customerFaxNumber || "");
         setCustomerTaxCode(item.customerTaxCode || "");
         setCustomerRepresentativeName(item.customerRepresentativeName || "");
         setCustomerRepresentativeTitle(item.customerRepresentativeTitle || "");
+        setCustomerBankAccountNumber(item.customerBankAccountNumber || "");
+        setCustomerBankName(item.customerBankName || "");
         setCustomerAddress(item.customerAddress || "");
         setCustomerCity(item.customerCity || "");
         setCustomerCountry(item.customerCountry || "");
@@ -83,9 +90,12 @@ export function CustomerFormModal({
         setCustomerEmail("");
         setCustomerMobile("");
         setCustomerPhone("");
+        setCustomerFaxNumber("");
         setCustomerTaxCode("");
         setCustomerRepresentativeName("");
         setCustomerRepresentativeTitle("");
+        setCustomerBankAccountNumber("");
+        setCustomerBankName("");
         setCustomerAddress("");
         setCustomerCity("");
         setCustomerCountry("");
@@ -128,11 +138,15 @@ export function CustomerFormModal({
           customerEmail: customerEmail.trim() || null,
           customerMobile: customerMobile.trim() || null,
           customerPhone: customerPhone.trim() || null,
+          customerFaxNumber: customerFaxNumber.trim() || null,
           customerTaxCode: customerTaxCode.trim() || null,
           customerRepresentativeName:
             customerRepresentativeName.trim() || null,
           customerRepresentativeTitle:
             customerRepresentativeTitle.trim() || null,
+          customerBankAccountNumber:
+            customerBankAccountNumber.trim() || null,
+          customerBankName: customerBankName.trim() || null,
           customerAddress: customerAddress.trim() || null,
           customerCity: customerCity.trim() || null,
           customerCountry: customerCountry.trim() || null,
@@ -149,11 +163,15 @@ export function CustomerFormModal({
           customerEmail: customerEmail.trim() || null,
           customerMobile: customerMobile.trim() || null,
           customerPhone: customerPhone.trim() || null,
+          customerFaxNumber: customerFaxNumber.trim() || null,
           customerTaxCode: customerTaxCode.trim() || null,
           customerRepresentativeName:
             customerRepresentativeName.trim() || null,
           customerRepresentativeTitle:
             customerRepresentativeTitle.trim() || null,
+          customerBankAccountNumber:
+            customerBankAccountNumber.trim() || null,
+          customerBankName: customerBankName.trim() || null,
           customerAddress: customerAddress.trim() || null,
           customerCity: customerCity.trim() || null,
           customerCountry: customerCountry.trim() || null,
@@ -227,7 +245,7 @@ export function CustomerFormModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="customerFullName">
-                Tên khách hàng / Người đại diện{" "}
+                Tên khách hàng / Người liên hệ{" "}
                 {!viewOnly && <span className="text-destructive">*</span>}
               </Label>
               <Input
@@ -258,7 +276,7 @@ export function CustomerFormModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="customerEmail">
                 Email {!viewOnly && <span className="text-destructive">*</span>}
@@ -310,6 +328,17 @@ export function CustomerFormModal({
                 maxLength={15}
               />
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="customerFaxNumber">Fax</Label>
+              <Input
+                id="customerFaxNumber"
+                placeholder="0243123457"
+                value={customerFaxNumber}
+                onChange={(event) => setCustomerFaxNumber(event.target.value)}
+                disabled={viewOnly}
+                maxLength={15}
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -341,6 +370,35 @@ export function CustomerFormModal({
                 }
                 disabled={viewOnly}
                 maxLength={200}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="customerBankAccountNumber">
+                Số tài khoản ngân hàng
+              </Label>
+              <Input
+                id="customerBankAccountNumber"
+                placeholder="Nhập số tài khoản"
+                value={customerBankAccountNumber}
+                onChange={(event) =>
+                  setCustomerBankAccountNumber(event.target.value)
+                }
+                disabled={viewOnly}
+                maxLength={100}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="customerBankName">Tên ngân hàng</Label>
+              <Input
+                id="customerBankName"
+                placeholder="Ví dụ: Ngân hàng TMCP Ngoại thương Việt Nam"
+                value={customerBankName}
+                onChange={(event) => setCustomerBankName(event.target.value)}
+                disabled={viewOnly}
+                maxLength={500}
               />
             </div>
           </div>

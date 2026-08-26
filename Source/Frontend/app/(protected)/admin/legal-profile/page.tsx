@@ -26,6 +26,10 @@ const EMPTY_FORM: UpsertTenantLegalProfileRequest = {
   address: "",
   representativeName: "",
   representativeTitle: "",
+  phoneNumber: "",
+  faxNumber: "",
+  bankAccountNumber: "",
+  bankName: "",
   rowVersion: null,
 };
 
@@ -79,6 +83,10 @@ function LegalProfilePageContent() {
         address: form.address.trim(),
         representativeName: form.representativeName.trim(),
         representativeTitle: form.representativeTitle.trim(),
+        phoneNumber: form.phoneNumber?.trim() || null,
+        faxNumber: form.faxNumber?.trim() || null,
+        bankAccountNumber: form.bankAccountNumber?.trim() || null,
+        bankName: form.bankName?.trim() || null,
       });
       setForm(toForm(saved));
       toast.success("Đã lưu hồ sơ pháp lý doanh nghiệp.");
@@ -145,7 +153,7 @@ function LegalProfilePageContent() {
             </CardHeader>
             <CardContent className="grid gap-5 pt-6 sm:grid-cols-2">
               {isLoading ? (
-                Array.from({ length: 5 }, (_, index) => (
+                Array.from({ length: 9 }, (_, index) => (
                   <Skeleton key={index} className="h-20 w-full" />
                 ))
               ) : (
@@ -178,6 +186,38 @@ function LegalProfilePageContent() {
                     maxLength={200}
                     onChange={(value) => updateField("representativeTitle", value)}
                   />
+                  <Field
+                    id="phoneNumber"
+                    label="Điện thoại"
+                    value={form.phoneNumber ?? ""}
+                    maxLength={30}
+                    required={false}
+                    onChange={(value) => updateField("phoneNumber", value)}
+                  />
+                  <Field
+                    id="faxNumber"
+                    label="Fax"
+                    value={form.faxNumber ?? ""}
+                    maxLength={30}
+                    required={false}
+                    onChange={(value) => updateField("faxNumber", value)}
+                  />
+                  <Field
+                    id="bankAccountNumber"
+                    label="Số tài khoản ngân hàng"
+                    value={form.bankAccountNumber ?? ""}
+                    maxLength={100}
+                    required={false}
+                    onChange={(value) => updateField("bankAccountNumber", value)}
+                  />
+                  <Field
+                    id="bankName"
+                    label="Tên ngân hàng"
+                    value={form.bankName ?? ""}
+                    maxLength={500}
+                    required={false}
+                    onChange={(value) => updateField("bankName", value)}
+                  />
                   <div className="grid gap-2 sm:col-span-2">
                     <RequiredLabel htmlFor="address">Địa chỉ</RequiredLabel>
                     <Textarea
@@ -204,17 +244,23 @@ function Field({
   label,
   value,
   maxLength,
+  required = true,
   onChange,
 }: {
   id: string;
   label: string;
   value: string;
   maxLength: number;
+  required?: boolean;
   onChange: (value: string) => void;
 }) {
   return (
     <div className="grid gap-2">
-      <RequiredLabel htmlFor={id}>{label}</RequiredLabel>
+      {required ? (
+        <RequiredLabel htmlFor={id}>{label}</RequiredLabel>
+      ) : (
+        <Label htmlFor={id}>{label}</Label>
+      )}
       <Input
         id={id}
         value={value}
@@ -248,6 +294,10 @@ function toForm(
     address: profile.address,
     representativeName: profile.representativeName,
     representativeTitle: profile.representativeTitle,
+    phoneNumber: profile.phoneNumber ?? "",
+    faxNumber: profile.faxNumber ?? "",
+    bankAccountNumber: profile.bankAccountNumber ?? "",
+    bankName: profile.bankName ?? "",
     rowVersion: profile.rowVersion,
   };
 }

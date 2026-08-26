@@ -24,7 +24,7 @@ public sealed class ContractTemplateServiceTests
         var result = await CreateService(context).CreateAsync(
             new CreateContractTemplateRequest
             {
-                TemplateCode = "  SW-SUPPLY  ",
+                TemplateCode = "  sw-supply  ",
                 TemplateName = "  Hợp đồng cung cấp  ",
                 TemplateNameEn = "Software supply",
                 LanguageMode = ContractLanguageMode.Bilingual,
@@ -73,6 +73,25 @@ public sealed class ContractTemplateServiceTests
         await Assert.ThrowsAsync<ArgumentException>(() =>
             service.CreateAsync(CreateRequest("  DUPLICATE  "), AdminOfficerId));
         Assert.Equal(1, await context.TblContractTemplates.CountAsync());
+    }
+
+    [Theory]
+    [InlineData("Mã mẫu 1")]
+    [InlineData("INVALID CODE")]
+    [InlineData("-INVALID")]
+    [InlineData("INVALID?")]
+    public async Task InvalidTechnicalTemplateCode_IsRejected(string templateCode)
+    {
+        await using var context = CreateContext();
+        await SeedEmployeesAsync(context);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
+            CreateService(context).CreateAsync(
+                CreateRequest(templateCode),
+                AdminOfficerId));
+
+        Assert.Contains("chữ cái không dấu", exception.Message);
+        Assert.Empty(context.TblContractTemplates);
     }
 
     [Fact]

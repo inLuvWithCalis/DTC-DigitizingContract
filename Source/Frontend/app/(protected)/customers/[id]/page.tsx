@@ -268,9 +268,12 @@ function CustomerDetailPageContent() {
     customerEmail: "",
     customerMobile: "",
     customerPhone: "",
+    customerFaxNumber: "",
     customerTaxCode: "",
     customerRepresentativeName: "",
     customerRepresentativeTitle: "",
+    customerBankAccountNumber: "",
+    customerBankName: "",
     customerAddress: "",
     customerCity: "",
     customerCountry: "",
@@ -295,9 +298,12 @@ function CustomerDetailPageContent() {
         customerEmail: res.customerEmail,
         customerMobile: res.customerMobile,
         customerPhone: res.customerPhone,
+        customerFaxNumber: res.customerFaxNumber,
         customerTaxCode: res.customerTaxCode,
         customerRepresentativeName: res.customerRepresentativeName,
         customerRepresentativeTitle: res.customerRepresentativeTitle,
+        customerBankAccountNumber: res.customerBankAccountNumber,
+        customerBankName: res.customerBankName,
         customerAddress: res.customerAddress,
         customerCity: res.customerCity,
         customerCountry: res.customerCountry,
@@ -451,7 +457,7 @@ function CustomerDetailPageContent() {
               <CardContent className="p-5 space-y-4">
                 <div className="grid gap-2">
                   <Label className="text-xs font-semibold uppercase text-muted-foreground">
-                    Tên KH / Đại diện *
+                    Tên khách hàng / Người liên hệ *
                   </Label>
                   <Input
                     readOnly={!isEditingProfile}
@@ -561,6 +567,41 @@ function CustomerDetailPageContent() {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="grid gap-2">
                     <Label className="text-xs font-semibold uppercase text-muted-foreground">
+                      Số tài khoản ngân hàng
+                    </Label>
+                    <Input
+                      readOnly={!isEditingProfile}
+                      className={`h-9 ${!isEditingProfile ? "bg-muted/40 border-transparent shadow-none cursor-default font-medium text-foreground focus-visible:ring-0" : ""}`}
+                      value={formData.customerBankAccountNumber ?? ""}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          customerBankAccountNumber: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label className="text-xs font-semibold uppercase text-muted-foreground">
+                      Tên ngân hàng
+                    </Label>
+                    <Input
+                      readOnly={!isEditingProfile}
+                      className={`h-9 ${!isEditingProfile ? "bg-muted/40 border-transparent shadow-none cursor-default font-medium text-foreground focus-visible:ring-0" : ""}`}
+                      value={formData.customerBankName ?? ""}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          customerBankName: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div className="grid gap-2">
+                    <Label className="text-xs font-semibold uppercase text-muted-foreground">
                       Số di động
                     </Label>
                     <div className="relative">
@@ -590,6 +631,22 @@ function CustomerDetailPageContent() {
                         setFormData({
                           ...formData,
                           customerPhone: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label className="text-xs font-semibold uppercase text-muted-foreground">
+                      Fax
+                    </Label>
+                    <Input
+                      readOnly={!isEditingProfile}
+                      className={`h-9 ${!isEditingProfile ? "bg-muted/40 border-transparent shadow-none cursor-default font-medium text-foreground focus-visible:ring-0" : ""}`}
+                      value={formData.customerFaxNumber ?? ""}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          customerFaxNumber: e.target.value,
                         })
                       }
                     />
@@ -724,11 +781,15 @@ function CustomerDetailPageContent() {
                             customerEmail: customer.customerEmail,
                             customerMobile: customer.customerMobile,
                             customerPhone: customer.customerPhone,
+                            customerFaxNumber: customer.customerFaxNumber,
                             customerTaxCode: customer.customerTaxCode,
                             customerRepresentativeName:
                               customer.customerRepresentativeName,
                             customerRepresentativeTitle:
                               customer.customerRepresentativeTitle,
+                            customerBankAccountNumber:
+                              customer.customerBankAccountNumber,
+                            customerBankName: customer.customerBankName,
                             customerAddress: customer.customerAddress,
                             customerCity: customer.customerCity,
                             customerCountry: customer.customerCountry,

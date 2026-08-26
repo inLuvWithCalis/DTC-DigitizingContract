@@ -18,6 +18,14 @@ public sealed class TblTenantLegalProfile
 
     public string RepresentativeTitle { get; set; } = string.Empty;
 
+    public string? PhoneNumber { get; set; }
+
+    public string? FaxNumber { get; set; }
+
+    public string? BankAccountNumber { get; set; }
+
+    public string? BankName { get; set; }
+
     public int CreatedByEmployeeId { get; set; }
 
     public DateTime CreatedAt { get; set; }

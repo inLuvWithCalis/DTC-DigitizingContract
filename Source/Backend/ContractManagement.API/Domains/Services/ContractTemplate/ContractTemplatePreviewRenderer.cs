@@ -14,6 +14,11 @@ namespace ContractManagement.Domains.Services.ContractTemplate;
 /// </summary>
 public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRenderer
 {
+    public const string FormatVersion = "V2";
+
+    private const string GeneratedContentFont = "Times New Roman";
+    private const string GeneratedContentFontSize = "24";
+
     private static readonly IReadOnlyList<string> DynamicKeys =
         SoftwareSupplyPlaceholderCatalog.GetAll()
             .Where(definition =>
@@ -219,23 +224,20 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
         ContractTemplateRenderSignature signature,
         string notice)
     {
-        var children = new List<OpenXmlElement>
-        {
-            new W.RunProperties(new W.Bold()),
-            Text(signature.PartyTitle),
-            new W.Break()
-        };
+        var paragraph = new W.Paragraph(
+            CreateRun(signature.PartyTitle, bold: true),
+            CreateBreakRun());
         if (!string.IsNullOrWhiteSpace(notice))
         {
-            children.Add(Text(notice));
-            children.Add(new W.Break());
+            paragraph.Append(
+                CreateRun(notice),
+                CreateBreakRun());
         }
-        children.AddRange([
-            new W.Break(),
-            Text(signature.SignerName)
-        ]);
-        var run = new W.Run(children);
-        return new W.Paragraph(run);
+
+        paragraph.Append(
+            CreateBreakRun(),
+            CreateRun(signature.SignerName));
+        return paragraph;
     }
 
     private static W.Table CreateItemTable(
@@ -441,11 +443,27 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
 
     private static W.Paragraph CreateParagraph(string value, bool bold = false)
     {
-        var run = bold
-            ? new W.Run(new W.RunProperties(new W.Bold()), Text(value))
-            : new W.Run(Text(value));
-        return new W.Paragraph(run);
+        return new W.Paragraph(CreateRun(value, bold));
     }
+
+    private static W.Run CreateRun(string value, bool bold = false) =>
+        new(CreateGeneratedRunProperties(bold), Text(value));
+
+    private static W.Run CreateBreakRun() =>
+        new(CreateGeneratedRunProperties(), new W.Break());
+
+    private static W.RunProperties CreateGeneratedRunProperties(bool bold = false) =>
+        new(
+            new W.RunFonts
+            {
+                Ascii = GeneratedContentFont,
+                HighAnsi = GeneratedContentFont,
+                EastAsia = GeneratedContentFont,
+                ComplexScript = GeneratedContentFont
+            },
+            new W.Bold { Val = bold },
+            new W.FontSize { Val = GeneratedContentFontSize },
+            new W.FontSizeComplexScript { Val = GeneratedContentFontSize });
 
     private static W.Text Text(string value) => new(value)
     {

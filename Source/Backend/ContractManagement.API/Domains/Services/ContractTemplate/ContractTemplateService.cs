@@ -12,6 +12,7 @@ using ContractManagement.Infrastructure.Persistence.Application.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace ContractManagement.Domains.Services.ContractTemplate;
 
@@ -21,6 +22,10 @@ namespace ContractManagement.Domains.Services.ContractTemplate;
 /// </summary>
 public sealed class ContractTemplateService : IContractTemplateService
 {
+    private static readonly Regex TemplateCodePattern = new(
+        "^[A-Z0-9]+(?:[-_][A-Z0-9]+)*$",
+        RegexOptions.CultureInvariant);
+
     private const byte ActiveEmployeeStatus = 1;
     private const string ContractTemplateVersionObjectType =
         "ContractTemplateVersion";
@@ -305,10 +310,7 @@ public sealed class ContractTemplateService : IContractTemplateService
         ArgumentNullException.ThrowIfNull(request);
         await EnsureAdminOfficerAsync(employeeId, cancellationToken);
 
-        var templateCode = NormalizeRequired(
-            request.TemplateCode,
-            50,
-            nameof(request.TemplateCode));
+        var templateCode = NormalizeTemplateCode(request.TemplateCode);
         var templateName = NormalizeRequired(
             request.TemplateName,
             500,
@@ -2130,6 +2132,7 @@ public sealed class ContractTemplateService : IContractTemplateService
             documentHash.Trim().ToLowerInvariant(),
             SoftwareSupplyPlaceholderCatalog.Version,
             SoftwareSupplyPreviewDatasetV1.Version,
+            ContractTemplatePreviewRenderer.FormatVersion,
             ((byte)languageMode).ToString(System.Globalization.CultureInfo.InvariantCulture));
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source)))
             .ToLowerInvariant();
@@ -2343,6 +2346,23 @@ public sealed class ContractTemplateService : IContractTemplateService
         {
             throw new ArgumentException("LanguageMode không hợp lệ.");
         }
+    }
+
+    private static string NormalizeTemplateCode(string? value)
+    {
+        var normalized = NormalizeRequired(
+                value,
+                50,
+                nameof(CreateContractTemplateRequest.TemplateCode))
+            .ToUpperInvariant();
+        if (!TemplateCodePattern.IsMatch(normalized))
+        {
+            throw new ArgumentException(
+                "Mã mẫu chỉ được gồm chữ cái không dấu, chữ số, dấu gạch ngang hoặc gạch dưới; không được bắt đầu hoặc kết thúc bằng dấu gạch.",
+                nameof(CreateContractTemplateRequest.TemplateCode));
+        }
+
+        return normalized;
     }
 
     private static string NormalizeRequired(

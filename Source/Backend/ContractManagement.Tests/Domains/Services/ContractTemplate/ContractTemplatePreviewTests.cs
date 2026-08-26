@@ -40,7 +40,7 @@ public sealed class ContractTemplatePreviewTests
 
         Assert.True(catalogKeys.SetEquals(
             SoftwareSupplyPreviewDatasetV1.CoveredPlaceholderKeys));
-        Assert.Equal("V1", SoftwareSupplyPreviewDatasetV1.Version);
+        Assert.Equal("V2", SoftwareSupplyPreviewDatasetV1.Version);
         Assert.Equal(2, SoftwareSupplyPreviewDatasetV1.Items.Count);
         Assert.Equal(2, SoftwareSupplyPreviewDatasetV1.Payments.Count);
         Assert.Equal(100m, SoftwareSupplyPreviewDatasetV1.Payments.Sum(item => item.Percent));
@@ -69,6 +69,46 @@ public sealed class ContractTemplatePreviewTests
         Assert.Contains("Điều 4.", text);
         Assert.True(document.MainDocumentPart!.Document!.Body!
             .Elements<W.Table>().Count() >= 2);
+    }
+
+    [Fact]
+    public void Renderer_UsesConsistentFontAndOnlyBoldsGeneratedHeadings()
+    {
+        var preview = new ContractTemplatePreviewRenderer().Render(
+            CreateSourceDocument(),
+            ContractLanguageMode.Vietnamese);
+
+        using var stream = new MemoryStream(preview);
+        using var document = WordprocessingDocument.Open(stream, false);
+        var runs = document.MainDocumentPart!.Document!.Body!
+            .Descendants<W.Run>()
+            .ToList();
+
+        var tableHeader = Assert.Single(runs, run => run.InnerText == "STT");
+        var itemDescription = Assert.Single(runs, run =>
+            run.InnerText == SoftwareSupplyPreviewDatasetV1.Items[0].Description);
+        var termTitle = Assert.Single(runs, run =>
+            run.InnerText == "Điều 1. Phạm vi cung cấp");
+        var termContent = Assert.Single(runs, run =>
+            run.InnerText == SoftwareSupplyPreviewDatasetV1.Terms[0].ContentVi);
+        var signer = Assert.Single(runs, run =>
+            run.InnerText == SoftwareSupplyPreviewDatasetV1.ProviderSignature.SignerName);
+
+        foreach (var run in new[]
+                 {
+                     tableHeader, itemDescription, termTitle, termContent, signer
+                 })
+        {
+            Assert.Equal("Times New Roman", run.RunProperties!.RunFonts!.Ascii!.Value);
+            Assert.Equal("Times New Roman", run.RunProperties.RunFonts.HighAnsi!.Value);
+            Assert.Equal("24", run.RunProperties.FontSize!.Val!.Value);
+        }
+
+        Assert.True(tableHeader.RunProperties!.Bold!.Val!.Value);
+        Assert.True(termTitle.RunProperties!.Bold!.Val!.Value);
+        Assert.False(itemDescription.RunProperties!.Bold!.Val!.Value);
+        Assert.False(termContent.RunProperties!.Bold!.Val!.Value);
+        Assert.False(signer.RunProperties!.Bold!.Val!.Value);
     }
 
     [Fact]
@@ -105,7 +145,7 @@ public sealed class ContractTemplatePreviewTests
         Assert.Contains("Công ty Khách hàng Thật", text);
         Assert.Contains("Phần mềm thật", text);
         Assert.Contains("Nhân viên Thật", text);
-        Assert.DoesNotContain("Nguyễn Minh An", text);
+        Assert.DoesNotContain("Trần Thị Mẫu", text);
         Assert.DoesNotContain("CUS-DEMO-2026", text);
     }
 

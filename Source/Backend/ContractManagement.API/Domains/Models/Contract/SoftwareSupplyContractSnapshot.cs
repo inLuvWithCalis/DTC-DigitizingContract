@@ -21,7 +21,11 @@ public sealed record TenantLegalSnapshot(
     string TaxCode,
     string Address,
     string RepresentativeName,
-    string RepresentativeTitle);
+    string RepresentativeTitle,
+    string? PhoneNumber,
+    string? FaxNumber,
+    string? BankAccountNumber,
+    string? BankName);
 
 public sealed record CustomerLegalSnapshot(
     int CustomerId,
@@ -29,7 +33,11 @@ public sealed record CustomerLegalSnapshot(
     string? TaxCode,
     string Address,
     string RepresentativeName,
-    string RepresentativeTitle);
+    string RepresentativeTitle,
+    string? PhoneNumber,
+    string? FaxNumber,
+    string? BankAccountNumber,
+    string? BankName);
 
 public sealed record ContractLegalSnapshot(
     int ContractId,
@@ -95,7 +103,7 @@ public sealed record ContractTermLegalSnapshot(
 
 public static class SoftwareSupplyContractSnapshotFactory
 {
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
@@ -122,9 +130,8 @@ public static class SoftwareSupplyContractSnapshotFactory
             customer.CustomerCompany,
             customer.CustomerFullName,
             "Tên pháp lý khách hàng");
-        var representativeName = FirstRequired(
+        var representativeName = Required(
             customer.CustomerRepresentativeName,
-            customer.CustomerFullName,
             "Người đại diện khách hàng");
 
         return new SoftwareSupplyContractSnapshot(
@@ -134,7 +141,11 @@ public static class SoftwareSupplyContractSnapshotFactory
                 Required(tenant.TaxCode, "Mã số thuế tenant"),
                 Required(tenant.Address, "Địa chỉ tenant"),
                 Required(tenant.RepresentativeName, "Người đại diện tenant"),
-                Required(tenant.RepresentativeTitle, "Chức danh đại diện tenant")),
+                Required(tenant.RepresentativeTitle, "Chức danh đại diện tenant"),
+                Optional(tenant.PhoneNumber),
+                Optional(tenant.FaxNumber),
+                Optional(tenant.BankAccountNumber),
+                Optional(tenant.BankName)),
             new CustomerLegalSnapshot(
                 customer.CustomerId,
                 customerLegalName,
@@ -143,7 +154,11 @@ public static class SoftwareSupplyContractSnapshotFactory
                 representativeName,
                 Required(
                     customer.CustomerRepresentativeTitle,
-                    "Chức danh đại diện khách hàng")),
+                    "Chức danh đại diện khách hàng"),
+                FirstOptional(customer.CustomerPhone, customer.CustomerMobile),
+                Optional(customer.CustomerFaxNumber),
+                Optional(customer.CustomerBankAccountNumber),
+                Optional(customer.CustomerBankName)),
             new ContractLegalSnapshot(
                 contract.ContractId,
                 Required(contract.ContractCode, "Mã hợp đồng"),
@@ -234,5 +249,16 @@ public static class SoftwareSupplyContractSnapshotFactory
         }
 
         return value.Trim();
+    }
+
+    private static string? FirstOptional(string? preferred, string? fallback)
+    {
+        return Optional(preferred) ?? Optional(fallback);
+    }
+
+    private static string? Optional(string? value)
+    {
+        var normalized = value?.Trim();
+        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
     }
 }

@@ -6,6 +6,10 @@ export interface UpsertTenantLegalProfileRequest {
   address: string;
   representativeName: string;
   representativeTitle: string;
+  phoneNumber?: string | null;
+  faxNumber?: string | null;
+  bankAccountNumber?: string | null;
+  bankName?: string | null;
   rowVersion?: string | null;
 }
 
@@ -16,6 +20,10 @@ export interface TenantLegalProfileResponse {
   address: string;
   representativeName: string;
   representativeTitle: string;
+  phoneNumber?: string | null;
+  faxNumber?: string | null;
+  bankAccountNumber?: string | null;
+  bankName?: string | null;
   createdByEmployeeId: number;
   createdAt: string;
   updatedByEmployeeId: number;

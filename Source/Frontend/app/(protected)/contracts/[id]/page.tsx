@@ -27,6 +27,7 @@ import {
 
 import { Header } from "@/components/ui/custom/header";
 import { showConfirmToast } from "@/components/ui/custom/confirm-toast";
+import { SplitActionMenu } from "@/components/ui/custom/split-action-menu";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -619,44 +620,35 @@ export default function ContractDetailPage() {
 
           <div className="flex flex-wrap gap-2">
             {canPreviewContractDocument && (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={viewContractPdf}
-                  disabled={isOpeningPdf}
-                >
-                  {isOpeningPdf ? (
-                    <Loader2 className="size-4 mr-2 animate-spin" />
-                  ) : (
-                    <Eye className="size-4 mr-2" />
-                  )}
-                  Xem PDF preview
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={downloadContractDocx}
-                  disabled={isDownloadingDocx}
-                >
-                  {isDownloadingDocx ? (
-                    <Loader2 className="size-4 mr-2 animate-spin" />
-                  ) : (
-                    <FileText className="size-4 mr-2" />
-                  )}
-                  Tải DOCX preview
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={downloadContractPdf}
-                  disabled={isDownloadingPdf}
-                >
-                  {isDownloadingPdf ? (
-                    <Loader2 className="size-4 mr-2 animate-spin" />
-                  ) : (
-                    <Download className="size-4 mr-2" />
-                  )}
-                  Tải PDF preview
-                </Button>
-              </>
+              <SplitActionMenu
+                primaryLabel="Xem PDF preview"
+                primaryIcon={<Eye className="size-4" />}
+                onPrimaryClick={viewContractPdf}
+                isLoading={isOpeningPdf}
+                buttonClassName="h-9"
+                menuItems={[
+                  {
+                    label: "Tải DOCX preview",
+                    icon: isDownloadingDocx ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <FileText className="size-4" />
+                    ),
+                    onClick: downloadContractDocx,
+                    disabled: isDownloadingDocx,
+                  },
+                  {
+                    label: "Tải PDF preview",
+                    icon: isDownloadingPdf ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Download className="size-4" />
+                    ),
+                    onClick: downloadContractPdf,
+                    disabled: isDownloadingPdf,
+                  },
+                ]}
+              />
             )}
             {canUpdateDraft && (
               <Button

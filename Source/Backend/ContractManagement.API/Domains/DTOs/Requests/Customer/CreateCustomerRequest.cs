@@ -28,6 +28,9 @@ namespace ContractManagement.API.Domains.DTOs.Requests.Customer
         [MaxLength(15)]
         public string? CustomerPhone { get; set; }
 
+        [MaxLength(15)]
+        public string? CustomerFaxNumber { get; set; }
+
         [MaxLength(30)]
         public string? CustomerTaxCode { get; set; }
 
@@ -36,6 +39,12 @@ namespace ContractManagement.API.Domains.DTOs.Requests.Customer
 
         [MaxLength(200)]
         public string? CustomerRepresentativeTitle { get; set; }
+
+        [MaxLength(100)]
+        public string? CustomerBankAccountNumber { get; set; }
+
+        [MaxLength(500)]
+        public string? CustomerBankName { get; set; }
 
         [MaxLength(2000)]
         public string? CustomerAddress { get; set; }

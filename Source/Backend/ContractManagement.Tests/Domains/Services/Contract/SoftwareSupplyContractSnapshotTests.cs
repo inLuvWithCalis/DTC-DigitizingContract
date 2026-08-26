@@ -14,7 +14,11 @@ public sealed class SoftwareSupplyContractSnapshotTests
             TaxCode = "0101",
             Address = "Hà Nội",
             RepresentativeName = "Nguyễn A",
-            RepresentativeTitle = "Giám đốc"
+            RepresentativeTitle = "Giám đốc",
+            PhoneNumber = "02473000001",
+            FaxNumber = "02473000002",
+            BankAccountNumber = "098765432109",
+            BankName = "Ngân hàng DTC"
         };
         var customer = new TblCustomer
         {
@@ -23,7 +27,11 @@ public sealed class SoftwareSupplyContractSnapshotTests
             CustomerTaxCode = "0202",
             CustomerAddress = "Đà Nẵng",
             CustomerRepresentativeName = "Trần B",
-            CustomerRepresentativeTitle = "Tổng giám đốc"
+            CustomerRepresentativeTitle = "Tổng giám đốc",
+            CustomerPhone = "02367300001",
+            CustomerFaxNumber = "02367300002",
+            CustomerBankAccountNumber = "012345678901",
+            CustomerBankName = "Ngân hàng ABC"
         };
         var contract = new TblContract
         {
@@ -78,10 +86,18 @@ public sealed class SoftwareSupplyContractSnapshotTests
             terms);
         var json = SoftwareSupplyContractSnapshotFactory.Serialize(snapshot);
 
-        Assert.Equal(3, snapshot.SchemaVersion);
+        Assert.Equal(4, snapshot.SchemaVersion);
         Assert.Equal(contract.CreatedDate, snapshot.Contract.CreatedDate);
         Assert.Equal("DTC", snapshot.Tenant.LegalEntityName);
         Assert.Equal("Trần B", snapshot.Customer.RepresentativeName);
+        Assert.Equal("02367300001", snapshot.Customer.PhoneNumber);
+        Assert.Equal("02367300002", snapshot.Customer.FaxNumber);
+        Assert.Equal("012345678901", snapshot.Customer.BankAccountNumber);
+        Assert.Equal("Ngân hàng ABC", snapshot.Customer.BankName);
+        Assert.Equal("02473000001", snapshot.Tenant.PhoneNumber);
+        Assert.Equal("02473000002", snapshot.Tenant.FaxNumber);
+        Assert.Equal("098765432109", snapshot.Tenant.BankAccountNumber);
+        Assert.Equal("Ngân hàng DTC", snapshot.Tenant.BankName);
         Assert.Single(snapshot.Items);
         Assert.Single(snapshot.Terms);
         Assert.Contains("\"totalAmount\":1100000", json);

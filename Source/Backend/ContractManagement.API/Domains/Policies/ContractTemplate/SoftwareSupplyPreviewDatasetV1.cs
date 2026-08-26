@@ -8,7 +8,7 @@ namespace ContractManagement.Domains.Policies.ContractTemplate;
 /// </summary>
 public static class SoftwareSupplyPreviewDatasetV1
 {
-    public const string Version = "V1";
+    public const string Version = "V2";
 
     public const string LegalDisclaimer =
         "DỮ LIỆU MẪU — KHÔNG CÓ GIÁ TRỊ PHÁP LÝ";
@@ -24,17 +24,29 @@ public static class SoftwareSupplyPreviewDatasetV1
         "CONTRACT_CURRENCY",
         "CUSTOMER_CODE",
         "CUSTOMER_NAME",
+        "CUSTOMER_REPRESENTATIVE_TITLE",
         "CUSTOMER_COMPANY",
         "CUSTOMER_TAX_CODE",
         "CUSTOMER_ADDRESS",
         "CUSTOMER_EMAIL",
         "CUSTOMER_PHONE",
+        "PROVIDER_LEGAL_NAME",
+        "PROVIDER_TAX_CODE",
+        "PROVIDER_ADDRESS",
+        "PROVIDER_REPRESENTATIVE_NAME",
+        "PROVIDER_REPRESENTATIVE_TITLE",
         "CONTRACT_TERMS",
         "CONTRACT_ITEM_TABLE",
         "SIGNATURE_PROVIDER",
         "SIGNATURE_CUSTOMER",
         "CONTRACT_NAME_EN",
         "CUSTOMER_FAX",
+        "CUSTOMER_BANK_ACCOUNT_NUMBER",
+        "CUSTOMER_BANK_NAME",
+        "PROVIDER_PHONE",
+        "PROVIDER_FAX",
+        "PROVIDER_BANK_ACCOUNT_NUMBER",
+        "PROVIDER_BANK_NAME",
         "CUSTOMER_WEBSITE",
         "CUSTOMER_CITY",
         "CUSTOMER_COUNTRY",
@@ -62,7 +74,8 @@ public static class SoftwareSupplyPreviewDatasetV1
             ["EXPIRE_DATE"] = "Ngày 31 tháng 08 năm 2027",
             ["CONTRACT_CURRENCY"] = "VND",
             ["CUSTOMER_CODE"] = "CUS-DEMO-2026",
-            ["CUSTOMER_NAME"] = "Nguyễn Minh An",
+            ["CUSTOMER_NAME"] = "Trần Thị Mẫu",
+            ["CUSTOMER_REPRESENTATIVE_TITLE"] = "Tổng giám đốc",
             ["CUSTOMER_COMPANY"] =
                 "CÔNG TY CỔ PHẦN GIẢ LẬP GIẢI PHÁP DOANH NGHIỆP MINH AN",
             ["CUSTOMER_TAX_CODE"] = "0312345678",
@@ -70,9 +83,21 @@ public static class SoftwareSupplyPreviewDatasetV1
                 "Tầng 18, Tòa nhà Minh An Demo, 123 Đường Mẫu, Phường Bến Thành, Quận 1, TP. Hồ Chí Minh, Việt Nam",
             ["CUSTOMER_EMAIL"] = "legal.demo.customer@example.invalid",
             ["CUSTOMER_PHONE"] = "+84 28 7300 0001",
+            ["PROVIDER_LEGAL_NAME"] = "CÔNG TY CỔ PHẦN DTC MẪU",
+            ["PROVIDER_TAX_CODE"] = "0107654321",
+            ["PROVIDER_ADDRESS"] =
+                "Tầng 10, Tòa nhà DTC Demo, Hà Nội, Việt Nam",
+            ["PROVIDER_REPRESENTATIVE_NAME"] = "Nguyễn Văn Mẫu",
+            ["PROVIDER_REPRESENTATIVE_TITLE"] = "Giám đốc",
             ["CONTRACT_NAME_EN"] =
                 "SOFTWARE SUPPLY AGREEMENT — SAMPLE DATA — NO LEGAL VALUE",
             ["CUSTOMER_FAX"] = "+84 28 7300 0002",
+            ["CUSTOMER_BANK_ACCOUNT_NUMBER"] = "012345678901",
+            ["CUSTOMER_BANK_NAME"] = "Ngân hàng TMCP Khách hàng Mẫu",
+            ["PROVIDER_PHONE"] = "+84 24 7300 0001",
+            ["PROVIDER_FAX"] = "+84 24 7300 0002",
+            ["PROVIDER_BANK_ACCOUNT_NUMBER"] = "098765432109",
+            ["PROVIDER_BANK_NAME"] = "Ngân hàng TMCP Nhà cung cấp Mẫu",
             ["CUSTOMER_WEBSITE"] = "https://customer-demo.example.invalid",
             ["CUSTOMER_CITY"] = "Hồ Chí Minh",
             ["CUSTOMER_COUNTRY"] = "Việt Nam",

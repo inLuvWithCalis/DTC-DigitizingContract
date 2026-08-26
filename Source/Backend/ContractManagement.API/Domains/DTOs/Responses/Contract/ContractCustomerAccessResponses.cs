@@ -26,3 +26,12 @@ public sealed class ContractCustomerAccessLinkResponse
     /// <summary>Returned only from a successful create or replace operation.</summary>
     public string PublicUrl { get; init; } = string.Empty;
 }
+
+public sealed class CurrentContractCustomerAccessLinkResponse
+{
+    public int LinkId { get; init; }
+    public string State { get; init; } = string.Empty;
+    public int VersionId { get; init; }
+    public DateTime CreatedAt { get; init; }
+    public DateTime ExpiresAt { get; init; }
+}

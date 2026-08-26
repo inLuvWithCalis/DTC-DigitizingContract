@@ -12,6 +12,8 @@ import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Clock,
+  Download,
+  Eye,
   FileSignature,
   FileText,
   Loader2,
@@ -29,10 +31,11 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatCurrency } from "@/lib/format-currency";
+import { downloadBlob } from "@/components/contract-templates/contract-template-utils";
 
 import {
   contractApi,
-  ContractCustomerAccessLinkResponse,
+  CurrentContractCustomerAccessLinkResponse,
   ContractDetailResponse,
   ContractItemDiscountMode,
   ContractLanguageMode,
@@ -75,48 +78,10 @@ const CONTRACT_TABS = [
 
 type ContractTab = (typeof CONTRACT_TABS)[number];
 
-type StoredCustomerAccessLink = Pick<
-  ContractCustomerAccessLinkResponse,
+type KnownCustomerAccessLink = Pick<
+  CurrentContractCustomerAccessLinkResponse,
   "linkId" | "state" | "expiresAt"
 >;
-
-const CUSTOMER_ACCESS_LINK_STORAGE_PREFIX = "contract-customer-access-link";
-
-const getCustomerAccessLinkStorageKey = (
-  contractId: number,
-  versionId: number,
-) => `${CUSTOMER_ACCESS_LINK_STORAGE_PREFIX}:${contractId}:${versionId}`;
-
-const readStoredCustomerAccessLink = (
-  contractId: number,
-  versionId: number,
-): StoredCustomerAccessLink | null => {
-  if (typeof window === "undefined") return null;
-
-  const storageKey = getCustomerAccessLinkStorageKey(contractId, versionId);
-  try {
-    const value = window.localStorage.getItem(storageKey);
-    if (!value) return null;
-
-    const parsed = JSON.parse(value) as StoredCustomerAccessLink;
-    const expiresAt = new Date(parsed.expiresAt).getTime();
-    if (
-      !Number.isInteger(parsed.linkId) ||
-      parsed.linkId <= 0 ||
-      !parsed.state ||
-      !parsed.expiresAt ||
-      !Number.isFinite(expiresAt) ||
-      expiresAt <= Date.now()
-    ) {
-      window.localStorage.removeItem(storageKey);
-      return null;
-    }
-
-    return parsed;
-  } catch {
-    return null;
-  }
-};
 
 const isContractTab = (value: string): value is ContractTab =>
   CONTRACT_TABS.some((tab) => tab === value);
@@ -132,13 +97,13 @@ export default function ContractDetailPage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isStartingNegotiation, setIsStartingNegotiation] = useState(false);
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
+  const [isOpeningPdf, setIsOpeningPdf] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<ContractTab>("overview");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [knownCustomerAccessLink, setKnownCustomerAccessLink] =
-    useState<StoredCustomerAccessLink | null>(null);
-  const currentContractId = contract?.contractId ?? null;
-  const currentVersionId = contract?.currentVersion.versionId ?? null;
+    useState<KnownCustomerAccessLink | null>(null);
 
   useEffect(() => {
     const syncTabFromHash = () => {
@@ -187,9 +152,13 @@ export default function ContractDetailPage() {
 
       try {
         if (showLoading) setIsLoading(true);
-        const res: any = await contractApi.getDetail(Number(params.id));
-        const contractData = res.data ? res.data : res;
-        setContract(contractData);
+        const contractId = Number(params.id);
+        const [res, currentLink] = await Promise.all([
+          contractApi.getDetail(contractId),
+          contractApi.getCurrentCustomerAccessLink(contractId),
+        ]);
+        setContract(res);
+        setKnownCustomerAccessLink(currentLink);
         setHasUnsavedChanges(false);
         setError(null);
       } catch (err: any) {
@@ -217,59 +186,19 @@ export default function ContractDetailPage() {
     void fetchContractDetail().catch(() => undefined);
   }, [fetchContractDetail]);
 
-  useEffect(() => {
-    if (!currentContractId || !currentVersionId) {
-      setKnownCustomerAccessLink(null);
-      return;
-    }
-
-    const storageKey = getCustomerAccessLinkStorageKey(
-      currentContractId,
-      currentVersionId,
-    );
-    const syncStoredLink = () =>
-      setKnownCustomerAccessLink(
-        readStoredCustomerAccessLink(currentContractId, currentVersionId),
-      );
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key === storageKey) syncStoredLink();
-    };
-
-    syncStoredLink();
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
-  }, [currentContractId, currentVersionId]);
-
   const handleCustomerAccessLinkChange = useCallback(
-    (link: StoredCustomerAccessLink | null) => {
-      if (!currentContractId || !currentVersionId) return;
-
-      const storageKey = getCustomerAccessLinkStorageKey(
-        currentContractId,
-        currentVersionId,
+    (link: KnownCustomerAccessLink | null) => {
+      setKnownCustomerAccessLink(
+        link
+          ? {
+              linkId: link.linkId,
+              state: link.state,
+              expiresAt: link.expiresAt,
+            }
+          : null,
       );
-      if (link) {
-        const storedLink: StoredCustomerAccessLink = {
-          linkId: link.linkId,
-          state: link.state,
-          expiresAt: link.expiresAt,
-        };
-        try {
-          window.localStorage.setItem(storageKey, JSON.stringify(storedLink));
-        } catch {
-          // State trong phiên hiện tại vẫn được cập nhật nếu storage bị chặn.
-        }
-        setKnownCustomerAccessLink(storedLink);
-      } else {
-        try {
-          window.localStorage.removeItem(storageKey);
-        } catch {
-          // Không có gì cần xử lý thêm khi storage bị chặn.
-        }
-        setKnownCustomerAccessLink(null);
-      }
     },
-    [currentContractId, currentVersionId],
+    [],
   );
 
   if (isLoading) {
@@ -571,6 +500,56 @@ export default function ContractDetailPage() {
     !contract.currentVersion.isLocked &&
     !isCurrentVersionShared;
 
+  const viewContractPdf = async () => {
+    if (isOpeningPdf) return;
+
+    const previewWindow = window.open("about:blank", "_blank");
+    if (!previewWindow) {
+      toast.error(
+        "Trình duyệt đã chặn tab xem trước. Vui lòng cho phép cửa sổ bật lên.",
+      );
+      return;
+    }
+
+    previewWindow.opener = null;
+    previewWindow.document.title = "Đang tải hợp đồng...";
+    previewWindow.document.body.textContent = "Đang tải bản PDF hợp đồng...";
+
+    try {
+      setIsOpeningPdf(true);
+      const blob = await contractApi.downloadPreviewPdf(contract.contractId);
+      const pdfUrl = URL.createObjectURL(
+        blob.type === "application/pdf"
+          ? blob
+          : new Blob([blob], { type: "application/pdf" }),
+      );
+      previewWindow.location.replace(pdfUrl);
+      window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000);
+    } catch (error) {
+      previewWindow.close();
+      toast.error(getApiErrorMessage(error, "Không thể mở bản PDF hợp đồng."));
+    } finally {
+      setIsOpeningPdf(false);
+    }
+  };
+
+  const downloadContractPdf = async () => {
+    if (isDownloadingPdf) return;
+
+    try {
+      setIsDownloadingPdf(true);
+      const blob = await contractApi.downloadPreviewPdf(contract.contractId);
+      downloadBlob(
+        blob,
+        `${contract.contractCode || `contract-${contract.contractId}`}.pdf`,
+      );
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Không thể tải bản PDF hợp đồng."));
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
   return (
     <>
       <Header />
@@ -598,6 +577,30 @@ export default function ContractDetailPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={viewContractPdf}
+              disabled={isOpeningPdf}
+            >
+              {isOpeningPdf ? (
+                <Loader2 className="size-4 mr-2 animate-spin" />
+              ) : (
+                <Eye className="size-4 mr-2" />
+              )}
+              Xem hợp đồng PDF
+            </Button>
+            <Button
+              variant="outline"
+              onClick={downloadContractPdf}
+              disabled={isDownloadingPdf}
+            >
+              {isDownloadingPdf ? (
+                <Loader2 className="size-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="size-4 mr-2" />
+              )}
+              Tải hợp đồng
+            </Button>
             {canUpdateDraft && (
               <Button
                 variant="outline"

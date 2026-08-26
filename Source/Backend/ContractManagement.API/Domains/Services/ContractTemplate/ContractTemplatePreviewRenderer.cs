@@ -8,8 +8,9 @@ using W = DocumentFormat.OpenXml.Wordprocessing;
 namespace ContractManagement.Domains.Services.ContractTemplate;
 
 /// <summary>
-/// Tạo một DOCX preview mới từ bytes của template đã validation.
-/// Chỉ dataset cố định V1 được dùng; renderer không có dependency đến dữ liệu nghiệp vụ thật.
+/// Tạo DOCX đã merge dữ liệu từ bytes của template đã validation.
+/// Overload mặc định vẫn dùng dataset mẫu cho màn quản lý template; overload có renderData
+/// được dùng để tạo tài liệu hợp đồng thật.
 /// </summary>
 public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRenderer
 {
@@ -21,8 +22,15 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
             .ToList();
 
     public byte[] Render(byte[] sourceDocumentBytes, ContractLanguageMode languageMode)
+        => Render(sourceDocumentBytes, languageMode, CreateSampleRenderData(languageMode));
+
+    public byte[] Render(
+        byte[] sourceDocumentBytes,
+        ContractLanguageMode languageMode,
+        ContractTemplateRenderData renderData)
     {
         ArgumentNullException.ThrowIfNull(sourceDocumentBytes);
+        ArgumentNullException.ThrowIfNull(renderData);
         if (sourceDocumentBytes.Length == 0)
         {
             throw new ContractTemplatePreviewException(
@@ -48,13 +56,11 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
             }
 
             var dynamicParagraphs = LocateDynamicParagraphs(mainPart);
-            ReplaceDynamicBlocks(dynamicParagraphs, languageMode);
+            ReplaceDynamicBlocks(dynamicParagraphs, languageMode, renderData);
 
-            var scalarValues = SoftwareSupplyPreviewDatasetV1
-                .GetScalarValues(languageMode);
             foreach (var root in GetTextRoots(mainPart))
             {
-                ReplaceScalarTokens(root, scalarValues);
+                ReplaceScalarTokens(root, renderData.ScalarValues);
             }
 
             EnsureNoCatalogTokensRemain(mainPart);
@@ -122,7 +128,8 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
 
     private static void ReplaceDynamicBlocks(
         IReadOnlyDictionary<string, W.Paragraph> paragraphs,
-        ContractLanguageMode languageMode)
+        ContractLanguageMode languageMode,
+        ContractTemplateRenderData renderData)
     {
         foreach (var (key, paragraph) in paragraphs)
         {
@@ -130,23 +137,25 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
             {
                 "CONTRACT_ITEM_TABLE" =>
                 [
-                    (OpenXmlElement)CreateItemTable(languageMode)
+                    (OpenXmlElement)CreateItemTable(languageMode, renderData)
                 ],
                 "PAYMENT_SCHEDULE_TABLE" =>
                 [
-                    (OpenXmlElement)CreatePaymentTable(languageMode)
+                    (OpenXmlElement)CreatePaymentTable(languageMode, renderData)
                 ],
-                "CONTRACT_TERMS" => CreateTermParagraphs(languageMode)
+                "CONTRACT_TERMS" => CreateTermParagraphs(languageMode, renderData)
                     .Cast<OpenXmlElement>(),
                 "SIGNATURE_PROVIDER" =>
                 [
                     (OpenXmlElement)CreateSignatureBlock(
-                        SoftwareSupplyPreviewDatasetV1.ProviderSignature)
+                        renderData.ProviderSignature,
+                        renderData.Notice)
                 ],
                 "SIGNATURE_CUSTOMER" =>
                 [
                     (OpenXmlElement)CreateSignatureBlock(
-                        SoftwareSupplyPreviewDatasetV1.CustomerSignature)
+                        renderData.CustomerSignature,
+                        renderData.Notice)
                 ],
                 _ => throw LayoutUnsupported(key)
             };
@@ -181,15 +190,16 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
     }
 
     private static IEnumerable<W.Paragraph> CreateTermParagraphs(
-        ContractLanguageMode languageMode)
+        ContractLanguageMode languageMode,
+        ContractTemplateRenderData renderData)
     {
-        var paragraphs = new List<W.Paragraph>
+        var paragraphs = new List<W.Paragraph>();
+        if (!string.IsNullOrWhiteSpace(renderData.Notice))
         {
-            CreateParagraph(SoftwareSupplyPreviewDatasetV1.LegalDisclaimer,
-                bold: true)
-        };
+            paragraphs.Add(CreateParagraph(renderData.Notice, bold: true));
+        }
 
-        foreach (var term in SoftwareSupplyPreviewDatasetV1.Terms)
+        foreach (var term in renderData.Terms)
         {
             var title = languageMode == ContractLanguageMode.Bilingual
                 ? $"Điều {term.No}. {term.TitleVi} / Article {term.No}. {term.TitleEn}"
@@ -206,20 +216,31 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
     }
 
     private static W.Paragraph CreateSignatureBlock(
-        SoftwareSupplyPreviewSignature signature)
+        ContractTemplateRenderSignature signature,
+        string notice)
     {
-        var run = new W.Run(
+        var children = new List<OpenXmlElement>
+        {
             new W.RunProperties(new W.Bold()),
             Text(signature.PartyTitle),
+            new W.Break()
+        };
+        if (!string.IsNullOrWhiteSpace(notice))
+        {
+            children.Add(Text(notice));
+            children.Add(new W.Break());
+        }
+        children.AddRange([
             new W.Break(),
-            Text(SoftwareSupplyPreviewDatasetV1.LegalDisclaimer),
-            new W.Break(),
-            new W.Break(),
-            Text(signature.SignerName));
+            Text(signature.SignerName)
+        ]);
+        var run = new W.Run(children);
         return new W.Paragraph(run);
     }
 
-    private static W.Table CreateItemTable(ContractLanguageMode languageMode)
+    private static W.Table CreateItemTable(
+        ContractLanguageMode languageMode,
+        ContractTemplateRenderData renderData)
     {
         var headers = languageMode == ContractLanguageMode.Bilingual
             ? new[] { "STT / No.", "Loại / Type", "Sản phẩm, dịch vụ / Description", "SL / Qty", "Đơn giá / Unit price", "CK / Disc.", "VAT", "Thành tiền / Total" }
@@ -229,7 +250,7 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
             headers
         };
 
-        rows.AddRange(SoftwareSupplyPreviewDatasetV1.Items.Select(item =>
+        rows.AddRange(renderData.Items.Select(item =>
             (IEnumerable<string>)
             [
                 item.No.ToString(),
@@ -237,17 +258,17 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                 item.Description,
                 FormatQuantity(item.Quantity),
                 FormatMoney(item.UnitPrice),
-                $"{item.DiscountPercent:0}%",
-                $"{item.VatPercent:0}%",
+                item.Discount,
+                item.Vat,
                 FormatMoney(item.TotalAmount)
             ]));
 
-        var total = SoftwareSupplyPreviewDatasetV1.Items.Sum(item => item.TotalAmount);
+        var total = renderData.Items.Sum(item => item.TotalAmount);
         rows.Add(
         [
             string.Empty,
             string.Empty,
-            SoftwareSupplyPreviewDatasetV1.LegalDisclaimer,
+            renderData.Notice,
             string.Empty,
             string.Empty,
             string.Empty,
@@ -258,7 +279,9 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
         return CreateTable(rows, headerRow: true);
     }
 
-    private static W.Table CreatePaymentTable(ContractLanguageMode languageMode)
+    private static W.Table CreatePaymentTable(
+        ContractLanguageMode languageMode,
+        ContractTemplateRenderData renderData)
     {
         var headers = languageMode == ContractLanguageMode.Bilingual
             ? new[] { "Đợt / No.", "Nội dung / Description", "Tỷ lệ / Percent", "Số tiền / Amount", "Điều kiện / Due condition" }
@@ -267,15 +290,19 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
         {
             headers
         };
-        rows.AddRange(SoftwareSupplyPreviewDatasetV1.Payments.Select(payment =>
+        rows.AddRange(renderData.Payments.Select(payment =>
             (IEnumerable<string>)
             [
                 payment.No.ToString(),
                 payment.Description,
-                $"{payment.Percent:0}%",
+                payment.Percent,
                 FormatMoney(payment.Amount),
                 payment.DueCondition
             ]));
+        if (renderData.Payments.Count == 0)
+        {
+            rows.Add([string.Empty, "Chưa có dữ liệu lịch thanh toán", string.Empty, string.Empty, string.Empty]);
+        }
         return CreateTable(rows, headerRow: true);
     }
 
@@ -426,6 +453,41 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
     };
 
     private static string Token(string key) => $"{{{{{key}}}}}";
+
+    private static ContractTemplateRenderData CreateSampleRenderData(
+        ContractLanguageMode languageMode) => new(
+        SoftwareSupplyPreviewDatasetV1.GetScalarValues(languageMode),
+        SoftwareSupplyPreviewDatasetV1.Items.Select(item =>
+            new ContractTemplateRenderItem(
+                item.No,
+                item.Type,
+                item.Description,
+                item.Quantity,
+                item.UnitPrice,
+                $"{item.DiscountPercent:0}%",
+                $"{item.VatPercent:0}%",
+                item.TotalAmount)).ToList(),
+        SoftwareSupplyPreviewDatasetV1.Payments.Select(payment =>
+            new ContractTemplateRenderPayment(
+                payment.No,
+                payment.Description,
+                $"{payment.Percent:0}%",
+                payment.Amount,
+                payment.DueCondition)).ToList(),
+        SoftwareSupplyPreviewDatasetV1.Terms.Select(term =>
+            new ContractTemplateRenderTerm(
+                term.No,
+                term.TitleVi,
+                term.TitleEn,
+                term.ContentVi,
+                term.ContentEn)).ToList(),
+        new ContractTemplateRenderSignature(
+            SoftwareSupplyPreviewDatasetV1.ProviderSignature.PartyTitle,
+            SoftwareSupplyPreviewDatasetV1.ProviderSignature.SignerName),
+        new ContractTemplateRenderSignature(
+            SoftwareSupplyPreviewDatasetV1.CustomerSignature.PartyTitle,
+            SoftwareSupplyPreviewDatasetV1.CustomerSignature.SignerName),
+        SoftwareSupplyPreviewDatasetV1.LegalDisclaimer);
 
     private static ContractTemplatePreviewException LayoutUnsupported(string key) =>
         new(

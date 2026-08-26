@@ -1,10 +1,18 @@
 using ContractManagement.API.Common.Enums;
+using ContractManagement.Domains.Policies.ContractTemplate;
 
 namespace ContractManagement.Domains.Interfaces.ContractTemplate;
 
 public interface IContractTemplatePreviewRenderer
 {
     byte[] Render(byte[] sourceDocumentBytes, ContractLanguageMode languageMode);
+
+    byte[] Render(
+        byte[] sourceDocumentBytes,
+        ContractLanguageMode languageMode,
+        ContractTemplateRenderData renderData) =>
+        throw new NotSupportedException(
+            "Renderer này chưa hỗ trợ dữ liệu hợp đồng động.");
 }
 
 /// <summary>

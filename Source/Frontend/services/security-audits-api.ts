@@ -27,6 +27,7 @@ export interface TenantSecurityAuditResponse {
   authorizationAuditId: number;
   tenantId: number;
   actorEmployeeId?: number | null;
+  actorDisplayName?: string | null;
   actorType: string;
   action: string;
   result: string;

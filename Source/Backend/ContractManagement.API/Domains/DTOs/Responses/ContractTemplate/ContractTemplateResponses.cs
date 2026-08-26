@@ -15,7 +15,7 @@ public sealed class SoftwareSupplyPlaceholderCatalogResponse
 /// <summary>
 /// Minimal current published template version that may be selected for a new contract.
 /// </summary>
-public sealed class AvailableContractTemplateVersionResponse
+public class AvailableContractTemplateVersionResponse
 {
     public int TemplateId { get; set; }
 
@@ -32,6 +32,25 @@ public sealed class AvailableContractTemplateVersionResponse
     public int TemplateVersionId { get; set; }
 
     public int VersionNo { get; set; }
+}
+
+public sealed class AvailableContractTemplateVersionDetailResponse
+    : AvailableContractTemplateVersionResponse
+{
+    public IReadOnlyList<AvailableContractTemplateTermResponse> Terms { get; set; }
+        = [];
+}
+
+public sealed class AvailableContractTemplateTermResponse
+{
+    public int TemplateTermId { get; set; }
+    public string TermCode { get; set; } = string.Empty;
+    public string TermTitle { get; set; } = string.Empty;
+    public string? TermTitleEn { get; set; }
+    public string? TermContent { get; set; }
+    public string? TermContentEn { get; set; }
+    public bool IsNegotiable { get; set; }
+    public int DisplayOrder { get; set; }
 }
 
 public class ContractTemplateResponse

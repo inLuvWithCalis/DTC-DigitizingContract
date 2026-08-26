@@ -83,6 +83,143 @@ public sealed class ContractTemplateService : IContractTemplateService
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<PagedResult<AvailableContractTemplateVersionResponse>>
+        SearchAvailableAsync(
+            AvailableContractTemplateFilterRequest filter,
+            CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        var page = filter.Page <= 0 ? 1 : filter.Page;
+        var pageSize = filter.PageSize <= 0 ? 20 : filter.PageSize;
+        if (pageSize > 100)
+        {
+            throw new ArgumentException("PageSize không được vượt quá 100.");
+        }
+
+        var query =
+            from version in _dbContext.TblContractTemplateVersions.AsNoTracking()
+            join template in _dbContext.TblContractTemplates.AsNoTracking()
+                on version.TemplateId equals template.TemplateId
+            where template.IsActive
+                  && template.CurrentPublishedVersionId == version.TemplateVersionId
+                  && version.Status == (byte)TemplateVersionStatus.Published
+            select new { version, template };
+
+        var keyword = NormalizeOptional(filter.Keyword);
+        if (keyword is not null)
+        {
+            query = query.Where(item =>
+                item.template.TemplateCode.Contains(keyword)
+                || item.template.TemplateName.Contains(keyword)
+                || (item.template.TemplateNameEn != null
+                    && item.template.TemplateNameEn.Contains(keyword)));
+        }
+
+        if (filter.DocumentType.HasValue)
+        {
+            query = query.Where(item =>
+                item.template.DocumentType == (byte)filter.DocumentType.Value);
+        }
+
+        if (filter.LanguageMode.HasValue)
+        {
+            query = query.Where(item =>
+                item.template.LanguageMode == (byte)filter.LanguageMode.Value);
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var offset = ((long)page - 1) * pageSize;
+        if (offset > int.MaxValue)
+        {
+            throw new ArgumentException(
+                "Requested template page is outside the supported range.");
+        }
+        var items = await query
+            .OrderBy(item => item.template.TemplateCode)
+            .ThenBy(item => item.version.VersionNo)
+            .ThenBy(item => item.version.TemplateVersionId)
+            .Skip((int)offset)
+            .Take(pageSize)
+            .Select(item => new AvailableContractTemplateVersionResponse
+            {
+                TemplateId = item.template.TemplateId,
+                TemplateCode = item.template.TemplateCode,
+                TemplateName = item.template.TemplateName,
+                TemplateNameEn = item.template.TemplateNameEn,
+                DocumentType = (TemplateDocumentType)item.template.DocumentType,
+                LanguageMode = (ContractLanguageMode)item.template.LanguageMode,
+                TemplateVersionId = item.version.TemplateVersionId,
+                VersionNo = item.version.VersionNo
+            })
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<AvailableContractTemplateVersionResponse>
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize
+        };
+    }
+
+    public async Task<AvailableContractTemplateVersionDetailResponse>
+        GetAvailableAsync(
+            int templateVersionId,
+            CancellationToken cancellationToken = default)
+    {
+        if (templateVersionId <= 0)
+        {
+            throw new ArgumentException("TemplateVersionId phải lớn hơn 0.");
+        }
+
+        var detail = await (
+            from version in _dbContext.TblContractTemplateVersions.AsNoTracking()
+            join template in _dbContext.TblContractTemplates.AsNoTracking()
+                on version.TemplateId equals template.TemplateId
+            where version.TemplateVersionId == templateVersionId
+                  && template.IsActive
+                  && template.CurrentPublishedVersionId == version.TemplateVersionId
+                  && version.Status == (byte)TemplateVersionStatus.Published
+            select new AvailableContractTemplateVersionDetailResponse
+            {
+                TemplateId = template.TemplateId,
+                TemplateCode = template.TemplateCode,
+                TemplateName = template.TemplateName,
+                TemplateNameEn = template.TemplateNameEn,
+                DocumentType = (TemplateDocumentType)template.DocumentType,
+                LanguageMode = (ContractLanguageMode)template.LanguageMode,
+                TemplateVersionId = version.TemplateVersionId,
+                VersionNo = version.VersionNo
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (detail is null)
+        {
+            throw new KeyNotFoundException(
+                "Không tìm thấy template version đã phát hành hiện hành.");
+        }
+
+        detail.Terms = await _dbContext.TblContractTemplateTerms
+            .AsNoTracking()
+            .Where(term => term.TemplateVersionId == templateVersionId)
+            .OrderBy(term => term.DisplayOrder)
+            .ThenBy(term => term.TemplateTermId)
+            .Select(term => new AvailableContractTemplateTermResponse
+            {
+                TemplateTermId = term.TemplateTermId,
+                TermCode = term.TermCode,
+                TermTitle = term.TermTitle,
+                TermTitleEn = term.TermTitleEn,
+                TermContent = term.TermContent,
+                TermContentEn = term.TermContentEn,
+                IsNegotiable = term.IsNegotiable,
+                DisplayOrder = term.DisplayOrder
+            })
+            .ToListAsync(cancellationToken);
+
+        return detail;
+    }
+
     public async Task<SoftwareSupplyPlaceholderCatalogResponse>
         GetPlaceholderCatalogAsync(
         int employeeId,
@@ -429,13 +566,18 @@ public sealed class ContractTemplateService : IContractTemplateService
             cancellationToken);
         if (!validation.IsTechnicallyAccepted)
         {
+            _logger?.LogWarning(
+                "Template DOCX upload rejected. VersionId={VersionId}, FailureCode={FailureCode}, FileSizeBytes={FileSizeBytes}",
+                versionId,
+                validation.FailureCode ?? "Unknown",
+                validation.FileSizeBytes);
             await RecordTechnicalRejectionAsync(
                 preflightVersion,
                 employeeId,
                 validation,
                 cancellationToken);
             throw new ArgumentException(
-                "Tệp DOCX bị từ chối do không đạt yêu cầu kỹ thuật hoặc an toàn.",
+                $"Tệp DOCX bị từ chối do không đạt yêu cầu kỹ thuật hoặc an toàn. Mã lỗi: {validation.FailureCode ?? "Unknown"}.",
                 nameof(request.File));
         }
 

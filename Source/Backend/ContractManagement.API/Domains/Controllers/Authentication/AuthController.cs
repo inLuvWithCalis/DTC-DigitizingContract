@@ -46,7 +46,7 @@ namespace ContractManagement.Domains.Controllers.Authentication
             {
                 return Unauthorized(new
                 {
-                    message = "Invalid account name or password."
+                    message = "Sai tên đăng nhập hoặc mật khẩu."
                 });
             }
 
@@ -57,7 +57,7 @@ namespace ContractManagement.Domains.Controllers.Authentication
             {
                 return Unauthorized(new
                 {
-                    message = "Invalid account name or password."
+                    message = "Sai tên đăng nhập hoặc mật khẩu."
                 });
             }
 
@@ -91,7 +91,7 @@ namespace ContractManagement.Domains.Controllers.Authentication
             // 5. Return success response
             return Ok(new
             {
-                message = "Login successful.",
+                message = "Đăng nhập thành công.",
                 employeeId = employee.EmployeeId,
                 employeeName = employee.EmployeeFullName,
                 tenantId = tenant.TenantId,
@@ -137,7 +137,7 @@ namespace ContractManagement.Domains.Controllers.Authentication
             // Return success response
             return Ok(new
             {
-                message = "Logout successful."
+                message = "Đăng xuất thành công."
             });
         }
 

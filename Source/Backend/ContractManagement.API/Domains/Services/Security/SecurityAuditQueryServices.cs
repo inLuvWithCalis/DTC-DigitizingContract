@@ -89,22 +89,40 @@ public sealed class TenantSecurityAuditQueryService
         return query;
     }
 
-    private static async Task<PagedResult<TenantSecurityAuditResponse>> ToTenantPageAsync(
+    private async Task<PagedResult<TenantSecurityAuditResponse>> ToTenantPageAsync(
         IQueryable<Infrastructure.Persistence.Application.Models.TblAuthorizationAudit> query,
         SecurityAuditFilterRequest filter,
         CancellationToken cancellationToken)
     {
         var totalCount = await query.CountAsync(cancellationToken);
-        var audits = await query
+        var auditRows = await query
             .OrderByDescending(audit => audit.OccurredAt)
             .ThenByDescending(audit => audit.AuthorizationAuditId)
             .Skip((filter.Page - 1) * filter.PageSize)
             .Take(filter.PageSize)
+            .ToListAsync(cancellationToken);
+        var actorIds = auditRows
+            .Where(audit => audit.ActorEmployeeId.HasValue)
+            .Select(audit => audit.ActorEmployeeId!.Value)
+            .Distinct()
+            .ToList();
+        var actorNames = await _dbContext.TblEmployees
+            .AsNoTracking()
+            .Where(employee => actorIds.Contains(employee.EmployeeId))
+            .ToDictionaryAsync(
+                employee => employee.EmployeeId,
+                employee => employee.EmployeeFullName,
+                cancellationToken);
+        var audits = auditRows
             .Select(audit => new TenantSecurityAuditResponse
             {
                 AuthorizationAuditId = audit.AuthorizationAuditId,
                 TenantId = audit.TenantId,
                 ActorEmployeeId = audit.ActorEmployeeId,
+                ActorDisplayName = audit.ActorEmployeeId.HasValue
+                    && actorNames.TryGetValue(audit.ActorEmployeeId.Value, out var name)
+                        ? name
+                        : null,
                 ActorType = audit.ActorType,
                 Action = audit.Action,
                 Result = audit.Result,
@@ -120,7 +138,7 @@ public sealed class TenantSecurityAuditQueryService
                 UserAgent = audit.UserAgent,
                 CorrelationId = audit.CorrelationId
             })
-            .ToListAsync(cancellationToken);
+            .ToList();
 
         return new PagedResult<TenantSecurityAuditResponse>
         {
@@ -220,15 +238,33 @@ public sealed class CentralSecurityAuditQueryService
         }
 
         var totalCount = await query.CountAsync(cancellationToken);
-        var audits = await query
+        var auditRows = await query
             .OrderByDescending(audit => audit.OccurredAt)
             .ThenByDescending(audit => audit.CentralSecurityAuditId)
             .Skip((filter.Page - 1) * filter.PageSize)
             .Take(filter.PageSize)
+            .ToListAsync(cancellationToken);
+        var actorIds = auditRows
+            .Where(audit => audit.ActorSystemAdminId.HasValue)
+            .Select(audit => audit.ActorSystemAdminId!.Value)
+            .Distinct()
+            .ToList();
+        var actorNames = await _centralDbContext.SystemAdmins
+            .AsNoTracking()
+            .Where(admin => actorIds.Contains(admin.SystemAdminId))
+            .ToDictionaryAsync(
+                admin => admin.SystemAdminId,
+                admin => admin.FullName,
+                cancellationToken);
+        var audits = auditRows
             .Select(audit => new CentralSecurityAuditResponse
             {
                 CentralSecurityAuditId = audit.CentralSecurityAuditId,
                 ActorSystemAdminId = audit.ActorSystemAdminId,
+                ActorDisplayName = audit.ActorSystemAdminId.HasValue
+                    && actorNames.TryGetValue(audit.ActorSystemAdminId.Value, out var name)
+                        ? name
+                        : null,
                 TenantId = audit.TenantId,
                 TenantCode = audit.TenantCode,
                 Action = audit.Action,
@@ -245,7 +281,7 @@ public sealed class CentralSecurityAuditQueryService
                 UserAgent = audit.UserAgent,
                 CorrelationId = audit.CorrelationId
             })
-            .ToListAsync(cancellationToken);
+            .ToList();
 
         return new PagedResult<CentralSecurityAuditResponse>
         {

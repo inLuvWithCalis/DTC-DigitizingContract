@@ -79,6 +79,16 @@ public sealed class CustomerContractAccessService : ICustomerContractAccessServi
                     return response;
                 }
 
+                // The link can be prepared while the contract is still Draft, but it
+                // is activated only when negotiation starts.
+                if (!link.ActivatedAt.HasValue
+                    && !link.RevokedAt.HasValue
+                    && link.ExpiresAt > now)
+                {
+                    throw new InvalidOperationException(
+                        "Chỉ có thể xem hợp đồng khi hợp đồng đang ở trạng thái đàm phán.");
+                }
+
                 if (!IsLinkActive(link, now))
                 {
                     StageSystemAudit(

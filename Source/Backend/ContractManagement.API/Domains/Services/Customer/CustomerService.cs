@@ -98,7 +98,10 @@ namespace ContractManagement.API.Domains.Services.Customer
                 query = query.Where(x =>
                     (x.CustomerCode != null && x.CustomerCode.Contains(normalizedKeyword))
                     || (x.CustomerFullName != null && x.CustomerFullName.Contains(normalizedKeyword))
-                    || (x.CustomerCompany != null && x.CustomerCompany.Contains(normalizedKeyword)));
+                    || (x.CustomerCompany != null && x.CustomerCompany.Contains(normalizedKeyword))
+                    || (x.CustomerTaxCode != null && x.CustomerTaxCode.Contains(normalizedKeyword))
+                    || (x.CustomerMobile != null && x.CustomerMobile.Contains(normalizedKeyword))
+                    || (x.CustomerPhone != null && x.CustomerPhone.Contains(normalizedKeyword)));
             }
 
             return await query

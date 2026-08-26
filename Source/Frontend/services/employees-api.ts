@@ -106,7 +106,9 @@ export interface EmployeeResponse {
 
 export interface EmployeeDirectoryResponse {
   employeeId: number;
+  employeeCode?: string | null;
   employeeFullName?: string | null;
+  employeeMobile?: string | null;
   departmentId?: number | null;
   departmentName?: string | null;
   employeeType: EmployeeType;
@@ -128,6 +130,16 @@ const DIRECTORY_URL = "/api/employees/directory";
 export const employeeApi = {
   getDirectory: () => {
     return axiosClient.get<any, EmployeeDirectoryResponse[]>(DIRECTORY_URL);
+  },
+  searchDirectory: (params: {
+    page?: number;
+    pageSize?: number;
+    keyword?: string;
+  }) => {
+    return axiosClient.get<any, PagedResult<EmployeeDirectoryResponse>>(
+      `${DIRECTORY_URL}/search`,
+      { params },
+    );
   },
   getList: (params: EmployeeFilterParams) => {
     return axiosClient.get<any, PagedResult<EmployeeResponse>>(BASE_URL, {

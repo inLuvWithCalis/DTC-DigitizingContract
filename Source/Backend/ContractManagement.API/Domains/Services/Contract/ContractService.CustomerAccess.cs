@@ -160,6 +160,45 @@ public partial class ContractService
             ContractAuditActionTypes.CustomerAccessLinkCreated);
     }
 
+    public async Task<CurrentContractCustomerAccessLinkResponse?>
+        GetCurrentCustomerAccessLinkAsync(int contractId, int employeeId)
+    {
+        var contract = await GetCustomerAccessContractAsync(
+            contractId,
+            employeeId,
+            allowManagerOrAdmin: true);
+        if (!contract.CurrentCustomerAccessLinkId.HasValue)
+        {
+            return null;
+        }
+
+        var link = await _dbContext.TblContractCustomerAccessLinks
+            .AsNoTracking()
+            .SingleOrDefaultAsync(item =>
+                item.CustomerAccessLinkId == contract.CurrentCustomerAccessLinkId.Value
+                && item.ContractId == contract.ContractId);
+        if (link is null || link.RevokedAt.HasValue)
+        {
+            return null;
+        }
+
+        var now = DateTime.UtcNow;
+        var state = link.ExpiresAt <= now
+            ? "Expired"
+            : link.ActivatedAt.HasValue && link.VersionId == contract.CurrentVersionId
+                ? "Active"
+                : "PendingActivation";
+
+        return new CurrentContractCustomerAccessLinkResponse
+        {
+            LinkId = link.CustomerAccessLinkId,
+            State = state,
+            VersionId = link.VersionId,
+            CreatedAt = link.CreatedDate,
+            ExpiresAt = link.ExpiresAt
+        };
+    }
+
     public async Task<ContractCustomerAccessLinkResponse>
         ReplaceCustomerAccessLinkAsync(
             int contractId,

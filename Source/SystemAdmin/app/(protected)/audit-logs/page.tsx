@@ -155,7 +155,12 @@ export default function CentralSecurityAuditsPage() {
                   <TableCell>{item.tenantCode || (item.tenantId ? `#${item.tenantId}` : "—")}</TableCell>
                   <TableCell className="font-medium">{item.action}</TableCell>
                   <TableCell><Badge className={item.result === "Success" ? "bg-emerald-600 text-white" : item.result === "Denied" ? "bg-amber-600 text-white" : "bg-destructive text-destructive-foreground"}>{item.result}</Badge></TableCell>
-                  <TableCell>{item.actorSystemAdminId ? `#${item.actorSystemAdminId}` : "—"}</TableCell>
+                  <TableCell>
+                    {item.actorDisplayName ||
+                      (item.actorSystemAdminId
+                        ? `System Admin #${item.actorSystemAdminId}`
+                        : "—")}
+                  </TableCell>
                   <TableCell>{item.targetType || "—"}{item.targetId ? ` #${item.targetId}` : ""}</TableCell>
                   <TableCell>{item.failureCode || "—"}</TableCell>
                   <TableCell className="max-w-48 truncate font-mono text-xs" title={item.correlationId}>{item.correlationId}</TableCell>

@@ -50,10 +50,24 @@ public sealed class ContractServiceSlice06Tests
             EmployeeId,
             "https://public.example.test");
         Assert.Equal("PendingActivation", link.State);
+        var currentLink = await contractService.GetCurrentCustomerAccessLinkAsync(
+            ContractId,
+            EmployeeId);
+        Assert.NotNull(currentLink);
+        Assert.Equal(link.LinkId, currentLink.LinkId);
+        Assert.Equal(VersionId, currentLink.VersionId);
+        Assert.Equal("PendingActivation", currentLink.State);
+        Assert.DoesNotContain(
+            currentLink.GetType().GetProperties(),
+            property => property.Name.Contains("Url", StringComparison.OrdinalIgnoreCase)
+                || property.Name.Contains("Token", StringComparison.OrdinalIgnoreCase));
 
         var pendingToken = new Uri(link.PublicUrl).Segments.Last().Trim('/');
-        var pending = await customerAccess.RequestOtpAsync(pendingToken, "+84912345678");
-        Assert.NotEmpty(pending.PublicChallengeId);
+        var pendingError = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            customerAccess.RequestOtpAsync(pendingToken, "+84912345678"));
+        Assert.Equal(
+            "Chỉ có thể xem hợp đồng khi hợp đồng đang ở trạng thái đàm phán.",
+            pendingError.Message);
         Assert.Empty(context.TblContractCustomerOtpChallenges);
 
         await contractService.StartNegotiationAsync(
@@ -105,6 +119,9 @@ public sealed class ContractServiceSlice06Tests
 
         Assert.NotEqual(VersionId, round.CurrentVersion.VersionId);
         Assert.Null((await context.TblContracts.SingleAsync()).CurrentCustomerAccessLinkId);
+        Assert.Null(await contractService.GetCurrentCustomerAccessLinkAsync(
+            ContractId,
+            EmployeeId));
         Assert.NotNull((await context.TblContractCustomerAccessLinks.SingleAsync()).RevokedAt);
         Assert.NotNull((await context.TblContractCustomerAccessSessions.SingleAsync()).RevokedAt);
         await Assert.ThrowsAsync<UnauthorizedAccessException>(

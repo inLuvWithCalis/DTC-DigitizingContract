@@ -5,6 +5,7 @@ public sealed class TenantSecurityAuditResponse
     public long AuthorizationAuditId { get; set; }
     public int TenantId { get; set; }
     public int? ActorEmployeeId { get; set; }
+    public string? ActorDisplayName { get; set; }
     public string ActorType { get; set; } = string.Empty;
     public string Action { get; set; } = string.Empty;
     public string Result { get; set; } = string.Empty;
@@ -25,6 +26,7 @@ public sealed class CentralSecurityAuditResponse
 {
     public long CentralSecurityAuditId { get; set; }
     public int? ActorSystemAdminId { get; set; }
+    public string? ActorDisplayName { get; set; }
     public int? TenantId { get; set; }
     public string? TenantCode { get; set; }
     public string Action { get; set; } = string.Empty;

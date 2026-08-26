@@ -19,11 +19,14 @@ namespace ContractManagement.Domains.Controllers.Contract
     public class ContractController : ControllerBase
     {
         private readonly IContractService _contractService;
+        private readonly IContractDocumentPreviewService _documentPreviewService;
 
         public ContractController(
-            IContractService contractService)
+            IContractService contractService,
+            IContractDocumentPreviewService documentPreviewService)
         {
             _contractService = contractService;
+            _documentPreviewService = documentPreviewService;
         }
 
         /// <summary>
@@ -712,6 +715,48 @@ namespace ContractManagement.Domains.Controllers.Contract
             catch (UnauthorizedAccessException exception)
             {
                 return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<object>.Fail(exception.Message));
+            }
+        }
+
+        /// <summary>
+        /// Sinh PDF xem trước từ DOCX template và dữ liệu thật của version hiện hành.
+        /// PDF được tạo theo yêu cầu, không dùng published preview chứa dữ liệu mẫu.
+        /// </summary>
+        [HttpGet("{contractId:int}/preview/pdf")]
+        [Produces("application/pdf")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> DownloadPreviewPdf(int contractId)
+        {
+            var result = await _documentPreviewService.GeneratePdfAsync(
+                contractId,
+                GetEmployeeId(),
+                CanReadTenantContracts(),
+                HttpContext.RequestAborted);
+
+            return File(result.Content, "application/pdf", result.FileName);
+        }
+
+        /// <summary>
+        /// Lấy link customer access hiện tại mà không trả token hoặc public URL.
+        /// Trả data null nếu hợp đồng chưa có link hiện tại.
+        /// </summary>
+        [HttpGet("{contractId:int}/customer-access/links/current")]
+        public async Task<IActionResult> GetCurrentCustomerAccessLink(int contractId)
+        {
+            try
+            {
+                var result = await _contractService.GetCurrentCustomerAccessLinkAsync(
+                    contractId,
+                    GetEmployeeId());
+                return Ok(ApiResponse<CurrentContractCustomerAccessLinkResponse?>.Ok(result));
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden,
+                    ApiResponse<object>.Fail(exception.Message));
             }
         }
 

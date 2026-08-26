@@ -239,6 +239,25 @@ public sealed class ContractTemplateServiceTests
         Assert.Equal(1, available.TemplateId);
         Assert.Equal(2, available.TemplateVersionId);
         Assert.Equal("PUBLISHED", available.TemplateCode);
+
+        var detail = await CreateService(context).GetAvailableAsync(
+            available.TemplateVersionId);
+        var term = Assert.Single(detail.Terms);
+        Assert.Equal("PAYMENT", term.TermCode);
+
+        var page = await CreateService(context).SearchAvailableAsync(
+            new AvailableContractTemplateFilterRequest
+            {
+                Keyword = "PUBLISHED",
+                DocumentType = TemplateDocumentType.SoftwareSupplyContract,
+                Page = 1,
+                PageSize = 10
+            });
+        Assert.Single(page.Items);
+        Assert.Equal(1, page.TotalCount);
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(
+            () => CreateService(context).GetAvailableAsync(21));
     }
 
     [Fact]

@@ -323,6 +323,10 @@ builder.Services.AddScoped<
     ITenantLegalProfileService,
     TenantLegalProfileService>();
 
+builder.Services.AddScoped<
+    IContractDocumentPreviewService,
+    ContractDocumentPreviewService>();
+
 #endregion
 
 #region 8. AutoMapper

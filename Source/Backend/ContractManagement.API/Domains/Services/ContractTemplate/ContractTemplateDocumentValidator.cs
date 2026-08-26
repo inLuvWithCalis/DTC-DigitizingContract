@@ -5,8 +5,8 @@ using ContractManagement.Domains.Interfaces.ContractTemplate;
 using ContractManagement.Domains.Policies.ContractTemplate;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
-using DocumentFormat.OpenXml.Validation;
 using DocumentFormat.OpenXml.Wordprocessing;
+using System.Xml;
 
 namespace ContractManagement.Domains.Services.ContractTemplate;
 
@@ -22,20 +22,10 @@ public sealed class ContractTemplateDocumentValidator
     private const long MaxUncompressedPackageBytes = 100 * 1024 * 1024;
     private const int MaxPackageEntries = 10_000;
     private const int MaxValidationMessageLength = 4_000;
-    private const string WordprocessingNamespace =
-        "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
     private static readonly Regex ValidTokenRegex = new(
         "^\\{\\{[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*\\}\\}$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
-
-    private static readonly HashSet<string> RevisionElementNames =
-    [
-        "ins", "del", "moveFrom", "moveTo", "moveFromRangeStart",
-        "moveFromRangeEnd", "moveToRangeStart", "moveToRangeEnd",
-        "rPrChange", "pPrChange", "tblPrChange", "trPrChange",
-        "tcPrChange", "sectPrChange", "numPrChange"
-    ];
 
     public async Task<ContractTemplateDocumentValidationResult> ValidateAsync(
         IFormFile? file,
@@ -101,13 +91,6 @@ public sealed class ContractTemplateDocumentValidator
             }
 
             stream.Position = 0;
-            if (ContainsCommentPart(stream))
-            {
-                return ContractTemplateDocumentValidationResult.RejectTechnical(
-                    "WordCommentsNotAllowed", extension, documentBytes.LongLength);
-            }
-
-            stream.Position = 0;
             using var document = WordprocessingDocument.Open(stream, false);
             var mainPart = document.MainDocumentPart;
             if (mainPart?.Document is null)
@@ -123,30 +106,15 @@ public sealed class ContractTemplateDocumentValidator
                     "MacroNotAllowed", extension, documentBytes.LongLength);
             }
 
-            if (document.Parts.Any(part => part.OpenXmlPart.ContentType.Contains(
-                    "comments", StringComparison.OrdinalIgnoreCase)))
-            {
-                return ContractTemplateDocumentValidationResult.RejectTechnical(
-                    "WordCommentsNotAllowed", extension, documentBytes.LongLength);
-            }
-
             var roots = GetTextRoots(mainPart).ToList();
-            if (mainPart.DocumentSettingsPart?.Settings?
-                    .Elements<TrackRevisions>().Any() == true
-                || roots.Any(ContainsTrackedChanges))
-            {
-                return ContractTemplateDocumentValidationResult.RejectTechnical(
-                    "TrackedChangesNotAllowed", extension, documentBytes.LongLength);
-            }
 
-            var schemaError = new OpenXmlValidator()
-                .Validate(document)
-                .FirstOrDefault();
-            if (schemaError is not null)
-            {
-                return ContractTemplateDocumentValidationResult.RejectTechnical(
-                    "OoxmlStructureInvalid", extension, documentBytes.LongLength);
-            }
+            // Do not use OpenXmlValidator as an upload gate. Real DOCX files
+            // created by newer Microsoft 365 builds and third-party editors can
+            // contain valid extension metadata that an older schema profile
+            // reports as an error. Comments and tracked changes are also legal
+            // WordprocessingML. They are ignored by placeholder extraction and
+            // do not execute code. Invalid/missing placeholders still produce a
+            // catalog-invalid version that cannot be published.
 
             return ValidatePlaceholders(roots, extension, documentBytes);
         }
@@ -157,6 +125,7 @@ public sealed class ContractTemplateDocumentValidator
         catch (Exception exception) when (exception is IOException
             or InvalidDataException
             or OpenXmlPackageException
+            or XmlException
             or ArgumentException)
         {
             return ContractTemplateDocumentValidationResult.RejectTechnical(
@@ -327,12 +296,6 @@ public sealed class ContractTemplateDocumentValidator
         }
     }
 
-    private static bool ContainsTrackedChanges(OpenXmlElement root) =>
-        root.Descendants().Any(element =>
-            string.Equals(element.NamespaceUri, WordprocessingNamespace,
-                StringComparison.Ordinal)
-            && RevisionElementNames.Contains(element.LocalName));
-
     private static bool IsSafeWordprocessingPackage(Stream stream)
     {
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read,
@@ -383,15 +346,6 @@ public sealed class ContractTemplateDocumentValidator
             leaveOpen: false);
         return reader.ReadToEnd().Contains("vbaProject",
             StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool ContainsCommentPart(Stream stream)
-    {
-        using var archive = new ZipArchive(stream, ZipArchiveMode.Read,
-            leaveOpen: true);
-        return archive.Entries.Any(entry => entry.FullName.StartsWith(
-                "word/comments", StringComparison.OrdinalIgnoreCase)
-            && entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
     }
 
     private static async Task<ReadResult> ReadAtMostTenMiBAsync(

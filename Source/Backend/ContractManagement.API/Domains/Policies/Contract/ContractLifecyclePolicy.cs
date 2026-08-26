@@ -53,8 +53,8 @@ namespace ContractManagement.API.Domains.Policies.Contract
                     // Approver từ chối dứt điểm.
                     ContractStatus.Rejected,
 
-                    // Owner/Admin rút hồ sơ trong lúc chờ duyệt.
-                    ContractStatus.Cancelled
+                    // Owner rút hồ sơ (Withdraw) cũng quay về Negotiating.
+                    // Không dùng Cancelled để thay thế approval action.
                 },
 
                 [ContractStatus.PendingSignature] = new()

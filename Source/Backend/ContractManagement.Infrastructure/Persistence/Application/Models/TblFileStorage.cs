@@ -15,6 +15,18 @@ public partial class TblFileStorage
 
     public string FilePath { get; set; } = null!;
 
+    /// <summary>
+    /// Identifier tương đối trong private storage. Không phải URL hoặc physical path.
+    /// Nullable để giữ tương thích với file legacy đang dùng FilePath.
+    /// </summary>
+    public string? StorageKey { get; set; }
+
+    public string? ContentType { get; set; }
+
+    public string? Sha256 { get; set; }
+
+    public string? TenantCode { get; set; }
+
     public string? FileType { get; set; }
 
     public long? FileSize { get; set; }

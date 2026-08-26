@@ -33,6 +33,8 @@ export interface CreateCustomerRequest {
   customerMobile?: string | null;
   customerPhone?: string | null;
   customerTaxCode?: string | null;
+  customerRepresentativeName?: string | null;
+  customerRepresentativeTitle?: string | null;
   customerAddress?: string | null;
   customerCity?: string | null;
   customerCountry?: string | null;
@@ -48,6 +50,8 @@ export interface UpdateCustomerRequest {
   customerMobile?: string | null;
   customerPhone?: string | null;
   customerTaxCode?: string | null;
+  customerRepresentativeName?: string | null;
+  customerRepresentativeTitle?: string | null;
   customerAddress?: string | null;
   customerCity?: string | null;
   customerCountry?: string | null;
@@ -64,6 +68,8 @@ export interface CustomerResponse {
   customerMobile?: string | null;
   customerPhone?: string | null;
   customerTaxCode?: string | null;
+  customerRepresentativeName?: string | null;
+  customerRepresentativeTitle?: string | null;
   customerAddress?: string | null;
   customerCity?: string | null;
   customerCountry?: string | null;
@@ -80,6 +86,9 @@ export interface CustomerLookupResponse {
   customerCode?: string | null;
   customerFullName?: string | null;
   customerCompany?: string | null;
+  customerTaxCode?: string | null;
+  customerMobile?: string | null;
+  customerPhone?: string | null;
   status?: CustomerStatus | number | null;
 }
 

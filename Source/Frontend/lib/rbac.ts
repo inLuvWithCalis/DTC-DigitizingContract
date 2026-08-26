@@ -19,6 +19,7 @@ export const RBAC_PERMISSIONS = {
   contractAuditReadOwn: "contract-audit.read.own",
   contractAuditReadTenant: "contract-audit.read.tenant",
   securityAuditReadTenant: "security-audit.read.tenant",
+  tenantLegalProfileManage: "tenant.legal-profile.manage",
   fileAccessByResource: "file.access-by-resource",
 } as const;
 

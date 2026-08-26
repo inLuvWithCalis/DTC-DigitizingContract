@@ -46,6 +46,10 @@ export function CustomerFormModal({
   const [customerMobile, setCustomerMobile] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerTaxCode, setCustomerTaxCode] = useState("");
+  const [customerRepresentativeName, setCustomerRepresentativeName] =
+    useState("");
+  const [customerRepresentativeTitle, setCustomerRepresentativeTitle] =
+    useState("");
   const [customerAddress, setCustomerAddress] = useState("");
   const [customerCity, setCustomerCity] = useState("");
   const [customerCountry, setCustomerCountry] = useState("");
@@ -65,6 +69,8 @@ export function CustomerFormModal({
         setCustomerMobile(item.customerMobile || "");
         setCustomerPhone(item.customerPhone || "");
         setCustomerTaxCode(item.customerTaxCode || "");
+        setCustomerRepresentativeName(item.customerRepresentativeName || "");
+        setCustomerRepresentativeTitle(item.customerRepresentativeTitle || "");
         setCustomerAddress(item.customerAddress || "");
         setCustomerCity(item.customerCity || "");
         setCustomerCountry(item.customerCountry || "");
@@ -78,6 +84,8 @@ export function CustomerFormModal({
         setCustomerMobile("");
         setCustomerPhone("");
         setCustomerTaxCode("");
+        setCustomerRepresentativeName("");
+        setCustomerRepresentativeTitle("");
         setCustomerAddress("");
         setCustomerCity("");
         setCustomerCountry("");
@@ -121,6 +129,10 @@ export function CustomerFormModal({
           customerMobile: customerMobile.trim() || null,
           customerPhone: customerPhone.trim() || null,
           customerTaxCode: customerTaxCode.trim() || null,
+          customerRepresentativeName:
+            customerRepresentativeName.trim() || null,
+          customerRepresentativeTitle:
+            customerRepresentativeTitle.trim() || null,
           customerAddress: customerAddress.trim() || null,
           customerCity: customerCity.trim() || null,
           customerCountry: customerCountry.trim() || null,
@@ -138,6 +150,10 @@ export function CustomerFormModal({
           customerMobile: customerMobile.trim() || null,
           customerPhone: customerPhone.trim() || null,
           customerTaxCode: customerTaxCode.trim() || null,
+          customerRepresentativeName:
+            customerRepresentativeName.trim() || null,
+          customerRepresentativeTitle:
+            customerRepresentativeTitle.trim() || null,
           customerAddress: customerAddress.trim() || null,
           customerCity: customerCity.trim() || null,
           customerCountry: customerCountry.trim() || null,
@@ -292,6 +308,39 @@ export function CustomerFormModal({
                 onChange={(e) => setCustomerPhone(e.target.value)}
                 disabled={viewOnly}
                 maxLength={15}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="customerRepresentativeName">
+                Người đại diện pháp luật
+              </Label>
+              <Input
+                id="customerRepresentativeName"
+                placeholder="Họ và tên người đại diện"
+                value={customerRepresentativeName}
+                onChange={(event) =>
+                  setCustomerRepresentativeName(event.target.value)
+                }
+                disabled={viewOnly}
+                maxLength={200}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="customerRepresentativeTitle">
+                Chức danh người đại diện
+              </Label>
+              <Input
+                id="customerRepresentativeTitle"
+                placeholder="Ví dụ: Tổng giám đốc"
+                value={customerRepresentativeTitle}
+                onChange={(event) =>
+                  setCustomerRepresentativeTitle(event.target.value)
+                }
+                disabled={viewOnly}
+                maxLength={200}
               />
             </div>
           </div>

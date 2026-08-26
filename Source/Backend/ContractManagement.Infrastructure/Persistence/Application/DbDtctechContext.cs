@@ -118,6 +118,8 @@ public partial class DbDtctechContext : DbContext
 
     public virtual DbSet<TblServiceType> TblServiceTypes { get; set; }
 
+    public virtual DbSet<TblTenantLegalProfile> TblTenantLegalProfiles { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<TblContractApprovalRequest>(entity =>
@@ -1824,6 +1826,10 @@ public partial class DbDtctechContext : DbContext
             entity.Property(e => e.CustomerTaxCode)
                 .HasMaxLength(30)
                 .IsUnicode(false);
+            entity.Property(e => e.CustomerRepresentativeName)
+                .HasMaxLength(200);
+            entity.Property(e => e.CustomerRepresentativeTitle)
+                .HasMaxLength(200);
             entity.Property(e => e.CustomerWebsite).HasMaxLength(500);
             entity.Property(e => e.CustomerZipCode)
                 .HasMaxLength(15)
@@ -1972,6 +1978,19 @@ public partial class DbDtctechContext : DbContext
 
             entity.Property(e => e.FileName).HasMaxLength(300);
             entity.Property(e => e.FilePath).HasMaxLength(1000);
+            entity.Property(e => e.StorageKey)
+                .HasMaxLength(1000)
+                .IsUnicode(false);
+            entity.Property(e => e.ContentType)
+                .HasMaxLength(255)
+                .IsUnicode(false);
+            entity.Property(e => e.Sha256)
+                .HasMaxLength(64)
+                .IsUnicode(false)
+                .IsFixedLength();
+            entity.Property(e => e.TenantCode)
+                .HasMaxLength(100)
+                .IsUnicode(false);
             entity.Property(e => e.FileType)
                 .HasMaxLength(100)
                 .IsUnicode(false);
@@ -1981,6 +2000,43 @@ public partial class DbDtctechContext : DbContext
             entity.Property(e => e.UploadedDate)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
+        });
+
+        modelBuilder.Entity<TblTenantLegalProfile>(entity =>
+        {
+            entity.HasKey(x => x.TenantLegalProfileId)
+                .HasName("PK_tbl_TenantLegalProfile");
+
+            entity.ToTable("tbl_TenantLegalProfile", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_tbl_TenantLegalProfile_Singleton",
+                    "[TenantLegalProfileId] = 1");
+                table.HasCheckConstraint(
+                    "CK_tbl_TenantLegalProfile_Employees",
+                    "[CreatedByEmployeeId] > 0 AND [UpdatedByEmployeeId] > 0");
+            });
+
+            entity.Property(x => x.TenantLegalProfileId)
+                .ValueGeneratedNever();
+            entity.Property(x => x.LegalEntityName)
+                .HasMaxLength(500);
+            entity.Property(x => x.TaxCode)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(x => x.Address)
+                .HasMaxLength(2000);
+            entity.Property(x => x.RepresentativeName)
+                .HasMaxLength(200);
+            entity.Property(x => x.RepresentativeTitle)
+                .HasMaxLength(200);
+            entity.Property(x => x.CreatedAt)
+                .HasColumnType("datetime2");
+            entity.Property(x => x.UpdatedAt)
+                .HasColumnType("datetime2");
+            entity.Property(x => x.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
         });
 
         modelBuilder.Entity<TblInvoice>(entity =>

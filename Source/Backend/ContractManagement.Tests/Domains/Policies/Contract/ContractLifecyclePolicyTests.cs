@@ -39,6 +39,10 @@ namespace ContractManagement.Tests.Domains.Policies.Contract
             ContractStatus.PendingSignature,
             true)]
         [InlineData(
+            ContractStatus.PendingApproval,
+            ContractStatus.Cancelled,
+            false)]
+        [InlineData(
             ContractStatus.PendingSignature,
             ContractStatus.Signed,
             true)]

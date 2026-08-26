@@ -47,7 +47,8 @@ namespace ContractManagement.Domains.Controllers.Quotation
             // Nếu service throw exception, middleware sẽ tự bắt.
             var result = await _service.CreateQuotationAsync(
                 request,
-                currentEmployeeId.Value);
+                currentEmployeeId ?? throw new UnauthorizedAccessException(
+                    "Không xác định được nhân viên đăng nhập."));
 
             // 4. Trả response chuẩn cho frontend.
             return CreatedAtAction(

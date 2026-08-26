@@ -31,6 +31,12 @@ namespace ContractManagement.API.Domains.DTOs.Requests.Customer
         [MaxLength(30)]
         public string? CustomerTaxCode { get; set; }
 
+        [MaxLength(200)]
+        public string? CustomerRepresentativeName { get; set; }
+
+        [MaxLength(200)]
+        public string? CustomerRepresentativeTitle { get; set; }
+
         [MaxLength(2000)]
         public string? CustomerAddress { get; set; }
 

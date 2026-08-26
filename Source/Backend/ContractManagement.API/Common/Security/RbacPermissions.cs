@@ -27,6 +27,7 @@ public static class RbacPermissions
     public const string ContractAuditReadOwn = "contract-audit.read.own";
     public const string ContractAuditReadTenant = "contract-audit.read.tenant";
     public const string SecurityAuditReadTenant = "security-audit.read.tenant";
+    public const string TenantLegalProfileManage = "tenant.legal-profile.manage";
     public const string FileAccessByResource = "file.access-by-resource";
 }
 
@@ -69,7 +70,8 @@ public static class EmployeePermissionCatalog
                 RbacPermissions.ContractReadTenant,
                 RbacPermissions.ContractSupport,
                 RbacPermissions.ContractAuditReadTenant,
-                RbacPermissions.SecurityAuditReadTenant)
+                RbacPermissions.SecurityAuditReadTenant,
+                RbacPermissions.TenantLegalProfileManage)
         };
 
     public static bool TryGetPermissions(

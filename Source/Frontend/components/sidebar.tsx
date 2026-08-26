@@ -123,6 +123,12 @@ const navItems: NavItem[] = [
     href: "/admin/departments",
     requiredPermissions: [RBAC_PERMISSIONS.departmentManage],
   },
+  {
+    label: "Hồ sơ pháp lý",
+    icon: Building2,
+    href: "/admin/legal-profile",
+    requiredPermissions: [RBAC_PERMISSIONS.tenantLegalProfileManage],
+  },
   { label: "Cấu hình", icon: Settings, href: "/dashboard/settings" },
 ];
 

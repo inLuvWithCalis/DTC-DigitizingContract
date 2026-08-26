@@ -223,7 +223,7 @@ namespace ContractManagement.Domains.Services.Quotation
 
                     QuatationStatus =
                         reader.IsDBNull(reader.GetOrdinal("QuatationStatus"))
-                            ? null
+                            ? string.Empty
                             : reader.GetString(reader.GetOrdinal("QuatationStatus"))
                 };
 

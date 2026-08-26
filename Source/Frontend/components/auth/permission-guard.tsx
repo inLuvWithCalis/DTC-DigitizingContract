@@ -97,6 +97,10 @@ const PERMISSION_METADATA: Record<string, { title: string; category: string }> =
       title: "Xem nhật ký bảo mật hệ thống",
       category: "Bảo mật",
     },
+    [RBAC_PERMISSIONS.tenantLegalProfileManage]: {
+      title: "Quản lý hồ sơ pháp lý doanh nghiệp",
+      category: "Tổ chức",
+    },
     [RBAC_PERMISSIONS.fileAccessByResource]: {
       title: "Truy cập tệp tin đính kèm",
       category: "Tài liệu",

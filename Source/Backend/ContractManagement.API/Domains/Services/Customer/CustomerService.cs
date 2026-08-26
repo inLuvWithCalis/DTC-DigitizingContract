@@ -111,6 +111,9 @@ namespace ContractManagement.API.Domains.Services.Customer
                     CustomerCode = x.CustomerCode,
                     CustomerFullName = x.CustomerFullName,
                     CustomerCompany = x.CustomerCompany,
+                    CustomerTaxCode = x.CustomerTaxCode,
+                    CustomerMobile = x.CustomerMobile,
+                    CustomerPhone = x.CustomerPhone,
                     Status = x.Status
                 })
                 .ToListAsync(cancellationToken);
@@ -161,6 +164,8 @@ namespace ContractManagement.API.Domains.Services.Customer
                 CustomerMobile = request.CustomerMobile?.Trim(),
                 CustomerPhone = request.CustomerPhone?.Trim(),
                 CustomerTaxCode = request.CustomerTaxCode?.Trim(),
+                CustomerRepresentativeName = request.CustomerRepresentativeName?.Trim(),
+                CustomerRepresentativeTitle = request.CustomerRepresentativeTitle?.Trim(),
                 CustomerAddress = request.CustomerAddress?.Trim(),
                 CustomerCity = request.CustomerCity?.Trim(),
                 CustomerCountry = request.CustomerCountry?.Trim(),
@@ -216,6 +221,8 @@ namespace ContractManagement.API.Domains.Services.Customer
             customer.CustomerMobile = request.CustomerMobile?.Trim();
             customer.CustomerPhone = request.CustomerPhone?.Trim();
             customer.CustomerTaxCode = request.CustomerTaxCode?.Trim();
+            customer.CustomerRepresentativeName = request.CustomerRepresentativeName?.Trim();
+            customer.CustomerRepresentativeTitle = request.CustomerRepresentativeTitle?.Trim();
             customer.CustomerAddress = request.CustomerAddress?.Trim();
             customer.CustomerCity = request.CustomerCity?.Trim();
             customer.CustomerCountry = request.CustomerCountry?.Trim();
@@ -289,6 +296,8 @@ namespace ContractManagement.API.Domains.Services.Customer
                 CustomerMobile = customer.CustomerMobile,
                 CustomerPhone = customer.CustomerPhone,
                 CustomerTaxCode = customer.CustomerTaxCode,
+                CustomerRepresentativeName = customer.CustomerRepresentativeName,
+                CustomerRepresentativeTitle = customer.CustomerRepresentativeTitle,
                 CustomerAddress = customer.CustomerAddress,
                 CustomerCity = customer.CustomerCity,
                 CustomerCountry = customer.CustomerCountry,

@@ -269,6 +269,8 @@ function CustomerDetailPageContent() {
     customerMobile: "",
     customerPhone: "",
     customerTaxCode: "",
+    customerRepresentativeName: "",
+    customerRepresentativeTitle: "",
     customerAddress: "",
     customerCity: "",
     customerCountry: "",
@@ -294,6 +296,8 @@ function CustomerDetailPageContent() {
         customerMobile: res.customerMobile,
         customerPhone: res.customerPhone,
         customerTaxCode: res.customerTaxCode,
+        customerRepresentativeName: res.customerRepresentativeName,
+        customerRepresentativeTitle: res.customerRepresentativeTitle,
         customerAddress: res.customerAddress,
         customerCity: res.customerCity,
         customerCountry: res.customerCountry,
@@ -520,6 +524,43 @@ function CustomerDetailPageContent() {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="grid gap-2">
                     <Label className="text-xs font-semibold uppercase text-muted-foreground">
+                      Người đại diện pháp luật
+                    </Label>
+                    <Input
+                      readOnly={!isEditingProfile}
+                      className={`h-9 ${!isEditingProfile ? "bg-muted/40 border-transparent shadow-none cursor-default font-medium text-foreground focus-visible:ring-0" : ""}`}
+                      placeholder="Họ và tên người đại diện"
+                      value={formData.customerRepresentativeName ?? ""}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          customerRepresentativeName: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label className="text-xs font-semibold uppercase text-muted-foreground">
+                      Chức danh
+                    </Label>
+                    <Input
+                      readOnly={!isEditingProfile}
+                      className={`h-9 ${!isEditingProfile ? "bg-muted/40 border-transparent shadow-none cursor-default font-medium text-foreground focus-visible:ring-0" : ""}`}
+                      placeholder="VD: Giám đốc"
+                      value={formData.customerRepresentativeTitle ?? ""}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          customerRepresentativeTitle: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label className="text-xs font-semibold uppercase text-muted-foreground">
                       Số di động
                     </Label>
                     <div className="relative">
@@ -684,6 +725,10 @@ function CustomerDetailPageContent() {
                             customerMobile: customer.customerMobile,
                             customerPhone: customer.customerPhone,
                             customerTaxCode: customer.customerTaxCode,
+                            customerRepresentativeName:
+                              customer.customerRepresentativeName,
+                            customerRepresentativeTitle:
+                              customer.customerRepresentativeTitle,
                             customerAddress: customer.customerAddress,
                             customerCity: customer.customerCity,
                             customerCountry: customer.customerCountry,

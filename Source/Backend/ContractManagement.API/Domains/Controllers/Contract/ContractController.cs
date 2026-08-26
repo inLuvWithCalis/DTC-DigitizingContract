@@ -720,7 +720,7 @@ namespace ContractManagement.Domains.Controllers.Contract
 
         /// <summary>
         /// Sinh DOCX xem trước từ template và dữ liệu thật của version hiện hành.
-        /// Chỉ owner của hợp đồng SoftwareSupply đang Negotiating được sử dụng.
+        /// Chỉ owner của hợp đồng SoftwareSupply đang Draft hoặc Negotiating được sử dụng.
         /// </summary>
         [HttpGet("{contractId:int}/preview/docx")]
         [SessionAuthorize(RbacPermissions.ContractManageOwn)]

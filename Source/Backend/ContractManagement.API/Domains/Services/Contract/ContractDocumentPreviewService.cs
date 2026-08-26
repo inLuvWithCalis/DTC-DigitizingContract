@@ -183,10 +183,11 @@ public sealed class ContractDocumentPreviewService : IContractDocumentPreviewSer
 
     private static void EnsurePreviewPolicy(TblContract contract)
     {
-        if (contract.Status != (byte)ContractStatus.Negotiating)
+        if ((ContractStatus)contract.Status is not (
+            ContractStatus.Draft or ContractStatus.Negotiating))
         {
             throw new InvalidOperationException(
-                "Chỉ hợp đồng đang đàm phán mới được tạo bản preview động.");
+                "Chỉ hợp đồng nháp hoặc đang đàm phán mới được tạo bản preview động.");
         }
 
         if (contract.ContractType != (byte)ContractType.SoftwareSupply)

@@ -224,6 +224,7 @@ export default function CreateContractPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdContract, setCreatedContract] =
     useState<CreateContractResponse | null>(null);
+  const [isOpeningPreview, setIsOpeningPreview] = useState(false);
   const [customerId, setCustomerId] = useState<string>("");
   const [responsibleEmployeeId, setResponsibleEmployeeId] =
     useState<string>("");
@@ -1004,16 +1005,49 @@ export default function CreateContractPage() {
   };
 
   const goToCreatedContractDetails = () => {
-    if (!createdContract) return;
+    if (!createdContract || isOpeningPreview) return;
 
     const contractId = createdContract.contractId;
     setCreatedContract(null);
     router.push(`/contracts/${contractId}#terms`);
   };
 
-  const goToContractsList = () => {
-    setCreatedContract(null);
-    router.push("/contracts");
+  const openContractPdfAndGoToDetails = async () => {
+    if (!createdContract || isOpeningPreview) return;
+
+    const { contractId } = createdContract;
+    const previewWindow = window.open("about:blank", "_blank");
+
+    if (!previewWindow) {
+      toast.error(
+        "Trình duyệt đã chặn tab xem trước. Vui lòng cho phép cửa sổ bật lên.",
+      );
+      return;
+    }
+
+    previewWindow.opener = null;
+    previewWindow.document.title = "Đang tải bản xem trước...";
+    previewWindow.document.body.textContent = "Đang tải bản PDF xem trước...";
+
+    setIsOpeningPreview(true);
+    try {
+      const pdf = await contractApi.downloadPreviewPdf(contractId);
+      const pdfUrl = URL.createObjectURL(
+        pdf.type === "application/pdf"
+          ? pdf
+          : new Blob([pdf], { type: "application/pdf" }),
+      );
+      previewWindow.location.replace(pdfUrl);
+      window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000);
+    } catch (error) {
+      previewWindow.close();
+      console.error("Failed to open contract PDF preview:", error);
+      toast.error("Không thể mở bản PDF xem trước của hợp đồng.");
+    } finally {
+      setIsOpeningPreview(false);
+      setCreatedContract(null);
+      router.push(`/contracts/${contractId}#terms`);
+    }
   };
 
   return (
@@ -2390,18 +2424,19 @@ export default function CreateContractPage() {
 
       <ConfirmDialog
         isOpen={createdContract !== null}
-        onClose={goToContractsList}
-        onConfirm={goToCreatedContractDetails}
-        title="Đã tạo hợp đồng nháp"
+        onClose={goToCreatedContractDetails}
+        onConfirm={openContractPdfAndGoToDetails}
+        title="Xem trước hợp đồng nháp"
         description={
           <>
-            Sản phẩm và các điều khoản đã chỉnh sửa được lưu thành công. PDF
-            preview chỉ khả dụng sau khi bắt đầu đàm phán.
+            Hợp đồng và các điều khoản đã chỉnh sửa được lưu thành công. Bạn có
+            muốn mở bản PDF xem trước trong tab mới không?
           </>
         }
         icon={<FileText className="size-5 text-primary" />}
-        confirmText="Xem chi tiết hợp đồng"
-        cancelText="Về danh sách"
+        confirmText="Có, xem PDF"
+        cancelText="Không, xem chi tiết"
+        isLoading={isOpeningPreview}
       />
     </>
   );

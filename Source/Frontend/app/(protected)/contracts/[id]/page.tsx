@@ -504,7 +504,8 @@ export default function ContractDetailPage() {
     !isCurrentVersionShared;
   const canPreviewContractDocument =
     canManageContract &&
-    contract.status === ContractStatus.Negotiating &&
+    (contract.status === ContractStatus.Draft ||
+      contract.status === ContractStatus.Negotiating) &&
     contract.contractType === ContractType.SoftwareSupply &&
     !contract.isLegacy;
 

@@ -109,7 +109,25 @@ public sealed class ContractDocumentPreviewServiceTests
     }
 
     [Theory]
-    [InlineData(ContractStatus.Draft, ContractType.SoftwareSupply)]
+    [InlineData(ContractStatus.Draft)]
+    [InlineData(ContractStatus.Negotiating)]
+    public async Task Preview_AllowsEditableLifecycle(ContractStatus status)
+    {
+        await using var context = CreateContext();
+        var source = CreateSourceDocument();
+        await SeedAsync(context, source);
+        var contract = await context.TblContracts.SingleAsync();
+        contract.Status = (byte)status;
+        await context.SaveChangesAsync();
+        var service = CreateService(context, source);
+
+        var result = await service.GenerateDocxAsync(ContractId, OwnerId);
+
+        Assert.NotEmpty(result.Content);
+    }
+
+    [Theory]
+    [InlineData(ContractStatus.PendingApproval, ContractType.SoftwareSupply)]
     [InlineData(ContractStatus.Negotiating, ContractType.SoftwareMaintenance)]
     public async Task Preview_RejectsUnsupportedLifecycleOrContractType(
         ContractStatus status,

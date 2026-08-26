@@ -40,6 +40,7 @@ import {
   ContractItemDiscountMode,
   ContractLanguageMode,
   ContractStatus,
+  ContractType,
   getContractTypeLabel,
   UpdateContractDraftRequest,
 } from "@/services/contract-api";
@@ -48,6 +49,7 @@ import { useAuthStore } from "@/hooks/use-auth-store";
 import { hasPermission, RBAC_PERMISSIONS } from "@/lib/rbac";
 import {
   getApiErrorMessage,
+  getBlobApiErrorMessage,
   isResourceNotFound,
   isStaleRowVersion,
 } from "@/lib/api-error";
@@ -99,6 +101,7 @@ export default function ContractDetailPage() {
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
   const [isOpeningPdf, setIsOpeningPdf] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [isDownloadingDocx, setIsDownloadingDocx] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<ContractTab>("overview");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -499,6 +502,11 @@ export default function ContractDetailPage() {
       contract.status === ContractStatus.Negotiating) &&
     !contract.currentVersion.isLocked &&
     !isCurrentVersionShared;
+  const canPreviewContractDocument =
+    canManageContract &&
+    contract.status === ContractStatus.Negotiating &&
+    contract.contractType === ContractType.SoftwareSupply &&
+    !contract.isLegacy;
 
   const viewContractPdf = async () => {
     if (isOpeningPdf) return;
@@ -527,7 +535,12 @@ export default function ContractDetailPage() {
       window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000);
     } catch (error) {
       previewWindow.close();
-      toast.error(getApiErrorMessage(error, "Không thể mở bản PDF hợp đồng."));
+      toast.error(
+        await getBlobApiErrorMessage(
+          error,
+          "Không thể mở bản PDF hợp đồng.",
+        ),
+      );
     } finally {
       setIsOpeningPdf(false);
     }
@@ -541,12 +554,39 @@ export default function ContractDetailPage() {
       const blob = await contractApi.downloadPreviewPdf(contract.contractId);
       downloadBlob(
         blob,
-        `${contract.contractCode || `contract-${contract.contractId}`}.pdf`,
+        `${contract.contractCode || `contract-${contract.contractId}`}-preview.pdf`,
       );
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Không thể tải bản PDF hợp đồng."));
+      toast.error(
+        await getBlobApiErrorMessage(
+          error,
+          "Không thể tải bản PDF hợp đồng.",
+        ),
+      );
     } finally {
       setIsDownloadingPdf(false);
+    }
+  };
+
+  const downloadContractDocx = async () => {
+    if (isDownloadingDocx) return;
+
+    try {
+      setIsDownloadingDocx(true);
+      const blob = await contractApi.downloadPreviewDocx(contract.contractId);
+      downloadBlob(
+        blob,
+        `${contract.contractCode || `contract-${contract.contractId}`}-preview.docx`,
+      );
+    } catch (error) {
+      toast.error(
+        await getBlobApiErrorMessage(
+          error,
+          "Không thể tải bản DOCX xem trước.",
+        ),
+      );
+    } finally {
+      setIsDownloadingDocx(false);
     }
   };
 
@@ -577,30 +617,46 @@ export default function ContractDetailPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              onClick={viewContractPdf}
-              disabled={isOpeningPdf}
-            >
-              {isOpeningPdf ? (
-                <Loader2 className="size-4 mr-2 animate-spin" />
-              ) : (
-                <Eye className="size-4 mr-2" />
-              )}
-              Xem hợp đồng PDF
-            </Button>
-            <Button
-              variant="outline"
-              onClick={downloadContractPdf}
-              disabled={isDownloadingPdf}
-            >
-              {isDownloadingPdf ? (
-                <Loader2 className="size-4 mr-2 animate-spin" />
-              ) : (
-                <Download className="size-4 mr-2" />
-              )}
-              Tải hợp đồng
-            </Button>
+            {canPreviewContractDocument && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={viewContractPdf}
+                  disabled={isOpeningPdf}
+                >
+                  {isOpeningPdf ? (
+                    <Loader2 className="size-4 mr-2 animate-spin" />
+                  ) : (
+                    <Eye className="size-4 mr-2" />
+                  )}
+                  Xem PDF preview
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={downloadContractDocx}
+                  disabled={isDownloadingDocx}
+                >
+                  {isDownloadingDocx ? (
+                    <Loader2 className="size-4 mr-2 animate-spin" />
+                  ) : (
+                    <FileText className="size-4 mr-2" />
+                  )}
+                  Tải DOCX preview
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={downloadContractPdf}
+                  disabled={isDownloadingPdf}
+                >
+                  {isDownloadingPdf ? (
+                    <Loader2 className="size-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="size-4 mr-2" />
+                  )}
+                  Tải PDF preview
+                </Button>
+              </>
+            )}
             {canUpdateDraft && (
               <Button
                 variant="outline"

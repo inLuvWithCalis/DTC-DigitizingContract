@@ -1,8 +1,8 @@
 namespace ContractManagement.Domains.Interfaces.ContractTemplate;
 
 /// <summary>
-/// Converts an already-rendered, fixed-dataset DOCX preview to its immutable
-/// PDF counterpart. It never receives a real Contract document.
+/// Converts an already-rendered DOCX to PDF. The converter has no database or
+/// placeholder knowledge, so template preview and contract preview can share it.
 /// </summary>
 public interface IContractTemplatePdfRenderer
 {

@@ -257,10 +257,10 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                 item.Type,
                 item.Description,
                 FormatQuantity(item.Quantity),
-                FormatMoney(item.UnitPrice),
+                FormatMoney(item.UnitPrice, renderData.CurrencyCode),
                 item.Discount,
                 item.Vat,
-                FormatMoney(item.TotalAmount)
+                FormatMoney(item.TotalAmount, renderData.CurrencyCode)
             ]));
 
         var total = renderData.Items.Sum(item => item.TotalAmount);
@@ -273,7 +273,7 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
             string.Empty,
             string.Empty,
             "TỔNG CỘNG",
-            FormatMoney(total)
+            FormatMoney(total, renderData.CurrencyCode)
         ]);
 
         return CreateTable(rows, headerRow: true);
@@ -296,7 +296,7 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                 payment.No.ToString(),
                 payment.Description,
                 payment.Percent,
-                FormatMoney(payment.Amount),
+                FormatMoney(payment.Amount, renderData.CurrencyCode),
                 payment.DueCondition
             ]));
         if (renderData.Payments.Count == 0)
@@ -494,8 +494,8 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
             "PreviewLayoutUnsupported",
             $"Placeholder động {key} phải đứng một mình trong paragraph của main document.");
 
-    private static string FormatMoney(decimal value) =>
-        $"{value:N0} VND".Replace(',', '.');
+    private static string FormatMoney(decimal value, string currencyCode) =>
+        $"{value:N0} {currencyCode}".Replace(',', '.');
 
     private static string FormatQuantity(decimal value) =>
         value == decimal.Truncate(value) ? value.ToString("0") : value.ToString("0.##");

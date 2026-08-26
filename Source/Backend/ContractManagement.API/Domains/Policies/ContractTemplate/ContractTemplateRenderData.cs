@@ -11,7 +11,8 @@ public sealed record ContractTemplateRenderData(
     IReadOnlyList<ContractTemplateRenderTerm> Terms,
     ContractTemplateRenderSignature ProviderSignature,
     ContractTemplateRenderSignature CustomerSignature,
-    string Notice);
+    string Notice,
+    string CurrencyCode = "VND");
 
 public sealed record ContractTemplateRenderItem(
     int No,

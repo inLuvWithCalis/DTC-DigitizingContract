@@ -719,24 +719,52 @@ namespace ContractManagement.Domains.Controllers.Contract
         }
 
         /// <summary>
-        /// Sinh PDF xem trước từ DOCX template và dữ liệu thật của version hiện hành.
-        /// PDF được tạo theo yêu cầu, không dùng published preview chứa dữ liệu mẫu.
+        /// Sinh DOCX xem trước từ template và dữ liệu thật của version hiện hành.
+        /// Chỉ owner của hợp đồng SoftwareSupply đang Negotiating được sử dụng.
+        /// </summary>
+        [HttpGet("{contractId:int}/preview/docx")]
+        [SessionAuthorize(RbacPermissions.ContractManageOwn)]
+        [Produces("application/vnd.openxmlformats-officedocument.wordprocessingml.document")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> DownloadPreviewDocx(int contractId)
+        {
+            var result = await _documentPreviewService.GenerateDocxAsync(
+                contractId,
+                GetEmployeeId(),
+                HttpContext.RequestAborted);
+
+            Response.Headers.CacheControl = "no-store, private";
+            Response.Headers.Pragma = "no-cache";
+            return File(result.Content, result.ContentType, result.FileName);
+        }
+
+        /// <summary>
+        /// Sinh PDF từ chính DOCX preview động của version hiện hành.
+        /// Không dùng published template preview chứa dữ liệu mẫu.
         /// </summary>
         [HttpGet("{contractId:int}/preview/pdf")]
+        [SessionAuthorize(RbacPermissions.ContractManageOwn)]
         [Produces("application/pdf")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
         public async Task<IActionResult> DownloadPreviewPdf(int contractId)
         {
             var result = await _documentPreviewService.GeneratePdfAsync(
                 contractId,
                 GetEmployeeId(),
-                CanReadTenantContracts(),
                 HttpContext.RequestAborted);
 
-            return File(result.Content, "application/pdf", result.FileName);
+            Response.Headers.CacheControl = "no-store, private";
+            Response.Headers.Pragma = "no-cache";
+            return File(result.Content, result.ContentType, result.FileName);
         }
 
         /// <summary>

@@ -58,6 +58,36 @@ export const getApiErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
+/**
+ * Download endpoints use responseType=blob, including for JSON error bodies.
+ * Decode that JSON locally without changing the global axios interceptor.
+ */
+export const getBlobApiErrorMessage = async (
+  error: unknown,
+  fallback: string,
+) => {
+  if (
+    axios.isAxiosError(error) &&
+    typeof Blob !== "undefined" &&
+    error.response?.data instanceof Blob
+  ) {
+    try {
+      const text = await error.response.data.text();
+      const payload = JSON.parse(text) as ErrorPayload;
+      if (typeof payload.message === "string" && payload.message.trim()) {
+        return payload.message;
+      }
+      if (typeof payload.title === "string" && payload.title.trim()) {
+        return payload.title;
+      }
+    } catch {
+      // Fall through to the regular Axios/fallback message.
+    }
+  }
+
+  return getApiErrorMessage(error, fallback);
+};
+
 export const hasApiErrorCode = (error: unknown, code: AuthorizationErrorCode) =>
   getApiErrorCode(error) === code;
 

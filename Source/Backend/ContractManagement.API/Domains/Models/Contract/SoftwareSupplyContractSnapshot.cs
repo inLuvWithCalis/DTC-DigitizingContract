@@ -38,6 +38,7 @@ public sealed record ContractLegalSnapshot(
     string? ContractNameEn,
     byte ContractType,
     int? TemplateVersionId,
+    DateTime CreatedDate,
     DateTime? SignDate,
     DateTime? EffectiveDate,
     DateTime? ExpireDate,
@@ -94,7 +95,7 @@ public sealed record ContractTermLegalSnapshot(
 
 public static class SoftwareSupplyContractSnapshotFactory
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
@@ -150,6 +151,7 @@ public static class SoftwareSupplyContractSnapshotFactory
                 contract.ContractNameEn?.Trim(),
                 contract.ContractType,
                 contract.TemplateVersionId,
+                contract.CreatedDate,
                 contract.SignDate,
                 contract.EffectiveDate,
                 contract.ExpireDate,

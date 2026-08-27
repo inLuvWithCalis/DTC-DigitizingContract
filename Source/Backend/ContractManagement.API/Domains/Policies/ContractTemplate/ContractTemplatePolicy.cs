@@ -131,6 +131,30 @@ public static class ContractTemplatePolicy
     }
 
     /// <summary>
+    /// Published hiện hành có thể làm nguồn cho Draft kế tiếp.
+    /// Khi template không còn Published hiện hành, chỉ Retired mới nhất được
+    /// dùng làm nguồn và chỉ khi chưa có Draft đang làm việc.
+    /// Retired nguồn vẫn bất biến, không phải transition ngược về Draft.
+    /// </summary>
+    public static bool CanCreateDraftFromSource(
+        TemplateVersionStatus sourceStatus,
+        bool isCurrentPublished,
+        bool hasCurrentPublished,
+        bool isLatestRetired,
+        bool hasExistingDraft)
+    {
+        if (sourceStatus == TemplateVersionStatus.Published)
+        {
+            return isCurrentPublished;
+        }
+
+        return sourceStatus == TemplateVersionStatus.Retired
+            && !hasCurrentPublished
+            && isLatestRetired
+            && !hasExistingDraft;
+    }
+
+    /// <summary>
     /// Kiểm tra toàn bộ điều kiện dữ liệu để publish.
     ///
     /// CanTransition chỉ kiểm tra đường đi giữa hai trạng thái.

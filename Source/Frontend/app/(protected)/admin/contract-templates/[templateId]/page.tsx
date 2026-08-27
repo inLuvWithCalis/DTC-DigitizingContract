@@ -86,6 +86,12 @@ export default function ContractTemplateDetailPage() {
       [...(template?.versions ?? [])].sort((a, b) => b.versionNo - a.versionNo),
     [template?.versions],
   );
+  const hasDraft = versions.some(
+    (version) => version.status === TemplateVersionStatus.Draft,
+  );
+  const latestRetiredVersionId = versions.find(
+    (version) => version.status === TemplateVersionStatus.Retired,
+  )?.templateVersionId;
 
   const handleCopy = async () => {
     if (!copySource) return;
@@ -228,6 +234,13 @@ export default function ContractTemplateDetailPage() {
                     const isCurrentPublished =
                       template.currentPublishedVersionId ===
                       version.templateVersionId;
+                    const canCreateDraft =
+                      (version.status === TemplateVersionStatus.Published &&
+                        isCurrentPublished) ||
+                      (version.status === TemplateVersionStatus.Retired &&
+                        !template.currentPublishedVersionId &&
+                        !hasDraft &&
+                        version.templateVersionId === latestRetiredVersionId);
                     return (
                       <div
                         key={version.templateVersionId}
@@ -261,19 +274,18 @@ export default function ContractTemplateDetailPage() {
                               Mở workspace
                             </Link>
                           </Button>
-                          {version.status === TemplateVersionStatus.Published &&
-                            isCurrentPublished && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setCopySource(version);
-                                  setChangeNote("");
-                                }}
-                              >
-                                <Copy className="size-4" /> Tạo bản nháp mới
-                              </Button>
-                            )}
+                          {canCreateDraft && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setCopySource(version);
+                                setChangeNote("");
+                              }}
+                            >
+                              <Copy className="size-4" /> Tạo bản nháp mới
+                            </Button>
+                          )}
                         </div>
                       </div>
                     );
@@ -305,8 +317,8 @@ export default function ContractTemplateDetailPage() {
           <DialogHeader>
             <DialogTitle>Tạo bản nháp mới</DialogTitle>
             <DialogDescription>
-              Soft terms sẽ được sao chép; DOCX, validation và preview phải thực
-              hiện lại.
+              Version nguồn vẫn giữ nguyên và chỉ ở chế độ đọc. Soft terms sẽ
+              được sao chép; DOCX, validation và preview phải thực hiện lại.
             </DialogDescription>
           </DialogHeader>
           <Textarea

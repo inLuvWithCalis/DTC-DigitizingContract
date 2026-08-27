@@ -28,6 +28,7 @@ export function ContractTerms({
   contract,
   setContract,
   canEdit,
+  canComment,
   onDraftChange,
 }: {
   contract: ContractDetailResponse;
@@ -35,6 +36,7 @@ export function ContractTerms({
     React.SetStateAction<ContractDetailResponse | null>
   >;
   canEdit: boolean;
+  canComment: boolean;
   onDraftChange?: () => void;
 }) {
   const isEditable = canEdit;
@@ -251,11 +253,7 @@ export function ContractTerms({
                     termCode={term.termCode}
                     termTitle={term.termTitle}
                     comments={contract.currentVersion.comments || []}
-                    canWrite={
-                      canEdit &&
-                      contract.status === ContractStatus.Negotiating &&
-                      !contract.currentVersion.isLocked
-                    }
+                    canWrite={canComment}
                     onCommentChanged={handleCommentChanged}
                   />
                 )}

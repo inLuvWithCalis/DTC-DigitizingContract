@@ -227,12 +227,13 @@ public sealed class ContractTemplateController : ControllerBase
     }
 
     /// <summary>
-    /// POST /api/contract-templates/versions/{sourceVersionId}/copy - tạo Draft mới từ Published hiện hành.
+    /// POST /api/contract-templates/versions/{sourceVersionId}/copy - tạo Draft mới từ version bất biến.
     /// </summary>
     /// <remarks>
-    /// Luồng: chỉ chấp nhận source là CurrentPublishedVersion, kiểm tra source RowVersion, tạo
+    /// Luồng: chấp nhận CurrentPublishedVersion, hoặc Retired mới nhất khi mẫu không còn bản
+    /// Published hiện hành và chưa có Draft. Sau khi kiểm tra source RowVersion, hệ thống tạo
     /// VersionNo tiếp theo và copy soft terms trong một transaction. File, hash, validation và
-    /// extraction cũ không được copy; source Published vẫn giữ nguyên.
+    /// extraction cũ không được copy; source Published/Retired vẫn giữ nguyên và bất biến.
     /// </remarks>
     [HttpPost("versions/{sourceVersionId:int}/copy")]
     public async Task<IActionResult> CopyVersion(

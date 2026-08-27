@@ -200,6 +200,45 @@ public class ContractTemplatePolicyTests
                 TemplateVersionStatus.Published));
     }
 
+    [Fact]
+    public void CanCreateDraftFromSource_CurrentPublished_ReturnsTrue()
+    {
+        Assert.True(ContractTemplatePolicy.CanCreateDraftFromSource(
+            TemplateVersionStatus.Published,
+            isCurrentPublished: true,
+            hasCurrentPublished: true,
+            isLatestRetired: false,
+            hasExistingDraft: true));
+    }
+
+    [Fact]
+    public void CanCreateDraftFromSource_LatestRetiredWithoutPublishedOrDraft_ReturnsTrue()
+    {
+        Assert.True(ContractTemplatePolicy.CanCreateDraftFromSource(
+            TemplateVersionStatus.Retired,
+            isCurrentPublished: false,
+            hasCurrentPublished: false,
+            isLatestRetired: true,
+            hasExistingDraft: false));
+    }
+
+    [Theory]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, true)]
+    public void CanCreateDraftFromSource_IneligibleRetired_ReturnsFalse(
+        bool hasCurrentPublished,
+        bool isLatestRetired,
+        bool hasExistingDraft)
+    {
+        Assert.False(ContractTemplatePolicy.CanCreateDraftFromSource(
+            TemplateVersionStatus.Retired,
+            isCurrentPublished: false,
+            hasCurrentPublished,
+            isLatestRetired,
+            hasExistingDraft));
+    }
+
     // =========================================================
     // PUBLISH GATE
     // =========================================================

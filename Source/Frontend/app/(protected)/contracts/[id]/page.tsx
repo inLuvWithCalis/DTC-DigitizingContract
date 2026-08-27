@@ -503,6 +503,10 @@ export default function ContractDetailPage() {
       contract.status === ContractStatus.Negotiating) &&
     !contract.currentVersion.isLocked &&
     !isCurrentVersionShared;
+  const canCommentOnCurrentVersion =
+    canManageContract &&
+    contract.status === ContractStatus.Negotiating &&
+    !contract.currentVersion.isLocked;
   const canPreviewContractDocument =
     canManageContract &&
     (contract.status === ContractStatus.Draft ||
@@ -811,6 +815,7 @@ export default function ContractDetailPage() {
               contract={contract}
               setContract={setContract}
               canEdit={canUpdateDraft}
+              canComment={canCommentOnCurrentVersion}
               onDraftChange={() => setHasUnsavedChanges(true)}
             />
           </TabsContent>

@@ -194,6 +194,86 @@ public sealed class ContractTemplateServiceTests
     }
 
     [Fact]
+    public async Task LatestRetiredWithoutCurrentPublished_CanCreateOneNewDraft()
+    {
+        await using var context = CreateContext();
+        await SeedEmployeesAsync(context);
+        await SeedPublishedTemplateAsync(context);
+        var source = await context.TblContractTemplateVersions
+            .SingleAsync(version => version.TemplateVersionId == 2);
+        var template = await context.TblContractTemplates
+            .SingleAsync(item => item.TemplateId == source.TemplateId);
+        source.Status = (byte)TemplateVersionStatus.Retired;
+        template.CurrentPublishedVersionId = null;
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context);
+        var copy = await service.CopyVersionAsync(
+            source.TemplateVersionId,
+            new CopyContractTemplateVersionRequest
+            {
+                RowVersion = Encode(source.RowVersion),
+                ChangeNote = "Khôi phục mẫu thành bản nháp mới"
+            },
+            AdminOfficerId);
+
+        Assert.Equal(2, copy.VersionNo);
+        Assert.Equal(TemplateVersionStatus.Draft, copy.Status);
+        Assert.Equal(TemplateValidationStatus.NotValidated, copy.ValidationStatus);
+        Assert.Null(copy.DocumentFileId);
+        Assert.Null(copy.DocumentHash);
+        Assert.Equal("PAYMENT", Assert.Single(copy.Terms).TermCode);
+        Assert.Equal(
+            TemplateVersionStatus.Retired,
+            (TemplateVersionStatus)source.Status);
+        Assert.Null(template.CurrentPublishedVersionId);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CopyVersionAsync(
+                source.TemplateVersionId,
+                new CopyContractTemplateVersionRequest
+                {
+                    RowVersion = Encode(source.RowVersion)
+                },
+                AdminOfficerId));
+    }
+
+    [Fact]
+    public async Task OlderRetiredVersion_CannotCreateDraft()
+    {
+        await using var context = CreateContext();
+        await SeedEmployeesAsync(context);
+        await SeedPublishedTemplateAsync(context);
+        var source = await context.TblContractTemplateVersions
+            .SingleAsync(version => version.TemplateVersionId == 2);
+        var template = await context.TblContractTemplates
+            .SingleAsync(item => item.TemplateId == source.TemplateId);
+        source.Status = (byte)TemplateVersionStatus.Retired;
+        template.CurrentPublishedVersionId = null;
+        context.TblContractTemplateVersions.Add(new TblContractTemplateVersion
+        {
+            TemplateVersionId = 4,
+            TemplateId = template.TemplateId,
+            VersionNo = 2,
+            Status = (byte)TemplateVersionStatus.Retired,
+            ValidationStatus = (byte)TemplateValidationStatus.Valid,
+            CreatedEmployeeId = AdminOfficerId,
+            CreatedDate = DateTime.UtcNow,
+            RowVersion = [4, 4, 4, 4, 4, 4, 4, 4]
+        });
+        await context.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CreateService(context).CopyVersionAsync(
+                source.TemplateVersionId,
+                new CopyContractTemplateVersionRequest
+                {
+                    RowVersion = Encode(source.RowVersion)
+                },
+                AdminOfficerId));
+    }
+
+    [Fact]
     public async Task AvailableLookup_ReturnsOnlyActiveCurrentPublishedVersions()
     {
         await using var context = CreateContext();

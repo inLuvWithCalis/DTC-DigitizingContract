@@ -368,6 +368,23 @@ export default function ContractTemplateVersionWorkspacePage() {
   const hasTerms = Boolean(version?.terms.length);
   const canGeneratePreview = Boolean(isDraft && hasDocument && isDocumentValid);
   const canPublish = Boolean(canGeneratePreview && hasPreview && hasTerms);
+  const templateHasDraft = Boolean(
+    template?.versions.some(
+      (candidate) => candidate.status === TemplateVersionStatus.Draft,
+    ),
+  );
+  const latestRetiredVersionId = [...(template?.versions ?? [])]
+    .filter(
+      (candidate) => candidate.status === TemplateVersionStatus.Retired,
+    )
+    .sort((left, right) => right.versionNo - left.versionNo)[0]
+    ?.templateVersionId;
+  const canCreateDraftFromRetired = Boolean(
+    version?.status === TemplateVersionStatus.Retired &&
+      !template?.currentPublishedVersionId &&
+      !templateHasDraft &&
+      version.templateVersionId === latestRetiredVersionId,
+  );
   const validationMessages = parseValidationMessages(
     version?.validationMessage,
   );
@@ -774,9 +791,19 @@ export default function ContractTemplateVersionWorkspacePage() {
                         </Button>
                       )}
                       {version.status === TemplateVersionStatus.Retired && (
-                        <p className="text-sm text-muted-foreground">
-                          Version này đã ngừng sử dụng và chỉ còn chế độ xem.
-                        </p>
+                        <div className="space-y-3">
+                          <p className="text-sm text-muted-foreground">
+                            Version này đã ngừng sử dụng, vẫn bất biến và chỉ
+                            còn chế độ xem.
+                          </p>
+                          {canCreateDraftFromRetired && (
+                            <Button asChild className="w-full" variant="outline">
+                              <Link href={`/admin/contract-templates/${templateId}`}>
+                                Quản lý và tạo bản nháp mới
+                              </Link>
+                            </Button>
+                          )}
+                        </div>
                       )}
                       <p className="text-xs text-muted-foreground">
                         Khi phát hành, version đang hiện hành trước đó của mẫu
@@ -805,7 +832,7 @@ export default function ContractTemplateVersionWorkspacePage() {
         onClose={() => setIsRetireOpen(false)}
         onConfirm={retireVersion}
         title="Ngừng sử dụng phiên bản?"
-        description="Phiên bản sẽ không còn là bản hiện hành và không thể chỉnh sửa lại."
+        description="Phiên bản sẽ không còn là bản hiện hành và không thể chỉnh sửa lại. Sau đó có thể sao chép bản Retired này thành một Draft mới nếu cần tiếp tục sử dụng mẫu."
         confirmText="Ngừng sử dụng"
         variant="destructive"
         isLoading={isRetiring}

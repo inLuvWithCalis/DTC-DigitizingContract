@@ -461,11 +461,33 @@ public sealed class ContractTemplateService : IContractTemplateService
             var template = await GetTemplateAsync(
                 source.TemplateId,
                 cancellationToken);
-            if (source.Status != (byte)TemplateVersionStatus.Published
-                || template.CurrentPublishedVersionId != source.TemplateVersionId)
+            var latestRetiredVersionId = await _dbContext
+                .TblContractTemplateVersions
+                .AsNoTracking()
+                .Where(version =>
+                    version.TemplateId == template.TemplateId
+                    && version.Status == (byte)TemplateVersionStatus.Retired)
+                .OrderByDescending(version => version.VersionNo)
+                .ThenByDescending(version => version.TemplateVersionId)
+                .Select(version => (int?)version.TemplateVersionId)
+                .FirstOrDefaultAsync(cancellationToken);
+            var hasExistingDraft = await _dbContext
+                .TblContractTemplateVersions
+                .AsNoTracking()
+                .AnyAsync(version =>
+                    version.TemplateId == template.TemplateId
+                    && version.Status == (byte)TemplateVersionStatus.Draft,
+                    cancellationToken);
+            var canCreateDraft = ContractTemplatePolicy.CanCreateDraftFromSource(
+                (TemplateVersionStatus)source.Status,
+                template.CurrentPublishedVersionId == source.TemplateVersionId,
+                template.CurrentPublishedVersionId.HasValue,
+                latestRetiredVersionId == source.TemplateVersionId,
+                hasExistingDraft);
+            if (!canCreateDraft)
             {
                 throw new InvalidOperationException(
-                    "Chỉ CurrentPublishedVersion của template mới được copy.");
+                    "Chỉ bản Published hiện hành hoặc bản Retired mới nhất của mẫu không còn bản phát hành mới được dùng để tạo Draft. Mẫu không được có Draft đang làm việc.");
             }
 
             EnsureRowVersionMatches(

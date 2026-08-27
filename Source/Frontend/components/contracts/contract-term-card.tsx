@@ -143,8 +143,7 @@ export function ContractTermCard({
         <div className="grid gap-4">
           <div className="space-y-2">
             <Label htmlFor={`term-title-${inputId}`}>
-              Tiêu đề điều khoản{" "}
-              <span className="text-destructive">*</span>
+              Tiêu đề điều khoản <span className="text-destructive">*</span>
             </Label>
             <Input
               id={`term-title-${inputId}`}
@@ -160,7 +159,7 @@ export function ContractTermCard({
             <Textarea
               id={`term-content-${inputId}`}
               value={term.termContent ?? ""}
-              className="min-h-24 resize-y"
+              className="min-h-24 resize-y break-all"
               placeholder="Nhập nội dung điều khoản..."
               onChange={(event) =>
                 onChange?.("termContent", event.target.value)
@@ -172,8 +171,7 @@ export function ContractTermCard({
             <div className="grid gap-4 rounded-xl border border-dashed p-3">
               <div className="space-y-2">
                 <Label htmlFor={`term-title-en-${inputId}`}>
-                  Tiêu đề tiếng Anh{" "}
-                  <span className="text-destructive">*</span>
+                  Tiêu đề tiếng Anh <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   id={`term-title-en-${inputId}`}

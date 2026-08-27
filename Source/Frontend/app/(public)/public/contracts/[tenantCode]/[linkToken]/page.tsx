@@ -6,6 +6,7 @@ import {
   CalendarDays,
   FileText,
   KeyRound,
+  Link2Off,
   Loader2,
   LockKeyhole,
   MessageSquareText,
@@ -44,10 +45,17 @@ import {
   CreateCustomerNegotiationCommentRequest,
   CustomerPublicNegotiationCommentResponse,
   CustomerSharedContractResponse,
+  CustomerAccessLinkAvailabilityState,
   publicContractApi,
 } from "@/services/public-contract-api";
 
-type AccessStep = "checking" | "phone" | "otp" | "contract" | "error";
+type AccessStep =
+  | "checking"
+  | "phone"
+  | "otp"
+  | "contract"
+  | "unavailable"
+  | "error";
 
 const getStatus = (error: any) => error?.response?.status as number | undefined;
 
@@ -90,6 +98,21 @@ export default function PublicContractPage() {
     if (message) toast.error(message);
   }, []);
 
+  const showLinkUnavailable = useCallback(
+    (state: CustomerAccessLinkAvailabilityState) => {
+      setContract(null);
+      setPublicChallengeId(null);
+      setOtp("");
+      setPageError(
+        state === "PendingActivation"
+          ? "Hợp đồng chưa bắt đầu đàm phán. Vui lòng thử lại sau khi nhân viên kích hoạt link."
+          : "Link này đã hết hạn, bị thu hồi hoặc được thay thế bởi một link mới. Vui lòng liên hệ nhân viên phụ trách để nhận link mới.",
+      );
+      setStep("unavailable");
+    },
+    [],
+  );
+
   const loadSharedContract = useCallback(async () => {
     try {
       setStep("checking");
@@ -111,9 +134,32 @@ export default function PublicContractPage() {
     }
   }, [resetToPhone, tenantCode]);
 
+  const initializeAccess = useCallback(async () => {
+    setStep("checking");
+    setPageError(null);
+
+    try {
+      const availability = await publicContractApi.getLinkAvailability(
+        tenantCode,
+        linkToken,
+      );
+      if (!availability.isAvailable) {
+        showLinkUnavailable(availability.state);
+        return;
+      }
+
+      await loadSharedContract();
+    } catch (error: any) {
+      setPageError(
+        getErrorMessage(error, "Không thể kiểm tra link truy cập."),
+      );
+      setStep("error");
+    }
+  }, [linkToken, loadSharedContract, showLinkUnavailable, tenantCode]);
+
   useEffect(() => {
-    void loadSharedContract();
-  }, [loadSharedContract]);
+    void initializeAccess();
+  }, [initializeAccess]);
 
   const sortedItems = useMemo(
     () =>
@@ -140,6 +186,15 @@ export default function PublicContractPage() {
 
     try {
       setIsRequestingOtp(true);
+      const availability = await publicContractApi.getLinkAvailability(
+        tenantCode,
+        linkToken,
+      );
+      if (!availability.isAvailable) {
+        showLinkUnavailable(availability.state);
+        return;
+      }
+
       const result = await publicContractApi.requestOtp(tenantCode, linkToken, {
         phoneNumber: normalizedPhone,
       });
@@ -177,7 +232,7 @@ export default function PublicContractPage() {
       setOtp("");
       setPublicChallengeId(null);
       toast.success("Xác thực thành công!");
-      await loadSharedContract();
+      await initializeAccess();
     } catch (error: any) {
       resetToPhone(
         getErrorMessage(error, "Không thể xác thực mã. Hãy yêu cầu mã mới."),
@@ -232,11 +287,35 @@ export default function PublicContractPage() {
             <AlertTitle>Không thể mở hợp đồng</AlertTitle>
             <AlertDescription className="mt-2 space-y-3">
               <p>{pageError}</p>
-              <Button variant="outline" size="sm" onClick={loadSharedContract}>
+              <Button variant="outline" size="sm" onClick={initializeAccess}>
                 <RefreshCw /> Thử lại
               </Button>
             </AlertDescription>
           </Alert>
+        </div>
+      </>
+    );
+  }
+
+  if (step === "unavailable") {
+    return (
+      <>
+        <PublicThemeToggle />
+        <div className="flex min-h-screen items-center justify-center px-4 py-10">
+          <Card className="w-full max-w-md text-center shadow-lg">
+            <CardHeader>
+              <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+                <Link2Off />
+              </div>
+              <CardTitle>Link không còn khả dụng</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">{pageError}</p>
+              <Button variant="outline" onClick={initializeAccess}>
+                <RefreshCw /> Kiểm tra lại
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </>
     );

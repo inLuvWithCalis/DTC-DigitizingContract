@@ -119,9 +119,67 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
             .Take(filter.PageSize)
             .ToListAsync(cancellationToken);
 
+        var employeeActorIds = records
+            .Where(audit => audit.ActorEmployeeId.HasValue)
+            .Select(audit => audit.ActorEmployeeId!.Value)
+            .Distinct()
+            .ToList();
+        var employeeActors = await _dbContext.TblEmployees
+            .AsNoTracking()
+            .Where(employee => employeeActorIds.Contains(employee.EmployeeId))
+            .Select(employee => new
+            {
+                employee.EmployeeId,
+                employee.EmployeeFullName,
+                employee.EmployeeCode,
+                employee.EmployeeAccount
+            })
+            .ToListAsync(cancellationToken);
+        var employeeActorNames = employeeActors.ToDictionary(
+            employee => employee.EmployeeId,
+            employee => FirstNonEmpty(
+                employee.EmployeeFullName,
+                employee.EmployeeCode,
+                employee.EmployeeAccount));
+
+        var customerSessionIds = records
+            .Where(audit => audit.ActorCustomerAccessSessionId.HasValue)
+            .Select(audit => audit.ActorCustomerAccessSessionId!.Value)
+            .Distinct()
+            .ToList();
+        var customerActors = await (
+            from session in _dbContext.TblContractCustomerAccessSessions.AsNoTracking()
+            join contract in _dbContext.TblContracts.AsNoTracking()
+                on session.ContractId equals contract.ContractId
+            join customer in _dbContext.TblCustomers.AsNoTracking()
+                on contract.CustomerId equals customer.CustomerId
+            where session.TenantId == tenantId
+                && customerSessionIds.Contains(session.CustomerAccessSessionId)
+            select new
+            {
+                session.CustomerAccessSessionId,
+                customer.CustomerFullName,
+                customer.CustomerCompany,
+                customer.CustomerRepresentativeName,
+                customer.CustomerCode
+            })
+            .ToListAsync(cancellationToken);
+        var customerActorNames = customerActors.ToDictionary(
+            customer => customer.CustomerAccessSessionId,
+            customer => FirstNonEmpty(
+                customer.CustomerFullName,
+                customer.CustomerCompany,
+                customer.CustomerRepresentativeName,
+                customer.CustomerCode));
+
         return new PagedResult<ContractAuditResponse>
         {
-            Items = records.Select(Map).ToList(),
+            Items = records
+                .Select(audit => Map(
+                    audit,
+                    employeeActorNames,
+                    customerActorNames))
+                .ToList(),
             TotalCount = totalCount,
             Page = filter.Page,
             PageSize = filter.PageSize
@@ -129,7 +187,9 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
     }
 
     private static ContractAuditResponse Map(
-        Infrastructure.Persistence.Application.Models.TblContractAudit audit) => new()
+        Infrastructure.Persistence.Application.Models.TblContractAudit audit,
+        IReadOnlyDictionary<int, string?> employeeActorNames,
+        IReadOnlyDictionary<int, string?> customerActorNames) => new()
     {
         ContractAuditId = audit.ContractAuditId,
         ContractId = audit.ContractId,
@@ -139,6 +199,10 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
         ActorType = audit.ActorType,
         ActorEmployeeId = audit.ActorEmployeeId,
         ActorCustomerAccessSessionId = audit.ActorCustomerAccessSessionId,
+        ActorDisplayName = ResolveActorDisplayName(
+            audit,
+            employeeActorNames,
+            customerActorNames),
         ActionType = audit.ActionType,
         Result = audit.Result,
         FailureCode = audit.FailureCode,
@@ -150,6 +214,33 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
         UserAgent = audit.UserAgent,
         CorrelationId = audit.CorrelationId
     };
+
+    private static string? ResolveActorDisplayName(
+        Infrastructure.Persistence.Application.Models.TblContractAudit audit,
+        IReadOnlyDictionary<int, string?> employeeActorNames,
+        IReadOnlyDictionary<int, string?> customerActorNames)
+    {
+        if (audit.ActorEmployeeId.HasValue
+            && employeeActorNames.TryGetValue(
+                audit.ActorEmployeeId.Value,
+                out var employeeName))
+        {
+            return employeeName;
+        }
+
+        if (audit.ActorCustomerAccessSessionId.HasValue
+            && customerActorNames.TryGetValue(
+                audit.ActorCustomerAccessSessionId.Value,
+                out var customerName))
+        {
+            return customerName;
+        }
+
+        return null;
+    }
+
+    private static string? FirstNonEmpty(params string?[] values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
 
     private static Dictionary<string, JsonElement>? ParseValues(string? json)
     {

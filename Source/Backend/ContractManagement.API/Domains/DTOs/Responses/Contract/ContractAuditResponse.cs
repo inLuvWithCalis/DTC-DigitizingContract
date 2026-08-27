@@ -25,6 +25,12 @@ public sealed class ContractAuditResponse
 
     public int? ActorCustomerAccessSessionId { get; set; }
 
+    /// <summary>
+    /// Tên hiển thị của actor tại thời điểm truy vấn. ID actor vẫn được trả về
+    /// để đối chiếu kỹ thuật khi tên không còn resolve được.
+    /// </summary>
+    public string? ActorDisplayName { get; set; }
+
     public string ActionType { get; set; } = string.Empty;
 
     public string Result { get; set; } = string.Empty;

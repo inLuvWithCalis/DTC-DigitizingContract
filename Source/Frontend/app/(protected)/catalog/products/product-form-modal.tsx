@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { CodeInput } from "@/components/ui/custom/code-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -267,11 +268,11 @@ export function ProductFormModal({
                   Mã sản phẩm{" "}
                   {!viewOnly && <span className="text-destructive">*</span>}
                 </Label>
-                <Input
+                <CodeInput
                   id="productCode"
                   placeholder="PROD-001"
                   value={productCode}
-                  onChange={(e) => setProductCode(e.target.value)}
+                  onValueChange={setProductCode}
                   disabled={viewOnly}
                   aria-invalid={!!errors.productCode}
                   maxLength={50}

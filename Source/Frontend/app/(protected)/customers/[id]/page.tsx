@@ -23,6 +23,7 @@ import {
   CalendarIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CodeInput } from "@/components/ui/custom/code-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -497,14 +498,14 @@ function CustomerDetailPageContent() {
                     <Label className="text-xs font-semibold uppercase text-muted-foreground">
                       Mã KH
                     </Label>
-                    <Input
+                    <CodeInput
                       readOnly={!isEditingProfile}
                       className={`h-9 ${!isEditingProfile ? "bg-muted/40 border-transparent shadow-none cursor-default font-medium text-foreground focus-visible:ring-0" : ""}`}
                       value={formData.customerCode ?? ""}
-                      onChange={(e) =>
+                      onValueChange={(value) =>
                         setFormData({
                           ...formData,
-                          customerCode: e.target.value,
+                          customerCode: value,
                         })
                       }
                     />

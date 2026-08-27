@@ -25,6 +25,16 @@ export interface CustomerOtpRequestAcceptedResponse {
   publicChallengeId: string;
 }
 
+export type CustomerAccessLinkAvailabilityState =
+  | "Available"
+  | "PendingActivation"
+  | "Unavailable";
+
+export interface CustomerAccessLinkAvailabilityResponse {
+  isAvailable: boolean;
+  state: CustomerAccessLinkAvailabilityState;
+}
+
 export interface CustomerPublicContractItemResponse {
   itemName: string;
   itemNameEn?: string | null;
@@ -79,6 +89,12 @@ const getLinkBaseUrl = (tenantCode: string, linkToken: string) =>
   `${getTenantBaseUrl(tenantCode)}/${encodeURIComponent(linkToken)}`;
 
 export const publicContractApi = {
+  getLinkAvailability: (tenantCode: string, linkToken: string) => {
+    return publicAxiosClient.get<any, CustomerAccessLinkAvailabilityResponse>(
+      `${getLinkBaseUrl(tenantCode, linkToken)}/availability`,
+    );
+  },
+
   requestOtp: (
     tenantCode: string,
     linkToken: string,

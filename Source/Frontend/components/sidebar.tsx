@@ -7,6 +7,7 @@ import {
   BriefcaseBusiness,
   Building2,
   ChevronLeft,
+  FileBadge,
   FileSignature,
   FileText,
   FolderTree,
@@ -125,7 +126,7 @@ const navItems: NavItem[] = [
   },
   {
     label: "Hồ sơ pháp lý",
-    icon: Building2,
+    icon: FileBadge,
     href: "/admin/legal-profile",
     requiredPermissions: [RBAC_PERMISSIONS.tenantLegalProfileManage],
   },

@@ -63,9 +63,59 @@ public sealed class ContractAuditQueryServiceTests
         {
             Assert.Equal(ContractAuditSubjectTypes.Contract, audit.SubjectType);
             Assert.Equal(ContractId, audit.SubjectId);
+            Assert.Equal($"Employee {ManagerId}", audit.ActorDisplayName);
             Assert.NotNull(audit.NewValues);
             Assert.DoesNotContain("PhoneNumber", audit.NewValues!.Keys);
         });
+    }
+
+    [Fact]
+    public async Task QueryAsync_CustomerActorResolvesNameFromAccessSession()
+    {
+        await using var context = CreateContext();
+        await SeedAsync(context);
+        var tenant = CreateTenant();
+        const int sessionId = 91;
+        var now = new DateTime(2026, 8, 7, 3, 0, 0, DateTimeKind.Utc);
+        context.TblContractCustomerAccessSessions.Add(
+            new TblContractCustomerAccessSession
+            {
+                CustomerAccessSessionId = sessionId,
+                TenantId = TenantId,
+                LinkId = 1,
+                ContractId = ContractId,
+                VersionId = 1,
+                VerificationPhoneId = 1,
+                SessionTokenHash = new string('a', 64),
+                IssuedAt = now,
+                LastActivityAt = now,
+                IdleExpiresAt = now.AddHours(1),
+                HardExpiresAt = now.AddHours(8)
+            });
+        CreateWriter(context, tenant).StageAudits(
+        [
+            new ContractAuditWriteRequest(
+                ContractId,
+                1,
+                ContractAuditActorTypes.Customer,
+                null,
+                sessionId,
+                ContractAuditActionTypes.PublicVersionViewed,
+                ContractAuditResults.Succeeded,
+                now,
+                SubjectType: ContractAuditSubjectTypes.ContractVersion,
+                SubjectId: 1)
+        ]);
+        await context.SaveChangesAsync();
+
+        var result = await new ContractAuditQueryService(context, tenant)
+            .QueryAsync(
+                new ContractAuditFilterRequest { Page = 1, PageSize = 20 },
+                ManagerId);
+
+        var audit = Assert.Single(result.Items);
+        Assert.Equal(sessionId, audit.ActorCustomerAccessSessionId);
+        Assert.Equal("Nguyễn Văn Khách", audit.ActorDisplayName);
     }
 
     [Fact]
@@ -167,9 +217,17 @@ public sealed class ContractAuditQueryServiceTests
             NewEmployee(ManagerId, EmployeeType.Manager),
             NewEmployee(ResponsibleId, EmployeeType.Sale),
             NewEmployee(OtherEmployeeId, EmployeeType.Sale));
+        context.TblCustomers.Add(new TblCustomer
+        {
+            CustomerId = 501,
+            CustomerCode = "KH-501",
+            CustomerFullName = "Nguyễn Văn Khách",
+            CustomerCompany = "Công ty Khách hàng"
+        });
         context.TblContracts.Add(new TblContract
         {
             ContractId = ContractId,
+            CustomerId = 501,
             EmployeeId = ResponsibleId,
             Status = (byte)ContractStatus.Draft
         });

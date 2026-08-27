@@ -5,6 +5,13 @@ public sealed class CustomerOtpRequestAcceptedResponse
     public string PublicChallengeId { get; init; } = string.Empty;
 }
 
+public sealed class CustomerAccessLinkAvailabilityResponse
+{
+    public bool IsAvailable { get; init; }
+
+    public string State { get; init; } = string.Empty;
+}
+
 public sealed class CustomerSharedContractResponse
 {
     public string? ContractCode { get; init; }

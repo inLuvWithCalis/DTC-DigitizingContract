@@ -230,6 +230,7 @@ function AuditChanges({ audit }: { audit: ContractAuditResponse }) {
 
 function AuditActor({ audit }: { audit: ContractAuditResponse }) {
   const label = CONTRACT_AUDIT_ACTOR_LABELS[audit.actorType];
+  const actorName = audit.actorDisplayName?.trim() || label;
   const actorId =
     audit.actorType === "Employee"
       ? audit.actorEmployeeId
@@ -247,8 +248,13 @@ function AuditActor({ audit }: { audit: ContractAuditResponse }) {
 
   return (
     <span className="inline-flex items-center gap-1.5">
-      <UserRound className="size-3.5" /> {label}
-      {actorId ? ` #${actorId}` : ""}
+      <UserRound className="size-3.5" />
+      {actorName}
+      {actorId && (
+        <span>
+          ({audit.actorType === "Employee" ? "NV" : "Phiên"} #{actorId})
+        </span>
+      )}
     </span>
   );
 }

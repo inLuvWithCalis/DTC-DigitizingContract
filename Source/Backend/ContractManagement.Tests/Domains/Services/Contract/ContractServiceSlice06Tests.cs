@@ -63,6 +63,10 @@ public sealed class ContractServiceSlice06Tests
                 || property.Name.Contains("Token", StringComparison.OrdinalIgnoreCase));
 
         var pendingToken = new Uri(link.PublicUrl).Segments.Last().Trim('/');
+        var pendingAvailability = await customerAccess.GetLinkAvailabilityAsync(pendingToken);
+        Assert.False(pendingAvailability.IsAvailable);
+        Assert.Equal("PendingActivation", pendingAvailability.State);
+
         var pendingError = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             customerAccess.RequestOtpAsync(pendingToken, "+84912345678"));
         Assert.Equal(
@@ -74,6 +78,10 @@ public sealed class ContractServiceSlice06Tests
             ContractId,
             new StartContractNegotiationRequest { RowVersion = rowVersion },
             EmployeeId);
+
+        var activeAvailability = await customerAccess.GetLinkAvailabilityAsync(pendingToken);
+        Assert.True(activeAvailability.IsAvailable);
+        Assert.Equal("Available", activeAvailability.State);
 
         var challengeResponse = await customerAccess.RequestOtpAsync(
             pendingToken,
@@ -124,6 +132,9 @@ public sealed class ContractServiceSlice06Tests
             EmployeeId));
         Assert.NotNull((await context.TblContractCustomerAccessLinks.SingleAsync()).RevokedAt);
         Assert.NotNull((await context.TblContractCustomerAccessSessions.SingleAsync()).RevokedAt);
+        var revokedAvailability = await customerAccess.GetLinkAvailabilityAsync(pendingToken);
+        Assert.False(revokedAvailability.IsAvailable);
+        Assert.Equal("Unavailable", revokedAvailability.State);
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
             () => customerAccess.GetSharedAsync(issue.SessionSecret));
     }

@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { CodeInput } from "@/components/ui/custom/code-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -220,11 +221,11 @@ export function CustomerFormModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="customerCode">Mã khách hàng</Label>
-              <Input
+              <CodeInput
                 id="customerCode"
                 placeholder="CUST-001 (Tùy chọn)"
                 value={customerCode}
-                onChange={(e) => setCustomerCode(e.target.value)}
+                onValueChange={setCustomerCode}
                 disabled={viewOnly}
                 maxLength={30}
               />

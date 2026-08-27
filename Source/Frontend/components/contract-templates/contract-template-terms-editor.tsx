@@ -10,6 +10,7 @@ import {
 } from "@/components/contracts/contract-term-card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { CodeInput } from "@/components/ui/custom/code-input";
 import { ConfirmDialog } from "@/components/ui/custom/confirm-dialog";
 import {
   Dialog,
@@ -359,10 +360,10 @@ export function ContractTemplateTermsEditor({
               <Label htmlFor="new-term-code">
                 Mã điều khoản <span className="text-destructive">*</span>
               </Label>
-              <Input
+              <CodeInput
                 id="new-term-code"
                 value={newTermCode}
-                onChange={(event) => setNewTermCode(event.target.value)}
+                onValueChange={setNewTermCode}
               />
             </div>
             <div className="space-y-2">

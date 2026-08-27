@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { CodeInput } from "@/components/ui/custom/code-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -285,11 +286,11 @@ export function EmployeeFormModal({
                 Mã nhân viên{" "}
                 {!isViewMode && <span className="text-destructive">*</span>}
               </Label>
-              <Input
+              <CodeInput
                 id="employeeCode"
                 placeholder="EMP-001"
                 value={employeeCode}
-                onChange={(e) => setEmployeeCode(e.target.value)}
+                onValueChange={setEmployeeCode}
                 maxLength={30}
                 disabled={isViewMode}
                 aria-invalid={!!errors.employeeCode}

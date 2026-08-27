@@ -8,6 +8,7 @@ import {
   type ContractTermEditableField,
 } from "@/components/contracts/contract-term-card";
 import { Button } from "@/components/ui/button";
+import { CodeInput } from "@/components/ui/custom/code-input";
 import { ConfirmDialog } from "@/components/ui/custom/confirm-dialog";
 import {
   Dialog,
@@ -228,10 +229,10 @@ export function CreateContractTermsEditor({
               <Label htmlFor="create-new-term-code">
                 Mã điều khoản <span className="text-destructive">*</span>
               </Label>
-              <Input
+              <CodeInput
                 id="create-new-term-code"
                 value={newTermCode}
-                onChange={(event) => setNewTermCode(event.target.value)}
+                onValueChange={setNewTermCode}
               />
             </div>
             <div className="space-y-2">

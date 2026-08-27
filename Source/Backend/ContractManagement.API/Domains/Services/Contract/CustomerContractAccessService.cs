@@ -42,6 +42,39 @@ public sealed class CustomerContractAccessService : ICustomerContractAccessServi
         _auditWriter = auditWriter;
     }
 
+    public async Task<CustomerAccessLinkAvailabilityResponse> GetLinkAvailabilityAsync(
+        string linkToken,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(linkToken))
+        {
+            return CreateLinkAvailabilityResponse("Unavailable");
+        }
+
+        var tenantId = _currentTenant.GetRequiredTenant().TenantId;
+        var link = await _dbContext.TblContractCustomerAccessLinks
+            .AsNoTracking()
+            .SingleOrDefaultAsync(x => x.TenantId == tenantId
+                && x.TokenHash == _cryptography.HashSecret(linkToken),
+                cancellationToken);
+
+        if (link is null)
+        {
+            return CreateLinkAvailabilityResponse("Unavailable");
+        }
+
+        var now = DateTime.UtcNow;
+        if (!link.ActivatedAt.HasValue
+            && !link.RevokedAt.HasValue
+            && link.ExpiresAt > now)
+        {
+            return CreateLinkAvailabilityResponse("PendingActivation");
+        }
+
+        return CreateLinkAvailabilityResponse(
+            IsLinkActive(link, now) ? "Available" : "Unavailable");
+    }
+
     public async Task<CustomerOtpRequestAcceptedResponse> RequestOtpAsync(
         string linkToken,
         string suppliedPhoneNumber,
@@ -627,6 +660,13 @@ public sealed class CustomerContractAccessService : ICustomerContractAccessServi
         link.ActivatedAt.HasValue
         && !link.RevokedAt.HasValue
         && link.ExpiresAt > now;
+
+    private static CustomerAccessLinkAvailabilityResponse CreateLinkAvailabilityResponse(
+        string state) => new()
+        {
+            IsAvailable = state == "Available",
+            State = state
+        };
 
     private static string GetLinkFailureCode(
         TblContractCustomerAccessLink link) => link.RevokedAt.HasValue

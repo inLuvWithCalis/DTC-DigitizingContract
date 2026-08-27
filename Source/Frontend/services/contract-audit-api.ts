@@ -75,6 +75,7 @@ export interface ContractAuditResponse {
   actorType: ContractAuditActorType;
   actorEmployeeId: number | null;
   actorCustomerAccessSessionId: number | null;
+  actorDisplayName?: string | null;
   actionType: ContractAuditActionType;
   result: ContractAuditResult;
   failureCode: string | null;

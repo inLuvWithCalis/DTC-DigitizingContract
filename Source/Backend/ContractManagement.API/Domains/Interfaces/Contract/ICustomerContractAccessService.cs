@@ -9,6 +9,10 @@ namespace ContractManagement.Domains.Interfaces.Contract;
 /// </summary>
 public interface ICustomerContractAccessService
 {
+    Task<CustomerAccessLinkAvailabilityResponse> GetLinkAvailabilityAsync(
+        string linkToken,
+        CancellationToken cancellationToken = default);
+
     Task<CustomerOtpRequestAcceptedResponse> RequestOtpAsync(
         string linkToken,
         string suppliedPhoneNumber,

@@ -37,7 +37,7 @@ public sealed class ContractAuditController : ControllerBase
     /// </remarks>
     [HttpGet]
     [ProducesResponseType(
-        typeof(ApiResponse<PagedResult<ContractAuditResponse>>),
+        typeof(ApiResponse<ContractAuditCursorPageResponse>),
         StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -58,9 +58,46 @@ public sealed class ContractAuditController : ControllerBase
                 cancellationToken);
 
             return Ok(
-                ApiResponse<PagedResult<ContractAuditResponse>>.Ok(
+                ApiResponse<ContractAuditCursorPageResponse>.Ok(
                     result,
                     "Lấy nhật ký hợp đồng thành công."));
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                ApiResponse<object>.Fail(exception.Message));
+        }
+    }
+
+    /// <summary>
+    /// Xuất tối đa 50.000 bản ghi audit phù hợp với bộ lọc hiện tại thành CSV.
+    /// Cursor và PageSize không giới hạn tập dữ liệu xuất.
+    /// </summary>
+    [HttpGet("export")]
+    [Produces("text/csv")]
+    [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> ExportCsv(
+        [FromQuery] ContractAuditFilterRequest filter,
+        CancellationToken cancellationToken)
+    {
+        var employeeId = HttpContext.Session.GetInt32("EmployeeId")
+            ?? throw new UnauthorizedAccessException(
+                "Bạn chưa đăng nhập hoặc phiên đăng nhập đã hết hạn.");
+
+        try
+        {
+            var result = await _queryService.ExportCsvAsync(
+                filter,
+                employeeId,
+                cancellationToken);
+            return File(
+                result.Content,
+                "text/csv; charset=utf-8",
+                result.FileName);
         }
         catch (UnauthorizedAccessException exception)
         {

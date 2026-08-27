@@ -1,11 +1,13 @@
 using ContractManagement.API.Common.Enums;
-using ContractManagement.API.Common.Responses;
 using ContractManagement.API.Domains.DTOs.Requests.Contract;
 using ContractManagement.API.Domains.DTOs.Responses.Contract;
 using ContractManagement.Domains.Interfaces.Contract;
 using ContractManagement.Infrastructure.MultiTenancy.Interfaces;
 using ContractManagement.Infrastructure.Persistence.Application;
+using ContractManagement.Infrastructure.Persistence.Application.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
+using System.Text;
 using System.Text.Json;
 
 namespace ContractManagement.Domains.Services.Contract;
@@ -17,6 +19,7 @@ namespace ContractManagement.Domains.Services.Contract;
 public sealed class ContractAuditQueryService : IContractAuditQueryService
 {
     private const byte ActiveEmployeeStatus = 1;
+    private const int MaxCsvRows = 50_000;
 
     private readonly DbDtctechContext _dbContext;
     private readonly ICurrentTenant _currentTenant;
@@ -29,10 +32,91 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
         _currentTenant = currentTenant;
     }
 
-    public async Task<PagedResult<ContractAuditResponse>> QueryAsync(
+    public async Task<ContractAuditCursorPageResponse> QueryAsync(
         ContractAuditFilterRequest filter,
         int employeeId,
         CancellationToken cancellationToken = default)
+    {
+        var (query, tenantId) = await BuildAuthorizedQueryAsync(
+            filter,
+            employeeId,
+            cancellationToken);
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var cursor = DecodeCursor(filter.Cursor);
+        if (cursor is not null)
+        {
+            query = query.Where(audit =>
+                audit.OccurredAt < cursor.OccurredAt
+                || audit.OccurredAt == cursor.OccurredAt
+                    && audit.ContractAuditId < cursor.ContractAuditId);
+        }
+
+        var records = await query
+            .OrderByDescending(audit => audit.OccurredAt)
+            .ThenByDescending(audit => audit.ContractAuditId)
+            .Take(filter.PageSize + 1)
+            .ToListAsync(cancellationToken);
+        var hasMore = records.Count > filter.PageSize;
+        if (hasMore)
+        {
+            records.RemoveAt(records.Count - 1);
+        }
+
+        var lookup = await LoadLookupContextAsync(
+            records,
+            tenantId,
+            cancellationToken);
+        var items = records.Select(audit => Map(audit, lookup)).ToList();
+        var last = records.LastOrDefault();
+
+        return new ContractAuditCursorPageResponse
+        {
+            Items = items,
+            TotalCount = totalCount,
+            PageSize = filter.PageSize,
+            HasMore = hasMore,
+            NextCursor = hasMore && last is not null
+                ? EncodeCursor(last)
+                : null
+        };
+    }
+
+    public async Task<ContractAuditExportFile> ExportCsvAsync(
+        ContractAuditFilterRequest filter,
+        int employeeId,
+        CancellationToken cancellationToken = default)
+    {
+        var (query, tenantId) = await BuildAuthorizedQueryAsync(
+            filter,
+            employeeId,
+            cancellationToken);
+        var records = await query
+            .OrderByDescending(audit => audit.OccurredAt)
+            .ThenByDescending(audit => audit.ContractAuditId)
+            .Take(MaxCsvRows + 1)
+            .ToListAsync(cancellationToken);
+        if (records.Count > MaxCsvRows)
+        {
+            throw new ArgumentException(
+                $"Kết quả xuất vượt quá {MaxCsvRows:N0} bản ghi. Hãy thu hẹp bộ lọc.");
+        }
+
+        var lookup = await LoadLookupContextAsync(
+            records,
+            tenantId,
+            cancellationToken);
+        var rows = records.Select(audit => Map(audit, lookup)).ToList();
+        var content = Encoding.UTF8.GetBytes("\uFEFF" + BuildCsv(rows));
+        var fileName = $"contract-audits-{DateTime.UtcNow:yyyyMMdd-HHmmss}.csv";
+        return new ContractAuditExportFile(content, fileName);
+    }
+
+    private async Task<(IQueryable<TblContractAudit> Query, int TenantId)>
+        BuildAuthorizedQueryAsync(
+            ContractAuditFilterRequest filter,
+            int employeeId,
+            CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(filter);
         ValidateFilter(filter);
@@ -83,17 +167,55 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
 
         if (!string.IsNullOrWhiteSpace(filter.ActorType))
         {
-            query = query.Where(audit => audit.ActorType == filter.ActorType);
+            var actorType = filter.ActorType.Trim();
+            query = query.Where(audit => audit.ActorType == actorType);
+        }
+
+        if (filter.ActorEmployeeId.HasValue)
+        {
+            query = query.Where(audit =>
+                audit.ActorEmployeeId == filter.ActorEmployeeId.Value);
+        }
+
+        if (filter.ActorCustomerAccessSessionId.HasValue)
+        {
+            query = query.Where(audit => audit.ActorCustomerAccessSessionId
+                == filter.ActorCustomerAccessSessionId.Value);
         }
 
         if (!string.IsNullOrWhiteSpace(filter.ActionType))
         {
-            query = query.Where(audit => audit.ActionType == filter.ActionType);
+            var actionType = filter.ActionType.Trim();
+            query = query.Where(audit => audit.ActionType == actionType);
         }
 
         if (!string.IsNullOrWhiteSpace(filter.Result))
         {
-            query = query.Where(audit => audit.Result == filter.Result);
+            var result = filter.Result.Trim();
+            query = query.Where(audit => audit.Result == result);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.CorrelationId))
+        {
+            var correlationId = filter.CorrelationId.Trim();
+            query = query.Where(audit => audit.CorrelationId == correlationId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.SubjectType))
+        {
+            var subjectType = filter.SubjectType.Trim();
+            query = query.Where(audit => audit.SubjectType == subjectType);
+        }
+
+        if (filter.SubjectId.HasValue)
+        {
+            query = query.Where(audit => audit.SubjectId == filter.SubjectId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.FailureCode))
+        {
+            var failureCode = filter.FailureCode.Trim();
+            query = query.Where(audit => audit.FailureCode == failureCode);
         }
 
         if (filter.FromUtc.HasValue)
@@ -106,141 +228,317 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
             query = query.Where(audit => audit.OccurredAt <= filter.ToUtc.Value);
         }
 
-        var totalCount = await query.CountAsync(cancellationToken);
-        var offset = ((long)filter.Page - 1) * filter.PageSize;
-        if (offset > int.MaxValue)
-        {
-            throw new ArgumentException("Requested audit page is outside the supported range.");
-        }
-        var records = await query
-            .OrderByDescending(audit => audit.OccurredAt)
-            .ThenByDescending(audit => audit.ContractAuditId)
-            .Skip((int)offset)
-            .Take(filter.PageSize)
-            .ToListAsync(cancellationToken);
+        return (query, tenantId);
+    }
 
-        var employeeActorIds = records
-            .Where(audit => audit.ActorEmployeeId.HasValue)
+    private async Task<AuditLookupContext> LoadLookupContextAsync(
+        IReadOnlyCollection<TblContractAudit> records,
+        int tenantId,
+        CancellationToken cancellationToken)
+    {
+        var employeeIds = records
+            .Where(audit => audit.ActorEmployeeId.HasValue
+                && string.IsNullOrWhiteSpace(audit.ActorDisplayNameSnapshot))
             .Select(audit => audit.ActorEmployeeId!.Value)
             .Distinct()
             .ToList();
-        var employeeActors = await _dbContext.TblEmployees
-            .AsNoTracking()
-            .Where(employee => employeeActorIds.Contains(employee.EmployeeId))
-            .Select(employee => new
-            {
-                employee.EmployeeId,
-                employee.EmployeeFullName,
-                employee.EmployeeCode,
-                employee.EmployeeAccount
-            })
-            .ToListAsync(cancellationToken);
-        var employeeActorNames = employeeActors.ToDictionary(
-            employee => employee.EmployeeId,
-            employee => FirstNonEmpty(
-                employee.EmployeeFullName,
-                employee.EmployeeCode,
-                employee.EmployeeAccount));
+        var employeeNames = new Dictionary<int, string?>();
+        if (employeeIds.Count > 0)
+        {
+            var employees = await _dbContext.TblEmployees.AsNoTracking()
+                .Where(employee => employeeIds.Contains(employee.EmployeeId))
+                .Select(employee => new
+                {
+                    employee.EmployeeId,
+                    employee.EmployeeFullName,
+                    employee.EmployeeCode,
+                    employee.EmployeeAccount
+                })
+                .ToListAsync(cancellationToken);
+            employeeNames = employees.ToDictionary(
+                employee => employee.EmployeeId,
+                employee => FirstNonEmpty(
+                    employee.EmployeeFullName,
+                    employee.EmployeeCode,
+                    employee.EmployeeAccount));
+        }
 
-        var customerSessionIds = records
-            .Where(audit => audit.ActorCustomerAccessSessionId.HasValue)
+        var contractIds = records
+            .Where(audit => string.IsNullOrWhiteSpace(audit.ContractNameSnapshot)
+                || audit.ActorCustomerAccessSessionId.HasValue
+                    && string.IsNullOrWhiteSpace(audit.ActorDisplayNameSnapshot))
+            .Select(audit => audit.ContractId)
+            .Distinct()
+            .ToList();
+        var contracts = new Dictionary<int, ContractLookup>();
+        if (contractIds.Count > 0)
+        {
+            var contractRows = await (
+                from contract in _dbContext.TblContracts.AsNoTracking()
+                join customer in _dbContext.TblCustomers.AsNoTracking()
+                    on contract.CustomerId equals customer.CustomerId into customers
+                from customer in customers.DefaultIfEmpty()
+                where contractIds.Contains(contract.ContractId)
+                select new
+                {
+                    contract.ContractId,
+                    contract.ContractCode,
+                    contract.ContractName,
+                    CustomerName = customer == null
+                        ? null
+                        : customer.CustomerFullName
+                            ?? customer.CustomerCompany
+                            ?? customer.CustomerRepresentativeName
+                            ?? customer.CustomerCode
+                })
+                .ToListAsync(cancellationToken);
+            contracts = contractRows.ToDictionary(
+                contract => contract.ContractId,
+                contract => new ContractLookup(
+                    contract.ContractCode,
+                    contract.ContractName,
+                    contract.CustomerName));
+        }
+
+        var versionIds = records.Where(audit => audit.VersionId.HasValue
+                && !audit.VersionNoSnapshot.HasValue)
+            .Select(audit => audit.VersionId!.Value)
+            .Distinct()
+            .ToList();
+        var versionNumbers = versionIds.Count == 0
+            ? new Dictionary<int, int>()
+            : await _dbContext.TblContractVersions.AsNoTracking()
+                .Where(version => versionIds.Contains(version.VersionId))
+                .ToDictionaryAsync(
+                    version => version.VersionId,
+                    version => version.VersionNo,
+                    cancellationToken);
+
+        var sessionIds = records
+            .Where(audit => audit.ActorCustomerAccessSessionId.HasValue
+                && (string.IsNullOrWhiteSpace(audit.ActorDisplayNameSnapshot)
+                    || string.IsNullOrWhiteSpace(audit.ActorMaskedPhoneSnapshot)
+                    || string.IsNullOrWhiteSpace(audit.ActorPhoneSourceSnapshot)))
             .Select(audit => audit.ActorCustomerAccessSessionId!.Value)
             .Distinct()
             .ToList();
-        var customerActors = await (
-            from session in _dbContext.TblContractCustomerAccessSessions.AsNoTracking()
-            join contract in _dbContext.TblContracts.AsNoTracking()
-                on session.ContractId equals contract.ContractId
-            join customer in _dbContext.TblCustomers.AsNoTracking()
-                on contract.CustomerId equals customer.CustomerId
-            where session.TenantId == tenantId
-                && customerSessionIds.Contains(session.CustomerAccessSessionId)
-            select new
-            {
-                session.CustomerAccessSessionId,
-                customer.CustomerFullName,
-                customer.CustomerCompany,
-                customer.CustomerRepresentativeName,
-                customer.CustomerCode
-            })
-            .ToListAsync(cancellationToken);
-        var customerActorNames = customerActors.ToDictionary(
-            customer => customer.CustomerAccessSessionId,
-            customer => FirstNonEmpty(
-                customer.CustomerFullName,
-                customer.CustomerCompany,
-                customer.CustomerRepresentativeName,
-                customer.CustomerCode));
-
-        return new PagedResult<ContractAuditResponse>
+        var sessions = sessionIds.Count == 0
+            ? new List<SessionLookup>()
+            : await _dbContext.TblContractCustomerAccessSessions
+                .AsNoTracking()
+                .Where(session => session.TenantId == tenantId
+                    && sessionIds.Contains(session.CustomerAccessSessionId))
+                .Select(session => new SessionLookup(
+                    session.CustomerAccessSessionId,
+                    session.ContractId,
+                    session.VerificationPhoneId))
+                .ToListAsync(cancellationToken);
+        var phoneIds = sessions.Select(session => session.VerificationPhoneId)
+            .Distinct()
+            .ToList();
+        var phones = new Dictionary<int, PhoneLookup>();
+        if (phoneIds.Count > 0)
         {
-            Items = records
-                .Select(audit => Map(
-                    audit,
-                    employeeActorNames,
-                    customerActorNames))
-                .ToList(),
-            TotalCount = totalCount,
-            Page = filter.Page,
-            PageSize = filter.PageSize
-        };
+            var phoneRows = await _dbContext.TblContractCustomerVerificationPhones
+                .AsNoTracking()
+                .Where(phone => phoneIds.Contains(phone.VerificationPhoneId))
+                .Select(phone => new
+                {
+                    phone.VerificationPhoneId,
+                    phone.PhoneNumberNormalized,
+                    phone.PhoneSource
+                })
+                .ToListAsync(cancellationToken);
+            phones = phoneRows.ToDictionary(
+                phone => phone.VerificationPhoneId,
+                phone => new PhoneLookup(
+                    MaskPhone(phone.PhoneNumberNormalized),
+                    phone.PhoneSource));
+        }
+        var customerActors = sessions.ToDictionary(
+            session => session.CustomerAccessSessionId,
+            session =>
+            {
+                contracts.TryGetValue(session.ContractId, out var contract);
+                phones.TryGetValue(session.VerificationPhoneId, out var phone);
+                return new CustomerActorLookup(
+                    contract?.CustomerName,
+                    phone?.MaskedPhone,
+                    phone?.PhoneSource);
+            });
+
+        return new AuditLookupContext(
+            employeeNames,
+            customerActors,
+            contracts,
+            versionNumbers);
     }
 
     private static ContractAuditResponse Map(
-        Infrastructure.Persistence.Application.Models.TblContractAudit audit,
-        IReadOnlyDictionary<int, string?> employeeActorNames,
-        IReadOnlyDictionary<int, string?> customerActorNames) => new()
+        TblContractAudit audit,
+        AuditLookupContext lookup)
     {
-        ContractAuditId = audit.ContractAuditId,
-        ContractId = audit.ContractId,
-        VersionId = audit.VersionId,
-        SubjectType = audit.SubjectType ?? ContractAuditSubjectTypes.Contract,
-        SubjectId = audit.SubjectId ?? audit.ContractId,
-        ActorType = audit.ActorType,
-        ActorEmployeeId = audit.ActorEmployeeId,
-        ActorCustomerAccessSessionId = audit.ActorCustomerAccessSessionId,
-        ActorDisplayName = ResolveActorDisplayName(
-            audit,
-            employeeActorNames,
-            customerActorNames),
-        ActionType = audit.ActionType,
-        Result = audit.Result,
-        FailureCode = audit.FailureCode,
-        PreviousValues = ParseValues(audit.PreviousValuesJson),
-        NewValues = ParseValues(audit.NewValuesJson),
-        Reason = audit.Reason,
-        OccurredAt = audit.OccurredAt,
-        IpAddress = audit.IpAddress,
-        UserAgent = audit.UserAgent,
-        CorrelationId = audit.CorrelationId
-    };
-
-    private static string? ResolveActorDisplayName(
-        Infrastructure.Persistence.Application.Models.TblContractAudit audit,
-        IReadOnlyDictionary<int, string?> employeeActorNames,
-        IReadOnlyDictionary<int, string?> customerActorNames)
-    {
-        if (audit.ActorEmployeeId.HasValue
-            && employeeActorNames.TryGetValue(
-                audit.ActorEmployeeId.Value,
-                out var employeeName))
+        lookup.Contracts.TryGetValue(audit.ContractId, out var contract);
+        CustomerActorLookup? customerActor = null;
+        if (audit.ActorCustomerAccessSessionId.HasValue)
         {
-            return employeeName;
-        }
-
-        if (audit.ActorCustomerAccessSessionId.HasValue
-            && customerActorNames.TryGetValue(
+            lookup.CustomerActors.TryGetValue(
                 audit.ActorCustomerAccessSessionId.Value,
-                out var customerName))
-        {
-            return customerName;
+                out customerActor);
         }
 
-        return null;
+        string? employeeName = null;
+        if (audit.ActorEmployeeId.HasValue)
+        {
+            lookup.EmployeeNames.TryGetValue(
+                audit.ActorEmployeeId.Value,
+                out employeeName);
+        }
+
+        int? versionNo = audit.VersionNoSnapshot;
+        if (!versionNo.HasValue && audit.VersionId.HasValue
+            && lookup.VersionNumbers.TryGetValue(
+                audit.VersionId.Value,
+                out var currentVersionNo))
+        {
+            versionNo = currentVersionNo;
+        }
+
+        return new ContractAuditResponse
+        {
+            ContractAuditId = audit.ContractAuditId,
+            ContractId = audit.ContractId,
+            VersionId = audit.VersionId,
+            VersionNo = versionNo,
+            ContractCode = audit.ContractCodeSnapshot ?? contract?.ContractCode,
+            ContractName = audit.ContractNameSnapshot ?? contract?.ContractName,
+            SubjectType = audit.SubjectType ?? ContractAuditSubjectTypes.Contract,
+            SubjectId = audit.SubjectId ?? audit.ContractId,
+            ActorType = audit.ActorType,
+            ActorEmployeeId = audit.ActorEmployeeId,
+            ActorCustomerAccessSessionId = audit.ActorCustomerAccessSessionId,
+            ActorDisplayName = audit.ActorDisplayNameSnapshot
+                ?? employeeName
+                ?? customerActor?.DisplayName
+                ?? contract?.CustomerName,
+            ActorMaskedPhone = audit.ActorMaskedPhoneSnapshot
+                ?? customerActor?.MaskedPhone,
+            ActorPhoneSource = audit.ActorPhoneSourceSnapshot
+                ?? customerActor?.PhoneSource,
+            ActionType = audit.ActionType,
+            Result = audit.Result,
+            FailureCode = audit.FailureCode,
+            PreviousValues = ParseValues(audit.PreviousValuesJson),
+            NewValues = ParseValues(audit.NewValuesJson),
+            Reason = audit.Reason,
+            OccurredAt = audit.OccurredAt,
+            IpAddress = audit.IpAddress,
+            UserAgent = audit.UserAgent,
+            CorrelationId = audit.CorrelationId
+        };
     }
 
-    private static string? FirstNonEmpty(params string?[] values) =>
-        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
+    private static string BuildCsv(IReadOnlyCollection<ContractAuditResponse> rows)
+    {
+        var builder = new StringBuilder();
+        AppendCsvRow(builder,
+            "OccurredAtUtc", "AuditId", "ContractCode", "ContractName",
+            "ContractId", "VersionNo", "VersionId", "ActorType",
+            "ActorDisplayName", "ActorEmployeeId", "CustomerSessionId",
+            "MaskedPhone", "PhoneSource", "ActionType", "Result",
+            "FailureCode", "SubjectType", "SubjectId", "Reason",
+            "IpAddress", "UserAgent", "CorrelationId", "PreviousValues",
+            "NewValues");
+        foreach (var row in rows)
+        {
+            AppendCsvRow(builder,
+                row.OccurredAt.ToString("O", CultureInfo.InvariantCulture),
+                row.ContractAuditId,
+                row.ContractCode,
+                row.ContractName,
+                row.ContractId,
+                row.VersionNo,
+                row.VersionId,
+                row.ActorType,
+                row.ActorDisplayName,
+                row.ActorEmployeeId,
+                row.ActorCustomerAccessSessionId,
+                row.ActorMaskedPhone,
+                row.ActorPhoneSource,
+                row.ActionType,
+                row.Result,
+                row.FailureCode,
+                row.SubjectType,
+                row.SubjectId,
+                row.Reason,
+                row.IpAddress,
+                row.UserAgent,
+                row.CorrelationId,
+                row.PreviousValues is null
+                    ? null
+                    : JsonSerializer.Serialize(row.PreviousValues),
+                row.NewValues is null
+                    ? null
+                    : JsonSerializer.Serialize(row.NewValues));
+        }
+
+        return builder.ToString();
+    }
+
+    private static void AppendCsvRow(StringBuilder builder, params object?[] values)
+    {
+        builder.AppendLine(string.Join(',', values.Select(EscapeCsv)));
+    }
+
+    private static string EscapeCsv(object? value)
+    {
+        var text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+        if (text.Length > 0 && text[0] is '=' or '+' or '-' or '@' or '\t' or '\r')
+        {
+            text = "'" + text;
+        }
+
+        return $"\"{text.Replace("\"", "\"\"")}\"";
+    }
+
+    private static string EncodeCursor(TblContractAudit audit)
+    {
+        var value = $"{audit.OccurredAt.Ticks}:{audit.ContractAuditId}";
+        return Convert.ToBase64String(Encoding.UTF8.GetBytes(value));
+    }
+
+    private static AuditCursor? DecodeCursor(string? encoded)
+    {
+        if (string.IsNullOrWhiteSpace(encoded))
+        {
+            return null;
+        }
+
+        try
+        {
+            var value = Encoding.UTF8.GetString(Convert.FromBase64String(encoded.Trim()));
+            var parts = value.Split(':', 2);
+            if (parts.Length != 2
+                || !long.TryParse(parts[0], NumberStyles.None,
+                    CultureInfo.InvariantCulture, out var ticks)
+                || !int.TryParse(parts[1], NumberStyles.None,
+                    CultureInfo.InvariantCulture, out var auditId)
+                || ticks < DateTime.MinValue.Ticks
+                || ticks > DateTime.MaxValue.Ticks
+                || auditId <= 0)
+            {
+                throw new FormatException();
+            }
+
+            return new AuditCursor(
+                new DateTime(ticks, DateTimeKind.Utc),
+                auditId);
+        }
+        catch (FormatException exception)
+        {
+            throw new ArgumentException("Audit cursor is invalid.", nameof(encoded), exception);
+        }
+    }
 
     private static Dictionary<string, JsonElement>? ParseValues(string? json)
     {
@@ -252,16 +550,34 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
         return JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json);
     }
 
-    private static void ValidateFilter(ContractAuditFilterRequest filter)
+    private static string? FirstNonEmpty(params string?[] values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
+
+    private static string? MaskPhone(string? normalized)
     {
-        if (filter.ContractId is <= 0 || filter.VersionId is <= 0)
+        if (string.IsNullOrWhiteSpace(normalized))
         {
-            throw new ArgumentException("ContractId and VersionId must be positive.");
+            return null;
         }
 
-        if (filter.Page <= 0 || filter.PageSize is < 1 or > 100)
+        var visible = Math.Min(4, normalized.Length);
+        return new string('*', normalized.Length - visible) + normalized[^visible..];
+    }
+
+    private static void ValidateFilter(ContractAuditFilterRequest filter)
+    {
+        if (filter.ContractId is <= 0
+            || filter.VersionId is <= 0
+            || filter.ActorEmployeeId is <= 0
+            || filter.ActorCustomerAccessSessionId is <= 0
+            || filter.SubjectId is <= 0)
         {
-            throw new ArgumentException("Page must be positive and PageSize must be from 1 to 100.");
+            throw new ArgumentException("Audit identifiers must be positive.");
+        }
+
+        if (filter.PageSize is < 1 or > 100)
+        {
+            throw new ArgumentException("PageSize must be from 1 to 100.");
         }
 
         if (filter.FromUtc.HasValue
@@ -273,9 +589,22 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
             throw new ArgumentException("Audit time range must be valid UTC.");
         }
 
+        ValidateLength(filter.CorrelationId, "CorrelationId", 100);
+        ValidateLength(filter.FailureCode, "FailureCode", 64);
+        ValidateLength(filter.Cursor, "Cursor", 256);
         ValidateValue(filter.ActorType, "ActorType", ActorTypes());
         ValidateValue(filter.Result, "Result", Results());
         ValidateValue(filter.ActionType, "ActionType", ActionTypes());
+        ValidateValue(filter.SubjectType, "SubjectType", SubjectTypes());
+        _ = DecodeCursor(filter.Cursor);
+    }
+
+    private static void ValidateLength(string? value, string name, int maxLength)
+    {
+        if (!string.IsNullOrWhiteSpace(value) && value.Trim().Length > maxLength)
+        {
+            throw new ArgumentException($"{name} is too long.");
+        }
     }
 
     private static void ValidateValue(
@@ -283,7 +612,7 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
         string name,
         HashSet<string> allowed)
     {
-        if (!string.IsNullOrWhiteSpace(value) && !allowed.Contains(value))
+        if (!string.IsNullOrWhiteSpace(value) && !allowed.Contains(value.Trim()))
         {
             throw new ArgumentException($"{name} is invalid.");
         }
@@ -292,6 +621,13 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
     private static HashSet<string> ActorTypes() =>
         [ContractAuditActorTypes.Employee, ContractAuditActorTypes.Customer,
             ContractAuditActorTypes.System];
+
+    private static HashSet<string> SubjectTypes() =>
+        [ContractAuditSubjectTypes.Contract, ContractAuditSubjectTypes.ContractVersion,
+            ContractAuditSubjectTypes.NegotiationComment,
+            ContractAuditSubjectTypes.CustomerAccessLink,
+            ContractAuditSubjectTypes.CustomerOtpChallenge,
+            ContractAuditSubjectTypes.CustomerAccessSession];
 
     private static HashSet<string> Results() =>
         [ContractAuditResults.Succeeded, ContractAuditResults.Failed,
@@ -330,4 +666,29 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
         ContractAuditActionTypes.PublicAccessDenied,
         ContractAuditActionTypes.ConcurrencyConflict
     ];
+
+    private sealed record AuditCursor(DateTime OccurredAt, int ContractAuditId);
+
+    private sealed record PhoneLookup(string? MaskedPhone, string? PhoneSource);
+
+    private sealed record SessionLookup(
+        int CustomerAccessSessionId,
+        int ContractId,
+        int VerificationPhoneId);
+
+    private sealed record CustomerActorLookup(
+        string? DisplayName,
+        string? MaskedPhone,
+        string? PhoneSource);
+
+    private sealed record ContractLookup(
+        string? ContractCode,
+        string? ContractName,
+        string? CustomerName);
+
+    private sealed record AuditLookupContext(
+        IReadOnlyDictionary<int, string?> EmployeeNames,
+        IReadOnlyDictionary<int, CustomerActorLookup> CustomerActors,
+        IReadOnlyDictionary<int, ContractLookup> Contracts,
+        IReadOnlyDictionary<int, int> VersionNumbers);
 }

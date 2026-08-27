@@ -31,6 +31,16 @@ public sealed class ContractAuditResponse
     /// </summary>
     public string? ActorDisplayName { get; set; }
 
+    public string? ActorMaskedPhone { get; set; }
+
+    public string? ActorPhoneSource { get; set; }
+
+    public string? ContractCode { get; set; }
+
+    public string? ContractName { get; set; }
+
+    public int? VersionNo { get; set; }
+
     public string ActionType { get; set; } = string.Empty;
 
     public string Result { get; set; } = string.Empty;
@@ -50,4 +60,17 @@ public sealed class ContractAuditResponse
     public string? UserAgent { get; set; }
 
     public string CorrelationId { get; set; } = string.Empty;
+}
+
+public sealed class ContractAuditCursorPageResponse
+{
+    public List<ContractAuditResponse> Items { get; set; } = [];
+
+    public int TotalCount { get; set; }
+
+    public int PageSize { get; set; }
+
+    public bool HasMore { get; set; }
+
+    public string? NextCursor { get; set; }
 }

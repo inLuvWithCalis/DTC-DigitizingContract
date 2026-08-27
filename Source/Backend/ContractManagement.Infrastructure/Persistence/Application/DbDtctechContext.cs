@@ -478,6 +478,58 @@ public partial class DbDtctechContext : DbContext
                 .HasDatabaseName(
                     "IX_tbl_ContractAudit_TenantId_OccurredAt_ContractAuditId");
 
+            entity.HasIndex(e => new
+                {
+                    e.TenantId,
+                    e.ActorEmployeeId,
+                    e.OccurredAt,
+                    e.ContractAuditId
+                })
+                .IsDescending(false, false, true, true)
+                .HasFilter("[ActorEmployeeId] IS NOT NULL")
+                .HasDatabaseName(
+                    "IX_tbl_ContractAudit_Tenant_Employee_OccurredAt");
+
+            entity.HasIndex(e => new
+                {
+                    e.TenantId,
+                    e.ActorCustomerAccessSessionId,
+                    e.OccurredAt,
+                    e.ContractAuditId
+                })
+                .IsDescending(false, false, true, true)
+                .HasFilter("[ActorCustomerAccessSessionId] IS NOT NULL")
+                .HasDatabaseName(
+                    "IX_tbl_ContractAudit_Tenant_CustomerSession_OccurredAt");
+
+            entity.HasIndex(e => new { e.TenantId, e.CorrelationId })
+                .HasDatabaseName(
+                    "IX_tbl_ContractAudit_Tenant_CorrelationId");
+
+            entity.HasIndex(e => new
+                {
+                    e.TenantId,
+                    e.SubjectType,
+                    e.SubjectId,
+                    e.OccurredAt,
+                    e.ContractAuditId
+                })
+                .IsDescending(false, false, false, true, true)
+                .HasDatabaseName(
+                    "IX_tbl_ContractAudit_Tenant_Subject_OccurredAt");
+
+            entity.HasIndex(e => new
+                {
+                    e.TenantId,
+                    e.FailureCode,
+                    e.OccurredAt,
+                    e.ContractAuditId
+                })
+                .IsDescending(false, false, true, true)
+                .HasFilter("[FailureCode] IS NOT NULL")
+                .HasDatabaseName(
+                    "IX_tbl_ContractAudit_Tenant_Failure_OccurredAt");
+
             entity.Property(e => e.SubjectType)
                 .HasMaxLength(64)
                 .IsUnicode(false);
@@ -493,6 +545,26 @@ public partial class DbDtctechContext : DbContext
                 .IsUnicode(false);
 
             entity.Property(e => e.ActorCustomerAccessSessionId);
+
+            entity.Property(e => e.ActorDisplayNameSnapshot)
+                .HasMaxLength(1000);
+
+            entity.Property(e => e.ActorMaskedPhoneSnapshot)
+                .HasMaxLength(32)
+                .IsUnicode(false);
+
+            entity.Property(e => e.ActorPhoneSourceSnapshot)
+                .HasMaxLength(32)
+                .IsUnicode(false);
+
+            entity.Property(e => e.ContractCodeSnapshot)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+
+            entity.Property(e => e.ContractNameSnapshot)
+                .HasMaxLength(1000);
+
+            entity.Property(e => e.VersionNoSnapshot);
 
             entity.Property(e => e.Result)
                 .HasMaxLength(32)

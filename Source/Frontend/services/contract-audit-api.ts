@@ -48,21 +48,38 @@ export const CONTRACT_AUDIT_ACTION_TYPES = [
   "ConcurrencyConflict",
 ] as const;
 
+export const CONTRACT_AUDIT_SUBJECT_TYPES = [
+  "Contract",
+  "ContractVersion",
+  "NegotiationComment",
+  "CustomerAccessLink",
+  "CustomerOtpChallenge",
+  "CustomerAccessSession",
+] as const;
+
 export type ContractAuditActorType =
   (typeof CONTRACT_AUDIT_ACTOR_TYPES)[number];
 export type ContractAuditResult = (typeof CONTRACT_AUDIT_RESULTS)[number];
 export type ContractAuditActionType =
   (typeof CONTRACT_AUDIT_ACTION_TYPES)[number];
+export type ContractAuditSubjectType =
+  (typeof CONTRACT_AUDIT_SUBJECT_TYPES)[number];
 
 export interface ContractAuditFilterRequest {
   contractId?: number;
   versionId?: number;
   actorType?: ContractAuditActorType;
+  actorEmployeeId?: number;
+  actorCustomerAccessSessionId?: number;
   actionType?: ContractAuditActionType;
   result?: ContractAuditResult;
+  correlationId?: string;
+  subjectType?: ContractAuditSubjectType;
+  subjectId?: number;
+  failureCode?: string;
   fromUtc?: string;
   toUtc?: string;
-  page?: number;
+  cursor?: string;
   pageSize?: number;
 }
 
@@ -76,6 +93,11 @@ export interface ContractAuditResponse {
   actorEmployeeId: number | null;
   actorCustomerAccessSessionId: number | null;
   actorDisplayName?: string | null;
+  actorMaskedPhone?: string | null;
+  actorPhoneSource?: string | null;
+  contractCode?: string | null;
+  contractName?: string | null;
+  versionNo?: number | null;
   actionType: ContractAuditActionType;
   result: ContractAuditResult;
   failureCode: string | null;
@@ -88,12 +110,12 @@ export interface ContractAuditResponse {
   correlationId: string;
 }
 
-export interface ContractAuditPagedResult {
+export interface ContractAuditCursorPageResult {
   items: ContractAuditResponse[];
   totalCount: number;
-  page: number;
   pageSize: number;
-  totalPages: number;
+  hasMore: boolean;
+  nextCursor?: string | null;
 }
 
 export const CONTRACT_AUDIT_ACTOR_LABELS: Record<
@@ -111,6 +133,18 @@ export const CONTRACT_AUDIT_RESULT_LABELS: Record<ContractAuditResult, string> =
   Denied: "Bị từ chối",
   RateLimited: "Vượt giới hạn",
   ConcurrencyConflict: "Xung đột dữ liệu",
+};
+
+export const CONTRACT_AUDIT_SUBJECT_LABELS: Record<
+  ContractAuditSubjectType,
+  string
+> = {
+  Contract: "Hợp đồng",
+  ContractVersion: "Phiên bản",
+  NegotiationComment: "Bình luận đàm phán",
+  CustomerAccessLink: "Link khách hàng",
+  CustomerOtpChallenge: "Yêu cầu OTP",
+  CustomerAccessSession: "Phiên khách hàng",
 };
 
 export const CONTRACT_AUDIT_ACTION_LABELS: Record<
@@ -150,5 +184,12 @@ export const CONTRACT_AUDIT_ACTION_LABELS: Record<
 
 export const contractAuditApi = {
   getList: (params: ContractAuditFilterRequest) =>
-    axiosClient.get<unknown, ContractAuditPagedResult>(BASE_URL, { params }),
+    axiosClient.get<unknown, ContractAuditCursorPageResult>(BASE_URL, {
+      params,
+    }),
+  exportCsv: (params: ContractAuditFilterRequest) =>
+    axiosClient.get<unknown, Blob>(`${BASE_URL}/export`, {
+      params,
+      responseType: "blob",
+    }),
 };

@@ -26,6 +26,24 @@ public partial class TblContractAudit
     /// </summary>
     public int? ActorCustomerAccessSessionId { get; set; }
 
+    /// <summary>
+    /// Immutable, non-secret actor context captured when the audit is persisted.
+    /// </summary>
+    public string? ActorDisplayNameSnapshot { get; set; }
+
+    public string? ActorMaskedPhoneSnapshot { get; set; }
+
+    public string? ActorPhoneSourceSnapshot { get; set; }
+
+    /// <summary>
+    /// Immutable contract context used by tenant-wide audit views.
+    /// </summary>
+    public string? ContractCodeSnapshot { get; set; }
+
+    public string? ContractNameSnapshot { get; set; }
+
+    public int? VersionNoSnapshot { get; set; }
+
     public string ActionType { get; set; } = null!;
 
     public string Result { get; set; } = null!;

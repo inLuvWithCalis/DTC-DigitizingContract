@@ -16,6 +16,7 @@ public partial class DbDtctechContext
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         RevokeCustomerAccessForCancelledContracts();
+        PopulateContractAuditSnapshots();
         AssignSyntheticRowVersionsForInMemory();
         ValidateContractAuditEntries();
         ValidateContractTemplateAuditEntries();
@@ -31,18 +32,283 @@ public partial class DbDtctechContext
             cancellationToken);
     }
 
-    public override Task<int> SaveChangesAsync(
+    public override async Task<int> SaveChangesAsync(
         bool acceptAllChangesOnSuccess,
         CancellationToken cancellationToken = default)
     {
         RevokeCustomerAccessForCancelledContracts();
+        await PopulateContractAuditSnapshotsAsync(cancellationToken);
         AssignSyntheticRowVersionsForInMemory();
         ValidateContractAuditEntries();
         ValidateContractTemplateAuditEntries();
         ValidateAuthorizationAuditEntries();
-        return base.SaveChangesAsync(
+        return await base.SaveChangesAsync(
             acceptAllChangesOnSuccess,
             cancellationToken);
+    }
+
+    private void PopulateContractAuditSnapshots() =>
+        PopulateContractAuditSnapshotsAsync(CancellationToken.None, useAsync: false)
+            .GetAwaiter()
+            .GetResult();
+
+    private Task PopulateContractAuditSnapshotsAsync(
+        CancellationToken cancellationToken) =>
+        PopulateContractAuditSnapshotsAsync(cancellationToken, useAsync: true);
+
+    private async Task PopulateContractAuditSnapshotsAsync(
+        CancellationToken cancellationToken,
+        bool useAsync)
+    {
+        var audits = ChangeTracker.Entries<TblContractAudit>()
+            .Where(entry => entry.State == EntityState.Added)
+            .Select(entry => entry.Entity)
+            .ToList();
+        if (audits.Count == 0)
+        {
+            return;
+        }
+
+        var contractIds = audits.Select(audit => audit.ContractId)
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList();
+        var contracts = ChangeTracker.Entries<TblContract>()
+            .Where(entry => entry.State != EntityState.Deleted
+                && contractIds.Contains(entry.Entity.ContractId))
+            .Select(entry => entry.Entity)
+            .ToDictionary(contract => contract.ContractId);
+        var missingContractIds = contractIds.Except(contracts.Keys).ToList();
+        if (missingContractIds.Count > 0)
+        {
+            var storedContracts = await LoadSnapshotRowsAsync(
+                TblContracts.AsNoTracking()
+                    .Where(contract => missingContractIds.Contains(contract.ContractId)),
+                useAsync,
+                cancellationToken);
+            foreach (var contract in storedContracts)
+            {
+                contracts[contract.ContractId] = contract;
+            }
+        }
+
+        var versionIds = audits.Where(audit => audit.VersionId.HasValue)
+            .Select(audit => audit.VersionId!.Value)
+            .Distinct()
+            .ToList();
+        var versions = ChangeTracker.Entries<TblContractVersion>()
+            .Where(entry => entry.State != EntityState.Deleted
+                && versionIds.Contains(entry.Entity.VersionId))
+            .Select(entry => entry.Entity)
+            .ToDictionary(version => version.VersionId);
+        var missingVersionIds = versionIds.Except(versions.Keys).ToList();
+        if (missingVersionIds.Count > 0)
+        {
+            var storedVersions = await LoadSnapshotRowsAsync(
+                TblContractVersions.AsNoTracking()
+                    .Where(version => missingVersionIds.Contains(version.VersionId)),
+                useAsync,
+                cancellationToken);
+            foreach (var version in storedVersions)
+            {
+                versions[version.VersionId] = version;
+            }
+        }
+
+        var employeeIds = audits.Where(audit => audit.ActorEmployeeId.HasValue)
+            .Select(audit => audit.ActorEmployeeId!.Value)
+            .Distinct()
+            .ToList();
+        var employees = ChangeTracker.Entries<TblEmployee>()
+            .Where(entry => entry.State != EntityState.Deleted
+                && employeeIds.Contains(entry.Entity.EmployeeId))
+            .Select(entry => entry.Entity)
+            .ToDictionary(employee => employee.EmployeeId);
+        var missingEmployeeIds = employeeIds.Except(employees.Keys).ToList();
+        if (missingEmployeeIds.Count > 0)
+        {
+            var storedEmployees = await LoadSnapshotRowsAsync(
+                TblEmployees.AsNoTracking()
+                    .Where(employee => missingEmployeeIds.Contains(employee.EmployeeId)),
+                useAsync,
+                cancellationToken);
+            foreach (var employee in storedEmployees)
+            {
+                employees[employee.EmployeeId] = employee;
+            }
+        }
+
+        var sessionIds = audits
+            .Where(audit => audit.ActorCustomerAccessSessionId.HasValue)
+            .Select(audit => audit.ActorCustomerAccessSessionId!.Value)
+            .Distinct()
+            .ToList();
+        var sessions = ChangeTracker.Entries<TblContractCustomerAccessSession>()
+            .Where(entry => entry.State != EntityState.Deleted
+                && sessionIds.Contains(entry.Entity.CustomerAccessSessionId))
+            .Select(entry => entry.Entity)
+            .ToDictionary(session => session.CustomerAccessSessionId);
+        var missingSessionIds = sessionIds.Except(sessions.Keys).ToList();
+        if (missingSessionIds.Count > 0)
+        {
+            var storedSessions = await LoadSnapshotRowsAsync(
+                TblContractCustomerAccessSessions.AsNoTracking()
+                    .Where(session => missingSessionIds.Contains(
+                        session.CustomerAccessSessionId)),
+                useAsync,
+                cancellationToken);
+            foreach (var session in storedSessions)
+            {
+                sessions[session.CustomerAccessSessionId] = session;
+            }
+        }
+
+        var customerIds = contracts.Values.Select(contract => contract.CustomerId)
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList();
+        var customers = ChangeTracker.Entries<TblCustomer>()
+            .Where(entry => entry.State != EntityState.Deleted
+                && customerIds.Contains(entry.Entity.CustomerId))
+            .Select(entry => entry.Entity)
+            .ToDictionary(customer => customer.CustomerId);
+        var missingCustomerIds = customerIds.Except(customers.Keys).ToList();
+        if (missingCustomerIds.Count > 0)
+        {
+            var storedCustomers = await LoadSnapshotRowsAsync(
+                TblCustomers.AsNoTracking()
+                    .Where(customer => missingCustomerIds.Contains(customer.CustomerId)),
+                useAsync,
+                cancellationToken);
+            foreach (var customer in storedCustomers)
+            {
+                customers[customer.CustomerId] = customer;
+            }
+        }
+
+        var verificationPhoneIds = sessions.Values
+            .Select(session => session.VerificationPhoneId)
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList();
+        var verificationPhones = ChangeTracker
+            .Entries<TblContractCustomerVerificationPhone>()
+            .Where(entry => entry.State != EntityState.Deleted
+                && verificationPhoneIds.Contains(entry.Entity.VerificationPhoneId))
+            .Select(entry => entry.Entity)
+            .ToDictionary(phone => phone.VerificationPhoneId);
+        var missingPhoneIds = verificationPhoneIds
+            .Except(verificationPhones.Keys)
+            .ToList();
+        if (missingPhoneIds.Count > 0)
+        {
+            var storedPhones = await LoadSnapshotRowsAsync(
+                TblContractCustomerVerificationPhones.AsNoTracking()
+                    .Where(phone => missingPhoneIds.Contains(phone.VerificationPhoneId)),
+                useAsync,
+                cancellationToken);
+            foreach (var phone in storedPhones)
+            {
+                verificationPhones[phone.VerificationPhoneId] = phone;
+            }
+        }
+
+        foreach (var audit in audits)
+        {
+            contracts.TryGetValue(audit.ContractId, out var contract);
+            if (contract is not null)
+            {
+                audit.ContractCodeSnapshot ??= NormalizeAuditSnapshot(
+                    contract.ContractCode,
+                    50);
+                audit.ContractNameSnapshot ??= NormalizeAuditSnapshot(
+                    contract.ContractName,
+                    1000);
+            }
+
+            if (audit.VersionId.HasValue
+                && versions.TryGetValue(audit.VersionId.Value, out var version))
+            {
+                audit.VersionNoSnapshot ??= version.VersionNo;
+            }
+
+            if (audit.ActorEmployeeId.HasValue
+                && employees.TryGetValue(audit.ActorEmployeeId.Value, out var employee))
+            {
+                audit.ActorDisplayNameSnapshot ??= NormalizeAuditSnapshot(
+                    FirstAuditSnapshotValue(
+                        employee.EmployeeFullName,
+                        employee.EmployeeCode,
+                        employee.EmployeeAccount),
+                    1000);
+            }
+
+            if (!audit.ActorCustomerAccessSessionId.HasValue
+                || !sessions.TryGetValue(
+                    audit.ActorCustomerAccessSessionId.Value,
+                    out var session))
+            {
+                continue;
+            }
+
+            if (contract is not null
+                && customers.TryGetValue(contract.CustomerId, out var customer))
+            {
+                audit.ActorDisplayNameSnapshot ??= NormalizeAuditSnapshot(
+                    FirstAuditSnapshotValue(
+                        customer.CustomerFullName,
+                        customer.CustomerCompany,
+                        customer.CustomerRepresentativeName,
+                        customer.CustomerCode),
+                    1000);
+            }
+
+            if (verificationPhones.TryGetValue(
+                    session.VerificationPhoneId,
+                    out var phone))
+            {
+                audit.ActorMaskedPhoneSnapshot ??= MaskAuditPhone(
+                    phone.PhoneNumberNormalized);
+                audit.ActorPhoneSourceSnapshot ??= NormalizeAuditSnapshot(
+                    phone.PhoneSource,
+                    32);
+            }
+        }
+    }
+
+    private static async Task<List<T>> LoadSnapshotRowsAsync<T>(
+        IQueryable<T> query,
+        bool useAsync,
+        CancellationToken cancellationToken) where T : class =>
+        useAsync
+            ? await query.ToListAsync(cancellationToken)
+            : query.ToList();
+
+    private static string? FirstAuditSnapshotValue(params string?[] values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+    private static string? NormalizeAuditSnapshot(string? value, int maxLength)
+    {
+        var normalized = value?.Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return null;
+        }
+
+        return normalized.Length <= maxLength
+            ? normalized
+            : normalized[..maxLength];
+    }
+
+    private static string? MaskAuditPhone(string? normalized)
+    {
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return null;
+        }
+
+        var visible = Math.Min(4, normalized.Length);
+        return new string('*', normalized.Length - visible) + normalized[^visible..];
     }
 
     private void AssignSyntheticRowVersionsForInMemory()

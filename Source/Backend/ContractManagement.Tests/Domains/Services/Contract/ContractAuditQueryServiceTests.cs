@@ -53,7 +53,7 @@ public sealed class ContractAuditQueryServiceTests
 
         var service = new ContractAuditQueryService(context, tenant);
         var result = await service.QueryAsync(
-            new ContractAuditFilterRequest { Page = 1, PageSize = 20 },
+            new ContractAuditFilterRequest { PageSize = 20 },
             ManagerId);
 
         Assert.Equal(2, result.TotalCount);
@@ -64,6 +64,9 @@ public sealed class ContractAuditQueryServiceTests
             Assert.Equal(ContractAuditSubjectTypes.Contract, audit.SubjectType);
             Assert.Equal(ContractId, audit.SubjectId);
             Assert.Equal($"Employee {ManagerId}", audit.ActorDisplayName);
+            Assert.Equal("HD-7001", audit.ContractCode);
+            Assert.Equal("Hợp đồng kiểm thử", audit.ContractName);
+            Assert.Equal(1, audit.VersionNo);
             Assert.NotNull(audit.NewValues);
             Assert.DoesNotContain("PhoneNumber", audit.NewValues!.Keys);
         });
@@ -110,12 +113,100 @@ public sealed class ContractAuditQueryServiceTests
 
         var result = await new ContractAuditQueryService(context, tenant)
             .QueryAsync(
-                new ContractAuditFilterRequest { Page = 1, PageSize = 20 },
+                new ContractAuditFilterRequest { PageSize = 20 },
                 ManagerId);
 
         var audit = Assert.Single(result.Items);
         Assert.Equal(sessionId, audit.ActorCustomerAccessSessionId);
         Assert.Equal("Nguyễn Văn Khách", audit.ActorDisplayName);
+        Assert.Equal("*********6789", audit.ActorMaskedPhone);
+        Assert.Equal("CustomerMobile", audit.ActorPhoneSource);
+
+        var storedAudit = await context.TblContractAudits.SingleAsync();
+        Assert.Equal("Nguyễn Văn Khách", storedAudit.ActorDisplayNameSnapshot);
+        Assert.Equal("*********6789", storedAudit.ActorMaskedPhoneSnapshot);
+        Assert.Equal("CustomerMobile", storedAudit.ActorPhoneSourceSnapshot);
+
+        var customer = await context.TblCustomers.SingleAsync();
+        var contract = await context.TblContracts.SingleAsync();
+        customer.CustomerFullName = "Tên khách hàng mới";
+        contract.ContractName = "Tên hợp đồng mới";
+        await context.SaveChangesAsync();
+
+        var afterProfileChange = await new ContractAuditQueryService(context, tenant)
+            .QueryAsync(
+                new ContractAuditFilterRequest { PageSize = 20 },
+                ManagerId);
+        var immutableAudit = Assert.Single(afterProfileChange.Items);
+        Assert.Equal("Nguyễn Văn Khách", immutableAudit.ActorDisplayName);
+        Assert.Equal("Hợp đồng kiểm thử", immutableAudit.ContractName);
+    }
+
+    [Fact]
+    public async Task QueryAsync_UsesCursorWithoutDuplicateRows()
+    {
+        await using var context = CreateContext();
+        await SeedAsync(context);
+        var tenant = CreateTenant();
+        var writer = CreateWriter(context, tenant);
+        var occurredAt = new DateTime(2026, 8, 7, 3, 0, 0, DateTimeKind.Utc);
+        writer.StageEmployeeAudits(
+        [
+            NewDraftAudit(ManagerId, occurredAt.AddMinutes(2), "Third"),
+            NewDraftAudit(ManagerId, occurredAt.AddMinutes(1), "Second"),
+            NewDraftAudit(ManagerId, occurredAt, "First")
+        ]);
+        await context.SaveChangesAsync();
+
+        var service = new ContractAuditQueryService(context, tenant);
+        var first = await service.QueryAsync(
+            new ContractAuditFilterRequest { PageSize = 2 },
+            ManagerId);
+        var second = await service.QueryAsync(
+            new ContractAuditFilterRequest
+            {
+                PageSize = 2,
+                Cursor = first.NextCursor
+            },
+            ManagerId);
+
+        Assert.Equal(3, first.TotalCount);
+        Assert.True(first.HasMore);
+        Assert.NotNull(first.NextCursor);
+        Assert.Equal(2, first.Items.Count);
+        Assert.False(second.HasMore);
+        Assert.Single(second.Items);
+        Assert.Empty(first.Items.Select(x => x.ContractAuditId)
+            .Intersect(second.Items.Select(x => x.ContractAuditId)));
+    }
+
+    [Fact]
+    public async Task ExportCsvAsync_AppliesTraceFiltersAndIncludesBom()
+    {
+        await using var context = CreateContext();
+        await SeedAsync(context);
+        var tenant = CreateTenant();
+        CreateWriter(context, tenant).StageEmployeeAudits(
+        [NewDraftAudit(ManagerId, DateTime.UtcNow, "Export")]);
+        await context.SaveChangesAsync();
+
+        var service = new ContractAuditQueryService(context, tenant);
+        var export = await service.ExportCsvAsync(
+            new ContractAuditFilterRequest
+            {
+                ActorEmployeeId = ManagerId,
+                CorrelationId = "audit-tests",
+                SubjectType = ContractAuditSubjectTypes.Contract,
+                SubjectId = ContractId
+            },
+            ManagerId);
+
+        Assert.StartsWith("contract-audits-", export.FileName);
+        Assert.Equal(new byte[] { 0xEF, 0xBB, 0xBF }, export.Content[..3]);
+        var csv = System.Text.Encoding.UTF8.GetString(export.Content);
+        Assert.Contains("HD-7001", csv);
+        Assert.Contains($"Employee {ManagerId}", csv);
+        Assert.DoesNotContain("Employee 12", csv);
     }
 
     [Fact]
@@ -133,14 +224,13 @@ public sealed class ContractAuditQueryServiceTests
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             service.QueryAsync(
-                new ContractAuditFilterRequest { Page = 1, PageSize = 20 },
+                new ContractAuditFilterRequest { PageSize = 20 },
                 ResponsibleId));
 
         var result = await service.QueryAsync(
             new ContractAuditFilterRequest
             {
                 ContractId = ContractId,
-                Page = 1,
                 PageSize = 20
             },
             ResponsibleId);
@@ -151,7 +241,6 @@ public sealed class ContractAuditQueryServiceTests
                 new ContractAuditFilterRequest
                 {
                     ContractId = ContractId,
-                    Page = 1,
                     PageSize = 20
                 },
                 OtherEmployeeId));
@@ -224,12 +313,33 @@ public sealed class ContractAuditQueryServiceTests
             CustomerFullName = "Nguyễn Văn Khách",
             CustomerCompany = "Công ty Khách hàng"
         });
+        context.TblContractCustomerVerificationPhones.Add(
+            new TblContractCustomerVerificationPhone
+            {
+                VerificationPhoneId = 1,
+                ContractId = ContractId,
+                PhoneSource = "CustomerMobile",
+                PhoneNumberNormalized = "+849123456789",
+                Reason = "Test",
+                CreatedByEmployeeId = ManagerId,
+                CreatedDate = DateTime.UtcNow
+            });
         context.TblContracts.Add(new TblContract
         {
             ContractId = ContractId,
             CustomerId = 501,
             EmployeeId = ResponsibleId,
+            ContractCode = "HD-7001",
+            ContractName = "Hợp đồng kiểm thử",
             Status = (byte)ContractStatus.Draft
+        });
+        context.TblContractVersions.Add(new TblContractVersion
+        {
+            VersionId = 1,
+            ContractId = ContractId,
+            VersionNo = 1,
+            CreatedEmployeeId = ManagerId,
+            CreatedDate = DateTime.UtcNow
         });
         await context.SaveChangesAsync();
     }

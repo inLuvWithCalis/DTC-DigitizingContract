@@ -12,15 +12,30 @@ public sealed class ContractAuditFilterRequest
 
     public string? ActorType { get; set; }
 
+    public int? ActorEmployeeId { get; set; }
+
+    public int? ActorCustomerAccessSessionId { get; set; }
+
     public string? ActionType { get; set; }
 
     public string? Result { get; set; }
+
+    public string? CorrelationId { get; set; }
+
+    public string? SubjectType { get; set; }
+
+    public int? SubjectId { get; set; }
+
+    public string? FailureCode { get; set; }
 
     public DateTime? FromUtc { get; set; }
 
     public DateTime? ToUtc { get; set; }
 
-    public int Page { get; set; } = 1;
+    /// <summary>
+    /// Opaque cursor returned by the previous response. Omit for the first page.
+    /// </summary>
+    public string? Cursor { get; set; }
 
     public int PageSize { get; set; } = 20;
 }

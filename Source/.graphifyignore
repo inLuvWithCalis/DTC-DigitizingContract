@@ -1,0 +1,15 @@
+# Graphify output must not be indexed back into the project graph.
+graphify-out/
+
+# Build artifacts and dependency caches.
+**/bin/
+**/obj/
+**/node_modules/
+**/.next/
+**/coverage/
+**/dist/
+
+# EF Core generated metadata is very large and duplicates the actual model and
+# migration definitions. Keep DbDtctechContext.cs and migration *.cs files.
+**/*.Designer.cs
+**/DbDtctechContextModelSnapshot.cs

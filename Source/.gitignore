@@ -1,2 +1,11 @@
 .agents/
 Docs/
+.codex/
+
+# Graphify: share only the portable graph, report, and incremental manifest.
+# Everything else is local cache, machine configuration, personal work memory,
+# or reproducible output.
+graphify-out/*
+!graphify-out/graph.json
+!graphify-out/GRAPH_REPORT.md
+!graphify-out/manifest.json

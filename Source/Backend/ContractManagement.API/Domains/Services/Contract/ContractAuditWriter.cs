@@ -323,7 +323,10 @@ public sealed class ContractAuditWriter : IContractAuditWriter
 
     private static HashSet<string> ApprovalFields() => Fields(
         "Status", "CurrentVersionId", "VersionLocked", "ApprovalRequestId",
-        "ApprovalStatus", "WorkflowId", "SnapshotHash");
+        "ApprovalStatus", "WorkflowId", "SnapshotSchemaVersion",
+        "TemplateVersionId", "SnapshotHash", "DocxFileId", "DocxHash",
+        "PdfFileId", "PdfHash", "ArtifactCount", "InvalidatedLinkCount",
+        "RevokedSessionCount");
 
     private static HashSet<string> AttachmentFields() => Fields(
         "AttachmentId", "FileId", "FileName", "DocumentType", "UploadDate");

@@ -46,6 +46,10 @@ public sealed class ContractTemplatePreviewTests
         Assert.Equal(100m, SoftwareSupplyPreviewDatasetV1.Payments.Sum(item => item.Percent));
         Assert.Equal(SoftwareSupplyPreviewDatasetV1.Items.Sum(item => item.TotalAmount),
             SoftwareSupplyPreviewDatasetV1.Payments.Sum(item => item.Amount));
+        Assert.Equal(
+            "72.187.500",
+            SoftwareSupplyPreviewDatasetV1.GetScalarValues(ContractLanguageMode.Vietnamese)[
+                "CONTRACT_TOTAL_AMOUNT"]);
     }
 
     [Fact]

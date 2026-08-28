@@ -508,6 +508,10 @@ export interface SubmitContractForApprovalResponse {
   approvalStatus: ApprovalRequestStatus;
   submittedDate: string;
   snapshotHash: string;
+  submittedDocxFileId: number;
+  submittedDocxHash: string;
+  submittedPdfFileId: number;
+  submittedPdfHash: string;
   contractRowVersion: string;
   versionRowVersion: string;
 }

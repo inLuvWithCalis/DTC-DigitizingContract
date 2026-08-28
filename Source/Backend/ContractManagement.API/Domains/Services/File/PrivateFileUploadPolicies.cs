@@ -39,6 +39,23 @@ public static class PrivateFileUploadPolicies
             });
     }
 
+    public static PrivateFileUploadPolicy SubmittedContractDocx(
+        long maximumSizeBytes = 25 * 1024 * 1024) =>
+        SoftwareSupplyTemplateDocument(maximumSizeBytes);
+
+    public static PrivateFileUploadPolicy SubmittedContractPdf(
+        long maximumSizeBytes = 25 * 1024 * 1024)
+    {
+        return Create(
+            [".pdf"],
+            ["application/pdf"],
+            maximumSizeBytes,
+            new Dictionary<string, IReadOnlyList<byte[]>>(StringComparer.OrdinalIgnoreCase)
+            {
+                [".pdf"] = [PdfSignature]
+            });
+    }
+
     private static PrivateFileUploadPolicy Create(
         IReadOnlyCollection<string> extensions,
         IReadOnlyCollection<string> contentTypes,

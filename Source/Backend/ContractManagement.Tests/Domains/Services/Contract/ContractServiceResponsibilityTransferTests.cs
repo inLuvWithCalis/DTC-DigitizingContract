@@ -2,6 +2,7 @@ using ContractManagement.API.Common.Enums;
 using ContractManagement.API.Domains.DTOs.Requests.Contract;
 using ContractManagement.Common.Enums;
 using ContractManagement.Domains.Interfaces.Contract;
+using ContractManagement.Domains.Interfaces.File;
 using ContractManagement.Domains.Services.Contract;
 using ContractManagement.Infrastructure.MultiTenancy.Enums;
 using ContractManagement.Infrastructure.MultiTenancy.Models;
@@ -13,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.ComponentModel.DataAnnotations;
 using System.Net;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace ContractManagement.Tests.Domains.Services.Contract;
@@ -704,6 +706,10 @@ public class ContractServiceResponsibilityTransferTests
     {
         await using var context = CreateContext();
         await SeedContractAsync(context);
+        await AddEmployeeAsync(
+            context,
+            ManagerEmployeeId,
+            EmployeeType.Manager);
 
         var contract = await context.TblContracts.SingleAsync();
         contract.Status = (byte)ContractStatus.Negotiating;
@@ -832,7 +838,12 @@ public class ContractServiceResponsibilityTransferTests
             writer = writerDecorator(writer);
         }
 
-        return new ContractService(context, writer);
+        return new ContractService(
+            context,
+            writer,
+            currentTenant,
+            new StaticSubmissionRenderer(),
+            new MemoryPrivateFileStorage());
     }
 
     private static async Task SeedContractAsync(
@@ -906,6 +917,55 @@ public class ContractServiceResponsibilityTransferTests
 
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
+    }
+
+    private sealed class StaticSubmissionRenderer
+        : IContractSubmissionArtifactRenderer
+    {
+        public Task<ContractSubmissionArtifactRenderResult> RenderAsync(
+            int contractId,
+            int employeeId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new ContractSubmissionArtifactRenderResult(
+                "{\"schemaVersion\":4}",
+                4,
+                7001,
+                [0x50, 0x4B, 0x03, 0x04, 0x01],
+                "contract-submitted.docx",
+                "%PDF-test"u8.ToArray(),
+                "contract-submitted.pdf"));
+    }
+
+    private sealed class MemoryPrivateFileStorage : IPrivateFileStorage
+    {
+        public async Task<StoredPrivateFile> SaveAsync(
+            PrivateFileSaveRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            await using var memory = new MemoryStream();
+            await request.Content.CopyToAsync(memory, cancellationToken);
+            var content = memory.ToArray();
+            return new StoredPrivateFile(
+                $"{request.TenantCode}/{request.ObjectType}/{request.ObjectId}/{Guid.NewGuid():N}{Path.GetExtension(request.OriginalFileName)}",
+                request.OriginalFileName,
+                request.ContentType,
+                content.LongLength,
+                Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant(),
+                DateTime.UtcNow,
+                request.TenantCode);
+        }
+
+        public Task<Stream> OpenReadAsync(
+            string tenantCode,
+            string storageKey,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task DeleteAsync(
+            string tenantCode,
+            string storageKey,
+            CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 
     private static TransferContractResponsibilityRequest

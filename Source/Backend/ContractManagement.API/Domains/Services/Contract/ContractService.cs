@@ -2,10 +2,13 @@
 using ContractManagement.API.Common.Responses;
 using ContractManagement.API.Domains.DTOs.Requests.Contract;
 using ContractManagement.API.Domains.DTOs.Responses.Contract;
+using ContractManagement.API.Domains.Models.Contract;
 using ContractManagement.API.Domains.Policies.Contract;
 using ContractManagement.Common.Enums;
 using ContractManagement.Domains.Interfaces.Contract;
+using ContractManagement.Domains.Interfaces.File;
 using ContractManagement.Domains.Policies.ContractTemplate;
+using ContractManagement.Domains.Services.File;
 using ContractManagement.Infrastructure.Persistence.Application;
 using ContractManagement.Infrastructure.Persistence.Application.Models;
 using Microsoft.EntityFrameworkCore;
@@ -26,12 +29,20 @@ namespace ContractManagement.Domains.Services.Contract
         private const decimal MaxMoney = 9999999999999999.99m;
         private const byte ActiveEmployeeStatus = 1;
         private const int MaxAuditSummaryLength = 500;
+        private const string SubmittedContractArtifactObjectType =
+            "ContractVersionArtifact";
+        private const string SubmittedDocxContentType =
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        private const string SubmittedPdfContentType = "application/pdf";
         private static long _syntheticCommentRowVersionSeed = 1000;
 
         private readonly DbDtctechContext _dbContext;
         private readonly IContractAuditWriter _contractAuditWriter;
         private readonly ICurrentTenant? _currentTenant;
         private readonly CustomerAccessCryptography? _customerAccessCryptography;
+        private readonly IContractSubmissionArtifactRenderer?
+            _submissionArtifactRenderer;
+        private readonly IPrivateFileStorage? _privateFileStorage;
 
         public ContractService(
             DbDtctechContext dbContext,
@@ -51,6 +62,37 @@ namespace ContractManagement.Domains.Services.Contract
             _contractAuditWriter = contractAuditWriter;
             _currentTenant = currentTenant;
             _customerAccessCryptography = customerAccessCryptography;
+        }
+
+        public ContractService(
+            DbDtctechContext dbContext,
+            IContractAuditWriter contractAuditWriter,
+            ICurrentTenant currentTenant,
+            CustomerAccessCryptography customerAccessCryptography,
+            IContractSubmissionArtifactRenderer submissionArtifactRenderer,
+            IPrivateFileStorage privateFileStorage)
+            : this(
+                dbContext,
+                contractAuditWriter,
+                currentTenant,
+                customerAccessCryptography)
+        {
+            _submissionArtifactRenderer = submissionArtifactRenderer;
+            _privateFileStorage = privateFileStorage;
+        }
+
+        public ContractService(
+            DbDtctechContext dbContext,
+            IContractAuditWriter contractAuditWriter,
+            ICurrentTenant currentTenant,
+            IContractSubmissionArtifactRenderer submissionArtifactRenderer,
+            IPrivateFileStorage privateFileStorage)
+        {
+            _dbContext = dbContext;
+            _contractAuditWriter = contractAuditWriter;
+            _currentTenant = currentTenant;
+            _submissionArtifactRenderer = submissionArtifactRenderer;
+            _privateFileStorage = privateFileStorage;
         }
 
         /// <summary>
@@ -2258,6 +2300,13 @@ namespace ContractManagement.Domains.Services.Contract
                                 "Không tìm thấy khách hàng của hợp đồng.");
                         }
 
+                        var tenantLegalProfile = await _dbContext
+                            .TblTenantLegalProfiles
+                            .AsNoTracking()
+                            .SingleOrDefaultAsync()
+                            ?? throw new InvalidOperationException(
+                                "Hồ sơ pháp lý doanh nghiệp chưa được cấu hình.");
+
                         var sourceItems = await _dbContext.TblContractItems
                             .AsNoTracking()
                             .Where(x =>
@@ -2282,12 +2331,15 @@ namespace ContractManagement.Domains.Services.Contract
                                 "Version nguồn phải có item và điều khoản.");
                         }
 
-                        var snapshotJson = BuildSnapshotJson(
-                            contract,
-                            sourceVersion,
-                            customer,
-                            sourceItems,
-                            sourceTerms);
+                        var snapshotJson =
+                            SoftwareSupplyContractSnapshotFactory.Serialize(
+                                SoftwareSupplyContractSnapshotFactory.Create(
+                                    tenantLegalProfile,
+                                    customer,
+                                    contract,
+                                    sourceVersion,
+                                    sourceItems,
+                                    sourceTerms));
 
                         var now = DateTime.UtcNow;
 
@@ -3595,6 +3647,16 @@ namespace ContractManagement.Domains.Services.Contract
                 request.CurrentVersionRowVersion,
                 nameof(request.CurrentVersionRowVersion));
 
+            var artifactRenderer = _submissionArtifactRenderer
+                ?? throw new InvalidOperationException(
+                    "Renderer artifact gửi duyệt chưa được cấu hình.");
+            var privateFileStorage = _privateFileStorage
+                ?? throw new InvalidOperationException(
+                    "Private storage cho artifact gửi duyệt chưa được cấu hình.");
+            var tenant = _currentTenant?.GetRequiredTenant()
+                ?? throw new InvalidOperationException(
+                    "Tenant của request chưa được xác định.");
+
             var strategy =
                 _dbContext.Database.CreateExecutionStrategy();
 
@@ -3602,6 +3664,7 @@ namespace ContractManagement.Domains.Services.Contract
             {
                 return await strategy.ExecuteAsync(async () =>
                 {
+                    var storedArtifacts = new List<StoredPrivateFile>(2);
                     await using var transaction = await _dbContext.Database
                         .BeginTransactionAsync();
                     try
@@ -3621,6 +3684,13 @@ namespace ContractManagement.Domains.Services.Contract
                         {
                             throw new InvalidOperationException(
                                 "Hợp đồng legacy không hỗ trợ gửi duyệt.");
+                        }
+
+                        if (contract.ContractType !=
+                            (byte)ContractType.SoftwareSupply)
+                        {
+                            throw new InvalidOperationException(
+                                "Phase 8C chỉ hỗ trợ gửi duyệt hợp đồng cung cấp phần mềm.");
                         }
 
                         var currentStatus =
@@ -3695,37 +3765,28 @@ namespace ContractManagement.Domains.Services.Contract
                                 "Hợp đồng đã có yêu cầu duyệt đang chờ xử lý.");
                         }
 
-                        /*
-                         * Nếu frontend gửi WorkflowId thì kiểm tra workflow.
-                         */
+                        TblApprovalWorkflow? workflow = null;
                         if (request.WorkflowId.HasValue)
                         {
-                            var workflowExists = await _dbContext
+                            workflow = await _dbContext
                                 .TblApprovalWorkflows
                                 .AsNoTracking()
-                                .AnyAsync(x =>
+                                .SingleOrDefaultAsync(x =>
                                     x.WorkflowId == request.WorkflowId.Value
                                     && x.ObjectType == "Contract"
                                     && x.StepNo == 1
                                     && x.IsActive);
 
-                            if (!workflowExists)
+                            if (workflow is null)
                             {
                                 throw new KeyNotFoundException(
                                     "Không tìm thấy workflow duyệt hợp lệ.");
                             }
                         }
 
-                        var customer = await _dbContext.TblCustomers
-                            .AsNoTracking()
-                            .FirstOrDefaultAsync(x =>
-                                x.CustomerId == contract.CustomerId);
-
-                        if (customer == null)
-                        {
-                            throw new KeyNotFoundException(
-                                "Không tìm thấy khách hàng của hợp đồng.");
-                        }
+                        await EnsureEligibleManagerApproverAsync(
+                            employeeId,
+                            workflow);
 
                         var items = await _dbContext.TblContractItems
                             .AsNoTracking()
@@ -3750,26 +3811,107 @@ namespace ContractManagement.Domains.Services.Contract
                             items,
                             terms);
 
-                        /*
-                         * Tạo bản đóng băng nội dung pháp lý.
-                         */
-                        var snapshotJson = BuildSnapshotJson(
-                            contract,
-                            version,
-                            customer,
-                            items,
-                            terms);
+                        var rendered = await artifactRenderer.RenderAsync(
+                            contract.ContractId,
+                            employeeId);
+                        if (rendered.SnapshotSchemaVersion !=
+                            SoftwareSupplyContractSnapshotFactory.CurrentSchemaVersion)
+                        {
+                            throw new InvalidOperationException(
+                                "Renderer không trả snapshot SoftwareSupply schema v4.");
+                        }
 
-                        var snapshotHash =
-                            CalculateSnapshotHash(snapshotJson);
+                        if (version.TemplateVersionId.HasValue
+                            && version.TemplateVersionId.Value !=
+                            rendered.TemplateVersionId)
+                        {
+                            throw new DbUpdateConcurrencyException(
+                                "TemplateVersion của version đã thay đổi trong lúc gửi duyệt.");
+                        }
+
+                        var existingArtifact = await _dbContext.TblFileStorages
+                            .AsNoTracking()
+                            .AnyAsync(file =>
+                                file.ObjectType ==
+                                    SubmittedContractArtifactObjectType
+                                && file.ObjectId == version.VersionId);
+                        if (existingArtifact)
+                        {
+                            throw new InvalidOperationException(
+                                "Version đã có artifact gửi duyệt và không được ghi đè.");
+                        }
+
+                        await using var docxStream = new MemoryStream(
+                            rendered.DocxContent,
+                            writable: false);
+                        var storedDocx = await privateFileStorage.SaveAsync(
+                            new PrivateFileSaveRequest(
+                                docxStream,
+                                rendered.DocxFileName,
+                                SubmittedDocxContentType,
+                                rendered.DocxContent.LongLength,
+                                tenant.TenantCode,
+                                SubmittedContractArtifactObjectType,
+                                version.VersionId,
+                                PrivateFileUploadPolicies
+                                    .SubmittedContractDocx()));
+                        storedArtifacts.Add(storedDocx);
+
+                        await using var pdfStream = new MemoryStream(
+                            rendered.PdfContent,
+                            writable: false);
+                        var storedPdf = await privateFileStorage.SaveAsync(
+                            new PrivateFileSaveRequest(
+                                pdfStream,
+                                rendered.PdfFileName,
+                                SubmittedPdfContentType,
+                                rendered.PdfContent.LongLength,
+                                tenant.TenantCode,
+                                SubmittedContractArtifactObjectType,
+                                version.VersionId,
+                                PrivateFileUploadPolicies
+                                    .SubmittedContractPdf()));
+                        storedArtifacts.Add(storedPdf);
+
+                        var docxHash = CalculateArtifactHash(
+                            rendered.DocxContent);
+                        var pdfHash = CalculateArtifactHash(
+                            rendered.PdfContent);
+                        EnsureStoredArtifactHash(storedDocx, docxHash, "DOCX");
+                        EnsureStoredArtifactHash(storedPdf, pdfHash, "PDF");
+
+                        var docxMetadata = CreateSubmittedArtifactMetadata(
+                            storedDocx,
+                            version.VersionId,
+                            employeeId,
+                            "docx");
+                        var pdfMetadata = CreateSubmittedArtifactMetadata(
+                            storedPdf,
+                            version.VersionId,
+                            employeeId,
+                            "pdf");
+                        _dbContext.TblFileStorages.AddRange(
+                            docxMetadata,
+                            pdfMetadata);
+
+                        var snapshotJson = rendered.SnapshotJson;
+                        var snapshotHash = CalculateSnapshotHash(snapshotJson);
 
                         var now = DateTime.UtcNow;
 
+                        version.TemplateVersionId = rendered.TemplateVersionId;
                         version.SnapshotJson = snapshotJson;
                         version.SnapshotHash = snapshotHash;
                         version.IsLocked = true;
                         version.LockedDate = now;
                         version.LockedByEmployeeId = employeeId;
+
+                        var invalidatedAccess =
+                            await InvalidateNegotiationAccessAsync(
+                                contract,
+                                version.VersionId,
+                                employeeId,
+                                now);
 
                         contract.Status =
                             (byte)ContractStatus.PendingApproval;
@@ -3794,8 +3936,9 @@ namespace ContractManagement.Domains.Services.Contract
                         _dbContext.TblContractApprovalRequests.Add(
                             approvalRequest);
 
-                        // Lần lưu đầu cấp ApprovalRequestId. Transaction vẫn chưa
-                        // commit, nên audit và thay đổi nghiệp vụ là nguyên tử.
+                        // Cấp ID cho request và hai metadata artifact. Transaction
+                        // vẫn chưa commit; audit submit ở lần SaveChanges kế tiếp
+                        // vẫn nguyên tử với toàn bộ thay đổi nghiệp vụ.
                         await _dbContext.SaveChangesAsync();
 
                         _contractAuditWriter.StageEmployeeAudits(
@@ -3825,7 +3968,20 @@ namespace ContractManagement.Domains.Services.Contract
                                     approvalRequest.ApprovalRequestId),
                                 ("ApprovalStatus", approvalRequest.Status),
                                 ("WorkflowId", approvalRequest.WorkflowId),
-                                ("SnapshotHash", snapshotHash)))
+                                ("SnapshotSchemaVersion",
+                                    rendered.SnapshotSchemaVersion),
+                                ("TemplateVersionId",
+                                    rendered.TemplateVersionId),
+                                ("SnapshotHash", snapshotHash),
+                                ("DocxFileId", docxMetadata.FileId),
+                                ("DocxHash", docxHash),
+                                ("PdfFileId", pdfMetadata.FileId),
+                                ("PdfHash", pdfHash),
+                                ("ArtifactCount", 2),
+                                ("InvalidatedLinkCount",
+                                    invalidatedAccess.LinkCount),
+                                ("RevokedSessionCount",
+                                    invalidatedAccess.SessionCount)))
                         ]);
                         await _dbContext.SaveChangesAsync();
                         await transaction.CommitAsync();
@@ -3846,6 +4002,10 @@ namespace ContractManagement.Domains.Services.Contract
 
                             SubmittedDate = now,
                             SnapshotHash = snapshotHash,
+                            SubmittedDocxFileId = docxMetadata.FileId,
+                            SubmittedDocxHash = docxHash,
+                            SubmittedPdfFileId = pdfMetadata.FileId,
+                            SubmittedPdfHash = pdfHash,
 
                             ContractRowVersion =
                                 EncodeRowVersion(contract.RowVersion),
@@ -3854,9 +4014,23 @@ namespace ContractManagement.Domains.Services.Contract
                                 EncodeRowVersion(version.RowVersion)
                         };
                     }
-                    catch
+                    catch (Exception exception)
                     {
                         await RollbackAndClearAsync(transaction);
+                        try
+                        {
+                            await DeleteStoredArtifactsAsync(
+                                privateFileStorage,
+                                storedArtifacts);
+                        }
+                        catch (Exception cleanupException)
+                        {
+                            throw new AggregateException(
+                                "Submit thất bại và không thể dọn hết private artifact đã lưu dở.",
+                                exception,
+                                cleanupException);
+                        }
+
                         throw;
                     }
                 });
@@ -5191,117 +5365,212 @@ namespace ContractManagement.Domains.Services.Contract
             }
         }
 
-        private static string BuildSnapshotJson(
-            TblContract contract,
-            TblContractVersion version,
-            TblCustomer customer,
-            List<TblContractItem> items,
-            List<TblContractTerm> terms)
+        private async Task EnsureEligibleManagerApproverAsync(
+            int submitterEmployeeId,
+            TblApprovalWorkflow? workflow)
         {
-            /*
-             * Không đưa RowVersion hoặc UpdatedDate vào snapshot
-             * vì đây không phải nội dung pháp lý.
-             */
-            var snapshot = new
+            if (workflow?.ApproverEmployeeId is int assignedApproverId)
             {
-                schemaVersion = 1,
-
-                contract = new
+                if (assignedApproverId == submitterEmployeeId)
                 {
-                    contract.ContractId,
-                    contract.ContractCode,
-                    contract.ContractName,
-                    contract.ContractNameEn,
-                    contract.ContractType,
-                    contract.TemplateVersionId,
-                    contract.ParentContractId,
-                    contract.EffectiveDate,
-                    contract.ExpireDate,
-                    contract.Subtotal,
-                    contract.TotalDiscount,
-                    contract.TotalVat,
-                    contract.TotalAmount,
-                    contract.CurrencyCode,
-                    contract.LanguageMode
-                },
+                    throw new InvalidOperationException(
+                        "Người gửi duyệt không được tự duyệt hợp đồng của mình.");
+                }
 
-                customer = new
+                var assignedManagerExists = await _dbContext.TblEmployees
+                    .AsNoTracking()
+                    .AnyAsync(employee =>
+                        employee.EmployeeId == assignedApproverId
+                        && employee.Status == ActiveEmployeeStatus
+                        && employee.EmployeeType == (byte)EmployeeType.Manager);
+                if (!assignedManagerExists)
                 {
-                    customer.CustomerId,
-                    customer.CustomerCode,
-                    customer.CustomerFullName,
-                    customer.CustomerCompany,
-                    customer.CustomerTaxCode,
-                    customer.CustomerEmail,
-                    customer.CustomerMobile,
-                    customer.CustomerAddress
-                },
+                    throw new InvalidOperationException(
+                        "Workflow không có Manager đang hoạt động phù hợp để duyệt.");
+                }
 
-                version = new
-                {
-                    version.VersionId,
-                    version.VersionNo,
-                    version.SourceVersionId,
-                    version.TemplateVersionId,
-                    version.ChangeNote,
-                    version.CurrencyCode,
-                    version.Subtotal,
-                    version.TotalDiscount,
-                    version.TotalVat,
-                    version.TotalAmount
-                },
+                return;
+            }
 
-                items = items.Select(x => new
-                {
-                    x.ContractItemId,
-                    x.ItemType,
-                    x.SourceProductId,
-                    x.SourceServiceId,
-                    x.ItemCode,
-                    x.ItemName,
-                    x.ItemNameEn,
-                    x.ItemDescription,
-                    x.ItemDescriptionEn,
-                    x.UnitName,
-                    x.UnitNameEn,
-                    x.Quantity,
-                    x.UnitPrice,
-                    x.LineSubtotal,
-                    x.DiscountMode,
-                    x.DiscountPercent,
-                    x.FixedDiscountAmount,
-                    x.DiscountAmount,
-                    x.IsTaxable,
-                    x.VatPercent,
-                    x.VatAmount,
-                    x.LineTotal,
-                    x.DisplayOrder
-                }),
-
-                terms = terms.Select(x => new
-                {
-                    x.TermId,
-                    x.SourceTemplateTermId,
-                    x.TermCode,
-                    x.TermTitle,
-                    x.TermTitleEn,
-                    x.TermContent,
-                    x.TermContentEn,
-                    x.IsNegotiable,
-                    x.DisplayOrder
-                })
-            };
-
-            return JsonSerializer.Serialize(
-                snapshot,
-                new JsonSerializerOptions
-                {
-                    PropertyNamingPolicy =
-                        JsonNamingPolicy.CamelCase,
-
-                    WriteIndented = false
-                });
+            var managerExists = await _dbContext.TblEmployees
+                .AsNoTracking()
+                .AnyAsync(employee =>
+                    employee.EmployeeId != submitterEmployeeId
+                    && employee.Status == ActiveEmployeeStatus
+                    && employee.EmployeeType == (byte)EmployeeType.Manager);
+            if (!managerExists)
+            {
+                throw new InvalidOperationException(
+                    "Không có Manager đang hoạt động khác người gửi để duyệt hợp đồng.");
+            }
         }
+
+        private async Task<(int LinkCount, int SessionCount)>
+            InvalidateNegotiationAccessAsync(
+                TblContract contract,
+                int submittedVersionId,
+                int employeeId,
+                DateTime now)
+        {
+            const string reason = "Contract submitted for approval";
+            var allLinkIds = await _dbContext.TblContractCustomerAccessLinks
+                .Where(link => link.ContractId == contract.ContractId)
+                .Select(link => link.CustomerAccessLinkId)
+                .ToListAsync();
+            var activeLinks = await _dbContext.TblContractCustomerAccessLinks
+                .Where(link => link.ContractId == contract.ContractId
+                    && link.RevokedAt == null)
+                .ToListAsync();
+
+            foreach (var link in activeLinks)
+            {
+                link.RevokedAt = now;
+                link.RevokedByEmployeeId = employeeId;
+                link.RevocationReason = reason;
+            }
+
+            if (allLinkIds.Count > 0)
+            {
+                var challenges = await _dbContext
+                    .TblContractCustomerOtpChallenges
+                    .Where(challenge =>
+                        allLinkIds.Contains(challenge.LinkId)
+                        && challenge.InvalidatedAt == null)
+                    .ToListAsync();
+                foreach (var challenge in challenges)
+                {
+                    challenge.InvalidatedAt = now;
+                }
+            }
+
+            var sessions = await _dbContext.TblContractCustomerAccessSessions
+                .Where(session => session.ContractId == contract.ContractId
+                    && session.RevokedAt == null)
+                .ToListAsync();
+            foreach (var session in sessions)
+            {
+                session.RevokedAt = now;
+                session.RevocationReason = reason;
+            }
+
+            contract.CurrentCustomerAccessLinkId = null;
+
+            if (activeLinks.Count > 0)
+            {
+                _contractAuditWriter.StageEmployeeAudits(activeLinks
+                    .Select(link => new EmployeeContractAuditWriteRequest(
+                        contract.ContractId,
+                        submittedVersionId,
+                        employeeId,
+                        ContractAuditActionTypes.CustomerAccessLinkInvalidated,
+                        ContractAuditResults.Succeeded,
+                        now,
+                        Reason: reason,
+                        SubjectType:
+                            ContractAuditSubjectTypes.CustomerAccessLink,
+                        SubjectId: link.CustomerAccessLinkId,
+                        NewValues: ContractAuditValues.Create(
+                            ("LinkId", link.CustomerAccessLinkId),
+                            ("CurrentVersionId", submittedVersionId),
+                            ("LinkState", "Invalidated"))))
+                    .ToArray());
+            }
+
+            if (sessions.Count > 0)
+            {
+                _contractAuditWriter.StageEmployeeAudits(sessions
+                    .Select(session => new EmployeeContractAuditWriteRequest(
+                        contract.ContractId,
+                        session.VersionId,
+                        employeeId,
+                        ContractAuditActionTypes.CustomerSessionRevoked,
+                        ContractAuditResults.Succeeded,
+                        now,
+                        Reason: reason,
+                        SubjectType:
+                            ContractAuditSubjectTypes.CustomerAccessSession,
+                        SubjectId: session.CustomerAccessSessionId,
+                        NewValues: ContractAuditValues.Create(
+                            ("CustomerAccessSessionId",
+                                session.CustomerAccessSessionId),
+                            ("SessionState", "Revoked"),
+                            ("RevocationReasonCode", "ApprovalSubmitted"))))
+                    .ToArray());
+            }
+
+            return (activeLinks.Count, sessions.Count);
+        }
+
+        private static TblFileStorage CreateSubmittedArtifactMetadata(
+            StoredPrivateFile stored,
+            int versionId,
+            int employeeId,
+            string fileType)
+        {
+            return new TblFileStorage
+            {
+                ObjectType = SubmittedContractArtifactObjectType,
+                ObjectId = versionId,
+                FileName = stored.OriginalFileName,
+                // Private artifact không có public/legacy URL.
+                FilePath = string.Empty,
+                StorageKey = stored.StorageKey,
+                ContentType = stored.ContentType,
+                Sha256 = stored.Sha256,
+                TenantCode = stored.TenantCode,
+                FileType = fileType,
+                FileSize = stored.FileSize,
+                UploadedByUserId = employeeId,
+                UploadedDate = stored.CreatedAt
+            };
+        }
+
+        private static void EnsureStoredArtifactHash(
+            StoredPrivateFile stored,
+            string expectedHash,
+            string artifactName)
+        {
+            if (!string.Equals(
+                    stored.Sha256,
+                    expectedHash,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Hash {artifactName} trong private storage không khớp nội dung đã render.");
+            }
+        }
+
+        private static string CalculateArtifactHash(byte[] content) =>
+            Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant();
+
+        private static async Task DeleteStoredArtifactsAsync(
+            IPrivateFileStorage privateFileStorage,
+            IReadOnlyCollection<StoredPrivateFile> storedArtifacts)
+        {
+            List<Exception>? failures = null;
+            foreach (var artifact in storedArtifacts)
+            {
+                try
+                {
+                    await privateFileStorage.DeleteAsync(
+                        artifact.TenantCode,
+                        artifact.StorageKey);
+                }
+                catch (Exception exception)
+                {
+                    failures ??= [];
+                    failures.Add(exception);
+                }
+            }
+
+            if (failures is { Count: > 0 })
+            {
+                throw new AggregateException(
+                    "Không thể dọn hết private artifact.",
+                    failures);
+            }
+        }
+
         private static string CalculateSnapshotHash(
             string snapshotJson)
         {

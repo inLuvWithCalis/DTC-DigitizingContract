@@ -405,9 +405,16 @@ export default function ContractDetailPage() {
       console.error("Lỗi cập nhật bản nháp:", err);
       if (isStaleRowVersion(err)) {
         await fetchContractDetail(false).catch(() => undefined);
-        toast.error("Hợp đồng đã được thay đổi ở nơi khác. Dữ liệu mới nhất đã được tải lại.");
+        toast.error(
+          "Hợp đồng đã được thay đổi ở nơi khác. Dữ liệu mới nhất đã được tải lại.",
+        );
       } else {
-        toast.error(getApiErrorMessage(err, "Cập nhật bản nháp thất bại. Vui lòng thử lại."));
+        toast.error(
+          getApiErrorMessage(
+            err,
+            "Cập nhật bản nháp thất bại. Vui lòng thử lại.",
+          ),
+        );
       }
     } finally {
       setIsUpdating(false);
@@ -436,7 +443,12 @@ export default function ContractDetailPage() {
         await fetchContractDetail(false).catch(() => undefined);
         toast.error("Hợp đồng đã thay đổi. Dữ liệu mới nhất đã được tải lại.");
       } else {
-        toast.error(getApiErrorMessage(err, "Không thể bắt đầu đàm phán. Vui lòng thử lại."));
+        toast.error(
+          getApiErrorMessage(
+            err,
+            "Không thể bắt đầu đàm phán. Vui lòng thử lại.",
+          ),
+        );
       }
     } finally {
       setIsStartingNegotiation(false);
@@ -478,9 +490,13 @@ export default function ContractDetailPage() {
           console.error("Lỗi gửi duyệt hợp đồng:", err);
           if (isStaleRowVersion(err)) {
             await fetchContractDetail(false).catch(() => undefined);
-            toast.error("Hợp đồng đã thay đổi. Dữ liệu mới nhất đã được tải lại.");
+            toast.error(
+              "Hợp đồng đã thay đổi. Dữ liệu mới nhất đã được tải lại.",
+            );
           } else {
-            toast.error(getApiErrorMessage(err, "Không thể gửi duyệt. Vui lòng thử lại."));
+            toast.error(
+              getApiErrorMessage(err, "Không thể gửi duyệt. Vui lòng thử lại."),
+            );
           }
         } finally {
           setIsSubmittingApproval(false);
@@ -542,10 +558,7 @@ export default function ContractDetailPage() {
     } catch (error) {
       previewWindow.close();
       toast.error(
-        await getBlobApiErrorMessage(
-          error,
-          "Không thể mở bản PDF hợp đồng.",
-        ),
+        await getBlobApiErrorMessage(error, "Không thể mở bản PDF hợp đồng."),
       );
     } finally {
       setIsOpeningPdf(false);
@@ -564,10 +577,7 @@ export default function ContractDetailPage() {
       );
     } catch (error) {
       toast.error(
-        await getBlobApiErrorMessage(
-          error,
-          "Không thể tải bản PDF hợp đồng.",
-        ),
+        await getBlobApiErrorMessage(error, "Không thể tải bản PDF hợp đồng."),
       );
     } finally {
       setIsDownloadingPdf(false);
@@ -685,19 +695,19 @@ export default function ContractDetailPage() {
             )}
             {canManageContract &&
               contract.status === ContractStatus.Negotiating && (
-              <Button
-                onClick={handleSubmitApproval}
-                disabled={isSubmittingApproval || hasUnsavedChanges}
-                className="bg-amber-600 hover:bg-amber-700 text-white"
-              >
-                {isSubmittingApproval ? (
-                  <Loader2 className="size-4 mr-2 animate-spin" />
-                ) : (
-                  <Send className="size-4 mr-2" />
-                )}
-                Gửi duyệt
-              </Button>
-            )}
+                <Button
+                  onClick={handleSubmitApproval}
+                  disabled={isSubmittingApproval || hasUnsavedChanges}
+                  className="bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  {isSubmittingApproval ? (
+                    <Loader2 className="size-4 mr-2 animate-spin" />
+                  ) : (
+                    <Send className="size-4 mr-2" />
+                  )}
+                  Gửi duyệt
+                </Button>
+              )}
             {/* <Button variant="outline">
               <DatabaseZap className="size-4 mr-2" />
               Tạo từ báo giá
@@ -732,7 +742,7 @@ export default function ContractDetailPage() {
             icon={<WalletCards className="size-4" />}
             label="Tổng thanh toán"
             value={
-              <span className="text-primary">
+              <span className="text-primary break-all">
                 {formatCurrency(
                   contract.totalPayment ?? contract.totalAmount,
                   contract.currencyCode,

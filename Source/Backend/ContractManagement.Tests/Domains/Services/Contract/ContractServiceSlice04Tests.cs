@@ -276,6 +276,9 @@ public sealed class ContractServiceSlice04Tests
         Assert.True(versions[0].IsLocked);
         Assert.False(string.IsNullOrWhiteSpace(
             versions[0].SnapshotHash));
+        Assert.Contains(
+            "\"schemaVersion\":4",
+            versions[0].SnapshotJson);
         Assert.False(versions[1].IsLocked);
         Assert.Equal(versions[0].VersionId,
             versions[1].SourceVersionId);
@@ -388,7 +391,25 @@ public sealed class ContractServiceSlice04Tests
         {
             CustomerId = CustomerId,
             CustomerFullName = "Demo customer",
+            CustomerCompany = "Demo Company",
+            CustomerAddress = "Ha Noi",
+            CustomerRepresentativeName = "Demo Representative",
+            CustomerRepresentativeTitle = "Director",
             Status = 1
+        });
+        context.TblTenantLegalProfiles.Add(new TblTenantLegalProfile
+        {
+            TenantLegalProfileId = 1,
+            LegalEntityName = "DTC Company",
+            TaxCode = "0100000001",
+            Address = "Ho Chi Minh City",
+            RepresentativeName = "Provider Representative",
+            RepresentativeTitle = "General Director",
+            CreatedByEmployeeId = EmployeeId,
+            UpdatedByEmployeeId = EmployeeId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            RowVersion = InitialRowVersion()
         });
         context.TblProducts.Add(new TblProduct
         {
@@ -522,7 +543,25 @@ public sealed class ContractServiceSlice04Tests
         {
             CustomerId = CustomerId,
             CustomerFullName = "Demo customer",
+            CustomerCompany = "Demo Company",
+            CustomerAddress = "Ha Noi",
+            CustomerRepresentativeName = "Demo Representative",
+            CustomerRepresentativeTitle = "Director",
             Status = 1
+        });
+        context.TblTenantLegalProfiles.Add(new TblTenantLegalProfile
+        {
+            TenantLegalProfileId = 1,
+            LegalEntityName = "DTC Company",
+            TaxCode = "0100000001",
+            Address = "Ho Chi Minh City",
+            RepresentativeName = "Provider Representative",
+            RepresentativeTitle = "General Director",
+            CreatedByEmployeeId = EmployeeId,
+            UpdatedByEmployeeId = EmployeeId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            RowVersion = rowVersion
         });
 
         var contract = new TblContract

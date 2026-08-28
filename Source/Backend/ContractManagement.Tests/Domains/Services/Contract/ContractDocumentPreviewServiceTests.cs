@@ -69,6 +69,9 @@ public sealed class ContractDocumentPreviewServiceTests
         Assert.DoesNotContain("Nguyễn Người liên hệ", text);
         Assert.Contains("Phần mềm quản lý hợp đồng", text);
         Assert.Contains("Phạm vi cung cấp", text);
+        Assert.Contains(
+            document.MainDocumentPart.Document.Descendants<W.Paragraph>(),
+            paragraph => paragraph.InnerText == "1.080");
         Assert.Contains("USD", text);
         Assert.DoesNotContain("{{", text);
         Assert.DoesNotContain("DỮ LIỆU MẪU", text);
@@ -95,6 +98,27 @@ public sealed class ContractDocumentPreviewServiceTests
         Assert.Contains("HD-8B-001", string.Concat(document.MainDocumentPart!
             .Document!.Descendants<W.Text>().Select(item => item.Text)));
         Assert.Equal(fileCountBefore, await context.TblFileStorages.CountAsync());
+    }
+
+    [Fact]
+    public async Task Submission_RendersDocxAndPdfFromTheSameSchemaV4Snapshot()
+    {
+        await using var context = CreateContext();
+        var source = CreateSourceDocument();
+        await SeedAsync(context, source);
+        var pdfRenderer = new CapturingPdfRenderer();
+        var service = CreateService(context, source, pdfRenderer);
+
+        var result = await service.RenderAsync(ContractId, OwnerId);
+
+        Assert.Equal(4, result.SnapshotSchemaVersion);
+        Assert.Equal(TemplateVersionId, result.TemplateVersionId);
+        Assert.Contains("\"schemaVersion\":4", result.SnapshotJson);
+        Assert.Contains("\"contractCode\":\"HD-8B-001\"", result.SnapshotJson);
+        Assert.Equal("HD-8B-001-submitted.docx", result.DocxFileName);
+        Assert.Equal("HD-8B-001-submitted.pdf", result.PdfFileName);
+        Assert.Equal(result.DocxContent, pdfRenderer.InputDocx);
+        Assert.True(result.PdfContent.AsSpan().StartsWith("%PDF-"u8));
     }
 
     [Fact]

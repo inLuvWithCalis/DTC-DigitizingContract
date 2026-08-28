@@ -13,10 +13,13 @@ using Microsoft.EntityFrameworkCore;
 namespace ContractManagement.Domains.Services.Contract;
 
 /// <summary>
-/// Renders an on-demand preview from the current mutable SoftwareSupply version.
-/// The result is deliberately not persisted and is not an approved artifact.
+/// Renders SoftwareSupply DOCX/PDF from one schema-v4 snapshot. Preview results
+/// remain ephemeral; the submit pipeline persists the separate submission result
+/// only after both formats have been generated successfully.
 /// </summary>
-public sealed class ContractDocumentPreviewService : IContractDocumentPreviewService
+public sealed class ContractDocumentPreviewService :
+    IContractDocumentPreviewService,
+    IContractSubmissionArtifactRenderer
 {
     private const string TemplateVersionObjectType = "ContractTemplateVersion";
     private const string DocxContentType =
@@ -51,6 +54,7 @@ public sealed class ContractDocumentPreviewService : IContractDocumentPreviewSer
         var rendered = await RenderDocxAsync(
             contractId,
             employeeId,
+            requireNegotiating: false,
             cancellationToken);
 
         return new ContractDocumentPreviewResult(
@@ -67,6 +71,7 @@ public sealed class ContractDocumentPreviewService : IContractDocumentPreviewSer
         var rendered = await RenderDocxAsync(
             contractId,
             employeeId,
+            requireNegotiating: false,
             cancellationToken);
         var pdf = await _pdfRenderer.ConvertPreviewToPdfAsync(
             rendered.Content,
@@ -78,9 +83,34 @@ public sealed class ContractDocumentPreviewService : IContractDocumentPreviewSer
             PdfContentType);
     }
 
+    public async Task<ContractSubmissionArtifactRenderResult> RenderAsync(
+        int contractId,
+        int employeeId,
+        CancellationToken cancellationToken = default)
+    {
+        var rendered = await RenderDocxAsync(
+            contractId,
+            employeeId,
+            requireNegotiating: true,
+            cancellationToken);
+        var pdf = await _pdfRenderer.ConvertPreviewToPdfAsync(
+            rendered.Content,
+            cancellationToken);
+
+        return new ContractSubmissionArtifactRenderResult(
+            SoftwareSupplyContractSnapshotFactory.Serialize(rendered.Snapshot),
+            rendered.Snapshot.SchemaVersion,
+            rendered.TemplateVersionId,
+            rendered.Content,
+            $"{rendered.SafeContractCode}-submitted.docx",
+            pdf,
+            $"{rendered.SafeContractCode}-submitted.pdf");
+    }
+
     private async Task<RenderedContractDocx> RenderDocxAsync(
         int contractId,
         int employeeId,
+        bool requireNegotiating,
         CancellationToken cancellationToken)
     {
         // Preview is a write-scope operation: Manager may read another owner's
@@ -95,6 +125,12 @@ public sealed class ContractDocumentPreviewService : IContractDocumentPreviewSer
             .SingleAsync(item => item.ContractId == contractId, cancellationToken);
 
         EnsurePreviewPolicy(contract);
+        if (requireNegotiating
+            && contract.Status != (byte)ContractStatus.Negotiating)
+        {
+            throw new InvalidOperationException(
+                "Chỉ hợp đồng đang đàm phán mới được tạo artifact gửi duyệt.");
+        }
 
         var versionId = contract.CurrentVersionId
             ?? throw new InvalidOperationException(
@@ -178,7 +214,9 @@ public sealed class ContractDocumentPreviewService : IContractDocumentPreviewSer
 
         return new RenderedContractDocx(
             renderedDocx,
-            SafeFileName(snapshot.Contract.ContractCode, contractId));
+            SafeFileName(snapshot.Contract.ContractCode, contractId),
+            snapshot,
+            templateVersionId);
     }
 
     private static void EnsurePreviewPolicy(TblContract contract)
@@ -304,7 +342,7 @@ public sealed class ContractDocumentPreviewService : IContractDocumentPreviewSer
                 contract.ExpireDate,
                 "Ngày hết hạn"),
             ["CONTRACT_CURRENCY"] = currency,
-            ["CONTRACT_TOTAL_AMOUNT"] = FormatMoney(version.TotalAmount, currency),
+            ["CONTRACT_TOTAL_AMOUNT"] = FormatAmount(version.TotalAmount),
             ["CONTRACT_TOTAL_AMOUNT_IN_WORDS"] =
                 VietnameseMoneyTextFormatter.Format(version.TotalAmount, currency),
             ["CUSTOMER_CODE"] = Required(customer.CustomerCode, "Mã khách hàng"),
@@ -433,6 +471,9 @@ public sealed class ContractDocumentPreviewService : IContractDocumentPreviewSer
     private static string FormatMoney(decimal value, string currency) =>
         $"{value:N0} {currency}".Replace(',', '.');
 
+    private static string FormatAmount(decimal value) =>
+        $"{value:N0}".Replace(',', '.');
+
     private static string Required(string? value, string fieldName)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -458,7 +499,9 @@ public sealed class ContractDocumentPreviewService : IContractDocumentPreviewSer
 
     private sealed record RenderedContractDocx(
         byte[] Content,
-        string SafeContractCode);
+        string SafeContractCode,
+        SoftwareSupplyContractSnapshot Snapshot,
+        int TemplateVersionId);
 }
 
 internal static class VietnameseMoneyTextFormatter

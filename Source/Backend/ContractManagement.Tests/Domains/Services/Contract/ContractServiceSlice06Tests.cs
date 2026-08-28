@@ -317,8 +317,26 @@ public sealed class ContractServiceSlice06Tests
         {
             CustomerId = CustomerId,
             CustomerFullName = "Slice 06 customer",
+            CustomerCompany = "Slice 06 Customer Company",
+            CustomerAddress = "Ha Noi",
+            CustomerRepresentativeName = "Slice 06 Representative",
+            CustomerRepresentativeTitle = "Director",
             CustomerMobile = "+84912345678",
             Status = 1
+        });
+        context.TblTenantLegalProfiles.Add(new TblTenantLegalProfile
+        {
+            TenantLegalProfileId = 1,
+            LegalEntityName = "DTC Company",
+            TaxCode = "0100000006",
+            Address = "Ho Chi Minh City",
+            RepresentativeName = "Provider Representative",
+            RepresentativeTitle = "General Director",
+            CreatedByEmployeeId = EmployeeId,
+            UpdatedByEmployeeId = EmployeeId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            RowVersion = InitialRowVersion()
         });
         context.TblContracts.Add(new TblContract
         {

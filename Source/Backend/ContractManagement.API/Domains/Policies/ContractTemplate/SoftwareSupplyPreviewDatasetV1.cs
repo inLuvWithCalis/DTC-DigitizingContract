@@ -101,7 +101,7 @@ public static class SoftwareSupplyPreviewDatasetV1
             ["CUSTOMER_WEBSITE"] = "https://customer-demo.example.invalid",
             ["CUSTOMER_CITY"] = "Hồ Chí Minh",
             ["CUSTOMER_COUNTRY"] = "Việt Nam",
-            ["CONTRACT_TOTAL_AMOUNT"] = "72.187.500 VND (đã bao gồm VAT)",
+            ["CONTRACT_TOTAL_AMOUNT"] = "72.187.500",
             ["CONTRACT_TOTAL_AMOUNT_IN_WORDS"] =
                 "Bảy mươi hai triệu một trăm tám mươi bảy nghìn năm trăm đồng chẵn"
         };

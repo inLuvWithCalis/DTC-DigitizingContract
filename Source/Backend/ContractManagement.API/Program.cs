@@ -323,9 +323,11 @@ builder.Services.AddScoped<
     ITenantLegalProfileService,
     TenantLegalProfileService>();
 
-builder.Services.AddScoped<
-    IContractDocumentPreviewService,
-    ContractDocumentPreviewService>();
+builder.Services.AddScoped<ContractDocumentPreviewService>();
+builder.Services.AddScoped<IContractDocumentPreviewService>(provider =>
+    provider.GetRequiredService<ContractDocumentPreviewService>());
+builder.Services.AddScoped<IContractSubmissionArtifactRenderer>(provider =>
+    provider.GetRequiredService<ContractDocumentPreviewService>());
 
 #endregion
 

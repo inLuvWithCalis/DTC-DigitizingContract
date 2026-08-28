@@ -18,6 +18,14 @@ public class SubmitContractForApprovalResponse
 
     public string SnapshotHash { get; set; } = string.Empty;
 
+    public int SubmittedDocxFileId { get; set; }
+
+    public string SubmittedDocxHash { get; set; } = string.Empty;
+
+    public int SubmittedPdfFileId { get; set; }
+
+    public string SubmittedPdfHash { get; set; } = string.Empty;
+
     public string ContractRowVersion { get; set; } = string.Empty;
 
     public string VersionRowVersion { get; set; } = string.Empty;

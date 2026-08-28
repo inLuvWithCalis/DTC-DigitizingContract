@@ -81,10 +81,7 @@ import {
   employeeApi,
   type EmployeeDirectoryResponse,
 } from "@/services/employees-api";
-import {
-  productApi,
-  ProductResponse,
-} from "@/services/catalog/products-api";
+import { productApi, ProductResponse } from "@/services/catalog/products-api";
 import {
   serviceApi,
   type ServiceResponse,
@@ -252,9 +249,9 @@ export default function CreateContractPage() {
   const [debouncedTemplateSearch, setDebouncedTemplateSearch] = useState("");
   const [selectedTemplateSnapshot, setSelectedTemplateSnapshot] =
     useState<AvailableTemplateView | null>(null);
-  const [contractTerms, setContractTerms] = useState<
-    CreateContractTermDraft[]
-  >([]);
+  const [contractTerms, setContractTerms] = useState<CreateContractTermDraft[]>(
+    [],
+  );
   const [isLoadingTemplateDetail, setIsLoadingTemplateDetail] = useState(false);
   const [templateDetailError, setTemplateDetailError] = useState<string | null>(
     null,
@@ -430,8 +427,7 @@ export default function CreateContractPage() {
                   versionId: template.templateVersionId,
                   name: template.templateName,
                   version: String(template.versionNo),
-                  description:
-                    "Phiên bản đã phát hành, sẵn sàng tạo hợp đồng.",
+                  description: "Phiên bản đã phát hành, sẵn sàng tạo hợp đồng.",
                   contractType: mappedContractType,
                 },
               ];
@@ -715,9 +711,10 @@ export default function CreateContractPage() {
   const selectedParentContract = eligibleParents.find(
     (item) => item.contractId === Number(parentContractId),
   );
-  const selectedTemplate = availableTemplates.find(
-    (item) => item.versionId === Number(templateVersionId),
-  ) ?? selectedTemplateSnapshot;
+  const selectedTemplate =
+    availableTemplates.find(
+      (item) => item.versionId === Number(templateVersionId),
+    ) ?? selectedTemplateSnapshot;
 
   const selectedCatalogItems = catalogItems.filter((item) =>
     selectedItems.includes(item.id),
@@ -1156,7 +1153,9 @@ export default function CreateContractPage() {
                     </Label>
                     <Input
                       value={customerSearch}
-                      onChange={(event) => setCustomerSearch(event.target.value)}
+                      onChange={(event) =>
+                        setCustomerSearch(event.target.value)
+                      }
                       placeholder="Tìm theo tên, mã, MST hoặc số điện thoại..."
                     />
                     <div className="flex items-center gap-2">
@@ -1181,7 +1180,7 @@ export default function CreateContractPage() {
                             <SelectItem
                               key={customer.customerId}
                               value={String(customer.customerId)}
-                          >
+                            >
                               {formatCustomerOption(customer)}
                               {customer.customerTaxCode
                                 ? ` · MST ${customer.customerTaxCode}`
@@ -1226,7 +1225,9 @@ export default function CreateContractPage() {
                     </div>
                     <Input
                       value={employeeSearch}
-                      onChange={(event) => setEmployeeSearch(event.target.value)}
+                      onChange={(event) =>
+                        setEmployeeSearch(event.target.value)
+                      }
                       placeholder="Tìm theo tên, mã hoặc phòng ban..."
                     />
                     <Select
@@ -1249,7 +1250,9 @@ export default function CreateContractPage() {
                             value={String(emp.employeeId)}
                           >
                             {emp.employeeCode ? `${emp.employeeCode} · ` : ""}
-                            {emp.employeeFullName} · {emp.departmentName || "Chưa có phòng ban"} · {emp.employeeTypeName}
+                            {emp.employeeFullName} ·{" "}
+                            {emp.departmentName || "Chưa có phòng ban"} ·{" "}
+                            {emp.employeeTypeName}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -1401,66 +1404,70 @@ export default function CreateContractPage() {
                     )}
 
                     {!isLoadingTemplates && (
-                    <div className="grid gap-3 lg:grid-cols-3">
-                      {paginatedTemplates.map((template) => {
-                        const selected =
-                          template.versionId === Number(templateVersionId);
-                        const compatible =
-                          template.contractType === contractType;
+                      <div className="grid gap-3 lg:grid-cols-3">
+                        {paginatedTemplates.map((template) => {
+                          const selected =
+                            template.versionId === Number(templateVersionId);
+                          const compatible =
+                            template.contractType === contractType;
 
-                        return (
-                          <button
-                            key={template.versionId}
-                            type="button"
-                            disabled={!compatible}
-                            onClick={() =>
-                              handleTemplateSelect(template.versionId)
-                            }
-                            className={`rounded-2xl border p-4 text-left transition-all ${
-                              selected
-                                ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary"
-                                : compatible
-                                  ? "bg-background hover:border-primary/50 hover:bg-accent/40"
-                                  : "cursor-not-allowed bg-muted/30 opacity-50"
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                                <LayoutTemplate className="size-5" />
+                          return (
+                            <button
+                              key={template.versionId}
+                              type="button"
+                              disabled={!compatible}
+                              onClick={() =>
+                                handleTemplateSelect(template.versionId)
+                              }
+                              className={`rounded-2xl border p-4 text-left transition-all ${
+                                selected
+                                  ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary"
+                                  : compatible
+                                    ? "bg-background hover:border-primary/50 hover:bg-accent/40"
+                                    : "cursor-not-allowed bg-muted/30 opacity-50"
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                                  <LayoutTemplate className="size-5" />
+                                </div>
+                                {selected ? (
+                                  <Badge className="gap-1">
+                                    <CheckCircle2 className="size-3.5" />
+                                    Đã chọn
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline">
+                                    v{template.version}
+                                  </Badge>
+                                )}
                               </div>
-                              {selected ? (
-                                <Badge className="gap-1">
-                                  <CheckCircle2 className="size-3.5" />
-                                  Đã chọn
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline">
-                                  v{template.version}
-                                </Badge>
-                              )}
-                            </div>
 
-                            <p className="mt-4 font-semibold leading-snug">
-                              {template.name}
-                            </p>
-                            <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">
-                              {template.description}
-                            </p>
+                              <p className="mt-4 font-semibold leading-snug">
+                                {template.name}
+                              </p>
+                              <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                                {template.description}
+                              </p>
 
-                            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                              <span>{getContractLanguageModeLabel(template.languageMode)}</span>
-                              <span>•</span>
-                              <span>{template.templateCode}</span>
-                            </div>
-                            <p className="mt-2 text-xs text-muted-foreground">
-                              {compatible
-                                ? "Phiên bản đã phát hành"
-                                : getContractTypeLabel(template.contractType)}
-                            </p>
-                          </button>
-                        );
-                      })}
-                    </div>
+                              <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                <span>
+                                  {getContractLanguageModeLabel(
+                                    template.languageMode,
+                                  )}
+                                </span>
+                                <span>•</span>
+                                <span>{template.templateCode}</span>
+                              </div>
+                              <p className="mt-2 text-xs text-muted-foreground">
+                                {compatible
+                                  ? "Phiên bản đã phát hành"
+                                  : getContractTypeLabel(template.contractType)}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
                     )}
 
                     {!isLoadingTemplates && templateTotalCount === 0 ? (
@@ -1704,7 +1711,7 @@ export default function CreateContractPage() {
                                     onValueChange={(value) =>
                                       updateQuantity(item.id, value)
                                     }
-                                    className="h-8 w-24 bg-white text-center"
+                                    className="h-8 bg-white text-center"
                                   />
                                 </div>
                               )}
@@ -2113,10 +2120,15 @@ export default function CreateContractPage() {
                           {selectedEmployee?.employeeFullName || "Chưa chọn"}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          {selectedEmployee?.departmentName || "Chưa có phòng ban"} · {selectedEmployee?.employeeTypeName || "Chưa có vai trò"}
+                          {selectedEmployee?.departmentName ||
+                            "Chưa có phòng ban"}{" "}
+                          ·{" "}
+                          {selectedEmployee?.employeeTypeName ||
+                            "Chưa có vai trò"}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          Điện thoại: {selectedEmployee?.employeeMobile || "Chưa có"}
+                          Điện thoại:{" "}
+                          {selectedEmployee?.employeeMobile || "Chưa có"}
                         </p>
                       </div>
                       {selectedParentContract && (
@@ -2353,9 +2365,7 @@ export default function CreateContractPage() {
                     <ShieldCheck className="size-4" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium">
-                      Theo template đã chọn
-                    </p>
+                    <p className="text-sm font-medium">Theo template đã chọn</p>
                     <p className="text-xs text-muted-foreground">
                       Chỉnh sửa tại trang chi tiết sau khi tạo
                     </p>

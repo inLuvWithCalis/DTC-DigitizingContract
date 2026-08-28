@@ -852,10 +852,10 @@
     "semantic_hash": "6868731c877bc51ced0d27d816793bde"
   },
   "Backend/ContractManagement.API/Domains/DTOs/Responses/Contract/SubmitContractForApprovalResponse.cs": {
-    "mtime": 1784707826.8328774,
-    "seen": 1787847669.307565,
-    "ast_hash": "84e5ad25f3d86c5595d5e76ddb90bfb3",
-    "semantic_hash": "84e5ad25f3d86c5595d5e76ddb90bfb3"
+    "mtime": 1787903870.1410055,
+    "seen": 1787918343.6814632,
+    "ast_hash": "af0a0054efa9a62d42ed8d89859fff0d",
+    "semantic_hash": ""
   },
   "Backend/ContractManagement.API/Domains/DTOs/Responses/Contract/TransferContractResponsibilityResponse.cs": {
     "mtime": 1785485718.5946755,
@@ -1170,10 +1170,10 @@
     "semantic_hash": "960b602bdb0f2da3a5736d324fb4b678"
   },
   "Backend/ContractManagement.API/Domains/Policies/ContractTemplate/SoftwareSupplyPreviewDatasetV1.cs": {
-    "mtime": 1787760732.9097376,
-    "seen": 1787847669.3076155,
-    "ast_hash": "ffb66a4efebe128f0c95bd0b56b97f00",
-    "semantic_hash": "ffb66a4efebe128f0c95bd0b56b97f00"
+    "mtime": 1787925488.041705,
+    "seen": 1787925605.7786944,
+    "ast_hash": "39ca2e693ff0544b2eb676b6d45d352e",
+    "semantic_hash": ""
   },
   "Backend/ContractManagement.API/Domains/Policies/Contract/ApprovalRequestPolicy.cs": {
     "mtime": 1784270802.0161934,
@@ -1296,16 +1296,16 @@
     "semantic_hash": ""
   },
   "Backend/ContractManagement.API/Domains/Services/Contract/ContractAuditWriter.cs": {
-    "mtime": 1787900115.3278992,
-    "seen": 1787900270.411167,
-    "ast_hash": "5446ea7dbc817df691be89f717f26cf2",
+    "mtime": 1787903868.2272003,
+    "seen": 1787918343.6815677,
+    "ast_hash": "4ebe4c2fbea84806f84817e53e935ed8",
     "semantic_hash": ""
   },
   "Backend/ContractManagement.API/Domains/Services/Contract/ContractDocumentPreviewService.cs": {
-    "mtime": 1787760734.2559295,
-    "seen": 1787847669.3076348,
-    "ast_hash": "53f616a0640408aab45fd319c2036f99",
-    "semantic_hash": "53f616a0640408aab45fd319c2036f99"
+    "mtime": 1787925486.3018186,
+    "seen": 1787925605.7787218,
+    "ast_hash": "e734ba1fcd2dc40b43cfb7363867cca3",
+    "semantic_hash": ""
   },
   "Backend/ContractManagement.API/Domains/Services/Contract/ContractResourceAuthorizationService.cs": {
     "mtime": 1786698364.0159452,
@@ -1320,9 +1320,9 @@
     "semantic_hash": ""
   },
   "Backend/ContractManagement.API/Domains/Services/Contract/ContractService.cs": {
-    "mtime": 1787899691.5865662,
-    "seen": 1787900270.4111764,
-    "ast_hash": "2ea981e16782e53f3c5adca4b7716c7d",
+    "mtime": 1787904033.6678765,
+    "seen": 1787918343.6815755,
+    "ast_hash": "5bbc7a02dd4e99e2ef403035e81a3399",
     "semantic_hash": ""
   },
   "Backend/ContractManagement.API/Domains/Services/Contract/CustomerContractAccessService.cs": {
@@ -1386,10 +1386,10 @@
     "semantic_hash": "f8de900dd1b49a5b188c62ef92105931"
   },
   "Backend/ContractManagement.API/Domains/Services/File/PrivateFileUploadPolicies.cs": {
-    "mtime": 1787729954.5670629,
-    "seen": 1787847669.3076477,
-    "ast_hash": "b7f0868ebb35c2464496b13284c50c7b",
-    "semantic_hash": "b7f0868ebb35c2464496b13284c50c7b"
+    "mtime": 1787903723.754361,
+    "seen": 1787918343.6815987,
+    "ast_hash": "97908c890e07b16e71b89d1bbff2d3a0",
+    "semantic_hash": ""
   },
   "Backend/ContractManagement.API/Domains/Services/Quotation/QuotationService.cs": {
     "mtime": 1787729305.751712,
@@ -1458,10 +1458,10 @@
     "semantic_hash": "1433496fa70d3edcb05cbe7f92dbd1a3"
   },
   "Backend/ContractManagement.API/Program.cs": {
-    "mtime": 1787758987.2941935,
-    "seen": 1787847669.3076584,
-    "ast_hash": "6946cfc2eda82a7f3cfa4bee3dee2fb1",
-    "semantic_hash": "6946cfc2eda82a7f3cfa4bee3dee2fb1"
+    "mtime": 1787903721.778742,
+    "seen": 1787918343.6816218,
+    "ast_hash": "2b55ef2634971c82c0b965616ea53a4a",
+    "semantic_hash": ""
   },
   "Backend/ContractManagement.API/Properties/launchSettings.json": {
     "mtime": 1784910581.5359707,
@@ -2304,10 +2304,10 @@
     "semantic_hash": "e4d5af9a548703a6fc2d1f5630aecdac"
   },
   "Backend/ContractManagement.Tests/Domains/Services/ContractTemplate/ContractTemplatePreviewTests.cs": {
-    "mtime": 1787762820.2411647,
-    "seen": 1787847669.3078315,
-    "ast_hash": "5aa9ec62d8945b82417ed81db8781cc2",
-    "semantic_hash": "5aa9ec62d8945b82417ed81db8781cc2"
+    "mtime": 1787925491.5652735,
+    "seen": 1787925605.7789295,
+    "ast_hash": "9ab206c3e73659fa8310bf410722ab97",
+    "semantic_hash": ""
   },
   "Backend/ContractManagement.Tests/Domains/Services/ContractTemplate/ContractTemplateServiceTests.cs": {
     "mtime": 1787799416.1655996,
@@ -2322,10 +2322,10 @@
     "semantic_hash": "a54eb5498a4d235c5446129352657545"
   },
   "Backend/ContractManagement.Tests/Domains/Services/Contract/ContractDocumentPreviewServiceTests.cs": {
-    "mtime": 1787760912.2740314,
-    "seen": 1787847669.3078341,
-    "ast_hash": "6755a1155d9e6ebc309b3af3a03dda84",
-    "semantic_hash": "6755a1155d9e6ebc309b3af3a03dda84"
+    "mtime": 1787925546.591087,
+    "seen": 1787925605.7789347,
+    "ast_hash": "a1a34fa58abd5ca0c618bf0e6e36173d",
+    "semantic_hash": ""
   },
   "Backend/ContractManagement.Tests/Domains/Services/Contract/ContractServiceResponsibilityTests.cs": {
     "mtime": 1787899262.7634463,
@@ -2334,27 +2334,27 @@
     "semantic_hash": ""
   },
   "Backend/ContractManagement.Tests/Domains/Services/Contract/ContractServiceResponsibilityTransferTests.cs": {
-    "mtime": 1787899290.7624302,
-    "seen": 1787900270.4115868,
-    "ast_hash": "a32e7a5a26cc108acc68fd08aae811c7",
+    "mtime": 1787904119.3581464,
+    "seen": 1787918343.6818244,
+    "ast_hash": "4f832e3a6b7733c07d29ef377ff9f149",
     "semantic_hash": ""
   },
   "Backend/ContractManagement.Tests/Domains/Services/Contract/ContractServiceSlice04Tests.cs": {
-    "mtime": 1787737709.1921022,
-    "seen": 1787847669.307837,
-    "ast_hash": "0cef34360f2a3782e1fcbaad42238dc0",
-    "semantic_hash": "0cef34360f2a3782e1fcbaad42238dc0"
+    "mtime": 1787904182.8287609,
+    "seen": 1787918343.6818256,
+    "ast_hash": "916ea07540123bca4083aec2469a2572",
+    "semantic_hash": ""
   },
   "Backend/ContractManagement.Tests/Domains/Services/Contract/ContractServiceSlice05Tests.cs": {
-    "mtime": 1786084432.0617547,
-    "seen": 1787847669.3078377,
-    "ast_hash": "5f51c129e58996bbfc0d80aa52ac5fdb",
-    "semantic_hash": "5f51c129e58996bbfc0d80aa52ac5fdb"
+    "mtime": 1787918125.9517157,
+    "seen": 1787918343.6818268,
+    "ast_hash": "15513ac669a2cc7519ee3b1049890ce6",
+    "semantic_hash": ""
   },
   "Backend/ContractManagement.Tests/Domains/Services/Contract/ContractServiceSlice06Tests.cs": {
-    "mtime": 1787899318.0307014,
-    "seen": 1787900270.4115937,
-    "ast_hash": "44c3001bbc1da036420913ef487ed723",
+    "mtime": 1787918128.2947178,
+    "seen": 1787918343.681828,
+    "ast_hash": "34328f604dcd0637b6c8f6a500a3e87a",
     "semantic_hash": ""
   },
   "Backend/ContractManagement.Tests/Domains/Services/Contract/SoftwareSupplyContractSnapshotTests.cs": {
@@ -2496,10 +2496,10 @@
     "semantic_hash": "27ec34ddf0915eb45062adaa80601249"
   },
   "Frontend/app/(protected)/contracts/create/page.tsx": {
-    "mtime": 1787754102.0476356,
-    "seen": 1787847669.3078618,
-    "ast_hash": "d6d78d6819c561b78e91a380cb1bd7e4",
-    "semantic_hash": "d6d78d6819c561b78e91a380cb1bd7e4"
+    "mtime": 1787925038.4830408,
+    "seen": 1787925605.7789724,
+    "ast_hash": "4f2b56ab246d367dec85d39315b8c84b",
+    "semantic_hash": ""
   },
   "Frontend/app/(protected)/contracts/maintenance/page.tsx": {
     "mtime": 1785930592.3782227,
@@ -2634,8 +2634,8 @@
     "semantic_hash": "73ca35968b52451e4221b2ac73e6edaa"
   },
   "Frontend/components/contracts/contract-audit-log.tsx": {
-    "mtime": 1787902124.555941,
-    "seen": 1787902208.6399605,
+    "mtime": 1787902700.1652231,
+    "seen": 1787918343.6818876,
     "ast_hash": "a4f6cc79779b2e5c4b1c686528a45b69",
     "semantic_hash": ""
   },
@@ -3336,10 +3336,10 @@
     "semantic_hash": "e9187b2aae70e3a2f384cdb109cc1703"
   },
   "Frontend/services/contract-api.ts": {
-    "mtime": 1787737793.1365125,
-    "seen": 1787847669.3079967,
-    "ast_hash": "f8e3f96dca0ff2b5743c71dc7d02a5cc",
-    "semantic_hash": "f8e3f96dca0ff2b5743c71dc7d02a5cc"
+    "mtime": 1787903872.1372979,
+    "seen": 1787918343.682048,
+    "ast_hash": "a4494acb950b196c4eb935807bc67548",
+    "semantic_hash": ""
   },
   "Frontend/services/contract-attachments-api.ts": {
     "mtime": 1785984710.753541,
@@ -5439,6 +5439,36 @@
     "mtime": 1787901111.390143,
     "seen": 1787902208.6403995,
     "ast_hash": "ac5aa60d362f979321f1b05730515cd4",
+    "semantic_hash": ""
+  },
+  "Backend/ContractManagement.API/Domains/Interfaces/Contract/IContractSubmissionArtifactRenderer.cs": {
+    "mtime": 1787903717.8244295,
+    "seen": 1787918343.6815045,
+    "ast_hash": "2993d5cc2616fadfae2305e056ce51d5",
+    "semantic_hash": ""
+  },
+  "Backend/ContractManagement.Tests/Domains/Services/Contract/ContractServicePhase8CSubmissionTests.cs": {
+    "mtime": 1787918466.1475978,
+    "seen": 1787918548.502577,
+    "ast_hash": "5ae347e395cb3899980fdbe979f133e7",
+    "semantic_hash": ""
+  },
+  "graphify-out/memory/query_20260828_073025_trong_contract_audit_log_tsx__currentversionid_ph\u1ea3.md": {
+    "mtime": 1787902225.767321,
+    "seen": 1787918343.6823173,
+    "ast_hash": "b1fa063df47683815ac29864e26c8729",
+    "semantic_hash": ""
+  },
+  "graphify-out/memory/query_20260828_115931_phase_8c_conflict_review_and_implementation__expan.md": {
+    "mtime": 1787918371.0524814,
+    "seen": 1787918548.5033023,
+    "ast_hash": "2c09e696dbfe1f0b9ca8e589358e6dee",
+    "semantic_hash": ""
+  },
+  "graphify-out/memory/query_20260828_120241_phase_8c_final_verification__expanded__contract_su.md": {
+    "mtime": 1787918561.088914,
+    "seen": 1787925605.779403,
+    "ast_hash": "80c66cabcb04f90e6044751f73dd28e4",
     "semantic_hash": ""
   }
 }

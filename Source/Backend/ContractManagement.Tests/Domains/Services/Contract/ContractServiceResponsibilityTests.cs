@@ -13,6 +13,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.Net;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 
 namespace ContractManagement.Tests.Domains.Services.Contract;
 
@@ -59,6 +60,25 @@ public class ContractServiceResponsibilityTests
                 CreatorEmployeeId));
         Assert.Null(audits[1].PreviousResponsibleEmployeeId);
         Assert.Null(audits[1].Reason);
+
+        using var createdValuesDocument = JsonDocument.Parse(
+            audits[0].NewValuesJson!);
+        var createdValues = createdValuesDocument.RootElement;
+        Assert.Equal(
+            (byte)ContractType.SoftwareSupply,
+            createdValues.GetProperty("ContractType").GetByte());
+        Assert.Equal(
+            (byte)ContractLanguageMode.Vietnamese,
+            createdValues.GetProperty("LanguageMode").GetByte());
+        Assert.Equal(
+            TemplateVersionId,
+            createdValues.GetProperty("TemplateVersionId").GetInt32());
+        Assert.Contains(
+            "Sản phẩm kiểm thử",
+            createdValues.GetProperty("AddedItems").GetString());
+        Assert.Contains(
+            "GENERAL",
+            createdValues.GetProperty("AddedTerms").GetString());
     }
 
     [Fact]

@@ -2,9 +2,12 @@
 using ContractManagement.API.Common.Security;
 using ContractManagement.Domains.DTOs.Requests.File;
 using ContractManagement.Domains.DTOs.Responses.File;
+using ContractManagement.Domains.Interfaces.Contract;
 using ContractManagement.Domains.Interfaces.File;
 using ContractManagement.Filter;
+using ContractManagement.Infrastructure.Persistence.Application;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace ContractManagement.Domains.Controllers.File
 {
@@ -19,13 +22,19 @@ namespace ContractManagement.Domains.Controllers.File
     {
         private readonly IFileStorageService _fileStorageService;
         private readonly IFileResourceAuthorizationService _fileAuthorizationService;
+        private readonly DbDtctechContext _dbContext;
+        private readonly IContractAuditWriter _contractAuditWriter;
 
         public FileController(
             IFileStorageService fileStorageService,
-            IFileResourceAuthorizationService fileAuthorizationService)
+            IFileResourceAuthorizationService fileAuthorizationService,
+            DbDtctechContext dbContext,
+            IContractAuditWriter contractAuditWriter)
         {
             _fileStorageService = fileStorageService;
             _fileAuthorizationService = fileAuthorizationService;
+            _dbContext = dbContext;
+            _contractAuditWriter = contractAuditWriter;
         }
 
         /// <summary>
@@ -60,11 +69,24 @@ namespace ContractManagement.Domains.Controllers.File
                 employeeId,
                 HttpContext.RequestAborted);
 
-            var result = await _fileStorageService.UploadAsync(
-                request.File,
-                request.ObjectType,
-                request.ObjectId,
-                employeeId);
+            FileStorageResponse result;
+            if (!string.Equals(
+                    request.ObjectType,
+                    ContractAuditSubjectTypes.Contract,
+                    StringComparison.Ordinal))
+            {
+                result = await _fileStorageService.UploadAsync(
+                    request.File,
+                    request.ObjectType,
+                    request.ObjectId,
+                    employeeId);
+            }
+            else
+            {
+                result = await UploadContractFileWithAuditAsync(
+                    request,
+                    employeeId);
+            }
 
             return Ok(
                 ApiResponse<FileStorageResponse>.Ok(
@@ -138,11 +160,71 @@ namespace ContractManagement.Domains.Controllers.File
         [HttpDelete("{fileId:int}")]
         public async Task<IActionResult> Delete(int fileId)
         {
+            var employeeId = GetEmployeeId();
             await _fileAuthorizationService.EnsureCanDeleteFileAsync(
                 fileId,
-                GetEmployeeId(),
+                employeeId,
                 HttpContext.RequestAborted);
-            await _fileStorageService.DeleteAsync(fileId);
+
+            var file = await _dbContext.TblFileStorages
+                .AsNoTracking()
+                .Where(candidate => candidate.FileId == fileId)
+                .Select(candidate => new
+                {
+                    candidate.FileId,
+                    candidate.ObjectType,
+                    candidate.ObjectId,
+                    candidate.FileName,
+                    candidate.UploadedDate
+                })
+                .SingleOrDefaultAsync(HttpContext.RequestAborted)
+                ?? throw new KeyNotFoundException("Không tìm thấy file.");
+
+            if (!string.Equals(
+                    file.ObjectType,
+                    ContractAuditSubjectTypes.Contract,
+                    StringComparison.Ordinal))
+            {
+                await _fileStorageService.DeleteAsync(fileId);
+            }
+            else
+            {
+                var strategy = _dbContext.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
+                {
+                    await using var transaction = await _dbContext.Database
+                        .BeginTransactionAsync(HttpContext.RequestAborted);
+                    try
+                    {
+                        _contractAuditWriter.StageEmployeeAudits(
+                        [
+                            new EmployeeContractAuditWriteRequest(
+                                file.ObjectId,
+                                null,
+                                employeeId,
+                                ContractAuditActionTypes.ContractAttachmentDeleted,
+                                ContractAuditResults.Succeeded,
+                                DateTime.UtcNow,
+                                SubjectType: ContractAuditSubjectTypes.Contract,
+                                SubjectId: file.ObjectId,
+                                PreviousValues: ContractAuditValues.Create(
+                                    ("FileId", file.FileId),
+                                    ("FileName", file.FileName),
+                                    ("UploadDate", file.UploadedDate)))
+                        ]);
+                        await _fileStorageService.DeleteAsync(fileId);
+                        await _dbContext.SaveChangesAsync(
+                            HttpContext.RequestAborted);
+                        await transaction.CommitAsync(
+                            HttpContext.RequestAborted);
+                    }
+                    catch
+                    {
+                        await RollbackAndClearAsync(transaction);
+                        throw;
+                    }
+                });
+            }
 
             return Ok(
                 ApiResponse<object>.Ok(
@@ -160,6 +242,74 @@ namespace ContractManagement.Domains.Controllers.File
             }
 
             return employeeId.Value;
+        }
+
+        private async Task<FileStorageResponse> UploadContractFileWithAuditAsync(
+            UploadFileRequest request,
+            int employeeId)
+        {
+            var strategy = _dbContext.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                FileStorageResponse? uploadedFile = null;
+                await using var transaction = await _dbContext.Database
+                    .BeginTransactionAsync(HttpContext.RequestAborted);
+                try
+                {
+                    uploadedFile = await _fileStorageService.UploadAsync(
+                        request.File,
+                        request.ObjectType,
+                        request.ObjectId,
+                        employeeId);
+
+                    _contractAuditWriter.StageEmployeeAudits(
+                    [
+                        new EmployeeContractAuditWriteRequest(
+                            request.ObjectId,
+                            null,
+                            employeeId,
+                            ContractAuditActionTypes.ContractAttachmentUploaded,
+                            ContractAuditResults.Succeeded,
+                            DateTime.UtcNow,
+                            SubjectType: ContractAuditSubjectTypes.Contract,
+                            SubjectId: request.ObjectId,
+                            NewValues: ContractAuditValues.Create(
+                                ("FileId", uploadedFile.FileId),
+                                ("FileName", uploadedFile.FileName),
+                                ("UploadDate", uploadedFile.UploadedDate)))
+                    ]);
+                    await _dbContext.SaveChangesAsync(
+                        HttpContext.RequestAborted);
+                    await transaction.CommitAsync(HttpContext.RequestAborted);
+                    return uploadedFile;
+                }
+                catch
+                {
+                    await RollbackAndClearAsync(transaction);
+                    if (uploadedFile is not null)
+                    {
+                        await _fileStorageService.DeleteUploadedArtifactAsync(
+                            uploadedFile);
+                    }
+
+                    throw;
+                }
+            });
+        }
+
+        private async Task RollbackAndClearAsync(
+            Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction)
+        {
+            try
+            {
+                await transaction.RollbackAsync(HttpContext.RequestAborted);
+            }
+            catch
+            {
+                // Giữ lại exception gốc để execution strategy quyết định retry.
+            }
+
+            _dbContext.ChangeTracker.Clear();
         }
     }
 }

@@ -49,6 +49,11 @@ public static class ContractAuditActionTypes
     public const string ResponsibilityTransferred =
         "ResponsibilityTransferred";
     public const string DraftUpdated = "DraftUpdated";
+    public const string ApprovalSubmitted = "ApprovalSubmitted";
+    public const string ContractAttachmentUploaded =
+        "ContractAttachmentUploaded";
+    public const string ContractAttachmentDeleted =
+        "ContractAttachmentDeleted";
     public const string NegotiationStarted = "NegotiationStarted";
     public const string NegotiationRoundCreated =
         "NegotiationRoundCreated";

@@ -41,6 +41,11 @@ public sealed class ContractAuditWriter : IContractAuditWriter
             [ContractAuditActionTypes.ResponsibleAssigned] = ContractFields(),
             [ContractAuditActionTypes.ResponsibilityTransferred] = ContractFields(),
             [ContractAuditActionTypes.DraftUpdated] = ContractFields(),
+            [ContractAuditActionTypes.ApprovalSubmitted] = ApprovalFields(),
+            [ContractAuditActionTypes.ContractAttachmentUploaded] =
+                AttachmentFields(),
+            [ContractAuditActionTypes.ContractAttachmentDeleted] =
+                AttachmentFields(),
             [ContractAuditActionTypes.NegotiationStarted] = ContractFields(),
             [ContractAuditActionTypes.NegotiationRoundCreated] =
                 Fields("SourceVersionId", "NewVersionId", "CurrentVersionId",
@@ -52,9 +57,9 @@ public sealed class ContractAuditWriter : IContractAuditWriter
             [ContractAuditActionTypes.CustomerCommentCreated] = CommentFields(),
             [ContractAuditActionTypes.CustomerCommentReplyCreated] = CommentFields(),
             [ContractAuditActionTypes.VerificationPhoneSelected] =
-                Fields("VerificationPhoneId", "PhoneSource", "LinkId", "LinkState"),
+                VerificationPhoneFields(),
             [ContractAuditActionTypes.VerificationPhoneChanged] =
-                Fields("VerificationPhoneId", "PhoneSource", "LinkId", "LinkState"),
+                VerificationPhoneFields(),
             [ContractAuditActionTypes.CustomerAccessLinkCreated] = LinkFields(),
             [ContractAuditActionTypes.CustomerAccessLinkReplaced] = LinkFields(),
             [ContractAuditActionTypes.CustomerAccessLinkRevoked] = LinkFields(),
@@ -309,15 +314,30 @@ public sealed class ContractAuditWriter : IContractAuditWriter
     }
 
     private static HashSet<string> ContractFields() => Fields(
-        "Status", "ResponsibleEmployeeId", "CurrentVersionId", "ContractName",
-        "EffectiveDate", "ExpireDate", "CurrencyCode", "TotalAmount",
-        "ItemCount", "TermCount");
+        "Status", "ResponsibleEmployeeId", "CurrentVersionId", "CustomerId",
+        "CustomerName", "ContractName", "ContractNameEn", "EffectiveDate",
+        "ExpireDate", "CurrencyCode", "Subtotal", "TotalDiscount", "TotalVat",
+        "TotalAmount", "ItemCount", "TermCount", "AddedItems", "UpdatedItems",
+        "RemovedItems", "AddedTerms", "UpdatedTerms", "RemovedTerms",
+        "ContractType", "LanguageMode", "TemplateVersionId", "ParentContractId");
+
+    private static HashSet<string> ApprovalFields() => Fields(
+        "Status", "CurrentVersionId", "VersionLocked", "ApprovalRequestId",
+        "ApprovalStatus", "WorkflowId", "SnapshotHash");
+
+    private static HashSet<string> AttachmentFields() => Fields(
+        "AttachmentId", "FileId", "FileName", "DocumentType", "UploadDate");
+
+    private static HashSet<string> VerificationPhoneFields() => Fields(
+        "VerificationPhoneId", "VerificationPhoneMasked", "PhoneSource",
+        "LinkId", "LinkState");
 
     private static HashSet<string> CommentFields() => Fields(
         "Source", "Target", "TermId", "ParentCommentId", "State");
 
     private static HashSet<string> LinkFields() => Fields(
-        "VerificationPhoneId", "LinkId", "CurrentVersionId", "ExpiresAt", "LinkState");
+        "VerificationPhoneId", "LinkId", "PreviousLinkId", "NewLinkId",
+        "CurrentVersionId", "ExpiresAt", "LinkState");
 
     private static HashSet<string> OtpFields() => Fields(
         "LinkId", "CustomerOtpChallengeId", "CurrentVersionId", "ExpiresAt",

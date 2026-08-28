@@ -124,13 +124,29 @@ const FIELD_LABELS: Record<string, string> = {
   Status: "Trạng thái",
   ResponsibleEmployeeId: "Nhân viên phụ trách",
   CurrentVersionId: "Phiên bản hiện tại",
+  ContractType: "Loại hợp đồng",
+  LanguageMode: "Ngôn ngữ hợp đồng",
+  TemplateVersionId: "Phiên bản mẫu",
+  ParentContractId: "Hợp đồng nguồn",
+  CustomerId: "ID khách hàng",
+  CustomerName: "Tên khách hàng",
   ContractName: "Tên hợp đồng",
+  ContractNameEn: "Tên hợp đồng (tiếng Anh)",
   EffectiveDate: "Ngày hiệu lực",
   ExpireDate: "Ngày hết hạn",
   CurrencyCode: "Đơn vị tiền tệ",
+  Subtotal: "Tạm tính",
+  TotalDiscount: "Tổng chiết khấu",
+  TotalVat: "Tổng VAT",
   TotalAmount: "Tổng giá trị",
   ItemCount: "Số hạng mục",
   TermCount: "Số điều khoản",
+  AddedItems: "Hạng mục thêm mới",
+  UpdatedItems: "Hạng mục đã sửa",
+  RemovedItems: "Hạng mục đã xóa",
+  AddedTerms: "Điều khoản thêm mới",
+  UpdatedTerms: "Điều khoản đã sửa",
+  RemovedTerms: "Điều khoản đã xóa",
   SourceVersionId: "Phiên bản nguồn",
   NewVersionId: "Phiên bản mới",
   SourceVersionLocked: "Khóa phiên bản nguồn",
@@ -140,8 +156,11 @@ const FIELD_LABELS: Record<string, string> = {
   ParentCommentId: "Bình luận cha",
   State: "Trạng thái",
   VerificationPhoneId: "Số xác minh",
+  VerificationPhoneMasked: "Số xác minh đã che",
   PhoneSource: "Nguồn số điện thoại",
   LinkId: "Link truy cập",
+  PreviousLinkId: "Link cũ",
+  NewLinkId: "Link mới",
   LinkState: "Trạng thái link",
   ExpiresAt: "Hết hạn lúc",
   CustomerOtpChallengeId: "Mã thử thách OTP",
@@ -152,12 +171,52 @@ const FIELD_LABELS: Record<string, string> = {
   IdleExpiresAt: "Hết hạn do không hoạt động",
   HardExpiresAt: "Hết hạn hoàn toàn",
   RevocationReasonCode: "Mã lý do thu hồi",
+  VersionLocked: "Khóa phiên bản",
+  ApprovalRequestId: "Yêu cầu duyệt",
+  ApprovalStatus: "Trạng thái duyệt",
+  WorkflowId: "Quy trình duyệt",
+  SnapshotHash: "Mã băm snapshot",
+  AttachmentId: "Tệp đính kèm",
+  FileId: "ID tệp",
+  FileName: "Tên tệp",
+  DocumentType: "Loại tài liệu",
+  UploadDate: "Ngày tải lên",
 };
 
 const PHONE_SOURCE_LABELS: Record<string, string> = {
   CustomerMobile: "Di động khách hàng",
   CustomerPhone: "Điện thoại khách hàng",
   Manual: "Nhập thủ công",
+};
+
+const APPROVAL_STATUS_LABELS: Record<number, string> = {
+  0: "Đang chờ duyệt",
+  1: "Đã duyệt",
+  2: "Yêu cầu chỉnh sửa",
+  3: "Đã từ chối",
+  4: "Đã rút",
+};
+
+const CONTRACT_TYPE_LABELS: Record<number, string> = {
+  1: "Cung cấp phần mềm",
+  2: "Bảo trì phần mềm",
+  3: "Duy trì phần mềm",
+};
+
+const LANGUAGE_MODE_LABELS: Record<number, string> = {
+  1: "Tiếng Việt",
+  2: "Song ngữ",
+};
+
+const DOCUMENT_TYPE_LABELS: Record<number, string> = {
+  0: "Báo giá",
+  1: "Biên bản nghiệm thu",
+  2: "Biên bản bàn giao",
+  3: "Biên bản thanh lý",
+  4: "Hóa đơn VAT",
+  5: "Bảo lãnh ngân hàng",
+  6: "Bản scan đã ký",
+  99: "Khác",
 };
 
 const toPositiveInteger = (value: string) => {
@@ -208,10 +267,60 @@ const buildAuditFilterRequest = (
 const formatFieldLabel = (key: string) =>
   FIELD_LABELS[key] ?? key.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
 
-const formatAuditValue = (key: string, value: unknown): string => {
+type AuditValueSide = "previous" | "new";
+
+const resolveAuditVersionNo = (
+  audit: ContractAuditResponse,
+  value: unknown,
+  side: AuditValueSide,
+) => {
+  const versionId = Number(value);
+  if (!Number.isInteger(versionId) || versionId <= 0 || !audit.versionNo) {
+    return undefined;
+  }
+
+  if (audit.versionId === versionId) return audit.versionNo;
+
+  if (
+    audit.actionType === "NegotiationRoundCreated" &&
+    side === "previous" &&
+    audit.versionNo > 1
+  ) {
+    const sourceVersionId = Number(
+      audit.previousValues?.SourceVersionId ?? audit.newValues?.SourceVersionId,
+    );
+
+    if (sourceVersionId === versionId) return audit.versionNo - 1;
+  }
+
+  return undefined;
+};
+
+const formatAuditValue = (
+  key: string,
+  value: unknown,
+  audit?: ContractAuditResponse,
+  side: AuditValueSide = "new",
+): string => {
   if (value === null || value === undefined || value === "") return "—";
+  if (key === "CurrentVersionId" && audit) {
+    const versionNo = resolveAuditVersionNo(audit, value, side);
+    return versionNo ? `Phiên bản ${versionNo}` : "—";
+  }
   if (key === "Status" && !Number.isNaN(Number(value))) {
     return getContractStatusLabel(Number(value) as ContractStatus);
+  }
+  if (key === "ApprovalStatus" && !Number.isNaN(Number(value))) {
+    return APPROVAL_STATUS_LABELS[Number(value)] ?? String(value);
+  }
+  if (key === "ContractType" && !Number.isNaN(Number(value))) {
+    return CONTRACT_TYPE_LABELS[Number(value)] ?? String(value);
+  }
+  if (key === "LanguageMode" && !Number.isNaN(Number(value))) {
+    return LANGUAGE_MODE_LABELS[Number(value)] ?? String(value);
+  }
+  if (key === "DocumentType" && !Number.isNaN(Number(value))) {
+    return DOCUMENT_TYPE_LABELS[Number(value)] ?? String(value);
   }
   if (typeof value === "boolean") return value ? "Có" : "Không";
   if (typeof value === "object") return JSON.stringify(value);
@@ -236,34 +345,65 @@ const getErrorMessage = (error: unknown) => {
 };
 
 function AuditChanges({ audit }: { audit: ContractAuditResponse }) {
+  const [isOpen, setIsOpen] = useState(false);
   const previousValues = audit.previousValues ?? {};
   const newValues = audit.newValues ?? {};
   const keys = Array.from(
     new Set([...Object.keys(previousValues), ...Object.keys(newValues)]),
   );
+  const changedKeys = keys.filter(
+    (key) =>
+      formatAuditValue(key, previousValues[key], audit, "previous") !==
+      formatAuditValue(key, newValues[key], audit, "new"),
+  );
 
-  if (keys.length === 0) return null;
+  if (changedKeys.length === 0) return null;
 
   return (
-    <div className="mt-3 overflow-hidden rounded-lg border bg-muted/20">
-      {keys.map((key) => (
-        <div
-          key={key}
-          className="grid gap-1 border-b px-3 py-2 text-xs last:border-b-0 sm:grid-cols-[minmax(130px,0.7fr)_1fr_auto_1fr] sm:items-center"
+    <Collapsible
+      open={isOpen}
+      onOpenChange={setIsOpen}
+      className="mt-3 overflow-hidden rounded-lg border bg-muted/20"
+    >
+      <CollapsibleTrigger asChild>
+        <Button
+          variant="ghost"
+          className="h-auto w-full justify-between rounded-none px-3 py-2 text-xs hover:bg-muted/60"
         >
-          <span className="font-medium text-foreground">
-            {formatFieldLabel(key)}
+          <span className="flex items-center gap-2">
+            <span className="font-medium">Thay đổi dữ liệu</span>
+            <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+              {changedKeys.length}
+            </Badge>
           </span>
-          <span className="break-all text-muted-foreground">
-            {formatAuditValue(key, previousValues[key])}
-          </span>
-          <span className="hidden text-muted-foreground sm:inline">→</span>
-          <span className="break-all font-medium text-foreground">
-            {formatAuditValue(key, newValues[key])}
-          </span>
-        </div>
-      ))}
-    </div>
+          <ChevronDown
+            className={cn(
+              "size-4 text-muted-foreground transition-transform",
+              isOpen && "rotate-180",
+            )}
+          />
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="overflow-hidden border-t data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=closed]:slide-out-to-top-2 data-[state=open]:animate-in data-[state=open]:fade-in data-[state=open]:slide-in-from-top-2">
+        {changedKeys.map((key) => (
+          <div
+            key={key}
+            className="grid gap-1 border-b px-3 py-2 text-xs last:border-b-0 sm:grid-cols-[minmax(130px,0.7fr)_1fr_auto_1fr] sm:items-center"
+          >
+            <span className="font-medium text-foreground">
+              {formatFieldLabel(key)}
+            </span>
+            <span className="break-all text-muted-foreground">
+              {formatAuditValue(key, previousValues[key], audit, "previous")}
+            </span>
+            <span className="hidden text-muted-foreground sm:inline">→</span>
+            <span className="break-all font-medium text-foreground">
+              {formatAuditValue(key, newValues[key], audit, "new")}
+            </span>
+          </div>
+        ))}
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -393,7 +533,10 @@ export function ContractAuditLog({
         : []),
       ["ID phiên bản", draftFilters.versionId] as const,
       ["ID nhân viên", draftFilters.actorEmployeeId] as const,
-      ["ID phiên khách hàng", draftFilters.actorCustomerAccessSessionId] as const,
+      [
+        "ID phiên khách hàng",
+        draftFilters.actorCustomerAccessSessionId,
+      ] as const,
       ["ID đối tượng", draftFilters.subjectId] as const,
     ];
     const invalidFilter = numericFilters.find(
@@ -487,7 +630,9 @@ export function ContractAuditLog({
               onClick={refreshAudits}
               disabled={isLoading}
             >
-              <RefreshCw className={cn("size-4", isLoading && "animate-spin")} />
+              <RefreshCw
+                className={cn("size-4", isLoading && "animate-spin")}
+              />
               Làm mới
             </Button>
           </div>
@@ -850,7 +995,8 @@ export function ContractAuditLog({
                       {mode === "tenant" && (
                         <p className="mt-1 text-sm text-foreground">
                           <span className="font-medium">
-                            {audit.contractCode || `Hợp đồng #${audit.contractId}`}
+                            {audit.contractCode ||
+                              `Hợp đồng #${audit.contractId}`}
                           </span>
                           {audit.contractName ? ` · ${audit.contractName}` : ""}
                         </p>
@@ -859,14 +1005,14 @@ export function ContractAuditLog({
                         <AuditActor audit={audit} />
                         {audit.versionId && (
                           <span>
-                            Phiên bản {audit.versionNo ?? "—"} (ID #{audit.versionId})
+                            Phiên bản {audit.versionNo ?? "—"} (ID #
+                            {audit.versionId})
                           </span>
                         )}
                         <span>
                           {CONTRACT_AUDIT_SUBJECT_LABELS[
                             audit.subjectType as ContractAuditSubjectType
-                          ] ??
-                            audit.subjectType}
+                          ] ?? audit.subjectType}
                           {" #"}
                           {audit.subjectId}
                         </span>

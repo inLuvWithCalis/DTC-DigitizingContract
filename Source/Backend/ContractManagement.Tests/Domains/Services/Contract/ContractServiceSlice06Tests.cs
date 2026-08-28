@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
+using System.Text.Json;
 
 namespace ContractManagement.Tests.Domains.Services.Contract;
 
@@ -137,6 +138,123 @@ public sealed class ContractServiceSlice06Tests
         Assert.Equal("Unavailable", revokedAvailability.State);
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
             () => customerAccess.GetSharedAsync(issue.SessionSecret));
+    }
+
+    [Fact]
+    public async Task VerificationPhoneChange_ShouldAuditBeforeAfterAndRevokedLink()
+    {
+        await using var context = CreateContext();
+        await SeedAsync(context);
+        var (contractService, _, _) = CreateServices(context);
+        var rowVersion = Convert.ToBase64String(InitialRowVersion());
+
+        await contractService.UpdateCustomerVerificationPhoneAsync(
+            ContractId,
+            new UpdateContractCustomerVerificationPhoneRequest
+            {
+                PhoneSource = "CustomerMobile",
+                Reason = "Chọn số khách hàng",
+                RowVersion = rowVersion
+            },
+            EmployeeId);
+        var link = await contractService.CreateCustomerAccessLinkAsync(
+            ContractId,
+            new CreateContractCustomerAccessLinkRequest
+            {
+                RowVersion = rowVersion
+            },
+            EmployeeId,
+            "https://public.example.test");
+
+        await contractService.UpdateCustomerVerificationPhoneAsync(
+            ContractId,
+            new UpdateContractCustomerVerificationPhoneRequest
+            {
+                PhoneSource = "Manual",
+                ManualPhoneNumber = "+84987654321",
+                Reason = "Khách hàng đổi số",
+                RowVersion = rowVersion
+            },
+            EmployeeId);
+
+        var phoneAudit = await context.TblContractAudits.SingleAsync(x =>
+            x.ActionType == ContractAuditActionTypes.VerificationPhoneChanged);
+        using var previousDocument = JsonDocument.Parse(
+            phoneAudit.PreviousValuesJson!);
+        using var newDocument = JsonDocument.Parse(
+            phoneAudit.NewValuesJson!);
+        Assert.Equal(
+            "********5678",
+            previousDocument.RootElement
+                .GetProperty("VerificationPhoneMasked").GetString());
+        Assert.Equal(
+            "********4321",
+            newDocument.RootElement
+                .GetProperty("VerificationPhoneMasked").GetString());
+        Assert.Equal(
+            link.LinkId,
+            previousDocument.RootElement.GetProperty("LinkId").GetInt32());
+
+        var revokedAudit = await context.TblContractAudits.SingleAsync(x =>
+            x.ActionType == ContractAuditActionTypes.CustomerAccessLinkRevoked
+            && x.SubjectId == link.LinkId);
+        using var revokedDocument = JsonDocument.Parse(
+            revokedAudit.NewValuesJson!);
+        Assert.Equal(
+            "Revoked",
+            revokedDocument.RootElement.GetProperty("LinkState").GetString());
+        Assert.Null((await context.TblContracts.SingleAsync())
+            .CurrentCustomerAccessLinkId);
+    }
+
+    [Fact]
+    public async Task ReplaceLink_ShouldAuditPreviousAndNewLinkIds()
+    {
+        await using var context = CreateContext();
+        await SeedAsync(context);
+        var (contractService, _, _) = CreateServices(context);
+        var rowVersion = Convert.ToBase64String(InitialRowVersion());
+
+        await contractService.UpdateCustomerVerificationPhoneAsync(
+            ContractId,
+            new UpdateContractCustomerVerificationPhoneRequest
+            {
+                PhoneSource = "CustomerMobile",
+                Reason = "Chọn số khách hàng",
+                RowVersion = rowVersion
+            },
+            EmployeeId);
+        var previous = await contractService.CreateCustomerAccessLinkAsync(
+            ContractId,
+            new CreateContractCustomerAccessLinkRequest
+            {
+                RowVersion = rowVersion
+            },
+            EmployeeId,
+            "https://public.example.test");
+        var replacement = await contractService.ReplaceCustomerAccessLinkAsync(
+            ContractId,
+            previous.LinkId,
+            new ReplaceContractCustomerAccessLinkRequest
+            {
+                RowVersion = rowVersion,
+                Reason = "Cấp lại link"
+            },
+            EmployeeId,
+            "https://public.example.test");
+
+        var audit = await context.TblContractAudits.SingleAsync(x =>
+            x.ActionType == ContractAuditActionTypes.CustomerAccessLinkReplaced);
+        using var previousDocument = JsonDocument.Parse(
+            audit.PreviousValuesJson!);
+        using var newDocument = JsonDocument.Parse(audit.NewValuesJson!);
+        Assert.Equal(
+            previous.LinkId,
+            previousDocument.RootElement
+                .GetProperty("PreviousLinkId").GetInt32());
+        Assert.Equal(
+            replacement.LinkId,
+            newDocument.RootElement.GetProperty("NewLinkId").GetInt32());
     }
 
     private static DbDtctechContext CreateContext()

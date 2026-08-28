@@ -25,6 +25,7 @@ namespace ContractManagement.Domains.Services.Contract
     {
         private const decimal MaxMoney = 9999999999999999.99m;
         private const byte ActiveEmployeeStatus = 1;
+        private const int MaxAuditSummaryLength = 500;
         private static long _syntheticCommentRowVersionSeed = 1000;
 
         private readonly DbDtctechContext _dbContext;
@@ -372,7 +373,8 @@ namespace ContractManagement.Domains.Services.Contract
                     await ValidateResponsibleEmployeeAsync(
                         responsibleEmployeeId);
 
-                    await ValidateCustomerAsync(request.CustomerId);
+                    var customerAudit =
+                        await ValidateCustomerAsync(request.CustomerId);
                     await ValidateTemplateAsync(request);
                     await ValidateParentContractAsync(
                         request,
@@ -639,6 +641,17 @@ namespace ContractManagement.Domains.Services.Contract
                         currencyCode,
                         totals);
 
+                    var createdItemsAudit = BuildAuditSummary(
+                        contractItems.Select(item => BuildItemAuditEntry(
+                            null,
+                            item.ItemCode,
+                            item.ItemName)).ToList());
+                    var createdTermsAudit = BuildAuditSummary(
+                        contractTerms.Select(term => BuildTermAuditEntry(
+                            null,
+                            term.TermCode,
+                            term.TermTitle)).ToList());
+
                     _contractAuditWriter.StageEmployeeAudits(
                     [
                         new EmployeeContractAuditWriteRequest(
@@ -657,13 +670,25 @@ namespace ContractManagement.Domains.Services.Contract
                                 ("Status", contract.Status),
                                 ("ResponsibleEmployeeId", responsibleEmployeeId),
                                 ("CurrentVersionId", contractVersion.VersionId),
-                                ("ContractName", contract.ContractName),
+                                ("CustomerId", customerAudit.CustomerId),
+                                ("CustomerName", customerAudit.DisplayName),
+                                ("ContractType", contract.ContractType),
+                                ("LanguageMode", contract.LanguageMode),
+                                ("TemplateVersionId", request.TemplateVersionId),
+                                ("ParentContractId", contract.ParentContractId),
+                                ("ContractName", BuildAuditSafeText(contract.ContractName)),
+                                ("ContractNameEn", BuildAuditSafeText(contract.ContractNameEn)),
                                 ("EffectiveDate", contract.EffectiveDate),
                                 ("ExpireDate", contract.ExpireDate),
                                 ("CurrencyCode", contract.CurrencyCode),
+                                ("Subtotal", contract.Subtotal),
+                                ("TotalDiscount", contract.TotalDiscount),
+                                ("TotalVat", contract.TotalVat),
                                 ("TotalAmount", contract.TotalAmount),
                                 ("ItemCount", contractItems.Count),
-                                ("TermCount", contractTerms.Count))),
+                                ("TermCount", contractTerms.Count),
+                                ("AddedItems", createdItemsAudit),
+                                ("AddedTerms", createdTermsAudit))),
 
                         new EmployeeContractAuditWriteRequest(
                             contract.ContractId,
@@ -683,10 +708,16 @@ namespace ContractManagement.Domains.Services.Contract
                                 ("Status", contract.Status),
                                 ("ResponsibleEmployeeId", responsibleEmployeeId),
                                 ("CurrentVersionId", contractVersion.VersionId),
-                                ("ContractName", contract.ContractName),
+                                ("CustomerId", customerAudit.CustomerId),
+                                ("CustomerName", customerAudit.DisplayName),
+                                ("ContractName", BuildAuditSafeText(contract.ContractName)),
+                                ("ContractNameEn", BuildAuditSafeText(contract.ContractNameEn)),
                                 ("EffectiveDate", contract.EffectiveDate),
                                 ("ExpireDate", contract.ExpireDate),
                                 ("CurrencyCode", contract.CurrencyCode),
+                                ("Subtotal", contract.Subtotal),
+                                ("TotalDiscount", contract.TotalDiscount),
+                                ("TotalVat", contract.TotalVat),
                                 ("TotalAmount", contract.TotalAmount),
                                 ("ItemCount", contractItems.Count),
                                 ("TermCount", contractTerms.Count)))
@@ -1399,388 +1430,479 @@ namespace ContractManagement.Domains.Services.Contract
 
                     try
                     {
-                    /*
-                     * Lọc EmployeeId ngay từ truy vấn để bảo vệ dữ liệu:
-                     * người khác không được cập nhật hợp đồng.
-                     */
-                    var contract = await _dbContext.TblContracts
-                        .FirstOrDefaultAsync(x =>
-                            x.ContractId == contractId
-                            && x.EmployeeId == employeeId);
+                        /*
+                         * Lọc EmployeeId ngay từ truy vấn để bảo vệ dữ liệu:
+                         * người khác không được cập nhật hợp đồng.
+                         */
+                        var contract = await _dbContext.TblContracts
+                            .FirstOrDefaultAsync(x =>
+                                x.ContractId == contractId
+                                && x.EmployeeId == employeeId);
 
-                    if (contract == null)
-                    {
-                        throw new KeyNotFoundException(
-                            "Không tìm thấy hợp đồng.");
-                    }
-
-                    var currentStatus = (ContractStatus)contract.Status;
-
-                    if (!ContractLifecyclePolicy.CanEditContent(currentStatus))
-                    {
-                        throw new InvalidOperationException(
-                            "Hợp đồng ở trạng thái hiện tại không được sửa nội dung.");
-                    }
-
-                    if (contract.IsLegacy)
-                    {
-                        throw new InvalidOperationException(
-                            "Hợp đồng legacy không được chỉnh sửa bằng API này.");
-                    }
-
-                    if (!contract.CurrentVersionId.HasValue)
-                    {
-                        throw new InvalidOperationException(
-                            "Hợp đồng chưa có version hiện hành.");
-                    }
-
-                    /*
-                     * Nếu CurrentVersionId đã thay đổi thì client đang sửa
-                     * dựa trên dữ liệu cũ.
-                     */
-                    if (contract.CurrentVersionId.Value !=
-                        request.CurrentVersionId)
-                    {
-                        throw new DbUpdateConcurrencyException(
-                            "Version hiện hành đã thay đổi.");
-                    }
-
-                    var version = await _dbContext.TblContractVersions
-                        .FirstOrDefaultAsync(x =>
-                            x.VersionId == request.CurrentVersionId
-                            && x.ContractId == contract.ContractId);
-
-                    if (version == null)
-                    {
-                        throw new InvalidOperationException(
-                            "Không tìm thấy version hiện hành.");
-                    }
-
-                    if (version.IsLocked)
-                    {
-                        throw new InvalidOperationException(
-                            "Version đã bị khóa, không thể cập nhật trực tiếp.");
-                    }
-
-                    /*
-                     * Kiểm tra optimistic concurrency cho Contract.
-                     */
-                    var expectedContractRowVersion =
-                        DecodeRowVersion(
-                            request.RowVersion,
-                            nameof(request.RowVersion));
-
-                    EnsureRowVersionMatches(
-                        contract.RowVersion,
-                        expectedContractRowVersion,
-                        "Hợp đồng");
-
-                    _dbContext.Entry(contract)
-                        .Property(x => x.RowVersion)
-                        .OriginalValue = expectedContractRowVersion;
-
-                    /*
-                     * Kiểm tra optimistic concurrency cho CurrentVersion.
-                     */
-                    var expectedVersionRowVersion =
-                        DecodeRowVersion(
-                            request.CurrentVersionRowVersion,
-                            nameof(request.CurrentVersionRowVersion));
-
-                    EnsureRowVersionMatches(
-                        version.RowVersion,
-                        expectedVersionRowVersion,
-                        "Version hợp đồng");
-
-                    var versionEntry = _dbContext.Entry(version);
-
-                    versionEntry
-                        .Property(x => x.RowVersion)
-                        .OriginalValue = expectedVersionRowVersion;
-
-                    /*
-                     * Đánh dấu version đã tham gia lần cập nhật này.
-                     * SQL Server sẽ sinh RowVersion mới cho version.
-                     */
-                    versionEntry
-                        .Property(x => x.ChangeNote)
-                        .IsModified = true;
-
-                    await ValidateCustomerAsync(request.CustomerId);
-
-                    await ValidateParentContractForCustomerAsync(
-                        contract.ParentContractId,
-                        request.CustomerId);
-
-                    ValidateBilingualUpdate(contract, request);
-
-                    await ValidateCatalogSourcesAsync(
-                        request.Items
-                            .Where(x => !x.ContractItemId.HasValue)
-                            .Cast<CreateContractItemRequest>()
-                            .ToList());
-
-                    var existingItems = await _dbContext.TblContractItems
-                        .Where(x =>
-                            x.ContractId == contract.ContractId
-                            && x.VersionId == version.VersionId)
-                        .ToListAsync();
-
-                    var existingTerms = await _dbContext.TblContractTerms
-                        .Where(x =>
-                            x.ContractId == contract.ContractId
-                            && x.VersionId == version.VersionId)
-                        .ToListAsync();
-
-                    var previousAuditValues = ContractAuditValues.Create(
-                        ("Status", contract.Status),
-                        ("ResponsibleEmployeeId", contract.EmployeeId),
-                        ("CurrentVersionId", contract.CurrentVersionId),
-                        ("ContractName", contract.ContractName),
-                        ("EffectiveDate", contract.EffectiveDate),
-                        ("ExpireDate", contract.ExpireDate),
-                        ("CurrencyCode", contract.CurrencyCode),
-                        ("TotalAmount", contract.TotalAmount),
-                        ("ItemCount", existingItems.Count),
-                        ("TermCount", existingTerms.Count));
-
-                    var existingItemById = existingItems
-                        .ToDictionary(x => x.ContractItemId);
-
-                    var existingTermById = existingTerms
-                        .ToDictionary(x => x.TermId);
-
-                    var requestedItemIds = request.Items
-                        .Where(x => x.ContractItemId.HasValue)
-                        .Select(x => x.ContractItemId!.Value)
-                        .ToHashSet();
-
-                    var requestedTermIds = request.Terms
-                        .Where(x => x.TermId.HasValue)
-                        .Select(x => x.TermId!.Value)
-                        .ToHashSet();
-
-                    var now = DateTime.UtcNow;
-                    var currencyCode = NormalizeCurrencyCode(
-                        request.CurrencyCode);
-                    var totals = ContractFinancialTotals.Zero;
-
-                    /*
-                     * Thêm mới hoặc cập nhật Items.
-                     */
-                    for (var index = 0;
-                         index < request.Items.Count;
-                         index++)
-                    {
-                        var requestItem = request.Items[index];
-                        var amounts = CalculateItemAmounts(
-                            requestItem,
-                            currencyCode);
-
-                        totals = AddToContractTotals(
-                            totals,
-                            amounts);
-
-                        TblContractItem item;
-
-                        if (requestItem.ContractItemId.HasValue)
+                        if (contract == null)
                         {
-                            if (!existingItemById.TryGetValue(
-                                    requestItem.ContractItemId.Value,
-                                    out item!))
-                            {
-                                throw new ArgumentException(
-                                    $"Item {requestItem.ContractItemId.Value} " +
-                                    "không thuộc version hiện hành.");
-                            }
-
-                            var expectedItemRowVersion =
-                                DecodeRowVersion(
-                                    requestItem.RowVersion,
-                                    $"Items[{index}].RowVersion");
-
-                            EnsureRowVersionMatches(
-                                item.RowVersion,
-                                expectedItemRowVersion,
-                                $"Item {item.ContractItemId}");
-
-                            _dbContext.Entry(item)
-                                .Property(x => x.RowVersion)
-                                .OriginalValue = expectedItemRowVersion;
-
-                            if (item.ItemType != (byte)requestItem.ItemType
-                                || item.SourceProductId != requestItem.SourceProductId
-                                || item.SourceServiceId != requestItem.SourceServiceId)
-                            {
-                                throw new InvalidOperationException(
-                                    "Không được thay đổi loại hoặc nguồn Catalog của item đã lưu.");
-                            }
-
-                            if (item.SourceProductId.HasValue
-                                || item.SourceServiceId.HasValue)
-                            {
-                                requestItem.ItemCode = item.ItemCode;
-                            }
-
-                            item.UpdatedEmployeeId = employeeId;
-                            item.UpdatedDate = now;
-                        }
-                        else
-                        {
-                            item = new TblContractItem
-                            {
-                                ContractId = contract.ContractId,
-                                VersionId = version.VersionId,
-                                CreatedEmployeeId = employeeId,
-                                CreatedDate = now
-                            };
-
-                            _dbContext.TblContractItems.Add(item);
+                            throw new KeyNotFoundException(
+                                "Không tìm thấy hợp đồng.");
                         }
 
-                        ApplyItemSnapshot(
-                            item,
-                            requestItem,
-                            amounts,
-                            requestItem.DisplayOrder > 0
-                                ? requestItem.DisplayOrder
-                                : index + 1);
-                    }
+                        var currentStatus = (ContractStatus)contract.Status;
 
-                    /*
-                     * Item cũ không còn trong request sẽ bị xóa.
-                     */
-                    var removedItems = existingItems
-                        .Where(x =>
-                            !requestedItemIds.Contains(x.ContractItemId))
-                        .ToList();
-
-                    _dbContext.TblContractItems.RemoveRange(removedItems);
-
-                    /*
-                     * Thêm mới hoặc cập nhật Terms.
-                     */
-                    for (var index = 0;
-                         index < request.Terms.Count;
-                         index++)
-                    {
-                        var requestTerm = request.Terms[index];
-
-                        TblContractTerm term;
-
-                        if (requestTerm.TermId.HasValue)
+                        if (!ContractLifecyclePolicy.CanEditContent(currentStatus))
                         {
-                            if (!existingTermById.TryGetValue(
-                                    requestTerm.TermId.Value,
-                                    out term!))
+                            throw new InvalidOperationException(
+                                "Hợp đồng ở trạng thái hiện tại không được sửa nội dung.");
+                        }
+
+                        if (contract.IsLegacy)
+                        {
+                            throw new InvalidOperationException(
+                                "Hợp đồng legacy không được chỉnh sửa bằng API này.");
+                        }
+
+                        if (!contract.CurrentVersionId.HasValue)
+                        {
+                            throw new InvalidOperationException(
+                                "Hợp đồng chưa có version hiện hành.");
+                        }
+
+                        /*
+                         * Nếu CurrentVersionId đã thay đổi thì client đang sửa
+                         * dựa trên dữ liệu cũ.
+                         */
+                        if (contract.CurrentVersionId.Value !=
+                            request.CurrentVersionId)
+                        {
+                            throw new DbUpdateConcurrencyException(
+                                "Version hiện hành đã thay đổi.");
+                        }
+
+                        var version = await _dbContext.TblContractVersions
+                            .FirstOrDefaultAsync(x =>
+                                x.VersionId == request.CurrentVersionId
+                                && x.ContractId == contract.ContractId);
+
+                        if (version == null)
+                        {
+                            throw new InvalidOperationException(
+                                "Không tìm thấy version hiện hành.");
+                        }
+
+                        if (version.IsLocked)
+                        {
+                            throw new InvalidOperationException(
+                                "Version đã bị khóa, không thể cập nhật trực tiếp.");
+                        }
+
+                        /*
+                         * Kiểm tra optimistic concurrency cho Contract.
+                         */
+                        var expectedContractRowVersion =
+                            DecodeRowVersion(
+                                request.RowVersion,
+                                nameof(request.RowVersion));
+
+                        EnsureRowVersionMatches(
+                            contract.RowVersion,
+                            expectedContractRowVersion,
+                            "Hợp đồng");
+
+                        _dbContext.Entry(contract)
+                            .Property(x => x.RowVersion)
+                            .OriginalValue = expectedContractRowVersion;
+
+                        /*
+                         * Kiểm tra optimistic concurrency cho CurrentVersion.
+                         */
+                        var expectedVersionRowVersion =
+                            DecodeRowVersion(
+                                request.CurrentVersionRowVersion,
+                                nameof(request.CurrentVersionRowVersion));
+
+                        EnsureRowVersionMatches(
+                            version.RowVersion,
+                            expectedVersionRowVersion,
+                            "Version hợp đồng");
+
+                        var versionEntry = _dbContext.Entry(version);
+
+                        versionEntry
+                            .Property(x => x.RowVersion)
+                            .OriginalValue = expectedVersionRowVersion;
+
+                        /*
+                         * Đánh dấu version đã tham gia lần cập nhật này.
+                         * SQL Server sẽ sinh RowVersion mới cho version.
+                         */
+                        versionEntry
+                            .Property(x => x.ChangeNote)
+                            .IsModified = true;
+
+                        var requestedCustomerAudit =
+                            await ValidateCustomerAsync(request.CustomerId);
+
+                        var previousCustomerAudit =
+                            contract.CustomerId == request.CustomerId
+                                ? requestedCustomerAudit
+                                : await GetCustomerAuditSnapshotAsync(
+                                    contract.CustomerId);
+
+                        await ValidateParentContractForCustomerAsync(
+                            contract.ParentContractId,
+                            request.CustomerId);
+
+                        ValidateBilingualUpdate(contract, request);
+
+                        await ValidateCatalogSourcesAsync(
+                            request.Items
+                                .Where(x => !x.ContractItemId.HasValue)
+                                .Cast<CreateContractItemRequest>()
+                                .ToList());
+
+                        var existingItems = await _dbContext.TblContractItems
+                            .Where(x =>
+                                x.ContractId == contract.ContractId
+                                && x.VersionId == version.VersionId)
+                            .ToListAsync();
+
+                        var existingTerms = await _dbContext.TblContractTerms
+                            .Where(x =>
+                                x.ContractId == contract.ContractId
+                                && x.VersionId == version.VersionId)
+                            .ToListAsync();
+
+                        var previousAuditValues = ContractAuditValues.Create(
+                            ("Status", contract.Status),
+                            ("ResponsibleEmployeeId", contract.EmployeeId),
+                            ("CurrentVersionId", contract.CurrentVersionId),
+                            ("CustomerId", previousCustomerAudit.CustomerId),
+                            ("CustomerName", previousCustomerAudit.DisplayName),
+                            ("ContractName", BuildAuditSafeText(contract.ContractName)),
+                            ("ContractNameEn", BuildAuditSafeText(contract.ContractNameEn)),
+                            ("EffectiveDate", contract.EffectiveDate),
+                            ("ExpireDate", contract.ExpireDate),
+                            ("CurrencyCode", contract.CurrencyCode),
+                            ("Subtotal", contract.Subtotal),
+                            ("TotalDiscount", contract.TotalDiscount),
+                            ("TotalVat", contract.TotalVat),
+                            ("TotalAmount", contract.TotalAmount),
+                            ("ItemCount", existingItems.Count),
+                            ("TermCount", existingTerms.Count));
+
+                        var addedItemAudits = new List<string>();
+                        var updatedItemAudits = new List<string>();
+                        var removedItemAudits = new List<string>();
+                        var addedTermAudits = new List<string>();
+                        var updatedTermAudits = new List<string>();
+                        var removedTermAudits = new List<string>();
+
+                        var existingItemById = existingItems
+                            .ToDictionary(x => x.ContractItemId);
+
+                        var existingTermById = existingTerms
+                            .ToDictionary(x => x.TermId);
+
+                        var requestedItemIds = request.Items
+                            .Where(x => x.ContractItemId.HasValue)
+                            .Select(x => x.ContractItemId!.Value)
+                            .ToHashSet();
+
+                        var requestedTermIds = request.Terms
+                            .Where(x => x.TermId.HasValue)
+                            .Select(x => x.TermId!.Value)
+                            .ToHashSet();
+
+                        var now = DateTime.UtcNow;
+                        var currencyCode = NormalizeCurrencyCode(
+                            request.CurrencyCode);
+                        var totals = ContractFinancialTotals.Zero;
+
+                        /*
+                         * Thêm mới hoặc cập nhật Items.
+                         */
+                        for (var index = 0;
+                             index < request.Items.Count;
+                             index++)
+                        {
+                            var requestItem = request.Items[index];
+                            var amounts = CalculateItemAmounts(
+                                requestItem,
+                                currencyCode);
+
+                            totals = AddToContractTotals(
+                                totals,
+                                amounts);
+
+                            var displayOrder =
+                                requestItem.DisplayOrder > 0
+                                    ? requestItem.DisplayOrder
+                                    : index + 1;
+
+                            TblContractItem item;
+
+                            if (requestItem.ContractItemId.HasValue)
                             {
-                                throw new ArgumentException(
-                                    $"Term {requestTerm.TermId.Value} " +
-                                    "không thuộc version hiện hành.");
+                                if (!existingItemById.TryGetValue(
+                                        requestItem.ContractItemId.Value,
+                                        out item!))
+                                {
+                                    throw new ArgumentException(
+                                        $"Item {requestItem.ContractItemId.Value} " +
+                                        "không thuộc version hiện hành.");
+                                }
+
+                                var expectedItemRowVersion =
+                                    DecodeRowVersion(
+                                        requestItem.RowVersion,
+                                        $"Items[{index}].RowVersion");
+
+                                EnsureRowVersionMatches(
+                                    item.RowVersion,
+                                    expectedItemRowVersion,
+                                    $"Item {item.ContractItemId}");
+
+                                _dbContext.Entry(item)
+                                    .Property(x => x.RowVersion)
+                                    .OriginalValue = expectedItemRowVersion;
+
+                                if (item.ItemType != (byte)requestItem.ItemType
+                                    || item.SourceProductId != requestItem.SourceProductId
+                                    || item.SourceServiceId != requestItem.SourceServiceId)
+                                {
+                                    throw new InvalidOperationException(
+                                        "Không được thay đổi loại hoặc nguồn Catalog của item đã lưu.");
+                                }
+
+                                if (item.SourceProductId.HasValue
+                                    || item.SourceServiceId.HasValue)
+                                {
+                                    requestItem.ItemCode = item.ItemCode;
+                                }
+
+                                var changedFields = GetChangedItemFields(
+                                    item,
+                                    requestItem,
+                                    displayOrder);
+
+                                if (changedFields.Count > 0)
+                                {
+                                    updatedItemAudits.Add(
+                                        BuildItemAuditEntry(
+                                            item.ContractItemId,
+                                            requestItem.ItemCode,
+                                            requestItem.ItemName,
+                                            changedFields));
+                                }
+
+                                item.UpdatedEmployeeId = employeeId;
+                                item.UpdatedDate = now;
+                            }
+                            else
+                            {
+                                item = new TblContractItem
+                                {
+                                    ContractId = contract.ContractId,
+                                    VersionId = version.VersionId,
+                                    CreatedEmployeeId = employeeId,
+                                    CreatedDate = now
+                                };
+
+                                _dbContext.TblContractItems.Add(item);
+
+                                addedItemAudits.Add(
+                                    BuildItemAuditEntry(
+                                        null,
+                                        requestItem.ItemCode,
+                                        requestItem.ItemName));
                             }
 
-                            var expectedTermRowVersion =
-                                DecodeRowVersion(
-                                    requestTerm.RowVersion,
-                                    $"Terms[{index}].RowVersion");
+                            ApplyItemSnapshot(
+                                item,
+                                requestItem,
+                                amounts,
+                                displayOrder);
+                        }
 
-                            EnsureRowVersionMatches(
-                                term.RowVersion,
-                                expectedTermRowVersion,
-                                $"Term {term.TermId}");
+                        /*
+                         * Item cũ không còn trong request sẽ bị xóa.
+                         */
+                        var removedItems = existingItems
+                            .Where(x =>
+                                !requestedItemIds.Contains(x.ContractItemId))
+                            .ToList();
 
-                            _dbContext.Entry(term)
-                                .Property(x => x.RowVersion)
-                                .OriginalValue = expectedTermRowVersion;
+                        removedItemAudits.AddRange(
+                            removedItems.Select(item =>
+                                BuildItemAuditEntry(
+                                    item.ContractItemId,
+                                    item.ItemCode,
+                                    item.ItemName)));
 
-                            /*
-                             * TermCode là mã ổn định.
-                             * Không cho đổi mã của term đã tồn tại.
-                             */
-                            if (!string.Equals(
+                        _dbContext.TblContractItems.RemoveRange(removedItems);
+
+                        /*
+                         * Thêm mới hoặc cập nhật Terms.
+                         */
+                        for (var index = 0;
+                             index < request.Terms.Count;
+                             index++)
+                        {
+                            var requestTerm = request.Terms[index];
+                            var displayOrder =
+                                requestTerm.DisplayOrder > 0
+                                    ? requestTerm.DisplayOrder
+                                    : index + 1;
+
+                            TblContractTerm term;
+
+                            if (requestTerm.TermId.HasValue)
+                            {
+                                if (!existingTermById.TryGetValue(
+                                        requestTerm.TermId.Value,
+                                        out term!))
+                                {
+                                    throw new ArgumentException(
+                                        $"Term {requestTerm.TermId.Value} " +
+                                        "không thuộc version hiện hành.");
+                                }
+
+                                var expectedTermRowVersion =
+                                    DecodeRowVersion(
+                                        requestTerm.RowVersion,
+                                        $"Terms[{index}].RowVersion");
+
+                                EnsureRowVersionMatches(
+                                    term.RowVersion,
+                                    expectedTermRowVersion,
+                                    $"Term {term.TermId}");
+
+                                _dbContext.Entry(term)
+                                    .Property(x => x.RowVersion)
+                                    .OriginalValue = expectedTermRowVersion;
+
+                                /*
+                                 * TermCode là mã ổn định.
+                                 * Không cho đổi mã của term đã tồn tại.
+                                 */
+                                if (!string.Equals(
+                                        term.TermCode,
+                                        requestTerm.TermCode.Trim(),
+                                        StringComparison.OrdinalIgnoreCase))
+                                {
+                                    throw new InvalidOperationException(
+                                        $"Không được thay đổi TermCode của term {term.TermId}.");
+                                }
+
+                                var changedFields = GetChangedTermFields(
+                                    term,
+                                    requestTerm,
+                                    displayOrder);
+
+                                if (changedFields.Count > 0)
+                                {
+                                    updatedTermAudits.Add(
+                                        BuildTermAuditEntry(
+                                            term.TermId,
+                                            requestTerm.TermCode,
+                                            requestTerm.TermTitle,
+                                            changedFields));
+                                }
+
+                                term.UpdatedEmployeeId = employeeId;
+                                term.UpdatedDate = now;
+                            }
+                            else
+                            {
+                                term = new TblContractTerm
+                                {
+                                    ContractId = contract.ContractId,
+                                    VersionId = version.VersionId,
+                                    SourceTemplateTermId = null,
+
+                                    TermCode = requestTerm.TermCode
+                                        .Trim()
+                                        .ToUpperInvariant(),
+
+                                    CreatedEmployeeId = employeeId,
+                                    CreatedDate = now
+                                };
+
+                                _dbContext.TblContractTerms.Add(term);
+
+                                addedTermAudits.Add(
+                                    BuildTermAuditEntry(
+                                        null,
+                                        requestTerm.TermCode,
+                                        requestTerm.TermTitle));
+                            }
+
+                            term.TermTitle = requestTerm.TermTitle.Trim();
+                            term.TermTitleEn =
+                                NormalizeOptional(requestTerm.TermTitleEn);
+
+                            term.TermContent =
+                                NormalizeOptional(requestTerm.TermContent);
+
+                            term.TermContentEn =
+                                NormalizeOptional(requestTerm.TermContentEn);
+
+                            term.IsNegotiable = requestTerm.IsNegotiable;
+
+                            term.DisplayOrder = displayOrder;
+                        }
+
+                        /*
+                         * Term cũ không còn trong request sẽ bị xóa.
+                         */
+                        var removedTerms = existingTerms
+                            .Where(x => !requestedTermIds.Contains(x.TermId))
+                            .ToList();
+
+                        removedTermAudits.AddRange(
+                            removedTerms.Select(term =>
+                                BuildTermAuditEntry(
+                                    term.TermId,
                                     term.TermCode,
-                                    requestTerm.TermCode.Trim(),
-                                    StringComparison.OrdinalIgnoreCase))
-                            {
-                                throw new InvalidOperationException(
-                                    $"Không được thay đổi TermCode của term {term.TermId}.");
-                            }
+                                    term.TermTitle)));
 
-                            term.UpdatedEmployeeId = employeeId;
-                            term.UpdatedDate = now;
-                        }
-                        else
-                        {
-                            term = new TblContractTerm
-                            {
-                                ContractId = contract.ContractId,
-                                VersionId = version.VersionId,
-                                SourceTemplateTermId = null,
+                        _dbContext.TblContractTerms.RemoveRange(removedTerms);
 
-                                TermCode = requestTerm.TermCode
-                                    .Trim()
-                                    .ToUpperInvariant(),
+                        /*
+                         * Cập nhật phần header của Contract.
+                         *
+                         * ContractType, TemplateVersionId, LanguageMode,
+                         * Status và ContractCode không được thay đổi tại API này.
+                         */
+                        contract.CustomerId = request.CustomerId;
+                        contract.ContractName = request.ContractName.Trim();
 
-                                CreatedEmployeeId = employeeId,
-                                CreatedDate = now
-                            };
+                        contract.ContractNameEn =
+                            NormalizeOptional(request.ContractNameEn);
 
-                            _dbContext.TblContractTerms.Add(term);
-                        }
+                        contract.EffectiveDate = request.EffectiveDate;
+                        contract.ExpireDate = request.ExpireDate;
 
-                        term.TermTitle = requestTerm.TermTitle.Trim();
-                        term.TermTitleEn =
-                            NormalizeOptional(requestTerm.TermTitleEn);
+                        ApplyFinancialTotals(
+                            contract,
+                            version,
+                            currencyCode,
+                            totals);
+                        contract.UpdatedEmployeeId = employeeId;
+                        contract.UpdateDate = now;
 
-                        term.TermContent =
-                            NormalizeOptional(requestTerm.TermContent);
+                        var previousAuditValuesWithRemovedEntries =
+                            previousAuditValues.ToDictionary(
+                                entry => entry.Key,
+                                entry => entry.Value,
+                                StringComparer.Ordinal);
 
-                        term.TermContentEn =
-                            NormalizeOptional(requestTerm.TermContentEn);
+                        previousAuditValuesWithRemovedEntries["RemovedItems"] =
+                            BuildAuditSummary(removedItemAudits);
+                        previousAuditValuesWithRemovedEntries["RemovedTerms"] =
+                            BuildAuditSummary(removedTermAudits);
 
-                        term.IsNegotiable = requestTerm.IsNegotiable;
-
-                        term.DisplayOrder =
-                            requestTerm.DisplayOrder > 0
-                                ? requestTerm.DisplayOrder
-                                : index + 1;
-                    }
-
-                    /*
-                     * Term cũ không còn trong request sẽ bị xóa.
-                     */
-                    var removedTerms = existingTerms
-                        .Where(x => !requestedTermIds.Contains(x.TermId))
-                        .ToList();
-
-                    _dbContext.TblContractTerms.RemoveRange(removedTerms);
-
-                    /*
-                     * Cập nhật phần header của Contract.
-                     *
-                     * ContractType, TemplateVersionId, LanguageMode,
-                     * Status và ContractCode không được thay đổi tại API này.
-                     */
-                    contract.CustomerId = request.CustomerId;
-                    contract.ContractName = request.ContractName.Trim();
-
-                    contract.ContractNameEn =
-                        NormalizeOptional(request.ContractNameEn);
-
-                    contract.EffectiveDate = request.EffectiveDate;
-                    contract.ExpireDate = request.ExpireDate;
-
-                    ApplyFinancialTotals(
-                        contract,
-                        version,
-                        currencyCode,
-                        totals);
-                    contract.UpdatedEmployeeId = employeeId;
-                    contract.UpdateDate = now;
-
-                    _contractAuditWriter.StageEmployeeAudits(
-                    [
-                        new EmployeeContractAuditWriteRequest(
+                        _contractAuditWriter.StageEmployeeAudits(
+                        [
+                            new EmployeeContractAuditWriteRequest(
                             contract.ContractId,
                             version.VersionId,
                             employeeId,
@@ -1791,23 +1913,34 @@ namespace ContractManagement.Domains.Services.Contract
                             NewContractStatus: contract.Status,
                             SubjectType: ContractAuditSubjectTypes.Contract,
                             SubjectId: contract.ContractId,
-                            PreviousValues: previousAuditValues,
+                            PreviousValues:
+                                previousAuditValuesWithRemovedEntries,
                             NewValues: ContractAuditValues.Create(
                                 ("Status", contract.Status),
                                 ("ResponsibleEmployeeId", contract.EmployeeId),
                                 ("CurrentVersionId", contract.CurrentVersionId),
-                                ("ContractName", contract.ContractName),
+                                ("CustomerId", requestedCustomerAudit.CustomerId),
+                                ("CustomerName", requestedCustomerAudit.DisplayName),
+                                ("ContractName", BuildAuditSafeText(contract.ContractName)),
+                                ("ContractNameEn", BuildAuditSafeText(contract.ContractNameEn)),
                                 ("EffectiveDate", contract.EffectiveDate),
                                 ("ExpireDate", contract.ExpireDate),
                                 ("CurrencyCode", contract.CurrencyCode),
+                                ("Subtotal", contract.Subtotal),
+                                ("TotalDiscount", contract.TotalDiscount),
+                                ("TotalVat", contract.TotalVat),
                                 ("TotalAmount", contract.TotalAmount),
                                 ("ItemCount", request.Items.Count),
-                                ("TermCount", request.Terms.Count)))
-                    ]);
+                                ("TermCount", request.Terms.Count),
+                                ("AddedItems", BuildAuditSummary(addedItemAudits)),
+                                ("UpdatedItems", BuildAuditSummary(updatedItemAudits)),
+                                ("AddedTerms", BuildAuditSummary(addedTermAudits)),
+                                ("UpdatedTerms", BuildAuditSummary(updatedTermAudits))))
+                        ]);
 
-                    await _dbContext.SaveChangesAsync();
-                    await transaction.CommitAsync();
-                }
+                        await _dbContext.SaveChangesAsync();
+                        await transaction.CommitAsync();
+                    }
                     catch (DbUpdateConcurrencyException exception)
                     {
                         await transaction.RollbackAsync();
@@ -2051,219 +2184,219 @@ namespace ContractManagement.Domains.Services.Contract
                                 x.ContractId == contractId
                                 && x.EmployeeId == employeeId);
 
-                    if (contract == null)
-                    {
-                        throw new KeyNotFoundException(
-                            "Không tìm thấy hợp đồng.");
-                    }
+                        if (contract == null)
+                        {
+                            throw new KeyNotFoundException(
+                                "Không tìm thấy hợp đồng.");
+                        }
 
-                    if (contract.IsLegacy)
-                    {
-                        throw new InvalidOperationException(
-                            "Hợp đồng legacy không hỗ trợ tạo vòng đàm phán.");
-                    }
+                        if (contract.IsLegacy)
+                        {
+                            throw new InvalidOperationException(
+                                "Hợp đồng legacy không hỗ trợ tạo vòng đàm phán.");
+                        }
 
-                    if ((ContractStatus)contract.Status !=
-                        ContractStatus.Negotiating)
-                    {
-                        throw new InvalidOperationException(
-                            "Chỉ Contract đang Negotiating mới được tạo vòng đàm phán mới.");
-                    }
+                        if ((ContractStatus)contract.Status !=
+                            ContractStatus.Negotiating)
+                        {
+                            throw new InvalidOperationException(
+                                "Chỉ Contract đang Negotiating mới được tạo vòng đàm phán mới.");
+                        }
 
-                    if (!contract.CurrentVersionId.HasValue
-                        || contract.CurrentVersionId.Value !=
-                        request.CurrentVersionId)
-                    {
-                        throw new DbUpdateConcurrencyException(
-                            "Version hiện hành đã thay đổi.");
-                    }
+                        if (!contract.CurrentVersionId.HasValue
+                            || contract.CurrentVersionId.Value !=
+                            request.CurrentVersionId)
+                        {
+                            throw new DbUpdateConcurrencyException(
+                                "Version hiện hành đã thay đổi.");
+                        }
 
-                    EnsureRowVersionMatches(
-                        contract.RowVersion,
-                        expectedContractRowVersion,
-                        "Hợp đồng");
+                        EnsureRowVersionMatches(
+                            contract.RowVersion,
+                            expectedContractRowVersion,
+                            "Hợp đồng");
 
-                    _dbContext.Entry(contract)
-                        .Property(x => x.RowVersion)
-                        .OriginalValue = expectedContractRowVersion;
+                        _dbContext.Entry(contract)
+                            .Property(x => x.RowVersion)
+                            .OriginalValue = expectedContractRowVersion;
 
-                    var sourceVersion = await _dbContext
-                        .TblContractVersions
-                        .FirstOrDefaultAsync(x =>
-                            x.ContractId == contract.ContractId
-                            && x.VersionId == request.CurrentVersionId);
+                        var sourceVersion = await _dbContext
+                            .TblContractVersions
+                            .FirstOrDefaultAsync(x =>
+                                x.ContractId == contract.ContractId
+                                && x.VersionId == request.CurrentVersionId);
 
-                    if (sourceVersion == null)
-                    {
-                        throw new KeyNotFoundException(
-                            "Không tìm thấy version hiện hành.");
-                    }
+                        if (sourceVersion == null)
+                        {
+                            throw new KeyNotFoundException(
+                                "Không tìm thấy version hiện hành.");
+                        }
 
-                    if (sourceVersion.IsLocked)
-                    {
-                        throw new InvalidOperationException(
-                            "Version nguồn đã bị khóa.");
-                    }
+                        if (sourceVersion.IsLocked)
+                        {
+                            throw new InvalidOperationException(
+                                "Version nguồn đã bị khóa.");
+                        }
 
-                    EnsureRowVersionMatches(
-                        sourceVersion.RowVersion,
-                        expectedVersionRowVersion,
-                        "Version hợp đồng");
+                        EnsureRowVersionMatches(
+                            sourceVersion.RowVersion,
+                            expectedVersionRowVersion,
+                            "Version hợp đồng");
 
-                    _dbContext.Entry(sourceVersion)
-                        .Property(x => x.RowVersion)
-                        .OriginalValue = expectedVersionRowVersion;
+                        _dbContext.Entry(sourceVersion)
+                            .Property(x => x.RowVersion)
+                            .OriginalValue = expectedVersionRowVersion;
 
-                    var customer = await _dbContext.TblCustomers
-                        .AsNoTracking()
-                        .FirstOrDefaultAsync(x =>
-                            x.CustomerId == contract.CustomerId);
+                        var customer = await _dbContext.TblCustomers
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(x =>
+                                x.CustomerId == contract.CustomerId);
 
-                    if (customer == null)
-                    {
-                        throw new KeyNotFoundException(
-                            "Không tìm thấy khách hàng của hợp đồng.");
-                    }
+                        if (customer == null)
+                        {
+                            throw new KeyNotFoundException(
+                                "Không tìm thấy khách hàng của hợp đồng.");
+                        }
 
-                    var sourceItems = await _dbContext.TblContractItems
-                        .AsNoTracking()
-                        .Where(x =>
-                            x.ContractId == contract.ContractId
-                            && x.VersionId == sourceVersion.VersionId)
-                        .OrderBy(x => x.DisplayOrder)
-                        .ThenBy(x => x.ContractItemId)
-                        .ToListAsync();
+                        var sourceItems = await _dbContext.TblContractItems
+                            .AsNoTracking()
+                            .Where(x =>
+                                x.ContractId == contract.ContractId
+                                && x.VersionId == sourceVersion.VersionId)
+                            .OrderBy(x => x.DisplayOrder)
+                            .ThenBy(x => x.ContractItemId)
+                            .ToListAsync();
 
-                    var sourceTerms = await _dbContext.TblContractTerms
-                        .AsNoTracking()
-                        .Where(x =>
-                            x.ContractId == contract.ContractId
-                            && x.VersionId == sourceVersion.VersionId)
-                        .OrderBy(x => x.DisplayOrder)
-                        .ThenBy(x => x.TermId)
-                        .ToListAsync();
+                        var sourceTerms = await _dbContext.TblContractTerms
+                            .AsNoTracking()
+                            .Where(x =>
+                                x.ContractId == contract.ContractId
+                                && x.VersionId == sourceVersion.VersionId)
+                            .OrderBy(x => x.DisplayOrder)
+                            .ThenBy(x => x.TermId)
+                            .ToListAsync();
 
-                    if (sourceItems.Count == 0 || sourceTerms.Count == 0)
-                    {
-                        throw new InvalidOperationException(
-                            "Version nguồn phải có item và điều khoản.");
-                    }
+                        if (sourceItems.Count == 0 || sourceTerms.Count == 0)
+                        {
+                            throw new InvalidOperationException(
+                                "Version nguồn phải có item và điều khoản.");
+                        }
 
-                    var snapshotJson = BuildSnapshotJson(
-                        contract,
-                        sourceVersion,
-                        customer,
-                        sourceItems,
-                        sourceTerms);
+                        var snapshotJson = BuildSnapshotJson(
+                            contract,
+                            sourceVersion,
+                            customer,
+                            sourceItems,
+                            sourceTerms);
 
-                    var now = DateTime.UtcNow;
+                        var now = DateTime.UtcNow;
 
-                    sourceVersion.SnapshotJson = snapshotJson;
-                    sourceVersion.SnapshotHash =
-                        CalculateSnapshotHash(snapshotJson);
-                    sourceVersion.IsLocked = true;
-                    sourceVersion.LockedDate = now;
-                    sourceVersion.LockedByEmployeeId = employeeId;
+                        sourceVersion.SnapshotJson = snapshotJson;
+                        sourceVersion.SnapshotHash =
+                            CalculateSnapshotHash(snapshotJson);
+                        sourceVersion.IsLocked = true;
+                        sourceVersion.LockedDate = now;
+                        sourceVersion.LockedByEmployeeId = employeeId;
 
-                    var newVersion = new TblContractVersion
-                    {
-                        ContractId = contract.ContractId,
-                        VersionNo = checked(sourceVersion.VersionNo + 1),
-                        SourceVersionId = sourceVersion.VersionId,
-                        TemplateVersionId =
-                            sourceVersion.TemplateVersionId,
-                        ChangeNote = changeNote,
-                        CurrencyCode = sourceVersion.CurrencyCode,
-                        Subtotal = sourceVersion.Subtotal,
-                        TotalDiscount =
-                            sourceVersion.TotalDiscount,
-                        TotalVat = sourceVersion.TotalVat,
-                        TotalAmount = sourceVersion.TotalAmount,
-                        SnapshotJson = null,
-                        SnapshotHash = null,
-                        IsLocked = false,
-                        LockedDate = null,
-                        LockedByEmployeeId = null,
-                        CreatedEmployeeId = employeeId,
-                        CreatedDate = now
-                    };
-
-                    _dbContext.TblContractVersions.Add(newVersion);
-                    await _dbContext.SaveChangesAsync();
-
-                    var copiedItems = sourceItems
-                        .Select(source => new TblContractItem
+                        var newVersion = new TblContractVersion
                         {
                             ContractId = contract.ContractId,
-                            VersionId = newVersion.VersionId,
-                            ItemType = source.ItemType,
-                            SourceProductId = source.SourceProductId,
-                            SourceServiceId = source.SourceServiceId,
-                            ItemCode = source.ItemCode,
-                            ItemName = source.ItemName,
-                            ItemNameEn = source.ItemNameEn,
-                            ItemDescription = source.ItemDescription,
-                            ItemDescriptionEn =
-                                source.ItemDescriptionEn,
-                            UnitName = source.UnitName,
-                            UnitNameEn = source.UnitNameEn,
-                            Quantity = source.Quantity,
-                            UnitPrice = source.UnitPrice,
-                            LineSubtotal = source.LineSubtotal,
-                            DiscountMode = source.DiscountMode,
-                            DiscountPercent =
-                                source.DiscountPercent,
-                            FixedDiscountAmount =
-                                source.FixedDiscountAmount,
-                            DiscountAmount = source.DiscountAmount,
-                            IsTaxable = source.IsTaxable,
-                            VatPercent = source.VatPercent,
-                            VatAmount = source.VatAmount,
-                            LineTotal = source.LineTotal,
-                            DisplayOrder = source.DisplayOrder,
+                            VersionNo = checked(sourceVersion.VersionNo + 1),
+                            SourceVersionId = sourceVersion.VersionId,
+                            TemplateVersionId =
+                                sourceVersion.TemplateVersionId,
+                            ChangeNote = changeNote,
+                            CurrencyCode = sourceVersion.CurrencyCode,
+                            Subtotal = sourceVersion.Subtotal,
+                            TotalDiscount =
+                                sourceVersion.TotalDiscount,
+                            TotalVat = sourceVersion.TotalVat,
+                            TotalAmount = sourceVersion.TotalAmount,
+                            SnapshotJson = null,
+                            SnapshotHash = null,
+                            IsLocked = false,
+                            LockedDate = null,
+                            LockedByEmployeeId = null,
                             CreatedEmployeeId = employeeId,
                             CreatedDate = now
-                        })
-                        .ToList();
+                        };
 
-                    var copiedTerms = sourceTerms
-                        .Select(source => new TblContractTerm
+                        _dbContext.TblContractVersions.Add(newVersion);
+                        await _dbContext.SaveChangesAsync();
+
+                        var copiedItems = sourceItems
+                            .Select(source => new TblContractItem
+                            {
+                                ContractId = contract.ContractId,
+                                VersionId = newVersion.VersionId,
+                                ItemType = source.ItemType,
+                                SourceProductId = source.SourceProductId,
+                                SourceServiceId = source.SourceServiceId,
+                                ItemCode = source.ItemCode,
+                                ItemName = source.ItemName,
+                                ItemNameEn = source.ItemNameEn,
+                                ItemDescription = source.ItemDescription,
+                                ItemDescriptionEn =
+                                    source.ItemDescriptionEn,
+                                UnitName = source.UnitName,
+                                UnitNameEn = source.UnitNameEn,
+                                Quantity = source.Quantity,
+                                UnitPrice = source.UnitPrice,
+                                LineSubtotal = source.LineSubtotal,
+                                DiscountMode = source.DiscountMode,
+                                DiscountPercent =
+                                    source.DiscountPercent,
+                                FixedDiscountAmount =
+                                    source.FixedDiscountAmount,
+                                DiscountAmount = source.DiscountAmount,
+                                IsTaxable = source.IsTaxable,
+                                VatPercent = source.VatPercent,
+                                VatAmount = source.VatAmount,
+                                LineTotal = source.LineTotal,
+                                DisplayOrder = source.DisplayOrder,
+                                CreatedEmployeeId = employeeId,
+                                CreatedDate = now
+                            })
+                            .ToList();
+
+                        var copiedTerms = sourceTerms
+                            .Select(source => new TblContractTerm
+                            {
+                                ContractId = contract.ContractId,
+                                VersionId = newVersion.VersionId,
+                                SourceTemplateTermId =
+                                    source.SourceTemplateTermId,
+                                TermCode = source.TermCode,
+                                TermTitle = source.TermTitle,
+                                TermTitleEn = source.TermTitleEn,
+                                TermContent = source.TermContent,
+                                TermContentEn = source.TermContentEn,
+                                IsNegotiable = source.IsNegotiable,
+                                DisplayOrder = source.DisplayOrder,
+                                CreatedEmployeeId = employeeId,
+                                CreatedDate = now
+                            })
+                            .ToList();
+
+                        _dbContext.TblContractItems.AddRange(copiedItems);
+                        _dbContext.TblContractTerms.AddRange(copiedTerms);
+
+                        contract.CurrentVersionId = newVersion.VersionId;
+                        contract.UpdatedEmployeeId = employeeId;
+                        contract.UpdateDate = now;
+
+                        if (contract.CurrentCustomerAccessLinkId.HasValue)
                         {
-                            ContractId = contract.ContractId,
-                            VersionId = newVersion.VersionId,
-                            SourceTemplateTermId =
-                                source.SourceTemplateTermId,
-                            TermCode = source.TermCode,
-                            TermTitle = source.TermTitle,
-                            TermTitleEn = source.TermTitleEn,
-                            TermContent = source.TermContent,
-                            TermContentEn = source.TermContentEn,
-                            IsNegotiable = source.IsNegotiable,
-                            DisplayOrder = source.DisplayOrder,
-                            CreatedEmployeeId = employeeId,
-                            CreatedDate = now
-                        })
-                        .ToList();
-
-                    _dbContext.TblContractItems.AddRange(copiedItems);
-                    _dbContext.TblContractTerms.AddRange(copiedTerms);
-
-                    contract.CurrentVersionId = newVersion.VersionId;
-                    contract.UpdatedEmployeeId = employeeId;
-                    contract.UpdateDate = now;
-
-                    if (contract.CurrentCustomerAccessLinkId.HasValue)
-                    {
-                        var sourceLinkId = contract.CurrentCustomerAccessLinkId.Value;
-                        await RevokeCustomerLinkStateAsync(
-                            sourceLinkId,
-                            employeeId,
-                            now,
-                            "New negotiation round");
-                        contract.CurrentCustomerAccessLinkId = null;
-                        _contractAuditWriter.StageEmployeeAudits(
-                        [
-                            new EmployeeContractAuditWriteRequest(
+                            var sourceLinkId = contract.CurrentCustomerAccessLinkId.Value;
+                            await RevokeCustomerLinkStateAsync(
+                                sourceLinkId,
+                                employeeId,
+                                now,
+                                "New negotiation round");
+                            contract.CurrentCustomerAccessLinkId = null;
+                            _contractAuditWriter.StageEmployeeAudits(
+                            [
+                                new EmployeeContractAuditWriteRequest(
                                 contract.ContractId,
                                 sourceVersion.VersionId,
                                 employeeId,
@@ -2277,12 +2410,12 @@ namespace ContractManagement.Domains.Services.Contract
                                     ("LinkId", sourceLinkId),
                                     ("CurrentVersionId", sourceVersion.VersionId),
                                     ("LinkState", "Invalidated")))
-                        ]);
-                    }
+                            ]);
+                        }
 
-                    _contractAuditWriter.StageEmployeeAudits(
-                    [
-                        new EmployeeContractAuditWriteRequest(
+                        _contractAuditWriter.StageEmployeeAudits(
+                        [
+                            new EmployeeContractAuditWriteRequest(
                             contract.ContractId,
                             newVersion.VersionId,
                             employeeId,
@@ -2310,32 +2443,32 @@ namespace ContractManagement.Domains.Services.Contract
                                 ("ItemCount", copiedItems.Count),
                                 ("TermCount", copiedTerms.Count),
                                 ("TotalAmount", newVersion.TotalAmount)))
-                    ]);
+                        ]);
 
-                    await _dbContext.SaveChangesAsync();
-                    await transaction.CommitAsync();
+                        await _dbContext.SaveChangesAsync();
+                        await transaction.CommitAsync();
 
-                    return new CreateContractNegotiationRoundResponse
-                    {
-                        ContractId = contract.ContractId,
-                        Status = ContractStatus.Negotiating,
-                        RowVersion =
-                            EncodeRowVersion(contract.RowVersion),
-                        SourceVersion =
-                            MapNegotiationRoundVersion(sourceVersion),
-                        CurrentVersion =
-                            MapNegotiationRoundVersion(newVersion),
-                        Totals = new ContractFinancialTotalsResponse
+                        return new CreateContractNegotiationRoundResponse
                         {
-                            CurrencyCode = newVersion.CurrencyCode,
-                            Subtotal = newVersion.Subtotal,
-                            TotalDiscount =
-                                newVersion.TotalDiscount,
-                            TotalVat = newVersion.TotalVat,
-                            TotalPayment = newVersion.TotalAmount
-                        }
-                    };
-                }
+                            ContractId = contract.ContractId,
+                            Status = ContractStatus.Negotiating,
+                            RowVersion =
+                                EncodeRowVersion(contract.RowVersion),
+                            SourceVersion =
+                                MapNegotiationRoundVersion(sourceVersion),
+                            CurrentVersion =
+                                MapNegotiationRoundVersion(newVersion),
+                            Totals = new ContractFinancialTotalsResponse
+                            {
+                                CurrencyCode = newVersion.CurrencyCode,
+                                Subtotal = newVersion.Subtotal,
+                                TotalDiscount =
+                                    newVersion.TotalDiscount,
+                                TotalVat = newVersion.TotalVat,
+                                TotalPayment = newVersion.TotalAmount
+                            }
+                        };
+                    }
                     catch
                     {
                         try
@@ -3014,12 +3147,12 @@ namespace ContractManagement.Domains.Services.Contract
                 {
                     var versionId = comment?.VersionId;
                     await RollbackAndClearAsync(transaction);
-                        await PersistNegotiationCommentConflictAuditAsync(
-                            contractId,
-                            versionId,
-                            employeeId,
-                            DateTime.UtcNow,
-                            auditActionType);
+                    await PersistNegotiationCommentConflictAuditAsync(
+                        contractId,
+                        versionId,
+                        employeeId,
+                        DateTime.UtcNow,
+                        auditActionType);
 
                     throw new DbUpdateConcurrencyException(
                         "Comment đã được cập nhật hoặc không còn đủ điều kiện lifecycle.",
@@ -3465,236 +3598,283 @@ namespace ContractManagement.Domains.Services.Contract
             var strategy =
                 _dbContext.Database.CreateExecutionStrategy();
 
-            return await strategy.ExecuteAsync(async () =>
+            try
             {
-                try
+                return await strategy.ExecuteAsync(async () =>
                 {
-                    var contract = await _dbContext.TblContracts
-                        .FirstOrDefaultAsync(x =>
-                            x.ContractId == contractId
-                            && x.EmployeeId == employeeId);
-
-                    if (contract == null)
+                    await using var transaction = await _dbContext.Database
+                        .BeginTransactionAsync();
+                    try
                     {
-                        throw new KeyNotFoundException(
-                            "Không tìm thấy hợp đồng.");
-                    }
+                        var contract = await _dbContext.TblContracts
+                            .FirstOrDefaultAsync(x =>
+                                x.ContractId == contractId
+                                && x.EmployeeId == employeeId);
 
-                    if (contract.IsLegacy)
-                    {
-                        throw new InvalidOperationException(
-                            "Hợp đồng legacy không hỗ trợ gửi duyệt.");
-                    }
-
-                    var currentStatus =
-                        (ContractStatus)contract.Status;
-
-                    /*
-                     * Policy chỉ cho:
-                     * Negotiating → PendingApproval.
-                     */
-                    ContractLifecyclePolicy.EnsureCanTransition(
-                        currentStatus,
-                        ContractStatus.PendingApproval);
-
-                    if (!contract.CurrentVersionId.HasValue
-                        || contract.CurrentVersionId.Value !=
-                        request.CurrentVersionId)
-                    {
-                        throw new DbUpdateConcurrencyException(
-                            "Version hiện hành đã thay đổi.");
-                    }
-
-                    EnsureRowVersionMatches(
-                        contract.RowVersion,
-                        expectedContractRowVersion,
-                        "Hợp đồng");
-
-                    _dbContext.Entry(contract)
-                        .Property(x => x.RowVersion)
-                        .OriginalValue = expectedContractRowVersion;
-
-                    var version = await _dbContext
-                        .TblContractVersions
-                        .FirstOrDefaultAsync(x =>
-                            x.VersionId == request.CurrentVersionId
-                            && x.ContractId == contract.ContractId);
-
-                    if (version == null)
-                    {
-                        throw new KeyNotFoundException(
-                            "Không tìm thấy version hiện hành.");
-                    }
-
-                    if (version.IsLocked)
-                    {
-                        throw new InvalidOperationException(
-                            "Version đã bị khóa.");
-                    }
-
-                    EnsureRowVersionMatches(
-                        version.RowVersion,
-                        expectedVersionRowVersion,
-                        "Version hợp đồng");
-
-                    _dbContext.Entry(version)
-                        .Property(x => x.RowVersion)
-                        .OriginalValue = expectedVersionRowVersion;
-
-                    /*
-                     * Không được tạo hai request Pending
-                     * cho cùng một hợp đồng.
-                     */
-                    var hasPendingRequest = await _dbContext
-                        .TblContractApprovalRequests
-                        .AnyAsync(x =>
-                            x.ContractId == contract.ContractId
-                            && x.Status ==
-                            (byte)ApprovalRequestStatus.Pending);
-
-                    if (hasPendingRequest)
-                    {
-                        throw new InvalidOperationException(
-                            "Hợp đồng đã có yêu cầu duyệt đang chờ xử lý.");
-                    }
-
-                    /*
-                     * Nếu frontend gửi WorkflowId thì kiểm tra workflow.
-                     */
-                    if (request.WorkflowId.HasValue)
-                    {
-                        var workflowExists = await _dbContext
-                            .TblApprovalWorkflows
-                            .AsNoTracking()
-                            .AnyAsync(x =>
-                                x.WorkflowId == request.WorkflowId.Value
-                                && x.ObjectType == "Contract"
-                                && x.StepNo == 1
-                                && x.IsActive);
-
-                        if (!workflowExists)
+                        if (contract == null)
                         {
                             throw new KeyNotFoundException(
-                                "Không tìm thấy workflow duyệt hợp lệ.");
+                                "Không tìm thấy hợp đồng.");
                         }
-                    }
 
-                    var customer = await _dbContext.TblCustomers
-                        .AsNoTracking()
-                        .FirstOrDefaultAsync(x =>
-                            x.CustomerId == contract.CustomerId);
-
-                    if (customer == null)
-                    {
-                        throw new KeyNotFoundException(
-                            "Không tìm thấy khách hàng của hợp đồng.");
-                    }
-
-                    var items = await _dbContext.TblContractItems
-                        .AsNoTracking()
-                        .Where(x =>
-                            x.ContractId == contract.ContractId
-                            && x.VersionId == version.VersionId)
-                        .OrderBy(x => x.DisplayOrder)
-                        .ThenBy(x => x.ContractItemId)
-                        .ToListAsync();
-
-                    var terms = await _dbContext.TblContractTerms
-                        .AsNoTracking()
-                        .Where(x =>
-                            x.ContractId == contract.ContractId
-                            && x.VersionId == version.VersionId)
-                        .OrderBy(x => x.DisplayOrder)
-                        .ThenBy(x => x.TermId)
-                        .ToListAsync();
-
-                    ValidateApprovalReadiness(
-                        contract,
-                        items,
-                        terms);
-
-                    /*
-                     * Tạo bản đóng băng nội dung pháp lý.
-                     */
-                    var snapshotJson = BuildSnapshotJson(
-                        contract,
-                        version,
-                        customer,
-                        items,
-                        terms);
-
-                    var snapshotHash =
-                        CalculateSnapshotHash(snapshotJson);
-
-                    var now = DateTime.UtcNow;
-
-                    version.SnapshotJson = snapshotJson;
-                    version.SnapshotHash = snapshotHash;
-                    version.IsLocked = true;
-                    version.LockedDate = now;
-                    version.LockedByEmployeeId = employeeId;
-
-                    contract.Status =
-                        (byte)ContractStatus.PendingApproval;
-
-                    contract.UpdatedEmployeeId = employeeId;
-                    contract.UpdateDate = now;
-
-                    var approvalRequest =
-                        new TblContractApprovalRequest
+                        if (contract.IsLegacy)
                         {
+                            throw new InvalidOperationException(
+                                "Hợp đồng legacy không hỗ trợ gửi duyệt.");
+                        }
+
+                        var currentStatus =
+                            (ContractStatus)contract.Status;
+
+                        /*
+                         * Policy chỉ cho:
+                         * Negotiating → PendingApproval.
+                         */
+                        ContractLifecyclePolicy.EnsureCanTransition(
+                            currentStatus,
+                            ContractStatus.PendingApproval);
+
+                        if (!contract.CurrentVersionId.HasValue
+                            || contract.CurrentVersionId.Value !=
+                            request.CurrentVersionId)
+                        {
+                            throw new DbUpdateConcurrencyException(
+                                "Version hiện hành đã thay đổi.");
+                        }
+
+                        EnsureRowVersionMatches(
+                            contract.RowVersion,
+                            expectedContractRowVersion,
+                            "Hợp đồng");
+
+                        _dbContext.Entry(contract)
+                            .Property(x => x.RowVersion)
+                            .OriginalValue = expectedContractRowVersion;
+
+                        var version = await _dbContext
+                            .TblContractVersions
+                            .FirstOrDefaultAsync(x =>
+                                x.VersionId == request.CurrentVersionId
+                                && x.ContractId == contract.ContractId);
+
+                        if (version == null)
+                        {
+                            throw new KeyNotFoundException(
+                                "Không tìm thấy version hiện hành.");
+                        }
+
+                        if (version.IsLocked)
+                        {
+                            throw new InvalidOperationException(
+                                "Version đã bị khóa.");
+                        }
+
+                        EnsureRowVersionMatches(
+                            version.RowVersion,
+                            expectedVersionRowVersion,
+                            "Version hợp đồng");
+
+                        _dbContext.Entry(version)
+                            .Property(x => x.RowVersion)
+                            .OriginalValue = expectedVersionRowVersion;
+
+                        /*
+                         * Không được tạo hai request Pending
+                         * cho cùng một hợp đồng.
+                         */
+                        var hasPendingRequest = await _dbContext
+                            .TblContractApprovalRequests
+                            .AnyAsync(x =>
+                                x.ContractId == contract.ContractId
+                                && x.Status ==
+                                (byte)ApprovalRequestStatus.Pending);
+
+                        if (hasPendingRequest)
+                        {
+                            throw new InvalidOperationException(
+                                "Hợp đồng đã có yêu cầu duyệt đang chờ xử lý.");
+                        }
+
+                        /*
+                         * Nếu frontend gửi WorkflowId thì kiểm tra workflow.
+                         */
+                        if (request.WorkflowId.HasValue)
+                        {
+                            var workflowExists = await _dbContext
+                                .TblApprovalWorkflows
+                                .AsNoTracking()
+                                .AnyAsync(x =>
+                                    x.WorkflowId == request.WorkflowId.Value
+                                    && x.ObjectType == "Contract"
+                                    && x.StepNo == 1
+                                    && x.IsActive);
+
+                            if (!workflowExists)
+                            {
+                                throw new KeyNotFoundException(
+                                    "Không tìm thấy workflow duyệt hợp lệ.");
+                            }
+                        }
+
+                        var customer = await _dbContext.TblCustomers
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(x =>
+                                x.CustomerId == contract.CustomerId);
+
+                        if (customer == null)
+                        {
+                            throw new KeyNotFoundException(
+                                "Không tìm thấy khách hàng của hợp đồng.");
+                        }
+
+                        var items = await _dbContext.TblContractItems
+                            .AsNoTracking()
+                            .Where(x =>
+                                x.ContractId == contract.ContractId
+                                && x.VersionId == version.VersionId)
+                            .OrderBy(x => x.DisplayOrder)
+                            .ThenBy(x => x.ContractItemId)
+                            .ToListAsync();
+
+                        var terms = await _dbContext.TblContractTerms
+                            .AsNoTracking()
+                            .Where(x =>
+                                x.ContractId == contract.ContractId
+                                && x.VersionId == version.VersionId)
+                            .OrderBy(x => x.DisplayOrder)
+                            .ThenBy(x => x.TermId)
+                            .ToListAsync();
+
+                        ValidateApprovalReadiness(
+                            contract,
+                            items,
+                            terms);
+
+                        /*
+                         * Tạo bản đóng băng nội dung pháp lý.
+                         */
+                        var snapshotJson = BuildSnapshotJson(
+                            contract,
+                            version,
+                            customer,
+                            items,
+                            terms);
+
+                        var snapshotHash =
+                            CalculateSnapshotHash(snapshotJson);
+
+                        var now = DateTime.UtcNow;
+
+                        version.SnapshotJson = snapshotJson;
+                        version.SnapshotHash = snapshotHash;
+                        version.IsLocked = true;
+                        version.LockedDate = now;
+                        version.LockedByEmployeeId = employeeId;
+
+                        contract.Status =
+                            (byte)ContractStatus.PendingApproval;
+
+                        contract.UpdatedEmployeeId = employeeId;
+                        contract.UpdateDate = now;
+
+                        var approvalRequest =
+                            new TblContractApprovalRequest
+                            {
+                                ContractId = contract.ContractId,
+                                VersionId = version.VersionId,
+                                WorkflowId = request.WorkflowId,
+
+                                Status =
+                                    (byte)ApprovalRequestStatus.Pending,
+
+                                SubmittedByEmployeeId = employeeId,
+                                SubmittedDate = now
+                            };
+
+                        _dbContext.TblContractApprovalRequests.Add(
+                            approvalRequest);
+
+                        // Lần lưu đầu cấp ApprovalRequestId. Transaction vẫn chưa
+                        // commit, nên audit và thay đổi nghiệp vụ là nguyên tử.
+                        await _dbContext.SaveChangesAsync();
+
+                        _contractAuditWriter.StageEmployeeAudits(
+                        [
+                            new EmployeeContractAuditWriteRequest(
+                            contract.ContractId,
+                            version.VersionId,
+                            employeeId,
+                            ContractAuditActionTypes.ApprovalSubmitted,
+                            ContractAuditResults.Succeeded,
+                            now,
+                            PreviousContractStatus:
+                                (byte)currentStatus,
+                            NewContractStatus: contract.Status,
+                            SubjectType:
+                                ContractAuditSubjectTypes.Contract,
+                            SubjectId: contract.ContractId,
+                            PreviousValues: ContractAuditValues.Create(
+                                ("Status", (byte)currentStatus),
+                                ("CurrentVersionId", version.VersionId),
+                                ("VersionLocked", false)),
+                            NewValues: ContractAuditValues.Create(
+                                ("Status", contract.Status),
+                                ("CurrentVersionId", version.VersionId),
+                                ("VersionLocked", version.IsLocked),
+                                ("ApprovalRequestId",
+                                    approvalRequest.ApprovalRequestId),
+                                ("ApprovalStatus", approvalRequest.Status),
+                                ("WorkflowId", approvalRequest.WorkflowId),
+                                ("SnapshotHash", snapshotHash)))
+                        ]);
+                        await _dbContext.SaveChangesAsync();
+                        await transaction.CommitAsync();
+
+                        return new SubmitContractForApprovalResponse
+                        {
+                            ApprovalRequestId =
+                                approvalRequest.ApprovalRequestId,
+
                             ContractId = contract.ContractId,
                             VersionId = version.VersionId,
-                            WorkflowId = request.WorkflowId,
 
-                            Status =
-                                (byte)ApprovalRequestStatus.Pending,
+                            ContractStatus =
+                                ContractStatus.PendingApproval,
 
-                            SubmittedByEmployeeId = employeeId,
-                            SubmittedDate = now
+                            ApprovalStatus =
+                                ApprovalRequestStatus.Pending,
+
+                            SubmittedDate = now,
+                            SnapshotHash = snapshotHash,
+
+                            ContractRowVersion =
+                                EncodeRowVersion(contract.RowVersion),
+
+                            VersionRowVersion =
+                                EncodeRowVersion(version.RowVersion)
                         };
-
-                    _dbContext.TblContractApprovalRequests.Add(
-                        approvalRequest);
-
-                    /*
-                     * SaveChanges tự tạo transaction:
-                     * hoặc lưu tất cả, hoặc không lưu gì.
-                     */
-                    await _dbContext.SaveChangesAsync();
-
-                    return new SubmitContractForApprovalResponse
+                    }
+                    catch
                     {
-                        ApprovalRequestId =
-                            approvalRequest.ApprovalRequestId,
-
-                        ContractId = contract.ContractId,
-                        VersionId = version.VersionId,
-
-                        ContractStatus =
-                            ContractStatus.PendingApproval,
-
-                        ApprovalStatus =
-                            ApprovalRequestStatus.Pending,
-
-                        SubmittedDate = now,
-                        SnapshotHash = snapshotHash,
-
-                        ContractRowVersion =
-                            EncodeRowVersion(contract.RowVersion),
-
-                        VersionRowVersion =
-                            EncodeRowVersion(version.RowVersion)
-                    };
-                }
-                catch (DbUpdateConcurrencyException exception)
-                {
-                    throw new DbUpdateConcurrencyException(
-                        "Hợp đồng đã được cập nhật. " +
-                        "Vui lòng tải lại dữ liệu trước khi gửi duyệt.",
-                        exception);
-                }
-            });
+                        await RollbackAndClearAsync(transaction);
+                        throw;
+                    }
+                });
+            }
+            catch (DbUpdateConcurrencyException exception)
+            {
+                _dbContext.ChangeTracker.Clear();
+                await PersistContractConcurrencyAuditAsync(
+                    contractId,
+                    request.CurrentVersionId,
+                    employeeId,
+                    ContractAuditActionTypes.ApprovalSubmitted,
+                    DateTime.UtcNow);
+                throw new DbUpdateConcurrencyException(
+                    "Hợp đồng đã được cập nhật. " +
+                    "Vui lòng tải lại dữ liệu trước khi gửi duyệt.",
+                    exception);
+            }
         }
 
         /// <summary>
@@ -3873,7 +4053,8 @@ namespace ContractManagement.Domains.Services.Contract
             }
         }
 
-        private async Task ValidateCustomerAsync(int customerId)
+        private async Task<CustomerAuditSnapshot> ValidateCustomerAsync(
+            int customerId)
         {
             var customer = await _dbContext.TblCustomers
                 .AsNoTracking()
@@ -3881,6 +4062,9 @@ namespace ContractManagement.Domains.Services.Contract
                 .Select(x => new
                 {
                     x.CustomerId,
+                    x.CustomerCode,
+                    x.CustomerFullName,
+                    x.CustomerCompany,
                     x.Status
                 })
                 .FirstOrDefaultAsync();
@@ -3896,6 +4080,45 @@ namespace ContractManagement.Domains.Services.Contract
                 throw new InvalidOperationException(
                     "Khách hàng đang inactive, không thể tạo hợp đồng.");
             }
+
+            return new CustomerAuditSnapshot(
+                customer.CustomerId,
+                BuildCustomerAuditDisplayName(
+                    customer.CustomerId,
+                    customer.CustomerCode,
+                    customer.CustomerFullName,
+                    customer.CustomerCompany));
+        }
+
+        private async Task<CustomerAuditSnapshot>
+            GetCustomerAuditSnapshotAsync(int customerId)
+        {
+            var customer = await _dbContext.TblCustomers
+                .AsNoTracking()
+                .Where(x => x.CustomerId == customerId)
+                .Select(x => new
+                {
+                    x.CustomerId,
+                    x.CustomerCode,
+                    x.CustomerFullName,
+                    x.CustomerCompany
+                })
+                .FirstOrDefaultAsync();
+
+            if (customer == null)
+            {
+                return new CustomerAuditSnapshot(
+                    customerId,
+                    $"Khách hàng #{customerId}");
+            }
+
+            return new CustomerAuditSnapshot(
+                customer.CustomerId,
+                BuildCustomerAuditDisplayName(
+                    customer.CustomerId,
+                    customer.CustomerCode,
+                    customer.CustomerFullName,
+                    customer.CustomerCompany));
         }
 
         private async Task ValidateTemplateAsync(
@@ -4329,6 +4552,10 @@ namespace ContractManagement.Domains.Services.Contract
             version.TotalAmount = totals.TotalPayment;
         }
 
+        private sealed record CustomerAuditSnapshot(
+            int CustomerId,
+            string DisplayName);
+
         private readonly record struct ContractFinancialTotals(
             decimal Subtotal,
             decimal TotalDiscount,
@@ -4377,6 +4604,177 @@ namespace ContractManagement.Domains.Services.Contract
             return string.IsNullOrWhiteSpace(value)
                 ? null
                 : value.Trim();
+        }
+
+        private static string BuildCustomerAuditDisplayName(
+            int customerId,
+            string? customerCode,
+            string? customerFullName,
+            string? customerCompany)
+        {
+            var displayName = NormalizeOptional(customerCompany)
+                ?? NormalizeOptional(customerFullName)
+                ?? NormalizeOptional(customerCode)
+                ?? $"Khách hàng #{customerId}";
+
+            return BuildAuditSafeText(displayName)!;
+        }
+
+        private static string? BuildAuditSafeText(string? value)
+        {
+            var normalized = NormalizeOptional(value);
+            if (normalized == null)
+            {
+                return null;
+            }
+
+            return normalized.Length <= MaxAuditSummaryLength
+                ? normalized
+                : normalized[..MaxAuditSummaryLength];
+        }
+
+        private static string? BuildAuditSummary(
+            IReadOnlyCollection<string> entries)
+        {
+            if (entries.Count == 0)
+            {
+                return null;
+            }
+
+            var summary = string.Join("; ", entries);
+            return summary.Length <= MaxAuditSummaryLength
+                ? summary
+                : summary[..(MaxAuditSummaryLength - 1)] + "…";
+        }
+
+        private static string BuildItemAuditEntry(
+            int? contractItemId,
+            string? itemCode,
+            string itemName,
+            IReadOnlyCollection<string>? changedFields = null)
+        {
+            var code = NormalizeOptional(itemCode);
+            var name = itemName.Trim();
+            var identity = code == null
+                ? name
+                : string.Equals(code, name, StringComparison.OrdinalIgnoreCase)
+                    ? code
+                    : $"{code} - {name}";
+            var idSuffix = contractItemId.HasValue
+                ? $" (#{contractItemId.Value})"
+                : string.Empty;
+            var changes = changedFields is { Count: > 0 }
+                ? $" [{string.Join(", ", changedFields)}]"
+                : string.Empty;
+
+            return identity + idSuffix + changes;
+        }
+
+        private static string BuildTermAuditEntry(
+            int? termId,
+            string termCode,
+            string termTitle,
+            IReadOnlyCollection<string>? changedFields = null)
+        {
+            var code = termCode.Trim();
+            var title = termTitle.Trim();
+            var identity = string.Equals(
+                code,
+                title,
+                StringComparison.OrdinalIgnoreCase)
+                ? code
+                : $"{code} - {title}";
+            var idSuffix = termId.HasValue
+                ? $" (#{termId.Value})"
+                : string.Empty;
+            var changes = changedFields is { Count: > 0 }
+                ? $" [{string.Join(", ", changedFields)}]"
+                : string.Empty;
+
+            return identity + idSuffix + changes;
+        }
+
+        private static List<string> GetChangedItemFields(
+            TblContractItem current,
+            CreateContractItemRequest requested,
+            int displayOrder)
+        {
+            var fields = new List<string>();
+
+            AddChangedField(fields, "Mã", current.ItemCode,
+                NormalizeOptional(requested.ItemCode));
+            AddChangedField(fields, "Tên", current.ItemName,
+                requested.ItemName.Trim());
+            AddChangedField(fields, "Tên tiếng Anh", current.ItemNameEn,
+                NormalizeOptional(requested.ItemNameEn));
+            AddChangedField(fields, "Mô tả", current.ItemDescription,
+                NormalizeOptional(requested.ItemDescription));
+            AddChangedField(fields, "Mô tả tiếng Anh",
+                current.ItemDescriptionEn,
+                NormalizeOptional(requested.ItemDescriptionEn));
+            AddChangedField(fields, "Đơn vị", current.UnitName,
+                NormalizeOptional(requested.UnitName));
+            AddChangedField(fields, "Đơn vị tiếng Anh", current.UnitNameEn,
+                NormalizeOptional(requested.UnitNameEn));
+            AddChangedField(fields, "Số lượng", current.Quantity,
+                requested.Quantity);
+            AddChangedField(fields, "Đơn giá", current.UnitPrice,
+                requested.UnitPrice);
+            AddChangedField(fields, "Kiểu chiết khấu", current.DiscountMode,
+                (byte)requested.DiscountMode);
+            AddChangedField(fields, "% chiết khấu",
+                current.DiscountPercent,
+                requested.DiscountPercent);
+            AddChangedField(fields, "Chiết khấu cố định",
+                current.FixedDiscountAmount,
+                requested.FixedDiscountAmount);
+            AddChangedField(fields, "Chịu thuế", current.IsTaxable,
+                requested.IsTaxable);
+            AddChangedField(fields, "% VAT", current.VatPercent,
+                requested.VatPercent);
+            AddChangedField(fields, "Thứ tự", current.DisplayOrder,
+                displayOrder);
+
+            return fields;
+        }
+
+        private static List<string> GetChangedTermFields(
+            TblContractTerm current,
+            UpdateContractTermRequest requested,
+            int displayOrder)
+        {
+            var fields = new List<string>();
+
+            AddChangedField(fields, "Tiêu đề", current.TermTitle,
+                requested.TermTitle.Trim());
+            AddChangedField(fields, "Tiêu đề tiếng Anh", current.TermTitleEn,
+                NormalizeOptional(requested.TermTitleEn));
+            AddChangedField(fields, "Nội dung", current.TermContent,
+                NormalizeOptional(requested.TermContent));
+            AddChangedField(fields, "Nội dung tiếng Anh",
+                current.TermContentEn,
+                NormalizeOptional(requested.TermContentEn));
+            AddChangedField(fields, "Cho phép đàm phán",
+                current.IsNegotiable,
+                requested.IsNegotiable);
+            AddChangedField(fields, "Thứ tự", current.DisplayOrder,
+                displayOrder);
+
+            return fields;
+        }
+
+        private static void AddChangedField<T>(
+            ICollection<string> fields,
+            string label,
+            T previousValue,
+            T newValue)
+        {
+            if (!EqualityComparer<T>.Default.Equals(
+                    previousValue,
+                    newValue))
+            {
+                fields.Add(label);
+            }
         }
 
         /// <summary>

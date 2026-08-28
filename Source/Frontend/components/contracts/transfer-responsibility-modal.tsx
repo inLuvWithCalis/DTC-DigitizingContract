@@ -18,9 +18,10 @@ import {
   employeeApi,
   type EmployeeDirectoryResponse,
 } from "@/services/employees-api";
-import { contractApi, ContractDetailResponse } from "@/services/contract-api";
+import { contractApi } from "@/services/contract-api";
 import { ConfirmDialog } from "@/components/ui/custom/confirm-dialog";
 import { showConfirmToast } from "@/components/ui/custom/confirm-toast";
+import { getApiErrorMessage } from "@/lib/api-error";
 import { useRouter } from "next/navigation";
 
 interface TransferResponsibilityModalProps {
@@ -30,7 +31,6 @@ interface TransferResponsibilityModalProps {
   rowVersion: string;
   currentEmployeeId?: number | null;
   currentEmployeeName?: string | null;
-  onSuccess: (updatedContract: ContractDetailResponse) => void;
 }
 
 export function TransferResponsibilityModal({
@@ -40,7 +40,6 @@ export function TransferResponsibilityModal({
   rowVersion,
   currentEmployeeId,
   currentEmployeeName,
-  onSuccess,
 }: TransferResponsibilityModalProps) {
   const router = useRouter();
 
@@ -106,19 +105,17 @@ export function TransferResponsibilityModal({
             rowVersion: rowVersion,
           });
 
-          const updatedContractData: any =
-            await contractApi.getDetail(contractId);
-          const updatedContract = updatedContractData.data
-            ? updatedContractData.data
-            : updatedContractData;
-
-          onSuccess(updatedContract);
           onClose();
-          router.push("/contracts");
+          toast.success("Chuyển giao người phụ trách thành công.");
+          router.replace("/contracts");
         } catch (error: any) {
           console.error("Lỗi chuyển giao người phụ trách:", error);
-          const data = error?.response?.data.message;
-          toast.error(data);
+          toast.error(
+            getApiErrorMessage(
+              error,
+              "Không thể chuyển giao người phụ trách. Vui lòng thử lại.",
+            ),
+          );
         } finally {
           setIsSubmitting(false);
         }

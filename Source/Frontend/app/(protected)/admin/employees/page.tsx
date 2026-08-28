@@ -147,6 +147,35 @@ function EmployeeListPageContent() {
     fetchEmployees();
   }, [fetchEmployees]);
 
+  useEffect(() => {
+    const employeeId = Number(
+      new URLSearchParams(window.location.search).get("employeeId"),
+    );
+    if (!Number.isInteger(employeeId) || employeeId <= 0) return;
+
+    let isActive = true;
+    const loadQuickViewEmployee = async () => {
+      try {
+        const employee = await employeeApi.getById(employeeId);
+        if (isActive) setViewingEmployee(employee);
+      } catch (error) {
+        if (isActive) {
+          toast.error(
+            getApiErrorMessage(
+              error,
+              "Không thể tải hồ sơ nhân viên từ nhật ký hợp đồng.",
+            ),
+          );
+        }
+      }
+    };
+
+    void loadQuickViewEmployee();
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
   const handleView = (employee: EmployeeResponse) => {
     setViewingEmployee(employee);
   };

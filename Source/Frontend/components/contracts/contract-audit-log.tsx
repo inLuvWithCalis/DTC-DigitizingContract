@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import {
   AlertCircle,
   Bot,
@@ -46,6 +47,8 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDateTime } from "@/lib/format-date-time";
+import { usePermission } from "@/hooks/use-permission";
+import { RBAC_PERMISSIONS } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import {
   CONTRACT_AUDIT_ACTION_LABELS,
@@ -407,7 +410,84 @@ function AuditChanges({ audit }: { audit: ContractAuditResponse }) {
   );
 }
 
-function AuditActor({ audit }: { audit: ContractAuditResponse }) {
+function AuditQuickLink({
+  href,
+  title,
+  children,
+}: {
+  href: string;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      title={title}
+      className="rounded-sm font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:text-primary hover:decoration-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      {children}
+    </Link>
+  );
+}
+
+function getAuditSubjectHref(
+  audit: ContractAuditResponse,
+  canReadContract: boolean,
+) {
+  if (!canReadContract) return null;
+
+  switch (audit.subjectType) {
+    case "Contract":
+      return `/contracts/${audit.contractId}`;
+    case "ContractVersion":
+      return `/contracts/${audit.contractId}/versions/${audit.subjectId}`;
+    case "NegotiationComment":
+      return `/contracts/${audit.contractId}#negotiation`;
+    case "CustomerAccessLink":
+    case "CustomerOtpChallenge":
+    case "CustomerAccessSession":
+      return `/contracts/${audit.contractId}#signature`;
+    default:
+      return null;
+  }
+}
+
+function AuditSubject({
+  audit,
+  canReadContract,
+}: {
+  audit: ContractAuditResponse;
+  canReadContract: boolean;
+}) {
+  const href = getAuditSubjectHref(audit, canReadContract);
+  const content = (
+    <>
+      {CONTRACT_AUDIT_SUBJECT_LABELS[
+        audit.subjectType as ContractAuditSubjectType
+      ] ?? audit.subjectType}
+      {" #"}
+      {audit.subjectId}
+    </>
+  );
+
+  return href ? (
+    <AuditQuickLink href={href} title="Mở đối tượng liên quan">
+      {content}
+    </AuditQuickLink>
+  ) : (
+    <span>{content}</span>
+  );
+}
+
+function AuditActor({
+  audit,
+  canReadContract,
+  canViewEmployee,
+}: {
+  audit: ContractAuditResponse;
+  canReadContract: boolean;
+  canViewEmployee: boolean;
+}) {
   const label = CONTRACT_AUDIT_ACTOR_LABELS[audit.actorType];
   const actorName = audit.actorDisplayName?.trim() || label;
   const actorId =
@@ -416,6 +496,22 @@ function AuditActor({ audit }: { audit: ContractAuditResponse }) {
       : audit.actorType === "Customer"
         ? audit.actorCustomerAccessSessionId
         : null;
+  const actorHref =
+    audit.actorType === "Employee" && audit.actorEmployeeId && canViewEmployee
+      ? `/admin/employees?employeeId=${audit.actorEmployeeId}`
+      : audit.actorType === "Customer" && canReadContract
+        ? `/contracts/${audit.contractId}#signature`
+        : null;
+  const actorContent = (
+    <>
+      {actorName}
+      {actorId && (
+        <span>
+          ({audit.actorType === "Employee" ? "NV" : "Phiên"} #{actorId})
+        </span>
+      )}
+    </>
+  );
 
   if (audit.actorType === "System") {
     return (
@@ -428,11 +524,19 @@ function AuditActor({ audit }: { audit: ContractAuditResponse }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <UserRound className="size-3.5" />
-      {actorName}
-      {actorId && (
-        <span>
-          ({audit.actorType === "Employee" ? "NV" : "Phiên"} #{actorId})
-        </span>
+      {actorHref ? (
+        <AuditQuickLink
+          href={actorHref}
+          title={
+            audit.actorType === "Employee"
+              ? "Xem nhanh hồ sơ nhân viên"
+              : "Xem ngữ cảnh truy cập khách hàng"
+          }
+        >
+          <span className="inline-flex items-center gap-1">{actorContent}</span>
+        </AuditQuickLink>
+      ) : (
+        actorContent
       )}
       {audit.actorType === "Customer" && audit.actorMaskedPhone && (
         <span>
@@ -451,6 +555,12 @@ export function ContractAuditLog({
   versionId,
   mode = contractId ? "contract" : "tenant",
 }: ContractAuditLogProps) {
+  const { can, canAny } = usePermission();
+  const canReadContract = canAny([
+    RBAC_PERMISSIONS.contractReadOwn,
+    RBAC_PERMISSIONS.contractReadTenant,
+  ]);
+  const canViewEmployee = can(RBAC_PERMISSIONS.employeeManage);
   const [draftFilters, setDraftFilters] = useState<AuditFilters>(() =>
     createInitialFilters(versionId),
   );
@@ -994,28 +1104,48 @@ export function ContractAuditLog({
                       </div>
                       {mode === "tenant" && (
                         <p className="mt-1 text-sm text-foreground">
-                          <span className="font-medium">
-                            {audit.contractCode ||
-                              `Hợp đồng #${audit.contractId}`}
-                          </span>
+                          {canReadContract ? (
+                            <AuditQuickLink
+                              href={`/contracts/${audit.contractId}`}
+                              title="Xem chi tiết hợp đồng"
+                            >
+                              {audit.contractCode ||
+                                `Hợp đồng #${audit.contractId}`}
+                            </AuditQuickLink>
+                          ) : (
+                            <span className="font-medium">
+                              {audit.contractCode ||
+                                `Hợp đồng #${audit.contractId}`}
+                            </span>
+                          )}
                           {audit.contractName ? ` · ${audit.contractName}` : ""}
                         </p>
                       )}
                       <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                        <AuditActor audit={audit} />
-                        {audit.versionId && (
-                          <span>
-                            Phiên bản {audit.versionNo ?? "—"} (ID #
-                            {audit.versionId})
-                          </span>
-                        )}
-                        <span>
-                          {CONTRACT_AUDIT_SUBJECT_LABELS[
-                            audit.subjectType as ContractAuditSubjectType
-                          ] ?? audit.subjectType}
-                          {" #"}
-                          {audit.subjectId}
-                        </span>
+                        <AuditActor
+                          audit={audit}
+                          canReadContract={canReadContract}
+                          canViewEmployee={canViewEmployee}
+                        />
+                        {audit.versionId &&
+                          (canReadContract ? (
+                            <AuditQuickLink
+                              href={`/contracts/${audit.contractId}/versions/${audit.versionId}`}
+                              title="Xem phiên bản hợp đồng"
+                            >
+                              Phiên bản {audit.versionNo ?? "—"} (ID #
+                              {audit.versionId})
+                            </AuditQuickLink>
+                          ) : (
+                            <span>
+                              Phiên bản {audit.versionNo ?? "—"} (ID #
+                              {audit.versionId})
+                            </span>
+                          ))}
+                        <AuditSubject
+                          audit={audit}
+                          canReadContract={canReadContract}
+                        />
                       </div>
                     </div>
                     <time className="shrink-0 text-xs text-muted-foreground">

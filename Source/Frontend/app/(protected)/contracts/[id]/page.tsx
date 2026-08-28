@@ -877,7 +877,6 @@ export default function ContractDetailPage() {
             rowVersion={contract.rowVersion}
             currentEmployeeId={contract.responsibleEmployee?.employeeId}
             currentEmployeeName={contract.responsibleEmployee?.employeeFullName}
-            onSuccess={(updated) => setContract(updated)}
           />
         )}
 

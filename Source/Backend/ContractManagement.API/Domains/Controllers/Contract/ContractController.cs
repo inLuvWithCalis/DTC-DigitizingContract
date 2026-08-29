@@ -501,7 +501,8 @@ namespace ContractManagement.Domains.Controllers.Contract
         }
 
         /// <summary>
-        /// Resolve một comment cụ thể và thêm event Resolved. 
+        /// Resolve một comment cùng toàn bộ reply con/cháu còn mở và thêm
+        /// event Resolved cho từng comment được chuyển trạng thái.
         /// </summary>
         [HttpPost("{contractId:int}/comments/{commentId:int}/resolve")]
         [Consumes("application/json")]
@@ -536,7 +537,7 @@ namespace ContractManagement.Domains.Controllers.Contract
             return Ok(
                 ApiResponse<ContractNegotiationCommentResponse>.Ok(
                     result,
-                    "Resolve comment thành công."));
+                    "Resolve comment và các câu trả lời thành công."));
         }
 
         /// <summary>

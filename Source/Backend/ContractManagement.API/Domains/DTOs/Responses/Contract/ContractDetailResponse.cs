@@ -69,6 +69,12 @@ namespace ContractManagement.API.Domains.DTOs.Responses.Contract
             get;
             set;
         } = new();
+
+        public ContractApprovalReadinessResponse ApprovalReadiness
+        {
+            get;
+            set;
+        } = new();
     }
 
     /// <summary>

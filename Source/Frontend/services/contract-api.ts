@@ -446,6 +446,37 @@ export interface ContractEmployeeSummaryResponse {
   employeeMobile?: string | null;
 }
 
+export const CONTRACT_APPROVAL_READINESS_CODES = {
+  contractNotNegotiating: "ContractNotNegotiating",
+  currentVersionLocked: "CurrentVersionLocked",
+  currentVersionAlreadyShared: "CurrentVersionAlreadyShared",
+  currentVersionNotShared: "CurrentVersionNotShared",
+  activeCustomerAccessLinkRequired: "ActiveCustomerAccessLinkRequired",
+  openNegotiationCommentsExist: "OpenNegotiationCommentsExist",
+  contractCodeRequired: "ContractCodeRequired",
+  contractNameRequired: "ContractNameRequired",
+  contractItemRequired: "ContractItemRequired",
+  contractTermRequired: "ContractTermRequired",
+  invalidContractDateRange: "InvalidContractDateRange",
+  contractTotalMismatch: "ContractTotalMismatch",
+  bilingualContractNameRequired: "BilingualContractNameRequired",
+  bilingualItemNameRequired: "BilingualItemNameRequired",
+  bilingualTermTitleRequired: "BilingualTermTitleRequired",
+} as const;
+
+export interface ContractApprovalReadinessBlockerResponse {
+  code: string;
+  message: string;
+}
+
+export interface ContractApprovalReadinessResponse {
+  canSubmit: boolean;
+  hasEverBeenShared: boolean;
+  hasActiveCurrentVersionLink: boolean;
+  openCommentCount: number;
+  blockers: ContractApprovalReadinessBlockerResponse[];
+}
+
 export interface ContractDetailResponse {
   contractId: number;
   contractCode?: string | null;
@@ -473,6 +504,7 @@ export interface ContractDetailResponse {
   customer: ContractCustomerSummaryResponse;
   responsibleEmployee: ContractEmployeeSummaryResponse;
   currentVersion: ContractVersionDetailResponse;
+  approvalReadiness: ContractApprovalReadinessResponse;
 }
 
 export interface CreateContractResponse {

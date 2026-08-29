@@ -213,6 +213,13 @@ export function ContractTermComments({
   const openRootCount = termRootComments.filter(
     (comment) => comment.state === ContractNegotiationCommentState.Open,
   ).length;
+  const selectedThreadHasOpenReplies = childComments.some(
+    (comment) => comment.state === ContractNegotiationCommentState.Open,
+  );
+  const selectedThreadNeedsResolution = Boolean(
+    selectedParent?.state === ContractNegotiationCommentState.Open ||
+      selectedThreadHasOpenReplies,
+  );
   const rootTotalPages = Math.max(
     1,
     Math.ceil(termRootComments.length / COMMENTS_PAGE_SIZE),
@@ -280,11 +287,13 @@ export function ContractTermComments({
         (comment) => comment.versionId === versionId && matchesTerm(comment),
       );
       setChildComments(termReplies);
+      return termReplies;
     } catch (error: any) {
       console.error("Lỗi tải comment con:", error);
       setChildError(
         getApiErrorMessage(error, "Không thể tải các câu trả lời."),
       );
+      return null;
     } finally {
       setIsLoadingChildren(false);
     }
@@ -416,6 +425,16 @@ export function ContractTermComments({
       }
 
       onCommentChanged?.(updatedComment);
+
+      if (action === "resolve" && !updatedComment.parentCommentId) {
+        const updatedChildren = await loadChildComments(
+          updatedComment.commentId,
+        );
+        updatedChildren?.forEach((childComment) =>
+          onCommentChanged?.(childComment),
+        );
+      }
+
       toast.success(
         action === "resolve"
           ? "Đã đánh dấu trao đổi là đã xử lý."
@@ -586,25 +605,26 @@ export function ContractTermComments({
                           onClick={() =>
                             void handleChangeState(
                               selectedParent,
-                              selectedParent.state ===
-                                ContractNegotiationCommentState.Resolved
-                                ? "reopen"
-                                : "resolve",
+                              selectedThreadNeedsResolution
+                                ? "resolve"
+                                : "reopen",
                             )
                           }
                         >
                           {processingCommentId === selectedParent.commentId ? (
                             <Loader2 className="mr-1.5 size-3.5 animate-spin" />
-                          ) : selectedParent.state ===
-                            ContractNegotiationCommentState.Resolved ? (
-                            <RotateCcw className="mr-1.5 size-3.5" />
-                          ) : (
+                          ) : selectedThreadNeedsResolution ? (
                             <CheckCircle2 className="mr-1.5 size-3.5" />
+                          ) : (
+                            <RotateCcw className="mr-1.5 size-3.5" />
                           )}
                           {selectedParent.state ===
-                          ContractNegotiationCommentState.Resolved
-                            ? "Mở lại"
-                            : "Đã xử lý"}
+                            ContractNegotiationCommentState.Resolved &&
+                          selectedThreadHasOpenReplies
+                            ? "Xử lý câu trả lời"
+                            : selectedThreadNeedsResolution
+                              ? "Đã xử lý"
+                              : "Mở lại"}
                         </Button>
                       )}
                     </div>

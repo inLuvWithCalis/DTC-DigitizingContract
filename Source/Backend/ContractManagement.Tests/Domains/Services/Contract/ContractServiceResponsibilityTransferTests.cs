@@ -1,5 +1,7 @@
 using ContractManagement.API.Common.Enums;
+using ContractManagement.API.Common.Exceptions;
 using ContractManagement.API.Domains.DTOs.Requests.Contract;
+using ContractManagement.API.Domains.DTOs.Responses.Contract;
 using ContractManagement.Common.Enums;
 using ContractManagement.Domains.Interfaces.Contract;
 using ContractManagement.Domains.Interfaces.File;
@@ -702,6 +704,46 @@ public class ContractServiceResponsibilityTransferTests
     }
 
     [Fact]
+    public async Task UpdateDraft_SharedCurrentVersion_ShouldRequireNewRound()
+    {
+        await using var context = CreateContext();
+        await SeedContractAsync(context);
+        var contract = await context.TblContracts.SingleAsync();
+        contract.Status = (byte)ContractStatus.Negotiating;
+        contract.CurrentCustomerAccessLinkId = 45;
+        context.TblContractCustomerAccessLinks.Add(
+            new TblContractCustomerAccessLink
+            {
+                CustomerAccessLinkId = 45,
+                TenantId = TenantId,
+                ContractId = ContractId,
+                VersionId = VersionId,
+                VerificationPhoneId = 46,
+                TokenHash = "shared-version-link-hash",
+                CreatedByEmployeeId = CurrentResponsibleEmployeeId,
+                CreatedDate = DateTime.UtcNow.AddDays(-2),
+                ActivatedAt = DateTime.UtcNow.AddDays(-2),
+                ExpiresAt = DateTime.UtcNow.AddDays(-1),
+                RevokedAt = DateTime.UtcNow.AddDays(-1),
+                RevokedByEmployeeId = CurrentResponsibleEmployeeId,
+                RevocationReason = "Expired test link",
+                RowVersion = InitialRowVersion()
+            });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var exception = await Assert.ThrowsAsync<BusinessRuleException>(() =>
+            CreateService(context).UpdateDraftAsync(
+                ContractId,
+                CreateUpdateRequest(),
+                CurrentResponsibleEmployeeId));
+
+        Assert.Equal(
+            ContractApprovalReadinessCodes.CurrentVersionAlreadyShared,
+            exception.Code);
+    }
+
+    [Fact]
     public async Task SubmitForApproval_ShouldAuditStatusLockAndApprovalRequest()
     {
         await using var context = CreateContext();
@@ -713,6 +755,22 @@ public class ContractServiceResponsibilityTransferTests
 
         var contract = await context.TblContracts.SingleAsync();
         contract.Status = (byte)ContractStatus.Negotiating;
+        contract.CurrentCustomerAccessLinkId = 43;
+        context.TblContractCustomerAccessLinks.Add(
+            new TblContractCustomerAccessLink
+            {
+                CustomerAccessLinkId = 43,
+                TenantId = TenantId,
+                ContractId = ContractId,
+                VersionId = VersionId,
+                VerificationPhoneId = 44,
+                TokenHash = "approval-link-hash",
+                CreatedByEmployeeId = CurrentResponsibleEmployeeId,
+                CreatedDate = DateTime.UtcNow,
+                ActivatedAt = DateTime.UtcNow,
+                ExpiresAt = DateTime.UtcNow.AddDays(1),
+                RowVersion = InitialRowVersion()
+            });
         context.TblContractItems.Add(new TblContractItem
         {
             ContractItemId = 41,

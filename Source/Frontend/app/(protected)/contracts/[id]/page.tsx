@@ -35,11 +35,13 @@ import { formatCurrency } from "@/lib/format-currency";
 import { downloadBlob } from "@/components/contract-templates/contract-template-utils";
 
 import {
+  CONTRACT_APPROVAL_READINESS_CODES,
   contractApi,
   CurrentContractCustomerAccessLinkResponse,
   ContractDetailResponse,
   ContractItemDiscountMode,
   ContractLanguageMode,
+  ContractNegotiationCommentState,
   ContractStatus,
   ContractType,
   getContractTypeLabel,
@@ -461,6 +463,13 @@ export default function ContractDetailPage() {
       toast.error("Vui lòng lưu các thay đổi trước khi gửi duyệt.");
       return;
     }
+    if (!canSubmitApproval) {
+      toast.error(
+        effectiveApprovalBlockers[0]?.message ||
+          "Hợp đồng chưa đủ điều kiện gửi duyệt.",
+      );
+      return;
+    }
 
     showConfirmToast({
       title: "Gửi hợp đồng để duyệt?",
@@ -505,14 +514,39 @@ export default function ContractDetailPage() {
     });
   };
 
-  const isCurrentVersionShared =
-    contract.status === ContractStatus.Negotiating &&
-    knownCustomerAccessLink !== null;
   const isResponsibleEmployee =
     user?.employeeId === contract.responsibleEmployee?.employeeId;
   const canManageContract =
     isResponsibleEmployee &&
     hasPermission(user?.permissions, RBAC_PERMISSIONS.contractManageOwn);
+  const localOpenCommentCount = contract.currentVersion.comments.filter(
+    (comment) => comment.state === ContractNegotiationCommentState.Open,
+  ).length;
+  const effectiveApprovalBlockers = contract.approvalReadiness.blockers.filter(
+    (blocker) =>
+      blocker.code !==
+      CONTRACT_APPROVAL_READINESS_CODES.openNegotiationCommentsExist,
+  );
+  if (localOpenCommentCount > 0) {
+    effectiveApprovalBlockers.push({
+      code: CONTRACT_APPROVAL_READINESS_CODES.openNegotiationCommentsExist,
+      message: `Còn ${localOpenCommentCount} trao đổi chưa được xử lý.`,
+    });
+  }
+  const canSubmitApproval = effectiveApprovalBlockers.length === 0;
+  const hasCustomerAccessBlocker = effectiveApprovalBlockers.some(
+    (blocker) =>
+      blocker.code ===
+        CONTRACT_APPROVAL_READINESS_CODES.currentVersionNotShared ||
+      blocker.code ===
+        CONTRACT_APPROVAL_READINESS_CODES.activeCustomerAccessLinkRequired,
+  );
+  const hasOpenCommentBlocker = effectiveApprovalBlockers.some(
+    (blocker) =>
+      blocker.code ===
+      CONTRACT_APPROVAL_READINESS_CODES.openNegotiationCommentsExist,
+  );
+  const isCurrentVersionShared = contract.approvalReadiness.hasEverBeenShared;
   const canUpdateDraft =
     canManageContract &&
     (contract.status === ContractStatus.Draft ||
@@ -697,7 +731,12 @@ export default function ContractDetailPage() {
               contract.status === ContractStatus.Negotiating && (
                 <Button
                   onClick={handleSubmitApproval}
-                  disabled={isSubmittingApproval || hasUnsavedChanges}
+                  disabled={
+                    isSubmittingApproval ||
+                    hasUnsavedChanges ||
+                    !canSubmitApproval
+                  }
+                  title={effectiveApprovalBlockers[0]?.message}
                   className="bg-amber-600 hover:bg-amber-700 text-white"
                 >
                   {isSubmittingApproval ? (
@@ -776,14 +815,52 @@ export default function ContractDetailPage() {
         {isCurrentVersionShared && (
           <Alert className="border-amber-300 bg-amber-50/60 dark:bg-amber-950/20">
             <LockKeyhole className="size-4 text-amber-700" />
-            <AlertTitle>Phiên bản đang được chia sẻ với khách hàng</AlertTitle>
+            <AlertTitle>Phiên bản đã được chia sẻ với khách hàng</AlertTitle>
             <AlertDescription>
-              Nội dung được chuyển sang chế độ chỉ xem để tránh thay đổi trực
-              tiếp dữ liệu khách hàng đang xem. Muốn chỉnh sửa, hãy tạo vòng
-              mới!
+              Nội dung được giữ ở chế độ chỉ xem kể cả khi link hết hạn hoặc bị
+              thu hồi, nhằm bảo toàn đúng version khách hàng đã nhận. Muốn chỉnh
+              sửa, hãy tạo vòng đàm phán mới.
             </AlertDescription>
           </Alert>
         )}
+
+        {canManageContract &&
+          contract.status === ContractStatus.Negotiating &&
+          !canSubmitApproval && (
+            <Alert className="border-amber-300 bg-amber-50/60 dark:bg-amber-950/20">
+              <Send className="size-4 text-amber-700" />
+              <AlertTitle>Chưa đủ điều kiện gửi duyệt</AlertTitle>
+              <AlertDescription className="space-y-3">
+                <ul className="list-disc space-y-1 pl-5">
+                  {effectiveApprovalBlockers.map((blocker) => (
+                    <li key={blocker.code}>{blocker.message}</li>
+                  ))}
+                </ul>
+                <div className="flex flex-wrap gap-2">
+                  {hasCustomerAccessBlocker && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleTabChange("signature")}
+                    >
+                      Truy cập khách hàng
+                    </Button>
+                  )}
+                  {hasOpenCommentBlocker && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleTabChange("terms")}
+                    >
+                      Xử lý trao đổi
+                    </Button>
+                  )}
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
 
         {!canManageContract && (
           <Alert>
@@ -803,8 +880,8 @@ export default function ContractDetailPage() {
         >
           <TabsList className="flex h-auto w-full flex-wrap justify-start">
             <TabsTrigger value="overview">Tổng quan</TabsTrigger>
-            <TabsTrigger value="terms">Điều khoản</TabsTrigger>
-            <TabsTrigger value="negotiation">Đàm phán</TabsTrigger>
+            <TabsTrigger value="negotiation">Vòng đàm phán</TabsTrigger>
+            <TabsTrigger value="terms">Điều khoản - Trao đổi</TabsTrigger>
             <TabsTrigger value="signature">Truy cập khách hàng</TabsTrigger>
             <TabsTrigger value="documents">Chứng từ</TabsTrigger>
             <TabsTrigger value="closing">Đóng hợp đồng</TabsTrigger>

@@ -1,4 +1,5 @@
 ﻿using ContractManagement.API.Common.Enums;
+using ContractManagement.API.Common.Exceptions;
 using ContractManagement.API.Common.Responses;
 using ContractManagement.API.Domains.DTOs.Requests.Contract;
 using ContractManagement.API.Domains.DTOs.Responses.Contract;
@@ -1293,6 +1294,14 @@ namespace ContractManagement.Domains.Services.Contract
                 contract.ContractId,
                 version.VersionId);
 
+            var approvalReadiness = await GetApprovalReadinessAsync(
+                contract,
+                version,
+                items,
+                terms,
+                comments.Count(comment =>
+                    comment.State == ContractNegotiationCommentState.Open));
+
             return new ContractDetailResponse
             {
                 ContractId = contract.ContractId,
@@ -1443,7 +1452,9 @@ namespace ContractManagement.Domains.Services.Contract
                         .ToList(),
 
                     Comments = comments
-                }
+                },
+
+                ApprovalReadiness = approvalReadiness
             };
         }
 
@@ -1570,6 +1581,23 @@ namespace ContractManagement.Domains.Services.Contract
                         versionEntry
                             .Property(x => x.RowVersion)
                             .OriginalValue = expectedVersionRowVersion;
+
+                        var hasEverBeenShared = await _dbContext
+                            .TblContractCustomerAccessLinks
+                            .AsNoTracking()
+                            .AnyAsync(link =>
+                                link.ContractId == contract.ContractId
+                                && link.VersionId == version.VersionId
+                                && link.ActivatedAt.HasValue);
+
+                        if (hasEverBeenShared)
+                        {
+                            throw new BusinessRuleException(
+                                StatusCodes.Status409Conflict,
+                                ContractApprovalReadinessCodes
+                                    .CurrentVersionAlreadyShared,
+                                "Version hiện tại đã được chia sẻ với khách hàng. Hãy tạo vòng đàm phán mới để chỉnh sửa.");
+                        }
 
                         /*
                          * Đánh dấu version đã tham gia lần cập nhật này.
@@ -3132,67 +3160,140 @@ namespace ContractManagement.Domains.Services.Contract
                         expectedRowVersion,
                         "Comment");
 
-                    if (comment.State == (byte)targetState)
+                    var now = DateTime.UtcNow;
+                    var commentsToChange = new List<
+                        TblContractNegotiationComment>();
+
+                    if (comment.State != (byte)targetState)
+                    {
+                        commentsToChange.Add(comment);
+                    }
+
+                    if (targetState ==
+                        ContractNegotiationCommentState.Resolved)
+                    {
+                        var commentCandidates = await _dbContext
+                            .TblContractNegotiationComments
+                            .Where(x =>
+                                x.ContractId == contractId
+                                && x.VersionId == comment.VersionId
+                                && x.CommentId != comment.CommentId)
+                            .ToListAsync();
+                        var commentsByParent = commentCandidates
+                            .Where(x => x.ParentCommentId.HasValue)
+                            .ToLookup(x => x.ParentCommentId!.Value);
+                        var pendingParentIds = new Queue<int>();
+                        var visitedCommentIds = new HashSet<int>
+                        {
+                            comment.CommentId
+                        };
+                        pendingParentIds.Enqueue(comment.CommentId);
+
+                        while (pendingParentIds.Count > 0)
+                        {
+                            var parentCommentId = pendingParentIds.Dequeue();
+
+                            foreach (var child in
+                                commentsByParent[parentCommentId])
+                            {
+                                if (!visitedCommentIds.Add(child.CommentId))
+                                {
+                                    continue;
+                                }
+
+                                pendingParentIds.Enqueue(child.CommentId);
+
+                                if (child.State != (byte)targetState)
+                                {
+                                    commentsToChange.Add(child);
+                                }
+                            }
+                        }
+                    }
+
+                    if (commentsToChange.Count == 0)
                     {
                         throw new DbUpdateConcurrencyException(
                             "Trạng thái comment đã được xử lý bởi request khác.");
                     }
 
-                    _dbContext.Entry(comment)
-                        .Property(x => x.RowVersion)
-                        .OriginalValue = expectedRowVersion;
+                    var previousStates = commentsToChange.ToDictionary(
+                        item => item.CommentId,
+                        item => item.State);
 
-                    var now = DateTime.UtcNow;
-                    var previousState = comment.State;
-                    comment.State = (byte)targetState;
-                    comment.UpdatedDate = now;
+                    foreach (var changedComment in commentsToChange)
+                    {
+                        var changedCommentRowVersion =
+                            changedComment.CommentId == comment.CommentId
+                                ? expectedRowVersion
+                                : changedComment.RowVersion.ToArray();
 
-                    _dbContext.TblContractNegotiationCommentEvents.Add(
-                        new TblContractNegotiationCommentEvent
-                        {
-                            CommentId = comment.CommentId,
-                            EventType = (byte)eventType,
-                            ActorType = ContractAuditActorTypes.Employee,
-                            EmployeeId = employeeId,
-                            OccurredAt = now
-                        });
+                        _dbContext.Entry(changedComment)
+                            .Property(x => x.RowVersion)
+                            .OriginalValue = changedCommentRowVersion;
+
+                        changedComment.State = (byte)targetState;
+                        changedComment.UpdatedDate = now;
+
+                        _dbContext.TblContractNegotiationCommentEvents.Add(
+                            new TblContractNegotiationCommentEvent
+                            {
+                                CommentId = changedComment.CommentId,
+                                EventType = (byte)eventType,
+                                ActorType = ContractAuditActorTypes.Employee,
+                                EmployeeId = employeeId,
+                                OccurredAt = now
+                            });
+
+                        RotateCommentRowVersionForInMemory(
+                            changedComment,
+                            changedCommentRowVersion);
+                    }
 
                     _contractAuditWriter.StageEmployeeAudits(
-                    [
-                        new EmployeeContractAuditWriteRequest(
-                            contract.ContractId,
-                            comment.VersionId,
-                            employeeId,
-                            auditActionType,
-                            ContractAuditResults.Succeeded,
-                            now,
-                            PreviousContractStatus: contract.Status,
-                            NewContractStatus: contract.Status,
-                            SubjectType: ContractAuditSubjectTypes.NegotiationComment,
-                            SubjectId: comment.CommentId,
-                            PreviousValues: ContractAuditValues.Create(
-                                ("Source", comment.Source),
-                                ("Target", comment.TermId.HasValue ? "Term" : "Contract"),
-                                ("TermId", comment.TermId),
-                                ("ParentCommentId", comment.ParentCommentId),
-                                ("State", previousState == 0 ? "Open" : "Resolved")),
-                            NewValues: ContractAuditValues.Create(
-                                ("Source", comment.Source),
-                                ("Target", comment.TermId.HasValue ? "Term" : "Contract"),
-                                ("TermId", comment.TermId),
-                                ("ParentCommentId", comment.ParentCommentId),
-                                ("State", targetState == ContractNegotiationCommentState.Open
-                                    ? "Open"
-                                    : "Resolved")))
-                    ]);
+                        commentsToChange.Select(changedComment =>
+                            new EmployeeContractAuditWriteRequest(
+                                contract.ContractId,
+                                changedComment.VersionId,
+                                employeeId,
+                                auditActionType,
+                                ContractAuditResults.Succeeded,
+                                now,
+                                PreviousContractStatus: contract.Status,
+                                NewContractStatus: contract.Status,
+                                SubjectType: ContractAuditSubjectTypes
+                                    .NegotiationComment,
+                                SubjectId: changedComment.CommentId,
+                                PreviousValues: ContractAuditValues.Create(
+                                    ("Source", changedComment.Source),
+                                    ("Target", changedComment.TermId.HasValue
+                                        ? "Term"
+                                        : "Contract"),
+                                    ("TermId", changedComment.TermId),
+                                    ("ParentCommentId",
+                                        changedComment.ParentCommentId),
+                                    ("State",
+                                        previousStates[changedComment.CommentId]
+                                            == 0
+                                            ? "Open"
+                                            : "Resolved")),
+                                NewValues: ContractAuditValues.Create(
+                                    ("Source", changedComment.Source),
+                                    ("Target", changedComment.TermId.HasValue
+                                        ? "Term"
+                                        : "Contract"),
+                                    ("TermId", changedComment.TermId),
+                                    ("ParentCommentId",
+                                        changedComment.ParentCommentId),
+                                    ("State", targetState ==
+                                        ContractNegotiationCommentState.Open
+                                        ? "Open"
+                                        : "Resolved"))))
+                        .ToList());
 
-                    RotateCommentRowVersionForInMemory(
-                        comment,
-                        expectedRowVersion);
                     await _dbContext.SaveChangesAsync();
                     await transaction.CommitAsync();
 
-                    _ = previousState;
                     return await MapCommentResponseAsync(comment);
                 }
                 catch (DbUpdateConcurrencyException exception)
@@ -3666,7 +3767,7 @@ namespace ContractManagement.Domains.Services.Contract
                 {
                     var storedArtifacts = new List<StoredPrivateFile>(2);
                     await using var transaction = await _dbContext.Database
-                        .BeginTransactionAsync();
+                        .BeginTransactionAsync(IsolationLevel.Serializable);
                     try
                     {
                         var contract = await _dbContext.TblContracts
@@ -3806,10 +3907,24 @@ namespace ContractManagement.Domains.Services.Contract
                             .ThenBy(x => x.TermId)
                             .ToListAsync();
 
-                        ValidateApprovalReadiness(
-                            contract,
-                            items,
-                            terms);
+                        var openCommentCount = await _dbContext
+                            .TblContractNegotiationComments
+                            .AsNoTracking()
+                            .CountAsync(comment =>
+                                comment.ContractId == contract.ContractId
+                                && comment.VersionId == version.VersionId
+                                && comment.State ==
+                                (byte)ContractNegotiationCommentState.Open);
+
+                        var approvalReadiness =
+                            await GetApprovalReadinessAsync(
+                                contract,
+                                version,
+                                items,
+                                terms,
+                                openCommentCount);
+
+                        EnsureApprovalReadiness(approvalReadiness);
 
                         var rendered = await artifactRenderer.RenderAsync(
                             contract.ContractId,
@@ -5291,32 +5406,92 @@ namespace ContractManagement.Domains.Services.Contract
             }
         }
 
-        private static void ValidateApprovalReadiness(
-    TblContract contract,
-    List<TblContractItem> items,
-    List<TblContractTerm> terms)
+        private async Task<ContractApprovalReadinessResponse>
+            GetApprovalReadinessAsync(
+                TblContract contract,
+                TblContractVersion version,
+                IReadOnlyCollection<TblContractItem> items,
+                IReadOnlyCollection<TblContractTerm> terms,
+                int openCommentCount)
         {
+            var versionLinks = await _dbContext
+                .TblContractCustomerAccessLinks
+                .AsNoTracking()
+                .Where(link =>
+                    link.ContractId == contract.ContractId
+                    && link.VersionId == version.VersionId)
+                .ToListAsync();
+
+            var hasEverBeenShared = versionLinks.Any(link =>
+                link.ActivatedAt.HasValue);
+            var now = DateTime.UtcNow;
+            var hasActiveCurrentVersionLink =
+                contract.CurrentCustomerAccessLinkId.HasValue
+                && versionLinks.Any(link =>
+                    link.CustomerAccessLinkId ==
+                    contract.CurrentCustomerAccessLinkId.Value
+                    && link.ActivatedAt.HasValue
+                    && !link.RevokedAt.HasValue
+                    && link.ExpiresAt > now);
+
+            var blockers = new List<
+                ContractApprovalReadinessBlockerResponse>();
+
+            static void AddBlocker(
+                List<ContractApprovalReadinessBlockerResponse> target,
+                string code,
+                string message) => target.Add(new()
+                {
+                    Code = code,
+                    Message = message
+                });
+
+            if ((ContractStatus)contract.Status !=
+                ContractStatus.Negotiating)
+            {
+                AddBlocker(
+                    blockers,
+                    ContractApprovalReadinessCodes.ContractNotNegotiating,
+                    "Hợp đồng phải ở trạng thái Đang đàm phán trước khi gửi duyệt.");
+            }
+
+            if (version.IsLocked)
+            {
+                AddBlocker(
+                    blockers,
+                    ContractApprovalReadinessCodes.CurrentVersionLocked,
+                    "Version hiện tại đã bị khóa.");
+            }
+
             if (string.IsNullOrWhiteSpace(contract.ContractCode))
             {
-                throw new InvalidOperationException(
+                AddBlocker(
+                    blockers,
+                    ContractApprovalReadinessCodes.ContractCodeRequired,
                     "Hợp đồng chưa có mã.");
             }
 
             if (string.IsNullOrWhiteSpace(contract.ContractName))
             {
-                throw new InvalidOperationException(
+                AddBlocker(
+                    blockers,
+                    ContractApprovalReadinessCodes.ContractNameRequired,
                     "Hợp đồng chưa có tên.");
             }
 
             if (items.Count == 0)
             {
-                throw new InvalidOperationException(
+                AddBlocker(
+                    blockers,
+                    ContractApprovalReadinessCodes.ContractItemRequired,
                     "Hợp đồng phải có ít nhất một item.");
             }
 
             if (terms.Count == 0)
             {
-                throw new InvalidOperationException(
+                AddBlocker(
+                    blockers,
+                    ContractApprovalReadinessCodes.ContractTermRequired,
                     "Hợp đồng phải có ít nhất một điều khoản.");
             }
 
@@ -5324,45 +5499,113 @@ namespace ContractManagement.Domains.Services.Contract
                 && contract.ExpireDate.HasValue
                 && contract.ExpireDate < contract.EffectiveDate)
             {
-                throw new InvalidOperationException(
+                AddBlocker(
+                    blockers,
+                    ContractApprovalReadinessCodes.InvalidContractDateRange,
                     "Ngày hết hạn không được trước ngày hiệu lực.");
             }
 
-            var calculatedTotal =
-                items.Sum(x => x.LineTotal);
-
-            if (calculatedTotal != contract.TotalAmount)
+            if (items.Sum(item => item.LineTotal) != contract.TotalAmount)
             {
-                throw new InvalidOperationException(
+                AddBlocker(
+                    blockers,
+                    ContractApprovalReadinessCodes.ContractTotalMismatch,
                     "Tổng tiền hợp đồng không khớp với các item.");
             }
 
-            if (contract.LanguageMode !=
+            if (contract.LanguageMode ==
                 (byte)ContractLanguageMode.Bilingual)
+            {
+                if (string.IsNullOrWhiteSpace(contract.ContractNameEn))
+                {
+                    AddBlocker(
+                        blockers,
+                        ContractApprovalReadinessCodes
+                            .BilingualContractNameRequired,
+                        "Hợp đồng song ngữ thiếu tên tiếng Anh.");
+                }
+
+                if (items.Any(item =>
+                        string.IsNullOrWhiteSpace(item.ItemNameEn)))
+                {
+                    AddBlocker(
+                        blockers,
+                        ContractApprovalReadinessCodes
+                            .BilingualItemNameRequired,
+                        "Hợp đồng song ngữ có item thiếu tên tiếng Anh.");
+                }
+
+                if (terms.Any(term =>
+                        string.IsNullOrWhiteSpace(term.TermTitleEn)))
+                {
+                    AddBlocker(
+                        blockers,
+                        ContractApprovalReadinessCodes
+                            .BilingualTermTitleRequired,
+                        "Hợp đồng song ngữ có điều khoản thiếu tiêu đề tiếng Anh.");
+                }
+            }
+
+            if (!hasEverBeenShared)
+            {
+                AddBlocker(
+                    blockers,
+                    ContractApprovalReadinessCodes.CurrentVersionNotShared,
+                    "Version hiện tại chưa được chia sẻ với khách hàng.");
+            }
+            else if (!hasActiveCurrentVersionLink)
+            {
+                AddBlocker(
+                    blockers,
+                    ContractApprovalReadinessCodes
+                        .ActiveCustomerAccessLinkRequired,
+                    "Version hiện tại cần một link khách hàng đang hoạt động trước khi gửi duyệt.");
+            }
+
+            if (openCommentCount > 0)
+            {
+                AddBlocker(
+                    blockers,
+                    ContractApprovalReadinessCodes
+                        .OpenNegotiationCommentsExist,
+                    $"Còn {openCommentCount} trao đổi chưa được xử lý.");
+            }
+
+            return new ContractApprovalReadinessResponse
+            {
+                CanSubmit = blockers.Count == 0,
+                HasEverBeenShared = hasEverBeenShared,
+                HasActiveCurrentVersionLink =
+                    hasActiveCurrentVersionLink,
+                OpenCommentCount = openCommentCount,
+                Blockers = blockers
+            };
+        }
+
+        private static void EnsureApprovalReadiness(
+            ContractApprovalReadinessResponse readiness)
+        {
+            var blocker = readiness.Blockers.FirstOrDefault();
+            if (blocker is null)
             {
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(
-                    contract.ContractNameEn))
-            {
-                throw new InvalidOperationException(
-                    "Hợp đồng song ngữ thiếu tên tiếng Anh.");
-            }
+            var isStateConflict = blocker.Code is
+                ContractApprovalReadinessCodes.ContractNotNegotiating
+                or ContractApprovalReadinessCodes.CurrentVersionLocked
+                or ContractApprovalReadinessCodes.CurrentVersionNotShared
+                or ContractApprovalReadinessCodes
+                    .ActiveCustomerAccessLinkRequired
+                or ContractApprovalReadinessCodes
+                    .OpenNegotiationCommentsExist;
 
-            if (items.Any(x =>
-                    string.IsNullOrWhiteSpace(x.ItemNameEn)))
-            {
-                throw new InvalidOperationException(
-                    "Hợp đồng song ngữ có item thiếu tên tiếng Anh.");
-            }
-
-            if (terms.Any(x =>
-                    string.IsNullOrWhiteSpace(x.TermTitleEn)))
-            {
-                throw new InvalidOperationException(
-                    "Hợp đồng song ngữ có điều khoản thiếu tiêu đề tiếng Anh.");
-            }
+            throw new BusinessRuleException(
+                isStateConflict
+                    ? StatusCodes.Status409Conflict
+                    : StatusCodes.Status400BadRequest,
+                blocker.Code,
+                blocker.Message);
         }
 
         private async Task EnsureEligibleManagerApproverAsync(

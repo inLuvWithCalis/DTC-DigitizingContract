@@ -1,7 +1,9 @@
 using System.Net;
 using System.Security.Cryptography;
 using ContractManagement.API.Common.Enums;
+using ContractManagement.API.Common.Exceptions;
 using ContractManagement.API.Domains.DTOs.Requests.Contract;
+using ContractManagement.API.Domains.DTOs.Responses.Contract;
 using ContractManagement.Common.Enums;
 using ContractManagement.Domains.Interfaces.Contract;
 using ContractManagement.Domains.Interfaces.File;
@@ -100,6 +102,103 @@ public sealed class ContractServicePhase8CSubmissionTests
         Assert.Equal(0, renderer.CallCount);
         Assert.Empty(storage.SavedKeys);
         await AssertSubmissionStateUnchangedAsync(context);
+    }
+
+    [Fact]
+    public async Task Submit_WithoutSharedCurrentVersion_IsRejectedBeforeRender()
+    {
+        await using var context = CreateContext();
+        await SeedReadyContractAsync(context, includeCustomerAccess: false);
+        var renderer = new StubRenderer();
+        var storage = new TrackingPrivateStorage();
+
+        var exception = await Assert.ThrowsAsync<BusinessRuleException>(() =>
+            CreateService(context, renderer, storage).SubmitForApprovalAsync(
+                ContractId, CreateRequest(), OwnerId));
+
+        Assert.Equal(
+            ContractApprovalReadinessCodes.CurrentVersionNotShared,
+            exception.Code);
+        Assert.Equal(0, renderer.CallCount);
+        Assert.Empty(storage.SavedKeys);
+        await AssertSubmissionStateUnchangedAsync(context);
+    }
+
+    [Fact]
+    public async Task Submit_ExpiredCurrentVersionLink_IsRejectedBeforeRender()
+    {
+        await using var context = CreateContext();
+        await SeedReadyContractAsync(context);
+        var link = await context.TblContractCustomerAccessLinks.SingleAsync();
+        link.ExpiresAt = DateTime.UtcNow.AddMinutes(-1);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var renderer = new StubRenderer();
+        var storage = new TrackingPrivateStorage();
+
+        var exception = await Assert.ThrowsAsync<BusinessRuleException>(() =>
+            CreateService(context, renderer, storage).SubmitForApprovalAsync(
+                ContractId, CreateRequest(), OwnerId));
+
+        Assert.Equal(
+            ContractApprovalReadinessCodes.ActiveCustomerAccessLinkRequired,
+            exception.Code);
+        Assert.Equal(0, renderer.CallCount);
+        Assert.Empty(storage.SavedKeys);
+        await AssertSubmissionStateUnchangedAsync(context);
+    }
+
+    [Fact]
+    public async Task Submit_WithOpenNegotiationComment_IsRejectedBeforeRender()
+    {
+        await using var context = CreateContext();
+        await SeedReadyContractAsync(context);
+        context.TblContractNegotiationComments.Add(
+            new TblContractNegotiationComment
+            {
+                CommentId = 8816,
+                ContractId = ContractId,
+                VersionId = VersionId,
+                Content = "Open customer question",
+                Source = "Customer",
+                State = (byte)ContractNegotiationCommentState.Open,
+                CreatedDate = DateTime.UtcNow,
+                RowVersion = InitialRowVersion
+            });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var renderer = new StubRenderer();
+        var storage = new TrackingPrivateStorage();
+
+        var exception = await Assert.ThrowsAsync<BusinessRuleException>(() =>
+            CreateService(context, renderer, storage).SubmitForApprovalAsync(
+                ContractId, CreateRequest(), OwnerId));
+
+        Assert.Equal(
+            ContractApprovalReadinessCodes.OpenNegotiationCommentsExist,
+            exception.Code);
+        Assert.Equal(0, renderer.CallCount);
+        Assert.Empty(storage.SavedKeys);
+        await AssertSubmissionStateUnchangedAsync(context);
+    }
+
+    [Fact]
+    public async Task GetDetail_ReturnsCurrentVersionApprovalReadiness()
+    {
+        await using var context = CreateContext();
+        await SeedReadyContractAsync(context);
+
+        var detail = await CreateService(
+                context,
+                new StubRenderer(),
+                new TrackingPrivateStorage())
+            .GetDetailAsync(ContractId, OwnerId);
+
+        Assert.True(detail.ApprovalReadiness.CanSubmit);
+        Assert.True(detail.ApprovalReadiness.HasEverBeenShared);
+        Assert.True(detail.ApprovalReadiness.HasActiveCurrentVersionLink);
+        Assert.Equal(0, detail.ApprovalReadiness.OpenCommentCount);
+        Assert.Empty(detail.ApprovalReadiness.Blockers);
     }
 
     [Fact]
@@ -305,7 +404,7 @@ public sealed class ContractServicePhase8CSubmissionTests
     private static async Task SeedReadyContractAsync(
         DbDtctechContext context,
         bool includeManager = true,
-        bool includeCustomerAccess = false)
+        bool includeCustomerAccess = true)
     {
         context.TblEmployees.Add(new TblEmployee
         {
@@ -411,6 +510,7 @@ public sealed class ContractServicePhase8CSubmissionTests
                     TokenHash = "token-hash",
                     CreatedByEmployeeId = OwnerId,
                     CreatedDate = DateTime.UtcNow,
+                    ActivatedAt = DateTime.UtcNow,
                     ExpiresAt = DateTime.UtcNow.AddDays(1),
                     RowVersion = InitialRowVersion
                 });

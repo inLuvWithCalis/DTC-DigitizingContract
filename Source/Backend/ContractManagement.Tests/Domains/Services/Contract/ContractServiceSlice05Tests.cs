@@ -213,6 +213,143 @@ public sealed class ContractServiceSlice05Tests
     }
 
     [Fact]
+    public async Task ResolveParent_ShouldResolveAllOpenDescendantsAtomically()
+    {
+        await using var context = CreateContext();
+        await SeedContractAsync(context);
+        var service = CreateService(context);
+
+        var root = await service.CreateExternalFeedbackAsync(
+            ContractId,
+            NewCommentRequest("Root thread"),
+            EmployeeId);
+        var directReply = await service.CreateExternalFeedbackAsync(
+            ContractId,
+            new CreateContractNegotiationCommentRequest
+            {
+                CurrentVersionId = VersionId,
+                ParentCommentId = root.CommentId,
+                Content = "Direct reply"
+            },
+            EmployeeId);
+        var nestedReply = await service.CreateExternalFeedbackAsync(
+            ContractId,
+            new CreateContractNegotiationCommentRequest
+            {
+                CurrentVersionId = VersionId,
+                ParentCommentId = directReply.CommentId,
+                Content = "Nested reply"
+            },
+            EmployeeId);
+        var unrelatedRoot = await service.CreateExternalFeedbackAsync(
+            ContractId,
+            NewCommentRequest("Unrelated root"),
+            EmployeeId);
+
+        await service.ResolveCommentAsync(
+            ContractId,
+            root.CommentId,
+            new UpdateContractNegotiationCommentStateRequest
+            {
+                RowVersion = root.RowVersion
+            },
+            EmployeeId);
+
+        var comments = await context.TblContractNegotiationComments
+            .AsNoTracking()
+            .ToDictionaryAsync(comment => comment.CommentId);
+
+        Assert.Equal(
+            (byte)ContractNegotiationCommentState.Resolved,
+            comments[root.CommentId].State);
+        Assert.Equal(
+            (byte)ContractNegotiationCommentState.Resolved,
+            comments[directReply.CommentId].State);
+        Assert.Equal(
+            (byte)ContractNegotiationCommentState.Resolved,
+            comments[nestedReply.CommentId].State);
+        Assert.Equal(
+            (byte)ContractNegotiationCommentState.Open,
+            comments[unrelatedRoot.CommentId].State);
+
+        var resolvedEvents = await context
+            .TblContractNegotiationCommentEvents
+            .AsNoTracking()
+            .Where(commentEvent =>
+                commentEvent.EventType ==
+                (byte)ContractNegotiationCommentEventType.Resolved)
+            .Select(commentEvent => commentEvent.CommentId)
+            .ToListAsync();
+
+        Assert.True(resolvedEvents.ToHashSet().SetEquals(
+        [
+            root.CommentId,
+            directReply.CommentId,
+            nestedReply.CommentId
+        ]));
+        Assert.Equal(
+            3,
+            await context.TblContractAudits.CountAsync(audit =>
+                audit.ActionType ==
+                ContractAuditActionTypes.NegotiationCommentResolved
+                && audit.Result == ContractAuditResults.Succeeded));
+    }
+
+    [Fact]
+    public async Task ResolveParent_ShouldHealPreviouslyResolvedParentWithOpenReply()
+    {
+        await using var context = CreateContext();
+        await SeedContractAsync(context);
+        var service = CreateService(context);
+
+        var root = await service.CreateExternalFeedbackAsync(
+            ContractId,
+            NewCommentRequest("Previously resolved root"),
+            EmployeeId);
+        var reply = await service.CreateExternalFeedbackAsync(
+            ContractId,
+            new CreateContractNegotiationCommentRequest
+            {
+                CurrentVersionId = VersionId,
+                ParentCommentId = root.CommentId,
+                Content = "Legacy open reply"
+            },
+            EmployeeId);
+
+        var storedRoot = await context.TblContractNegotiationComments
+            .SingleAsync(comment => comment.CommentId == root.CommentId);
+        storedRoot.State = (byte)ContractNegotiationCommentState.Resolved;
+        storedRoot.UpdatedDate = DateTime.UtcNow;
+        await context.SaveChangesAsync();
+
+        var result = await service.ResolveCommentAsync(
+            ContractId,
+            root.CommentId,
+            new UpdateContractNegotiationCommentStateRequest
+            {
+                RowVersion = root.RowVersion
+            },
+            EmployeeId);
+
+        Assert.Equal(
+            ContractNegotiationCommentState.Resolved,
+            result.State);
+        Assert.Equal(
+            (byte)ContractNegotiationCommentState.Resolved,
+            (await context.TblContractNegotiationComments
+                .AsNoTracking()
+                .SingleAsync(comment => comment.CommentId == reply.CommentId))
+                .State);
+        Assert.Single(await context.TblContractNegotiationCommentEvents
+            .AsNoTracking()
+            .Where(commentEvent =>
+                commentEvent.CommentId == reply.CommentId
+                && commentEvent.EventType ==
+                (byte)ContractNegotiationCommentEventType.Resolved)
+            .ToListAsync());
+    }
+
+    [Fact]
     public async Task ExternalFeedback_ShouldRejectNonNegotiableAndCrossVersionTerm()
     {
         await using var context = CreateContext();

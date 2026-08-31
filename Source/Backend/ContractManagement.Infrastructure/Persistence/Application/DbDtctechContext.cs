@@ -159,6 +159,15 @@ public partial class DbDtctechContext : DbContext
                 .HasDatabaseName(
                     "IX_tbl_ContractApprovalRequest_WorkflowId");
 
+            entity.HasIndex(x => new
+                {
+                    x.Status,
+                    x.SubmittedDate,
+                    x.ApprovalRequestId
+                })
+                .HasDatabaseName(
+                    "IX_tbl_ContractApprovalRequest_Inbox");
+
             entity.Property(x => x.Status)
                 .HasDefaultValue((byte)0);
 
@@ -193,6 +202,15 @@ public partial class DbDtctechContext : DbContext
             entity.Property(e => e.ObjectType)
                 .HasMaxLength(50)
                 .IsUnicode(false);
+
+            entity.HasIndex(e => new
+                {
+                    e.ObjectType,
+                    e.ObjectId,
+                    e.ActionDate,
+                    e.ApprovalHistoryId
+                })
+                .HasDatabaseName("IX_tbl_ApprovalHistory_ObjectTimeline");
         });
 
         modelBuilder.Entity<TblApprovalWorkflow>(entity =>
@@ -400,7 +418,8 @@ public partial class DbDtctechContext : DbContext
                     "([SubjectType] IS NULL AND [SubjectId] IS NULL) OR " +
                     "([SubjectType] IN ('Contract', 'ContractVersion', " +
                     "'NegotiationComment', 'CustomerAccessLink', " +
-                    "'CustomerOtpChallenge', 'CustomerAccessSession') " +
+                    "'CustomerOtpChallenge', 'CustomerAccessSession', " +
+                    "'ApprovalRequest') " +
                     "AND [SubjectId] > 0)");
 
                 table.HasCheckConstraint(

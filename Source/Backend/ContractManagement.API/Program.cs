@@ -281,6 +281,10 @@ builder.Services.AddScoped<
     ContractService>();
 
 builder.Services.AddScoped<
+    IContractApprovalService,
+    ContractApprovalService>();
+
+builder.Services.AddScoped<
     ICustomerContractAccessService,
     CustomerContractAccessService>();
 

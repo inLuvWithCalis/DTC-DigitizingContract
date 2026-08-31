@@ -124,7 +124,31 @@ public sealed class Slice04ResourceAuthorizationTests
                 FileName = "template.docx",
                 FilePath = "/uploads/tenant/ContractTemplateVersion/500/template.docx",
                 UploadedDate = DateTime.UtcNow
+            },
+            new TblFileStorage
+            {
+                FileId = 3,
+                ObjectType = "ContractVersionArtifact",
+                ObjectId = 600,
+                FileName = "submitted.pdf",
+                FilePath = string.Empty,
+                StorageKey = "tenant/ContractVersionArtifact/600/submitted.pdf",
+                TenantCode = "tenant",
+                UploadedDate = DateTime.UtcNow
             });
+        context.TblContractVersions.Add(new TblContractVersion
+        {
+            VersionId = 600,
+            ContractId = ContractId,
+            VersionNo = 1,
+            CurrencyCode = "VND",
+            SnapshotJson = "{\"schemaVersion\":4}",
+            SnapshotHash = new string('a', 64),
+            IsLocked = true,
+            CreatedEmployeeId = ResponsibleEmployeeId,
+            CreatedDate = DateTime.UtcNow,
+            RowVersion = [6, 0, 0, 0, 0, 0, 0, 0]
+        });
         context.TblContractTemplateVersions.Add(new TblContractTemplateVersion
         {
             TemplateVersionId = 500,
@@ -146,15 +170,25 @@ public sealed class Slice04ResourceAuthorizationTests
         await service.EnsureCanReadFileAsync(1, ManagerEmployeeId);
         await service.EnsureCanDeleteFileAsync(1, ResponsibleEmployeeId);
         await service.EnsureCanReadFileAsync(2, AdminOfficerEmployeeId);
+        await service.EnsureCanReadFileAsync(3, ResponsibleEmployeeId);
+        await service.EnsureCanReadFileAsync(3, ManagerEmployeeId);
 
         var deniedContractRead = await Assert.ThrowsAsync<RbacOperationException>(
             () => service.EnsureCanReadFileAsync(1, OtherEmployeeId));
         var deniedTemplateRead = await Assert.ThrowsAsync<RbacOperationException>(
             () => service.EnsureCanReadFileAsync(2, ManagerEmployeeId));
+        var deniedArtifactRead = await Assert.ThrowsAsync<RbacOperationException>(
+            () => service.EnsureCanReadFileAsync(3, OtherEmployeeId));
+        var deniedArtifactDelete = await Assert.ThrowsAsync<RbacOperationException>(
+            () => service.EnsureCanDeleteFileAsync(3, ResponsibleEmployeeId));
 
         Assert.Equal(AuthorizationErrorCodes.ResourceNotFound, deniedContractRead.Code);
         Assert.Equal(StatusCodes.Status403Forbidden, deniedTemplateRead.StatusCode);
         Assert.Equal(AuthorizationErrorCodes.PermissionDenied, deniedTemplateRead.Code);
+        Assert.Equal(StatusCodes.Status404NotFound, deniedArtifactRead.StatusCode);
+        Assert.Equal(AuthorizationErrorCodes.ResourceNotFound, deniedArtifactRead.Code);
+        Assert.Equal(StatusCodes.Status403Forbidden, deniedArtifactDelete.StatusCode);
+        Assert.Equal(AuthorizationErrorCodes.PermissionDenied, deniedArtifactDelete.Code);
     }
 
     [Fact]

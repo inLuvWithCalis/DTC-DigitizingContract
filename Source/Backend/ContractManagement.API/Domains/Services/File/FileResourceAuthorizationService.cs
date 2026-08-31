@@ -15,6 +15,8 @@ public sealed class FileResourceAuthorizationService
     : IFileResourceAuthorizationService
 {
     private const string ContractObjectType = "Contract";
+    private const string ContractVersionArtifactObjectType =
+        "ContractVersionArtifact";
     private const string ContractTemplateVersionObjectType =
         "ContractTemplateVersion";
     private const string ContractTemplatePreviewObjectType =
@@ -110,6 +112,33 @@ public sealed class FileResourceAuthorizationService
                         objectId, employeeId, cancellationToken);
                 }
 
+                return;
+
+            case ContractVersionArtifactObjectType:
+                // Submitted artifacts are immutable. Generic upload/delete must
+                // never be able to replace the legal document that was approved.
+                if (isWrite)
+                {
+                    throw new RbacOperationException(
+                        StatusCodes.Status403Forbidden,
+                        AuthorizationErrorCodes.PermissionDenied,
+                        "Submitted contract artifacts are immutable.");
+                }
+
+                var contractId = await _dbContext.TblContractVersions
+                    .AsNoTracking()
+                    .Where(version => version.VersionId == objectId)
+                    .Select(version => (int?)version.ContractId)
+                    .SingleOrDefaultAsync(cancellationToken);
+                if (!contractId.HasValue)
+                {
+                    throw ResourceNotFound();
+                }
+
+                await _contractAuthorization.EnsureCanReadAsync(
+                    contractId.Value,
+                    employeeId,
+                    cancellationToken);
                 return;
 
             case ContractTemplateVersionObjectType:

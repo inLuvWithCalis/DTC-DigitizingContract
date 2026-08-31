@@ -106,7 +106,6 @@ namespace ContractManagement.Tests.Domains.Policies.Contract
 
         [Theory]
         [InlineData(ContractStatus.Completed)]
-        [InlineData(ContractStatus.Rejected)]
         [InlineData(ContractStatus.Cancelled)]
         public void IsTerminal_ShouldReturnTrue_ForTerminalStatus(
             ContractStatus status)
@@ -115,6 +114,20 @@ namespace ContractManagement.Tests.Domains.Policies.Contract
                 ContractLifecyclePolicy.IsTerminal(status);
 
             Assert.True(result);
+        }
+
+        [Fact]
+        public void Rejected_IsLockedButCanStartANewVersion()
+        {
+            Assert.False(ContractLifecyclePolicy.IsTerminal(
+                ContractStatus.Rejected));
+            Assert.True(ContractLifecyclePolicy.IsContentLocked(
+                ContractStatus.Rejected));
+            Assert.True(ContractLifecyclePolicy.CanCreateVersion(
+                ContractStatus.Rejected));
+            Assert.True(ContractLifecyclePolicy.CanTransition(
+                ContractStatus.Rejected,
+                ContractStatus.Negotiating));
         }
     }
 }

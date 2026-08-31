@@ -4,16 +4,19 @@ using ContractManagement.Infrastructure.Persistence.Application;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace ContractManagement.Migrations
+namespace ContractManagement.Infrastructure.Migrations.Application
 {
     [DbContext(typeof(DbDtctechContext))]
-    partial class DbDtctechContextModelSnapshot : ModelSnapshot
+    [Migration("20260831032028_Phase8DInternalApprovalWorkflow")]
+    partial class Phase8DInternalApprovalWorkflow
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -720,7 +723,7 @@ namespace ContractManagement.Migrations
 
                             t.HasCheckConstraint("CK_tbl_ContractAudit_Result", "LEN(LTRIM(RTRIM([Result]))) > 0");
 
-                            t.HasCheckConstraint("CK_tbl_ContractAudit_Subject", "([SubjectType] IS NULL AND [SubjectId] IS NULL) OR ([SubjectType] IN ('Contract', 'ContractVersion', 'NegotiationComment', 'CustomerAccessLink', 'CustomerOtpChallenge', 'CustomerAccessSession', 'ApprovalRequest') AND [SubjectId] > 0)");
+                            t.HasCheckConstraint("CK_tbl_ContractAudit_Subject", "([SubjectType] IS NULL AND [SubjectId] IS NULL) OR ([SubjectType] IN ('Contract', 'ContractVersion', 'NegotiationComment', 'CustomerAccessLink', 'CustomerOtpChallenge', 'CustomerAccessSession') AND [SubjectId] > 0)");
 
                             t.HasCheckConstraint("CK_tbl_ContractAudit_TenantId", "[TenantId] > 0");
 

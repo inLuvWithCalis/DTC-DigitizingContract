@@ -19,15 +19,18 @@ namespace ContractManagement.Domains.Services.File
         private readonly DbDtctechContext _dbContext;
         private readonly IWebHostEnvironment _environment;
         private readonly ICurrentTenant _currentTenant;
+        private readonly IPrivateFileStorage _privateFileStorage;
 
         public FileStorageService(
             DbDtctechContext dbContext,
             IWebHostEnvironment environment,
-            ICurrentTenant currentTenant)
+            ICurrentTenant currentTenant,
+            IPrivateFileStorage privateFileStorage)
         {
             _dbContext = dbContext;
             _environment = environment;
             _currentTenant = currentTenant;
+            _privateFileStorage = privateFileStorage;
         }
 
         public async Task<FileStorageResponse> UploadAsync(
@@ -146,6 +149,15 @@ namespace ContractManagement.Domains.Services.File
             if (file == null)
             {
                 return null;
+            }
+
+            if (!string.IsNullOrWhiteSpace(file.StorageKey)
+                && !string.IsNullOrWhiteSpace(file.TenantCode))
+            {
+                var privateStream = await _privateFileStorage.OpenReadAsync(
+                    file.TenantCode,
+                    file.StorageKey);
+                return (privateStream, file.FileName ?? "download-file");
             }
 
             if (string.IsNullOrWhiteSpace(file.FilePath))

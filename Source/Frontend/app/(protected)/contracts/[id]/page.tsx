@@ -12,6 +12,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Clock,
+  ClipboardCheck,
   Download,
   Eye,
   FileSignature,
@@ -70,11 +71,13 @@ import { ContractDocuments } from "@/components/contracts/contract-attachments";
 import { ContractClosing } from "@/components/contracts/contract-closing";
 import { ContractAuditLog } from "@/components/contracts/contract-audit-log";
 import { TransferResponsibilityModal } from "@/components/contracts/transfer-responsibility-modal";
+import { ContractApprovalPanel } from "@/components/contracts/contract-approval-panel";
 
 const CONTRACT_TABS = [
   "overview",
   "terms",
   "negotiation",
+  "approval",
   "signature",
   "documents",
   "closing",
@@ -882,6 +885,7 @@ export default function ContractDetailPage() {
             <TabsTrigger value="overview">Tổng quan</TabsTrigger>
             <TabsTrigger value="negotiation">Vòng đàm phán</TabsTrigger>
             <TabsTrigger value="terms">Điều khoản - Trao đổi</TabsTrigger>
+            <TabsTrigger value="approval">Phê duyệt</TabsTrigger>
             <TabsTrigger value="signature">Truy cập khách hàng</TabsTrigger>
             <TabsTrigger value="documents">Chứng từ</TabsTrigger>
             <TabsTrigger value="closing">Đóng hợp đồng</TabsTrigger>
@@ -916,6 +920,14 @@ export default function ContractDetailPage() {
               onNegotiationRoundCreated={() =>
                 handleCustomerAccessLinkChange(null)
               }
+            />
+          </TabsContent>
+
+          <TabsContent value="approval">
+            <ContractApprovalPanel
+              contract={contract}
+              canManage={canManageContract}
+              onContractRefetch={() => fetchContractDetail(false)}
             />
           </TabsContent>
 

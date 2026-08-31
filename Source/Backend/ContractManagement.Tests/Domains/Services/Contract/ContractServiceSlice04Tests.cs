@@ -336,6 +336,60 @@ public sealed class ContractServiceSlice04Tests
         Assert.Equal(ContractAuditFailureCodes.StaleRowVersion, audit.FailureCode);
     }
 
+    [Theory]
+    [InlineData(ApprovalRequestStatus.Returned, ContractStatus.Negotiating)]
+    [InlineData(ApprovalRequestStatus.Withdrawn, ContractStatus.Negotiating)]
+    [InlineData(ApprovalRequestStatus.Rejected, ContractStatus.Rejected)]
+    public async Task NegotiationRound_AfterApprovalDecision_BranchesLockedVersion(
+        ApprovalRequestStatus approvalStatus,
+        ContractStatus contractStatus)
+    {
+        await using var context = CreateContext();
+        var sourceVersionId = await SeedNegotiatingContractAsync(context);
+        var contract = await context.TblContracts.SingleAsync();
+        var source = await context.TblContractVersions.SingleAsync();
+        contract.Status = (byte)contractStatus;
+        source.IsLocked = true;
+        source.LockedDate = DateTime.UtcNow.AddMinutes(-5);
+        source.LockedByEmployeeId = EmployeeId;
+        source.SnapshotJson = "{\"schemaVersion\":4}";
+        source.SnapshotHash = new string('a', 64);
+        context.TblContractApprovalRequests.Add(
+            new TblContractApprovalRequest
+            {
+                ApprovalRequestId = 700,
+                ContractId = contract.ContractId,
+                VersionId = source.VersionId,
+                Status = (byte)approvalStatus,
+                SubmittedByEmployeeId = EmployeeId,
+                SubmittedDate = DateTime.UtcNow.AddMinutes(-10),
+                ResolvedByEmployeeId = OtherEmployeeId,
+                ResolvedDate = DateTime.UtcNow.AddMinutes(-5),
+                RowVersion = InitialRowVersion()
+            });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var response = await CreateService(context)
+            .CreateNegotiationRoundAsync(
+                contract.ContractId,
+                CreateRoundRequest(sourceVersionId),
+                EmployeeId);
+
+        var persistedSource = await context.TblContractVersions
+            .AsNoTracking()
+            .SingleAsync(version => version.VersionId == sourceVersionId);
+        var persistedContract = await context.TblContracts
+            .AsNoTracking()
+            .SingleAsync();
+        Assert.True(persistedSource.IsLocked);
+        Assert.Equal("{\"schemaVersion\":4}", persistedSource.SnapshotJson);
+        Assert.False(response.CurrentVersion.IsLocked);
+        Assert.Equal(ContractStatus.Negotiating, response.Status);
+        Assert.Equal((byte)ContractStatus.Negotiating, persistedContract.Status);
+        Assert.Equal(sourceVersionId, response.CurrentVersion.SourceVersionId);
+    }
+
     private static DbDtctechContext CreateContext()
     {
         var options =

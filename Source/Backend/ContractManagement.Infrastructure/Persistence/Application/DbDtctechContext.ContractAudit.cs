@@ -451,7 +451,8 @@ public partial class DbDtctechContext
                         or "NegotiationComment"
                         or "CustomerAccessLink"
                         or "CustomerOtpChallenge"
-                        or "CustomerAccessSession"))))
+                        or "CustomerAccessSession"
+                        or "ApprovalRequest"))))
         {
             throw new InvalidOperationException(
                 "Contract audit subject phải nhất quán và hợp lệ.");

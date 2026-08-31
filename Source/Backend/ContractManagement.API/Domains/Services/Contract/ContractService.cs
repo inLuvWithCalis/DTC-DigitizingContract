@@ -2266,11 +2266,14 @@ namespace ContractManagement.Domains.Services.Contract
                                 "Hợp đồng legacy không hỗ trợ tạo vòng đàm phán.");
                         }
 
-                        if ((ContractStatus)contract.Status !=
-                            ContractStatus.Negotiating)
+                        var previousContractStatus =
+                            (ContractStatus)contract.Status;
+                        if (previousContractStatus is not (
+                                ContractStatus.Negotiating
+                                or ContractStatus.Rejected))
                         {
                             throw new InvalidOperationException(
-                                "Chỉ Contract đang Negotiating mới được tạo vòng đàm phán mới.");
+                                "Chỉ Contract đang Negotiating hoặc vừa bị Reject mới được tạo version mới.");
                         }
 
                         if (!contract.CurrentVersionId.HasValue
@@ -2302,10 +2305,34 @@ namespace ContractManagement.Domains.Services.Contract
                                 "Không tìm thấy version hiện hành.");
                         }
 
-                        if (sourceVersion.IsLocked)
+                        var sourceWasLocked = sourceVersion.IsLocked;
+                        if (sourceWasLocked)
                         {
-                            throw new InvalidOperationException(
-                                "Version nguồn đã bị khóa.");
+                            var latestApprovalStatus = await _dbContext
+                                .TblContractApprovalRequests
+                                .AsNoTracking()
+                                .Where(approval =>
+                                    approval.ContractId == contract.ContractId
+                                    && approval.VersionId == sourceVersion.VersionId)
+                                .OrderByDescending(approval =>
+                                    approval.SubmittedDate)
+                                .ThenByDescending(approval =>
+                                    approval.ApprovalRequestId)
+                                .Select(approval => (byte?)approval.Status)
+                                .FirstOrDefaultAsync();
+
+                            var canBranchFromApproval =
+                                previousContractStatus == ContractStatus.Rejected
+                                    ? latestApprovalStatus ==
+                                        (byte)ApprovalRequestStatus.Rejected
+                                    : latestApprovalStatus is
+                                        (byte)ApprovalRequestStatus.Returned
+                                        or (byte)ApprovalRequestStatus.Withdrawn;
+                            if (!canBranchFromApproval)
+                            {
+                                throw new InvalidOperationException(
+                                    "Version đã khóa chỉ được dùng làm nguồn sau Return, Withdraw hoặc Reject.");
+                            }
                         }
 
                         EnsureRowVersionMatches(
@@ -2316,24 +2343,6 @@ namespace ContractManagement.Domains.Services.Contract
                         _dbContext.Entry(sourceVersion)
                             .Property(x => x.RowVersion)
                             .OriginalValue = expectedVersionRowVersion;
-
-                        var customer = await _dbContext.TblCustomers
-                            .AsNoTracking()
-                            .FirstOrDefaultAsync(x =>
-                                x.CustomerId == contract.CustomerId);
-
-                        if (customer == null)
-                        {
-                            throw new KeyNotFoundException(
-                                "Không tìm thấy khách hàng của hợp đồng.");
-                        }
-
-                        var tenantLegalProfile = await _dbContext
-                            .TblTenantLegalProfiles
-                            .AsNoTracking()
-                            .SingleOrDefaultAsync()
-                            ?? throw new InvalidOperationException(
-                                "Hồ sơ pháp lý doanh nghiệp chưa được cấu hình.");
 
                         var sourceItems = await _dbContext.TblContractItems
                             .AsNoTracking()
@@ -2369,24 +2378,39 @@ namespace ContractManagement.Domains.Services.Contract
                                 "Version nguồn phải có item và điều khoản.");
                         }
 
-                        var snapshotJson =
-                            SoftwareSupplyContractSnapshotFactory.Serialize(
-                                SoftwareSupplyContractSnapshotFactory.Create(
-                                    tenantLegalProfile,
-                                    customer,
-                                    contract,
-                                    sourceVersion,
-                                    sourceItems,
-                                    sourceTerms));
-
                         var now = DateTime.UtcNow;
 
-                        sourceVersion.SnapshotJson = snapshotJson;
-                        sourceVersion.SnapshotHash =
-                            CalculateSnapshotHash(snapshotJson);
-                        sourceVersion.IsLocked = true;
-                        sourceVersion.LockedDate = now;
-                        sourceVersion.LockedByEmployeeId = employeeId;
+                        if (!sourceWasLocked)
+                        {
+                            var customer = await _dbContext.TblCustomers
+                                .AsNoTracking()
+                                .FirstOrDefaultAsync(x =>
+                                    x.CustomerId == contract.CustomerId)
+                                ?? throw new KeyNotFoundException(
+                                    "Không tìm thấy khách hàng của hợp đồng.");
+                            var tenantLegalProfile = await _dbContext
+                                .TblTenantLegalProfiles
+                                .AsNoTracking()
+                                .SingleOrDefaultAsync()
+                                ?? throw new InvalidOperationException(
+                                    "Hồ sơ pháp lý doanh nghiệp chưa được cấu hình.");
+                            var snapshotJson =
+                                SoftwareSupplyContractSnapshotFactory.Serialize(
+                                    SoftwareSupplyContractSnapshotFactory.Create(
+                                        tenantLegalProfile,
+                                        customer,
+                                        contract,
+                                        sourceVersion,
+                                        sourceItems,
+                                        sourceTerms));
+
+                            sourceVersion.SnapshotJson = snapshotJson;
+                            sourceVersion.SnapshotHash =
+                                CalculateSnapshotHash(snapshotJson);
+                            sourceVersion.IsLocked = true;
+                            sourceVersion.LockedDate = now;
+                            sourceVersion.LockedByEmployeeId = employeeId;
+                        }
 
                         var newVersion = new TblContractVersion
                         {
@@ -2498,6 +2522,13 @@ namespace ContractManagement.Domains.Services.Contract
                                 now);
 
                         contract.CurrentVersionId = newVersion.VersionId;
+                        if (previousContractStatus == ContractStatus.Rejected)
+                        {
+                            ContractLifecyclePolicy.EnsureCanTransition(
+                                previousContractStatus,
+                                ContractStatus.Negotiating);
+                            contract.Status = (byte)ContractStatus.Negotiating;
+                        }
                         contract.UpdatedEmployeeId = employeeId;
                         contract.UpdateDate = now;
 
@@ -2539,7 +2570,8 @@ namespace ContractManagement.Domains.Services.Contract
                                 .NegotiationRoundCreated,
                             ContractAuditResults.Succeeded,
                             now,
-                            PreviousContractStatus: contract.Status,
+                            PreviousContractStatus:
+                                (byte)previousContractStatus,
                             NewContractStatus: contract.Status,
                             Reason: changeNote,
                             SubjectType: ContractAuditSubjectTypes.ContractVersion,
@@ -2547,7 +2579,7 @@ namespace ContractManagement.Domains.Services.Contract
                             PreviousValues: ContractAuditValues.Create(
                                 ("SourceVersionId", sourceVersion.VersionId),
                                 ("CurrentVersionId", sourceVersion.VersionId),
-                                ("SourceVersionLocked", false),
+                                ("SourceVersionLocked", sourceWasLocked),
                                 ("ItemCount", sourceItems.Count),
                                 ("TermCount", sourceTerms.Count),
                                 ("CarriedForwardThreadCount", 0),

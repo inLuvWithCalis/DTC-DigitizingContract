@@ -95,13 +95,18 @@ namespace ContractManagement.API.Domains.Policies.Contract
                     ContractStatus.Completed
                 },
 
-                /*
-                 * Completed, Cancelled và Rejected là terminal state,
-                 * không được chuyển tiếp sang trạng thái khác.
-                 */
+                // Completed và Cancelled là terminal state.
                 [ContractStatus.Completed] = new(),
                 [ContractStatus.Cancelled] = new(),
                 [ContractStatus.Rejected] = new()
+                {
+                    /*
+                     * Reject kết thúc version đã duyệt, không buộc phải xóa
+                     * toàn bộ Contract. Owner chỉ được tiếp tục bằng cách tạo
+                     * một version mới bất biến từ version bị Reject.
+                     */
+                    ContractStatus.Negotiating
+                }
             };
 
         /// <summary>
@@ -157,13 +162,15 @@ namespace ContractManagement.API.Domains.Policies.Contract
         }
 
         /// <summary>
-        /// Chỉ được tạo version mới trong giai đoạn còn cho phép sửa.
+        /// Tạo version mới khi đang soạn thảo/đàm phán hoặc khi cần làm lại
+        /// một version đã bị từ chối. Version Rejected vẫn không được sửa.
         /// </summary>
         public static bool CanCreateVersion(ContractStatus status)
         {
             return status is
                 ContractStatus.Draft or
-                ContractStatus.Negotiating;
+                ContractStatus.Negotiating or
+                ContractStatus.Rejected;
         }
 
         /// <summary>
@@ -173,8 +180,7 @@ namespace ContractManagement.API.Domains.Policies.Contract
         {
             return status is
                 ContractStatus.Completed or
-                ContractStatus.Cancelled or
-                ContractStatus.Rejected;
+                ContractStatus.Cancelled;
         }
     }
 }

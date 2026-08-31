@@ -88,12 +88,16 @@ export function ContractNegotiation({
   const [historyPage, setHistoryPage] = useState(1);
 
   const currentVersion = contract.currentVersion;
+  const canBranchFromApprovalDecision =
+    contract.status === ContractStatus.Negotiating ||
+    contract.status === ContractStatus.Rejected;
   const canCreateRound =
-    canManage &&
-    contract.status === ContractStatus.Negotiating &&
-    !currentVersion.isLocked;
+    canManage && canBranchFromApprovalDecision;
   const loadVersionHistory = useCallback(async () => {
-    if (contract.status !== ContractStatus.Negotiating) {
+    if (
+      contract.status !== ContractStatus.Negotiating &&
+      contract.status !== ContractStatus.Rejected
+    ) {
       setVersionHistory([]);
       setSelectedVersion(null);
       return;
@@ -336,7 +340,7 @@ export function ContractNegotiation({
             )}
           </div>
 
-          {contract.status === ContractStatus.Negotiating && (
+          {canBranchFromApprovalDecision && (
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -585,9 +589,9 @@ export function ContractNegotiation({
           <DialogHeader>
             <DialogTitle>Tạo vòng đàm phán mới</DialogTitle>
             <DialogDescription>
-              Phiên bản {currentVersion.versionNo} sẽ được khóa và sao lưu. Hệ
-              thống sau đó tạo phiên bản {currentVersion.versionNo + 1} để bạn
-              tiếp tục chỉnh sửa.
+              {currentVersion.isLocked
+                ? `Phiên bản ${currentVersion.versionNo} vẫn được giữ nguyên và hệ thống sẽ tạo phiên bản ${currentVersion.versionNo + 1} để bạn chỉnh sửa.`
+                : `Phiên bản ${currentVersion.versionNo} sẽ được khóa và sao lưu. Hệ thống sau đó tạo phiên bản ${currentVersion.versionNo + 1} để bạn tiếp tục chỉnh sửa.`}
             </DialogDescription>
           </DialogHeader>
 

@@ -102,13 +102,10 @@ function mapAttachment(
 ): ContractAttachmentItem {
   return {
     id: attachment.attachmentId,
-    name:
-      attachment.contractFileName ||
-      `Tài liệu #${attachment.attachmentId}`,
+    name: attachment.contractFileName || `Tài liệu #${attachment.attachmentId}`,
     documentType: attachment.documentType,
     documentTypeName:
-      documentTypeLabel(attachment.documentType) ||
-      attachment.documentTypeName,
+      documentTypeLabel(attachment.documentType) || attachment.documentTypeName,
     uploadedAt: attachment.uploadDate,
     uploadedBy: attachment.uploadEmployeeId
       ? `Nhân viên #${attachment.uploadEmployeeId}`
@@ -273,7 +270,7 @@ export function ContractAttachments({
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden gap-0">
         <CardHeader className="border-b">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -307,9 +304,7 @@ export function ContractAttachments({
                 <FileText className="size-7" />
               </div>
               <p className="mt-4 font-semibold">Không thể tải chứng từ</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {loadError}
-              </p>
+              <p className="mt-1 text-sm text-muted-foreground">{loadError}</p>
               <Button
                 variant="outline"
                 className="mt-5"
@@ -375,7 +370,7 @@ export function ContractAttachments({
                           )}
                         </div>
                         <Badge variant="secondary" className="mt-2 font-normal">
-                          {attachment.documentTypeName}
+                          {documentTypeLabel(attachment.documentType)}
                         </Badge>
                       </div>
                     </div>
@@ -436,10 +431,7 @@ export function ContractAttachments({
             }`}
             onClick={() => canManage && inputRef.current?.click()}
             onKeyDown={(event) => {
-              if (
-                canManage &&
-                (event.key === "Enter" || event.key === " ")
-              ) {
+              if (canManage && (event.key === "Enter" || event.key === " ")) {
                 inputRef.current?.click();
               }
             }}

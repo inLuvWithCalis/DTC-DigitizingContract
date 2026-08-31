@@ -73,6 +73,10 @@ const PERMISSION_METADATA: Record<string, { title: string; category: string }> =
       title: "Quản lý hợp đồng cá nhân",
       category: "Hợp đồng",
     },
+    [RBAC_PERMISSIONS.contractApprovalDecide]: {
+      title: "Xử lý phê duyệt hợp đồng",
+      category: "Hợp đồng",
+    },
     [RBAC_PERMISSIONS.contractSupport]: {
       title: "Hỗ trợ xử lý hợp đồng",
       category: "Hợp đồng",

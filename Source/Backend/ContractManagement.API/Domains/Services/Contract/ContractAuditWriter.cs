@@ -25,7 +25,8 @@ public sealed class ContractAuditWriter : IContractAuditWriter
         ContractAuditSubjectTypes.NegotiationComment,
         ContractAuditSubjectTypes.CustomerAccessLink,
         ContractAuditSubjectTypes.CustomerOtpChallenge,
-        ContractAuditSubjectTypes.CustomerAccessSession
+        ContractAuditSubjectTypes.CustomerAccessSession,
+        ContractAuditSubjectTypes.ApprovalRequest
     ];
 
     /*
@@ -42,6 +43,10 @@ public sealed class ContractAuditWriter : IContractAuditWriter
             [ContractAuditActionTypes.ResponsibilityTransferred] = ContractFields(),
             [ContractAuditActionTypes.DraftUpdated] = ContractFields(),
             [ContractAuditActionTypes.ApprovalSubmitted] = ApprovalFields(),
+            [ContractAuditActionTypes.ApprovalApproved] = ApprovalFields(),
+            [ContractAuditActionTypes.ApprovalReturned] = ApprovalFields(),
+            [ContractAuditActionTypes.ApprovalRejected] = ApprovalFields(),
+            [ContractAuditActionTypes.ApprovalWithdrawn] = ApprovalFields(),
             [ContractAuditActionTypes.ContractAttachmentUploaded] =
                 AttachmentFields(),
             [ContractAuditActionTypes.ContractAttachmentDeleted] =
@@ -330,7 +335,7 @@ public sealed class ContractAuditWriter : IContractAuditWriter
         "ApprovalStatus", "WorkflowId", "SnapshotSchemaVersion",
         "TemplateVersionId", "SnapshotHash", "DocxFileId", "DocxHash",
         "PdfFileId", "PdfHash", "ArtifactCount", "InvalidatedLinkCount",
-        "RevokedSessionCount");
+        "RevokedSessionCount", "ResolvedByEmployeeId");
 
     private static HashSet<string> AttachmentFields() => Fields(
         "AttachmentId", "FileId", "FileName", "DocumentType", "UploadDate");

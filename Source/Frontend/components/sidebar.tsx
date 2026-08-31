@@ -7,6 +7,7 @@ import {
   BriefcaseBusiness,
   Building2,
   ChevronLeft,
+  ClipboardCheck,
   FileBadge,
   FileSignature,
   FileText,
@@ -57,6 +58,12 @@ const navItems: NavItem[] = [
       RBAC_PERMISSIONS.contractReadOwn,
       RBAC_PERMISSIONS.contractReadTenant,
     ],
+  },
+  {
+    label: "Phê duyệt hợp đồng",
+    icon: ClipboardCheck,
+    href: "/contract-approvals",
+    requiredPermissions: [RBAC_PERMISSIONS.contractApprovalDecide],
   },
   {
     label: "Mẫu hợp đồng",

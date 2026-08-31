@@ -221,7 +221,11 @@ export function ContractNegotiation({
       setSelectedVersionId(updatedContract.currentVersion.versionId);
       setContract(updatedContract);
       toast.success(
-        `Đã khóa phiên bản ${result.sourceVersion.versionNo} và tạo phiên bản ${result.currentVersion.versionNo}.`,
+        `Đã khóa phiên bản ${result.sourceVersion.versionNo} và tạo phiên bản ${result.currentVersion.versionNo}.${
+          result.carriedForwardThreadCount > 0
+            ? ` Đã chuyển tiếp ${result.carriedForwardThreadCount} luồng trao đổi còn mở (${result.carriedForwardCommentCount} bình luận).`
+            : ""
+        }`,
       );
     } catch (error: any) {
       console.error("Lỗi tạo vòng đàm phán:", error);
@@ -592,9 +596,10 @@ export function ContractNegotiation({
               <FileLock2 className="size-4" />
               <AlertTitle>Ảnh hưởng sau khi tạo vòng mới</AlertTitle>
               <AlertDescription>
-                Comment của version hiện tại chỉ còn trong lịch sử. Link và
-                phiên truy cập khách hàng hiện tại sẽ mất hiệu lực; sau khi sửa
-                version mới, bạn cần tạo link khác để gửi khách hàng.
+                Các luồng trao đổi còn mở sẽ được chuyển sang version mới để
+                tiếp tục xử lý; các luồng đã đóng chỉ còn trong lịch sử. Link
+                và phiên truy cập khách hàng hiện tại sẽ mất hiệu lực; sau khi
+                sửa version mới, bạn cần tạo link khác để gửi khách hàng.
               </AlertDescription>
             </Alert>
 

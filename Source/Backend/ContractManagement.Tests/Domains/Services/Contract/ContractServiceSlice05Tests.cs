@@ -516,18 +516,49 @@ public sealed class ContractServiceSlice05Tests
     }
 
     [Fact]
-    public async Task VersionHistory_ShouldKeepSourceCommentsAndNotCopyThemToNewRound()
+    public async Task VersionHistory_ShouldCarryOpenThreadsAndPreserveSourceHistory()
     {
         await using var context = CreateContext();
         await SeedContractAsync(context, includeItem: true);
         var service = CreateService(context);
 
-        await service.CreateExternalFeedbackAsync(
+        var openRoot = await service.CreateExternalFeedbackAsync(
             ContractId,
             new CreateContractNegotiationCommentRequest
             {
                 CurrentVersionId = VersionId,
-                Content = "Source comment"
+                TermId = NegotiableTermId,
+                Content = "Open source thread"
+            },
+            EmployeeId);
+        var resolvedReply = await service.CreateExternalFeedbackAsync(
+            ContractId,
+            new CreateContractNegotiationCommentRequest
+            {
+                CurrentVersionId = VersionId,
+                ParentCommentId = openRoot.CommentId,
+                Content = "Resolved reply kept as context"
+            },
+            EmployeeId);
+        await service.ResolveCommentAsync(
+            ContractId,
+            resolvedReply.CommentId,
+            new UpdateContractNegotiationCommentStateRequest
+            {
+                RowVersion = resolvedReply.RowVersion
+            },
+            EmployeeId);
+
+        var closedRoot = await service.CreateExternalFeedbackAsync(
+            ContractId,
+            NewCommentRequest("Closed source thread"),
+            EmployeeId);
+        await service.ResolveCommentAsync(
+            ContractId,
+            closedRoot.CommentId,
+            new UpdateContractNegotiationCommentStateRequest
+            {
+                RowVersion = closedRoot.RowVersion
             },
             EmployeeId);
 
@@ -561,10 +592,52 @@ public sealed class ContractServiceSlice05Tests
             EmployeeId);
 
         Assert.Equal(2, history.Count);
-        Assert.Single(source.Comments);
-        Assert.Empty(current.Comments);
+        Assert.Equal(1, round.CarriedForwardThreadCount);
+        Assert.Equal(2, round.CarriedForwardCommentCount);
+        Assert.Equal(3, source.Comments.Count);
+        Assert.Equal(2, current.Comments.Count);
         Assert.True(source.IsLocked);
         Assert.False(current.IsLocked);
+
+        var copiedRoot = Assert.Single(current.Comments, comment =>
+            comment.Content == openRoot.Content);
+        var copiedReply = Assert.Single(current.Comments, comment =>
+            comment.Content == resolvedReply.Content);
+        var copiedNegotiableTerm = Assert.Single(current.Terms, term =>
+            term.TermCode == "NEGOTIABLE");
+
+        Assert.NotEqual(openRoot.CommentId, copiedRoot.CommentId);
+        Assert.Equal(openRoot.CommentId,
+            copiedRoot.CarriedForwardFromCommentId);
+        Assert.Equal(VersionId,
+            copiedRoot.CarriedForwardFromVersionId);
+        Assert.Equal(1, copiedRoot.CarriedForwardFromVersionNo);
+        Assert.Equal(copiedNegotiableTerm.TermId, copiedRoot.TermId);
+        Assert.Equal(copiedRoot.CommentId, copiedReply.ParentCommentId);
+        Assert.Equal(resolvedReply.CommentId,
+            copiedReply.CarriedForwardFromCommentId);
+        Assert.Equal(ContractNegotiationCommentState.Open, copiedRoot.State);
+        Assert.Equal(
+            ContractNegotiationCommentState.Resolved,
+            copiedReply.State);
+        Assert.DoesNotContain(current.Comments, comment =>
+            comment.Content == closedRoot.Content);
+        Assert.All(current.Comments, comment =>
+        {
+            var carriedEvent = Assert.Single(comment.Events);
+            Assert.Equal(
+                ContractNegotiationCommentEventType.CarriedForward,
+                carriedEvent.EventType);
+        });
+
+        var detail = await service.GetDetailAsync(ContractId, EmployeeId);
+        Assert.Equal(1, detail.ApprovalReadiness.OpenCommentCount);
+        Assert.False(detail.ApprovalReadiness.CanSubmit);
+        Assert.Equal(
+            2,
+            await context.TblContractAudits.CountAsync(audit =>
+                audit.ActionType == ContractAuditActionTypes
+                    .NegotiationCommentCarriedForward));
 
         await Assert.ThrowsAsync<KeyNotFoundException>(
             () => service.GetVersionHistoryAsync(

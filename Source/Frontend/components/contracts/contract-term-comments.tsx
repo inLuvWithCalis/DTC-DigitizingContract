@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  GitBranch,
   Loader2,
   MessageSquareText,
   Reply,
@@ -252,6 +253,28 @@ export function ContractTermComments({
       ? "Khách hàng"
       : comment.recordedByDisplayName?.trim() ||
           `Nhân viên #${comment.recordedByEmployeeId}`;
+  };
+
+  const renderCarryForwardBadge = (
+    comment: ContractNegotiationCommentResponse,
+  ) => {
+    if (
+      !comment.carriedForwardFromCommentId ||
+      !comment.carriedForwardFromVersionId
+    ) {
+      return null;
+    }
+
+    return (
+      <Badge
+        variant="outline"
+        className="h-5 gap-1 border-sky-500/40 bg-sky-500/5 text-[10px] font-medium text-sky-700 dark:text-sky-300"
+        title={`Nguồn: phiên bản ${comment.carriedForwardFromVersionNo ?? comment.carriedForwardFromVersionId}, bình luận #${comment.carriedForwardFromCommentId}`}
+      >
+        <GitBranch className="size-3" />
+        Từ vòng trước
+      </Badge>
+    );
   };
 
   const loadRootComments = async () => {
@@ -575,6 +598,7 @@ export function ContractTermComments({
                         ? "Đã xử lý"
                         : "Đang mở"}
                     </Badge>
+                    {renderCarryForwardBadge(selectedParent)}
                     <span className="text-xs text-muted-foreground">
                       <span className="font-medium text-foreground">
                         {getCommentAuthorName(selectedParent)}
@@ -706,6 +730,7 @@ export function ContractTermComments({
                                   Đã xử lý
                                 </Badge>
                               )}
+                              {renderCarryForwardBadge(comment)}
                             </div>
                             <div className="mt-1.5 rounded-lg bg-muted px-3 py-2.5">
                               <p className="whitespace-pre-wrap text-sm leading-6">
@@ -847,11 +872,16 @@ export function ContractTermComments({
                                     {formatDateTime(comment.createdDate)}
                                   </p>
                                 </div>
-                                <Badge
-                                  variant={isResolved ? "secondary" : "outline"}
-                                >
-                                  {isResolved ? "Đã xử lý" : "Đang mở"}
-                                </Badge>
+                                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                                  {renderCarryForwardBadge(comment)}
+                                  <Badge
+                                    variant={
+                                      isResolved ? "secondary" : "outline"
+                                    }
+                                  >
+                                    {isResolved ? "Đã xử lý" : "Đang mở"}
+                                  </Badge>
+                                </div>
                               </div>
                               <p className="mt-3 line-clamp-2 whitespace-pre-wrap text-sm leading-6">
                                 {comment.content}

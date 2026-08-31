@@ -22,6 +22,10 @@ public sealed class CreateContractNegotiationRoundResponse
         set;
     } = new();
 
+    public int CarriedForwardThreadCount { get; set; }
+
+    public int CarriedForwardCommentCount { get; set; }
+
     public ContractFinancialTotalsResponse Totals { get; set; } = new();
 }
 

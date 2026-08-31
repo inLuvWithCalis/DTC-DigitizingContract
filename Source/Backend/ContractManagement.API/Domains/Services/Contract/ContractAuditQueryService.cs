@@ -649,6 +649,7 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
         ContractAuditActionTypes.NegotiationReplyCreated,
         ContractAuditActionTypes.NegotiationCommentResolved,
         ContractAuditActionTypes.NegotiationCommentReopened,
+        ContractAuditActionTypes.NegotiationCommentCarriedForward,
         ContractAuditActionTypes.VerificationPhoneSelected,
         ContractAuditActionTypes.VerificationPhoneChanged,
         ContractAuditActionTypes.CustomerAccessLinkCreated,

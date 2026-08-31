@@ -10,7 +10,7 @@ public partial class TblContractNegotiationCommentEvent
     public int CommentId { get; set; }
 
     /// <summary>
-    /// 1 = Created, 2 = Resolved, 3 = Reopened.
+    /// 1 = Created, 2 = Resolved, 3 = Reopened, 4 = CarriedForward.
     /// </summary>
     public byte EventType { get; set; }
 

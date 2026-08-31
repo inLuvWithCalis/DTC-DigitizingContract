@@ -701,6 +701,19 @@ public partial class DbDtctechContext : DbContext
                     "[ParentCommentId] IS NULL OR [ParentCommentId] > 0");
 
                 table.HasCheckConstraint(
+                    "CK_tbl_ContractNegotiationComment_CarriedForwardFromCommentId",
+                    "[CarriedForwardFromCommentId] IS NULL OR [CarriedForwardFromCommentId] > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractNegotiationComment_CarriedForwardFromVersionId",
+                    "[CarriedForwardFromVersionId] IS NULL OR [CarriedForwardFromVersionId] > 0");
+
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractNegotiationComment_CarryForwardPair",
+                    "([CarriedForwardFromCommentId] IS NULL AND [CarriedForwardFromVersionId] IS NULL) OR " +
+                    "([CarriedForwardFromCommentId] > 0 AND [CarriedForwardFromVersionId] > 0)");
+
+                table.HasCheckConstraint(
                     "CK_tbl_ContractNegotiationComment_Content",
                     "LEN(LTRIM(RTRIM([Content]))) BETWEEN 1 AND 4000");
 
@@ -735,6 +748,14 @@ public partial class DbDtctechContext : DbContext
             entity.HasIndex(e => e.ParentCommentId)
                 .HasDatabaseName(
                     "IX_tbl_ContractNegotiationComment_ParentCommentId");
+
+            entity.HasIndex(e => e.CarriedForwardFromCommentId)
+                .HasDatabaseName(
+                    "IX_tbl_ContractNegotiationComment_CarriedForwardFromCommentId");
+
+            entity.HasIndex(e => e.CarriedForwardFromVersionId)
+                .HasDatabaseName(
+                    "IX_tbl_ContractNegotiationComment_CarriedForwardFromVersionId");
 
             entity.HasIndex(e => e.TermId)
                 .HasDatabaseName("IX_tbl_ContractNegotiationComment_TermId");
@@ -781,7 +802,7 @@ public partial class DbDtctechContext : DbContext
 
                 table.HasCheckConstraint(
                     "CK_tbl_ContractNegotiationCommentEvent_EventType",
-                    "[EventType] IN (1, 2, 3)");
+                    "[EventType] IN (1, 2, 3, 4)");
 
                 table.HasCheckConstraint(
                     "CK_tbl_ContractNegotiationCommentEvent_Actor",

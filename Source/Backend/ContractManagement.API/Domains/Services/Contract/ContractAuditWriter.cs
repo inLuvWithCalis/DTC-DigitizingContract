@@ -49,11 +49,15 @@ public sealed class ContractAuditWriter : IContractAuditWriter
             [ContractAuditActionTypes.NegotiationStarted] = ContractFields(),
             [ContractAuditActionTypes.NegotiationRoundCreated] =
                 Fields("SourceVersionId", "NewVersionId", "CurrentVersionId",
-                    "SourceVersionLocked", "ItemCount", "TermCount", "TotalAmount"),
+                    "SourceVersionLocked", "ItemCount", "TermCount", "TotalAmount",
+                    "CarriedForwardThreadCount", "CarriedForwardCommentCount"),
             [ContractAuditActionTypes.ExternalFeedbackCreated] = CommentFields(),
             [ContractAuditActionTypes.NegotiationReplyCreated] = CommentFields(),
             [ContractAuditActionTypes.NegotiationCommentResolved] = CommentFields(),
             [ContractAuditActionTypes.NegotiationCommentReopened] = CommentFields(),
+            [ContractAuditActionTypes.NegotiationCommentCarriedForward] =
+                Fields("SourceCommentId", "SourceVersionId", "NewCommentId",
+                    "NewVersionId", "Target", "TermId", "ParentCommentId", "State"),
             [ContractAuditActionTypes.CustomerCommentCreated] = CommentFields(),
             [ContractAuditActionTypes.CustomerCommentReplyCreated] = CommentFields(),
             [ContractAuditActionTypes.VerificationPhoneSelected] =

@@ -69,6 +69,8 @@ public static class ContractAuditActionTypes
         "NegotiationCommentResolved";
     public const string NegotiationCommentReopened =
         "NegotiationCommentReopened";
+    public const string NegotiationCommentCarriedForward =
+        "NegotiationCommentCarriedForward";
     public const string ConcurrencyConflict = "ConcurrencyConflict";
     public const string VerificationPhoneSelected = "VerificationPhoneSelected";
     public const string VerificationPhoneChanged = "VerificationPhoneChanged";

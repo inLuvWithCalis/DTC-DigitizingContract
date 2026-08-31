@@ -10,5 +10,6 @@ public enum ContractNegotiationCommentEventType : byte
 {
     Created = 1,
     Resolved = 2,
-    Reopened = 3
+    Reopened = 3,
+    CarriedForward = 4
 }

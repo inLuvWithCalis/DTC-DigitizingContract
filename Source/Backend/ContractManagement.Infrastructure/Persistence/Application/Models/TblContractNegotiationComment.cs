@@ -18,6 +18,18 @@ public partial class TblContractNegotiationComment
 
     public int? ParentCommentId { get; set; }
 
+    /// <summary>
+    /// Comment ở version liền trước mà bản ghi này được carry-forward từ đó.
+    /// Null với comment được tạo trực tiếp trong version hiện tại.
+    /// </summary>
+    public int? CarriedForwardFromCommentId { get; set; }
+
+    /// <summary>
+    /// Version nguồn của lần carry-forward gần nhất.
+    /// Đây là logical reference để giữ provenance ngay cả khi chỉ đọc comment mới.
+    /// </summary>
+    public int? CarriedForwardFromVersionId { get; set; }
+
     public string Content { get; set; } = null!;
 
     /// <summary>

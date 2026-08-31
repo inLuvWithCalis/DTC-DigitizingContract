@@ -2353,6 +2353,16 @@ namespace ContractManagement.Domains.Services.Contract
                             .ThenBy(x => x.TermId)
                             .ToListAsync();
 
+                        var sourceComments = await _dbContext
+                            .TblContractNegotiationComments
+                            .AsNoTracking()
+                            .Where(x =>
+                                x.ContractId == contract.ContractId
+                                && x.VersionId == sourceVersion.VersionId)
+                            .OrderBy(x => x.CreatedDate)
+                            .ThenBy(x => x.CommentId)
+                            .ToListAsync();
+
                         if (sourceItems.Count == 0 || sourceTerms.Count == 0)
                         {
                             throw new InvalidOperationException(
@@ -2461,6 +2471,32 @@ namespace ContractManagement.Domains.Services.Contract
                         _dbContext.TblContractItems.AddRange(copiedItems);
                         _dbContext.TblContractTerms.AddRange(copiedTerms);
 
+                        // TermId của comment phải trỏ sang term thuộc version mới.
+                        // Lưu item/term trước để nhận identity trong cùng transaction.
+                        await _dbContext.SaveChangesAsync();
+
+                        var copiedTermIdsBySourceTermId = sourceTerms
+                            .Zip(
+                                copiedTerms,
+                                (source, copy) => new
+                                {
+                                    SourceTermId = source.TermId,
+                                    NewTermId = copy.TermId
+                                })
+                            .ToDictionary(
+                                pair => pair.SourceTermId,
+                                pair => pair.NewTermId);
+
+                        var carryForwardResult =
+                            await CarryForwardOpenCommentThreadsAsync(
+                                contract.ContractId,
+                                sourceVersion.VersionId,
+                                newVersion.VersionId,
+                                sourceComments,
+                                copiedTermIdsBySourceTermId,
+                                employeeId,
+                                now);
+
                         contract.CurrentVersionId = newVersion.VersionId;
                         contract.UpdatedEmployeeId = employeeId;
                         contract.UpdateDate = now;
@@ -2514,6 +2550,8 @@ namespace ContractManagement.Domains.Services.Contract
                                 ("SourceVersionLocked", false),
                                 ("ItemCount", sourceItems.Count),
                                 ("TermCount", sourceTerms.Count),
+                                ("CarriedForwardThreadCount", 0),
+                                ("CarriedForwardCommentCount", 0),
                                 ("TotalAmount", sourceVersion.TotalAmount)),
                             NewValues: ContractAuditValues.Create(
                                 ("SourceVersionId", sourceVersion.VersionId),
@@ -2522,6 +2560,10 @@ namespace ContractManagement.Domains.Services.Contract
                                 ("SourceVersionLocked", true),
                                 ("ItemCount", copiedItems.Count),
                                 ("TermCount", copiedTerms.Count),
+                                ("CarriedForwardThreadCount",
+                                    carryForwardResult.ThreadCount),
+                                ("CarriedForwardCommentCount",
+                                    carryForwardResult.CommentCount),
                                 ("TotalAmount", newVersion.TotalAmount)))
                         ]);
 
@@ -2538,6 +2580,10 @@ namespace ContractManagement.Domains.Services.Contract
                                 MapNegotiationRoundVersion(sourceVersion),
                             CurrentVersion =
                                 MapNegotiationRoundVersion(newVersion),
+                            CarriedForwardThreadCount =
+                                carryForwardResult.ThreadCount,
+                            CarriedForwardCommentCount =
+                                carryForwardResult.CommentCount,
                             Totals = new ContractFinancialTotalsResponse
                             {
                                 CurrencyCode = newVersion.CurrencyCode,
@@ -3426,6 +3472,22 @@ namespace ContractManagement.Domains.Services.Contract
                     employee => employee.EmployeeId,
                     employee => employee.EmployeeFullName);
 
+            var carriedForwardVersionIds = comments
+                .Where(comment =>
+                    comment.CarriedForwardFromVersionId.HasValue)
+                .Select(comment =>
+                    comment.CarriedForwardFromVersionId!.Value)
+                .Distinct()
+                .ToList();
+            var carriedForwardVersionNos = await _dbContext
+                .TblContractVersions
+                .AsNoTracking()
+                .Where(version =>
+                    carriedForwardVersionIds.Contains(version.VersionId))
+                .ToDictionaryAsync(
+                    version => version.VersionId,
+                    version => version.VersionNo);
+
             return comments
                 .Select(comment => MapCommentResponse(
                     comment,
@@ -3436,6 +3498,12 @@ namespace ContractManagement.Domains.Services.Contract
                             comment.RecordedByEmployeeId.Value,
                             out var displayName)
                             ? displayName
+                            : null,
+                    comment.CarriedForwardFromVersionId.HasValue
+                        && carriedForwardVersionNos.TryGetValue(
+                            comment.CarriedForwardFromVersionId.Value,
+                            out var sourceVersionNo)
+                            ? sourceVersionNo
                             : null))
                 .ToList();
         }
@@ -3479,14 +3547,29 @@ namespace ContractManagement.Domains.Services.Contract
                     .SingleOrDefaultAsync()
                 : null;
 
-            return MapCommentResponse(comment, events, displayName);
+            var carriedForwardFromVersionNo =
+                comment.CarriedForwardFromVersionId.HasValue
+                    ? await _dbContext.TblContractVersions
+                        .AsNoTracking()
+                        .Where(version => version.VersionId ==
+                            comment.CarriedForwardFromVersionId.Value)
+                        .Select(version => (int?)version.VersionNo)
+                        .SingleOrDefaultAsync()
+                    : null;
+
+            return MapCommentResponse(
+                comment,
+                events,
+                displayName,
+                carriedForwardFromVersionNo);
         }
 
         private static ContractNegotiationCommentResponse
             MapCommentResponse(
                 TblContractNegotiationComment comment,
                 IEnumerable<TblContractNegotiationCommentEvent> events,
-                string? recordedByDisplayName = null)
+                string? recordedByDisplayName = null,
+                int? carriedForwardFromVersionNo = null)
         {
             return new ContractNegotiationCommentResponse
             {
@@ -3495,6 +3578,11 @@ namespace ContractManagement.Domains.Services.Contract
                 VersionId = comment.VersionId,
                 TermId = comment.TermId,
                 ParentCommentId = comment.ParentCommentId,
+                CarriedForwardFromCommentId =
+                    comment.CarriedForwardFromCommentId,
+                CarriedForwardFromVersionId =
+                    comment.CarriedForwardFromVersionId,
+                CarriedForwardFromVersionNo = carriedForwardFromVersionNo,
                 Content = comment.Content,
                 Source = comment.Source,
                 ExternalFeedback = comment.ExternalFeedback,
@@ -3679,6 +3767,213 @@ namespace ContractManagement.Domains.Services.Contract
                 throw new InvalidOperationException(
                     "Chỉ Contract đang Negotiating mới hỗ trợ xem Version history.");
             }
+        }
+
+        private async Task<(int ThreadCount, int CommentCount)>
+            CarryForwardOpenCommentThreadsAsync(
+                int contractId,
+                int sourceVersionId,
+                int newVersionId,
+                IReadOnlyList<TblContractNegotiationComment> sourceComments,
+                IReadOnlyDictionary<int, int> copiedTermIdsBySourceTermId,
+                int employeeId,
+                DateTime occurredAt)
+        {
+            if (sourceComments.Count == 0)
+            {
+                return (0, 0);
+            }
+
+            var sourceCommentsById = sourceComments.ToDictionary(
+                comment => comment.CommentId);
+
+            int FindRootCommentId(TblContractNegotiationComment comment)
+            {
+                var current = comment;
+                var visitedCommentIds = new HashSet<int>
+                {
+                    current.CommentId
+                };
+
+                while (current.ParentCommentId is int parentCommentId
+                       && sourceCommentsById.TryGetValue(
+                           parentCommentId,
+                           out var parent))
+                {
+                    if (!visitedCommentIds.Add(parent.CommentId))
+                    {
+                        throw new InvalidOperationException(
+                            "Cây comment đàm phán chứa liên kết vòng.");
+                    }
+
+                    current = parent;
+                }
+
+                return current.CommentId;
+            }
+
+            // Một thread cần tiếp tục ở version mới nếu bất kỳ comment nào
+            // trong cây vẫn Open. Toàn bộ cây được copy để không mất ngữ cảnh.
+            var openThreadRootIds = sourceComments
+                .Where(comment => comment.State ==
+                    (byte)ContractNegotiationCommentState.Open)
+                .Select(FindRootCommentId)
+                .ToHashSet();
+
+            if (openThreadRootIds.Count == 0)
+            {
+                return (0, 0);
+            }
+
+            var commentsToCarry = sourceComments
+                .Where(comment => openThreadRootIds.Contains(
+                    FindRootCommentId(comment)))
+                .OrderBy(comment => comment.CreatedDate)
+                .ThenBy(comment => comment.CommentId)
+                .ToList();
+            var carriedSourceCommentIds = commentsToCarry
+                .Select(comment => comment.CommentId)
+                .ToHashSet();
+            var copiedCommentIdsBySourceCommentId =
+                new Dictionary<int, int>();
+            var pendingComments = commentsToCarry.ToList();
+
+            while (pendingComments.Count > 0)
+            {
+                var readyComments = pendingComments
+                    .Where(comment =>
+                        !comment.ParentCommentId.HasValue
+                        || !carriedSourceCommentIds.Contains(
+                            comment.ParentCommentId.Value)
+                        || copiedCommentIdsBySourceCommentId.ContainsKey(
+                            comment.ParentCommentId.Value))
+                    .ToList();
+
+                if (readyComments.Count == 0)
+                {
+                    throw new InvalidOperationException(
+                        "Không thể xác định thứ tự carry-forward cây comment.");
+                }
+
+                var copiedPairs = new List<(
+                    TblContractNegotiationComment Source,
+                    TblContractNegotiationComment Copy)>();
+
+                foreach (var sourceComment in readyComments)
+                {
+                    int? copiedTermId = null;
+                    if (sourceComment.TermId is int sourceTermId)
+                    {
+                        if (!copiedTermIdsBySourceTermId.TryGetValue(
+                                sourceTermId,
+                                out var mappedTermId))
+                        {
+                            throw new InvalidOperationException(
+                                "Comment đang mở tham chiếu điều khoản không tồn tại trong version nguồn.");
+                        }
+
+                        copiedTermId = mappedTermId;
+                    }
+
+                    int? copiedParentCommentId = null;
+                    if (sourceComment.ParentCommentId is int sourceParentId
+                        && copiedCommentIdsBySourceCommentId.TryGetValue(
+                            sourceParentId,
+                            out var mappedParentId))
+                    {
+                        copiedParentCommentId = mappedParentId;
+                    }
+
+                    var copiedComment = new TblContractNegotiationComment
+                    {
+                        ContractId = contractId,
+                        VersionId = newVersionId,
+                        TermId = copiedTermId,
+                        ParentCommentId = copiedParentCommentId,
+                        CarriedForwardFromCommentId = sourceComment.CommentId,
+                        CarriedForwardFromVersionId = sourceVersionId,
+                        Content = sourceComment.Content,
+                        Source = sourceComment.Source,
+                        RecordedByEmployeeId =
+                            sourceComment.RecordedByEmployeeId,
+                        CustomerAccessSessionId =
+                            sourceComment.CustomerAccessSessionId,
+                        State = sourceComment.State,
+                        CreatedDate = sourceComment.CreatedDate,
+                        UpdatedDate = sourceComment.UpdatedDate
+                    };
+
+                    SetSyntheticCommentRowVersionIfNeeded(copiedComment);
+                    _dbContext.TblContractNegotiationComments.Add(
+                        copiedComment);
+                    copiedPairs.Add((sourceComment, copiedComment));
+                }
+
+                // CommentEvent không có physical FK; cần lấy CommentId trước.
+                await _dbContext.SaveChangesAsync();
+
+                var carryForwardAudits =
+                    new List<EmployeeContractAuditWriteRequest>();
+                foreach (var (sourceComment, copiedComment) in copiedPairs)
+                {
+                    copiedCommentIdsBySourceCommentId[sourceComment.CommentId] =
+                        copiedComment.CommentId;
+
+                    _dbContext.TblContractNegotiationCommentEvents.Add(
+                        new TblContractNegotiationCommentEvent
+                        {
+                            CommentId = copiedComment.CommentId,
+                            EventType =
+                                (byte)ContractNegotiationCommentEventType
+                                    .CarriedForward,
+                            ActorType = ContractAuditActorTypes.Employee,
+                            EmployeeId = employeeId,
+                            OccurredAt = occurredAt
+                        });
+
+                    carryForwardAudits.Add(
+                        new EmployeeContractAuditWriteRequest(
+                            contractId,
+                            newVersionId,
+                            employeeId,
+                            ContractAuditActionTypes
+                                .NegotiationCommentCarriedForward,
+                            ContractAuditResults.Succeeded,
+                            occurredAt,
+                            SubjectType: ContractAuditSubjectTypes
+                                .NegotiationComment,
+                            SubjectId: copiedComment.CommentId,
+                            PreviousValues: ContractAuditValues.Create(
+                                ("SourceCommentId", sourceComment.CommentId),
+                                ("SourceVersionId", sourceVersionId),
+                                ("Target", sourceComment.TermId.HasValue
+                                    ? "Term"
+                                    : "Contract"),
+                                ("TermId", sourceComment.TermId),
+                                ("ParentCommentId",
+                                    sourceComment.ParentCommentId),
+                                ("State", ((ContractNegotiationCommentState)
+                                    sourceComment.State).ToString())),
+                            NewValues: ContractAuditValues.Create(
+                                ("NewCommentId", copiedComment.CommentId),
+                                ("NewVersionId", newVersionId),
+                                ("Target", copiedComment.TermId.HasValue
+                                    ? "Term"
+                                    : "Contract"),
+                                ("TermId", copiedComment.TermId),
+                                ("ParentCommentId",
+                                    copiedComment.ParentCommentId),
+                                ("State", ((ContractNegotiationCommentState)
+                                    copiedComment.State).ToString()))));
+
+                    pendingComments.Remove(sourceComment);
+                }
+
+                _contractAuditWriter.StageEmployeeAudits(
+                    carryForwardAudits);
+            }
+
+            return (openThreadRootIds.Count, commentsToCarry.Count);
         }
 
         private void SetSyntheticCommentRowVersionIfNeeded(

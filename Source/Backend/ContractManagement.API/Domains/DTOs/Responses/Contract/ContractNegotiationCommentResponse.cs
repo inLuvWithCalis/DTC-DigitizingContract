@@ -14,6 +14,12 @@ public sealed class ContractNegotiationCommentResponse
 
     public int? ParentCommentId { get; set; }
 
+    public int? CarriedForwardFromCommentId { get; set; }
+
+    public int? CarriedForwardFromVersionId { get; set; }
+
+    public int? CarriedForwardFromVersionNo { get; set; }
+
     public string Content { get; set; } = string.Empty;
 
     public string Source { get; set; } = "ExternalFeedback";

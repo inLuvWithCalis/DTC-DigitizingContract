@@ -358,6 +358,7 @@ export enum ContractNegotiationCommentEventType {
   Created = 1,
   Resolved = 2,
   Reopened = 3,
+  CarriedForward = 4,
 }
 
 export type ContractNegotiationCommentSource =
@@ -378,6 +379,9 @@ export interface ContractNegotiationCommentResponse {
   versionId: number;
   termId?: number | null;
   parentCommentId?: number | null;
+  carriedForwardFromCommentId?: number | null;
+  carriedForwardFromVersionId?: number | null;
+  carriedForwardFromVersionNo?: number | null;
   content: string;
   source: ContractNegotiationCommentSource;
   externalFeedback: boolean;
@@ -596,6 +600,8 @@ export interface CreateContractNegotiationRoundResponse {
   rowVersion: string;
   sourceVersion: ContractNegotiationRoundVersionResponse;
   currentVersion: ContractNegotiationRoundVersionResponse;
+  carriedForwardThreadCount: number;
+  carriedForwardCommentCount: number;
   totals: ContractFinancialTotalsResponse;
 }
 

@@ -56,6 +56,9 @@ public partial class DbDtctechContext : DbContext
 
     public virtual DbSet<TblContractAttachment> TblContractAttachments { get; set; }
 
+    public virtual DbSet<TblContractSignedEvidence>
+        TblContractSignedEvidences { get; set; }
+
     public virtual DbSet<TblContractItem> TblContractItems { get; set; }
 
     public virtual DbSet<TblContractTerm> TblContractTerms { get; set; }
@@ -419,7 +422,7 @@ public partial class DbDtctechContext : DbContext
                     "([SubjectType] IN ('Contract', 'ContractVersion', " +
                     "'NegotiationComment', 'CustomerAccessLink', " +
                     "'CustomerOtpChallenge', 'CustomerAccessSession', " +
-                    "'ApprovalRequest') " +
+                    "'ApprovalRequest', 'SignedEvidence') " +
                     "AND [SubjectId] > 0)");
 
                 table.HasCheckConstraint(
@@ -1024,6 +1027,77 @@ public partial class DbDtctechContext : DbContext
                 .HasColumnType("datetime");
             entity.Property(e => e.DocumentType)
                 .HasDefaultValue((byte)99);
+        });
+
+        modelBuilder.Entity<TblContractSignedEvidence>(entity =>
+        {
+            entity.HasKey(e => e.SignedEvidenceId)
+                .HasName("PK_tbl_ContractSignedEvidence");
+
+            entity.ToTable("tbl_ContractSignedEvidence", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractSignedEvidence_Status",
+                    "[Status] IN (1, 2)");
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractSignedEvidence_ContractId",
+                    "[ContractId] > 0");
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractSignedEvidence_VersionId",
+                    "[VersionId] > 0");
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractSignedEvidence_FileId",
+                    "[FileId] > 0");
+            });
+
+            entity.HasIndex(e => e.FileId)
+                .IsUnique()
+                .HasDatabaseName("UX_tbl_ContractSignedEvidence_FileId");
+            entity.HasIndex(e => new { e.ContractId, e.VersionId })
+                .IsUnique()
+                .HasFilter("[Status] = 1")
+                .HasDatabaseName(
+                    "UX_tbl_ContractSignedEvidence_ActiveVersion");
+
+            entity.Property(e => e.ProviderSignerName).HasMaxLength(200);
+            entity.Property(e => e.ProviderSignerTitle).HasMaxLength(200);
+            entity.Property(e => e.ProviderSigningDate)
+                .HasColumnType("date");
+            entity.Property(e => e.CustomerSignerName).HasMaxLength(200);
+            entity.Property(e => e.CustomerSignerTitle).HasMaxLength(200);
+            entity.Property(e => e.CustomerSigningDate)
+                .HasColumnType("date");
+            entity.Property(e => e.SupersedeReason).HasMaxLength(1000);
+            entity.Property(e => e.UploadedAt).HasColumnType("datetime2");
+            entity.Property(e => e.SupersededAt).HasColumnType("datetime2");
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+
+            entity.HasOne<TblContract>()
+                .WithMany()
+                .HasForeignKey(e => e.ContractId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<TblContractVersion>()
+                .WithMany()
+                .HasForeignKey(e => e.VersionId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<TblFileStorage>()
+                .WithMany()
+                .HasForeignKey(e => e.FileId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<TblContractSignedEvidence>()
+                .WithMany()
+                .HasForeignKey(e => e.SupersedesEvidenceId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<TblEmployee>()
+                .WithMany()
+                .HasForeignKey(e => e.UploadedByEmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<TblEmployee>()
+                .WithMany()
+                .HasForeignKey(e => e.SupersededByEmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<TblContractTemplate>(entity =>

@@ -197,6 +197,13 @@ const FIELD_LABELS: Record<string, string> = {
   FileName: "Tên tệp",
   DocumentType: "Loại tài liệu",
   UploadDate: "Ngày tải lên",
+  SignedEvidenceId: "Bản scan đã ký",
+  EvidenceStatus: "Trạng thái bản scan",
+  FileType: "Định dạng tệp",
+  Sha256: "Mã băm SHA-256",
+  SupersedesEvidenceId: "Thay thế bản scan",
+  ProviderSigningDate: "Ngày ký nhà cung cấp",
+  CustomerSigningDate: "Ngày ký khách hàng",
 };
 
 const PHONE_SOURCE_LABELS: Record<string, string> = {
@@ -337,6 +344,9 @@ const formatAuditValue = (
   }
   if (key === "DocumentType" && !Number.isNaN(Number(value))) {
     return DOCUMENT_TYPE_LABELS[Number(value)] ?? String(value);
+  }
+  if (key === "EvidenceStatus" && !Number.isNaN(Number(value))) {
+    return Number(value) === 1 ? "Đang hiệu lực" : "Đã thay thế";
   }
   if (typeof value === "boolean") return value ? "Có" : "Không";
   if (typeof value === "object") return JSON.stringify(value);

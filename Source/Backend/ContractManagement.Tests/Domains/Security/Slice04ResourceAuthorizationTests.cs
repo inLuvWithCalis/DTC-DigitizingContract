@@ -135,6 +135,17 @@ public sealed class Slice04ResourceAuthorizationTests
                 StorageKey = "tenant/ContractVersionArtifact/600/submitted.pdf",
                 TenantCode = "tenant",
                 UploadedDate = DateTime.UtcNow
+            },
+            new TblFileStorage
+            {
+                FileId = 4,
+                ObjectType = "ContractSignedEvidence",
+                ObjectId = ContractId,
+                FileName = "signed.pdf",
+                FilePath = string.Empty,
+                StorageKey = "tenant/ContractSignedEvidence/100/signed.pdf",
+                TenantCode = "tenant",
+                UploadedDate = DateTime.UtcNow
             });
         context.TblContractVersions.Add(new TblContractVersion
         {
@@ -172,6 +183,8 @@ public sealed class Slice04ResourceAuthorizationTests
         await service.EnsureCanReadFileAsync(2, AdminOfficerEmployeeId);
         await service.EnsureCanReadFileAsync(3, ResponsibleEmployeeId);
         await service.EnsureCanReadFileAsync(3, ManagerEmployeeId);
+        await service.EnsureCanReadFileAsync(4, ResponsibleEmployeeId);
+        await service.EnsureCanReadFileAsync(4, ManagerEmployeeId);
 
         var deniedContractRead = await Assert.ThrowsAsync<RbacOperationException>(
             () => service.EnsureCanReadFileAsync(1, OtherEmployeeId));
@@ -181,6 +194,10 @@ public sealed class Slice04ResourceAuthorizationTests
             () => service.EnsureCanReadFileAsync(3, OtherEmployeeId));
         var deniedArtifactDelete = await Assert.ThrowsAsync<RbacOperationException>(
             () => service.EnsureCanDeleteFileAsync(3, ResponsibleEmployeeId));
+        var deniedEvidenceRead = await Assert.ThrowsAsync<RbacOperationException>(
+            () => service.EnsureCanReadFileAsync(4, OtherEmployeeId));
+        var deniedEvidenceDelete = await Assert.ThrowsAsync<RbacOperationException>(
+            () => service.EnsureCanDeleteFileAsync(4, ResponsibleEmployeeId));
 
         Assert.Equal(AuthorizationErrorCodes.ResourceNotFound, deniedContractRead.Code);
         Assert.Equal(StatusCodes.Status403Forbidden, deniedTemplateRead.StatusCode);
@@ -189,6 +206,10 @@ public sealed class Slice04ResourceAuthorizationTests
         Assert.Equal(AuthorizationErrorCodes.ResourceNotFound, deniedArtifactRead.Code);
         Assert.Equal(StatusCodes.Status403Forbidden, deniedArtifactDelete.StatusCode);
         Assert.Equal(AuthorizationErrorCodes.PermissionDenied, deniedArtifactDelete.Code);
+        Assert.Equal(StatusCodes.Status404NotFound, deniedEvidenceRead.StatusCode);
+        Assert.Equal(AuthorizationErrorCodes.ResourceNotFound, deniedEvidenceRead.Code);
+        Assert.Equal(StatusCodes.Status403Forbidden, deniedEvidenceDelete.StatusCode);
+        Assert.Equal(AuthorizationErrorCodes.PermissionDenied, deniedEvidenceDelete.Code);
     }
 
     [Fact]

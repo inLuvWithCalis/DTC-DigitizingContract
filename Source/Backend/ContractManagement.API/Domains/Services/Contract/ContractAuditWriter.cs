@@ -26,7 +26,8 @@ public sealed class ContractAuditWriter : IContractAuditWriter
         ContractAuditSubjectTypes.CustomerAccessLink,
         ContractAuditSubjectTypes.CustomerOtpChallenge,
         ContractAuditSubjectTypes.CustomerAccessSession,
-        ContractAuditSubjectTypes.ApprovalRequest
+        ContractAuditSubjectTypes.ApprovalRequest,
+        ContractAuditSubjectTypes.SignedEvidence
     ];
 
     /*
@@ -47,6 +48,10 @@ public sealed class ContractAuditWriter : IContractAuditWriter
             [ContractAuditActionTypes.ApprovalReturned] = ApprovalFields(),
             [ContractAuditActionTypes.ApprovalRejected] = ApprovalFields(),
             [ContractAuditActionTypes.ApprovalWithdrawn] = ApprovalFields(),
+            [ContractAuditActionTypes.SignedEvidenceUploaded] =
+                SignedEvidenceFields(),
+            [ContractAuditActionTypes.SignedEvidenceSuperseded] =
+                SignedEvidenceFields(),
             [ContractAuditActionTypes.ContractAttachmentUploaded] =
                 AttachmentFields(),
             [ContractAuditActionTypes.ContractAttachmentDeleted] =
@@ -339,6 +344,11 @@ public sealed class ContractAuditWriter : IContractAuditWriter
 
     private static HashSet<string> AttachmentFields() => Fields(
         "AttachmentId", "FileId", "FileName", "DocumentType", "UploadDate");
+
+    private static HashSet<string> SignedEvidenceFields() => Fields(
+        "Status", "CurrentVersionId", "SignedEvidenceId", "FileId",
+        "FileType", "Sha256", "EvidenceStatus", "SupersedesEvidenceId",
+        "ProviderSigningDate", "CustomerSigningDate");
 
     private static HashSet<string> VerificationPhoneFields() => Fields(
         "VerificationPhoneId", "VerificationPhoneMasked", "PhoneSource",

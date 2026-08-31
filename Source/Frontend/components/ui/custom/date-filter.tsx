@@ -15,15 +15,19 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 interface DateFilterProps {
   date: Date | undefined;
   onChange: (date: Date | undefined) => void;
+  id?: string;
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
 }
 
 export function DateFilter({
   date,
   onChange,
+  id,
   placeholder = "Ngày tạo",
   className = "w-[160px]",
+  disabled = false,
 }: DateFilterProps) {
   const isMobile = useMediaQuery("(max-width: 767px)");
 
@@ -32,7 +36,10 @@ export function DateFilter({
       <Popover>
         <PopoverTrigger asChild>
           <Button
+            id={id}
+            type="button"
             variant="outline"
+            disabled={disabled}
             className={cn(
               "justify-start text-left font-normal h-9 bg-background shadow-sm cursor-pointer",
               isMobile ? "flex-1 w-full" : className,
@@ -57,6 +64,8 @@ export function DateFilter({
 
       {date && (
         <Button
+          type="button"
+          disabled={disabled}
           variant="ghost"
           size="sm"
           className="h-9 w-9 p-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0"

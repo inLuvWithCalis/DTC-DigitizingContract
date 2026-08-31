@@ -1,199 +1,114 @@
-﻿using ContractManagement.API.Common.Enums;
+using ContractManagement.API.Common.Enums;
 using ContractManagement.API.Domains.Policies.Contract;
 
-namespace ContractManagement.Tests.Domains.Policies.Contract
+namespace ContractManagement.Tests.Domains.Policies.Contract;
+
+public sealed class SignaturePolicyTests
 {
-    /// <summary>
-    /// Kiểm thử quy tắc ký hợp đồng Phase 6 MVP.
-    /// </summary>
-    public class SignaturePolicyTests
+    [Fact]
+    public void PendingSignature_WithApprovedLockedVersion_CanUploadEvidence()
     {
-        [Fact]
-        public void Provider_ShouldSignFirst_WithVerifiedOtp()
-        {
-            var action = () => SignaturePolicy.EnsureCanSign(
-                SignerParty.Provider,
-                SignatureStatus.Pending,
-                SignatureStatus.Pending,
-                SignatureMethod.OtpElectronic,
-                otpVerified: true,
-                hasSignedScanAttachment: false,
-                contractSigningVersionId: 2,
-                signatureVersionId: 2);
-
-            var exception = Record.Exception(action);
-
-            Assert.Null(exception);
-        }
-
-        [Fact]
-        public void OnlineSignature_ShouldFail_WhenOtpIsNotVerified()
-        {
-            var action = () => SignaturePolicy.EnsureCanSign(
-                SignerParty.Provider,
-                SignatureStatus.Pending,
-                SignatureStatus.Pending,
-                SignatureMethod.OtpElectronic,
-                otpVerified: false,
-                hasSignedScanAttachment: false,
-                contractSigningVersionId: 2,
-                signatureVersionId: 2);
-
-            Assert.Throws<InvalidOperationException>(action);
-        }
-
-        [Fact]
-        public void Customer_ShouldNotSignBeforeProvider()
-        {
-            var action = () => SignaturePolicy.EnsureCanSign(
-                SignerParty.Customer,
-                SignatureStatus.Pending,
-                SignatureStatus.Pending,
-                SignatureMethod.OtpElectronic,
-                otpVerified: true,
-                hasSignedScanAttachment: false,
-                contractSigningVersionId: 2,
-                signatureVersionId: 2);
-
-            Assert.Throws<InvalidOperationException>(action);
-        }
-
-        [Fact]
-        public void Customer_ShouldSignAfterProvider()
-        {
-            var action = () => SignaturePolicy.EnsureCanSign(
-                SignerParty.Customer,
-                SignatureStatus.Pending,
-                SignatureStatus.Signed,
-                SignatureMethod.OtpElectronic,
-                otpVerified: true,
-                hasSignedScanAttachment: false,
-                contractSigningVersionId: 2,
-                signatureVersionId: 2);
-
-            var exception = Record.Exception(action);
-
-            Assert.Null(exception);
-        }
-
-        [Fact]
-        public void WetInkScan_ShouldFail_WhenAttachmentIsMissing()
-        {
-            var action = () => SignaturePolicy.EnsureCanSign(
-                SignerParty.Provider,
-                SignatureStatus.Pending,
-                SignatureStatus.Pending,
-                SignatureMethod.WetInkScan,
-                otpVerified: false,
-                hasSignedScanAttachment: false,
-                contractSigningVersionId: 2,
-                signatureVersionId: 2);
-
-            Assert.Throws<InvalidOperationException>(action);
-        }
-
-        [Fact]
-        public void WetInkScan_ShouldNotRequireOtp_WhenAttachmentExists()
-        {
-            var action = () => SignaturePolicy.EnsureCanSign(
-                SignerParty.Provider,
-                SignatureStatus.Pending,
-                SignatureStatus.Pending,
-                SignatureMethod.WetInkScan,
-                otpVerified: false,
-                hasSignedScanAttachment: true,
-                contractSigningVersionId: 2,
-                signatureVersionId: 2);
-
-            var exception = Record.Exception(action);
-
-            Assert.Null(exception);
-        }
-
-        [Fact]
-        public void Signing_ShouldFail_WhenVersionDoesNotMatch()
-        {
-            var action = () => SignaturePolicy.EnsureCanSign(
-                SignerParty.Provider,
-                SignatureStatus.Pending,
-                SignatureStatus.Pending,
-                SignatureMethod.OtpElectronic,
-                otpVerified: true,
-                hasSignedScanAttachment: false,
-                contractSigningVersionId: 3,
-                signatureVersionId: 2);
-
-            Assert.Throws<InvalidOperationException>(action);
-        }
-
-        [Fact]
-        public void Contract_ShouldRemainPending_WhenOnlyProviderSigned()
-        {
-            var result =
-                SignaturePolicy.GetContractStatusAfterSigning(
-                    SignatureStatus.Signed,
-                    SignatureStatus.Pending);
-
-            Assert.Equal(
+        var exception = Record.Exception(() =>
+            SignaturePolicy.EnsureCanUploadInitialEvidence(
                 ContractStatus.PendingSignature,
-                result);
-        }
+                currentVersionId: 12,
+                evidenceVersionId: 12,
+                versionLocked: true,
+                approvedArtifactsExist: true,
+                activeEvidenceExists: false));
 
-        [Fact]
-        public void Contract_ShouldBecomeSigned_WhenBothPartiesSigned()
-        {
-            var result =
-                SignaturePolicy.GetContractStatusAfterSigning(
-                    SignatureStatus.Signed,
-                    SignatureStatus.Signed);
+        Assert.Null(exception);
+    }
 
-            Assert.Equal(ContractStatus.Signed, result);
-        }
+    [Theory]
+    [InlineData(ContractStatus.Negotiating)]
+    [InlineData(ContractStatus.PendingApproval)]
+    [InlineData(ContractStatus.Signed)]
+    [InlineData(ContractStatus.Completed)]
+    public void InitialEvidence_RejectsInvalidContractState(
+        ContractStatus status)
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            SignaturePolicy.EnsureCanUploadInitialEvidence(
+                status,
+                12,
+                12,
+                versionLocked: true,
+                approvedArtifactsExist: true,
+                activeEvidenceExists: false));
+    }
 
-        [Fact]
-        public void SignedSignature_ShouldNotBeInvalidated()
-        {
-            var result = SignaturePolicy.CanTransition(
-                SignatureStatus.Signed,
-                SignatureStatus.Invalidated);
+    [Fact]
+    public void InitialEvidence_RejectsVersionMismatch()
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            SignaturePolicy.EnsureCanUploadInitialEvidence(
+                ContractStatus.PendingSignature,
+                12,
+                13,
+                versionLocked: true,
+                approvedArtifactsExist: true,
+                activeEvidenceExists: false));
+    }
 
-            Assert.False(result);
-        }
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void InitialEvidence_RequiresLockedVersionAndApprovedArtifacts(
+        bool versionLocked,
+        bool approvedArtifactsExist)
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            SignaturePolicy.EnsureCanUploadInitialEvidence(
+                ContractStatus.PendingSignature,
+                12,
+                12,
+                versionLocked,
+                approvedArtifactsExist,
+                activeEvidenceExists: false));
+    }
 
-        [Fact]
-        public void PendingSignature_CanBeInvalidated()
-        {
-            var result = SignaturePolicy.CanTransition(
-                SignatureStatus.Pending,
-                SignatureStatus.Invalidated);
+    [Fact]
+    public void InitialEvidence_RejectsSecondActiveEvidence()
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            SignaturePolicy.EnsureCanUploadInitialEvidence(
+                ContractStatus.PendingSignature,
+                12,
+                12,
+                versionLocked: true,
+                approvedArtifactsExist: true,
+                activeEvidenceExists: true));
+    }
 
-            Assert.True(result);
-        }
+    [Fact]
+    public void SignedContract_CanSupersedeActiveEvidence()
+    {
+        var exception = Record.Exception(() =>
+            SignaturePolicy.EnsureCanSupersedeEvidence(
+                ContractStatus.Signed,
+                12,
+                12,
+                versionLocked: true,
+                approvedArtifactsExist: true,
+                activeEvidenceExists: true));
 
-        [Fact]
-        public void ContractShouldNotBecomeSigned_WhenCustomerHasNotSigned()
-        {
-            var action = () =>
-                SignaturePolicy.EnsureCanMarkContractSigned(
-                    ContractStatus.PendingSignature,
-                    SignatureStatus.Signed,
-                    SignatureStatus.Pending);
+        Assert.Null(exception);
+    }
 
-            Assert.Throws<InvalidOperationException>(action);
-        }
-
-        [Fact]
-        public void ContractShouldBecomeSigned_WhenBothPartiesSigned()
-        {
-            var action = () =>
-                SignaturePolicy.EnsureCanMarkContractSigned(
-                    ContractStatus.PendingSignature,
-                    SignatureStatus.Signed,
-                    SignatureStatus.Signed);
-
-            var exception = Record.Exception(action);
-
-            Assert.Null(exception);
-        }
+    [Theory]
+    [InlineData(ContractStatus.PendingSignature)]
+    [InlineData(ContractStatus.Completed)]
+    [InlineData(ContractStatus.Cancelled)]
+    public void Supersede_RejectsNonSignedContract(ContractStatus status)
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            SignaturePolicy.EnsureCanSupersedeEvidence(
+                status,
+                12,
+                12,
+                versionLocked: true,
+                approvedArtifactsExist: true,
+                activeEvidenceExists: true));
     }
 }

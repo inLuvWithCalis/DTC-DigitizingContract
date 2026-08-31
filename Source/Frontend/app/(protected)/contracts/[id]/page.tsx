@@ -72,12 +72,14 @@ import { ContractClosing } from "@/components/contracts/contract-closing";
 import { ContractAuditLog } from "@/components/contracts/contract-audit-log";
 import { TransferResponsibilityModal } from "@/components/contracts/transfer-responsibility-modal";
 import { ContractApprovalPanel } from "@/components/contracts/contract-approval-panel";
+import { ContractSigningPanel } from "@/components/contracts/contract-signing-panel";
 
 const CONTRACT_TABS = [
   "overview",
   "terms",
   "negotiation",
   "approval",
+  "customer-access",
   "signature",
   "documents",
   "closing",
@@ -845,7 +847,7 @@ export default function ContractDetailPage() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => handleTabChange("signature")}
+                      onClick={() => handleTabChange("customer-access")}
                     >
                       Truy cập khách hàng
                     </Button>
@@ -886,7 +888,8 @@ export default function ContractDetailPage() {
             <TabsTrigger value="negotiation">Vòng đàm phán</TabsTrigger>
             <TabsTrigger value="terms">Điều khoản - Trao đổi</TabsTrigger>
             <TabsTrigger value="approval">Phê duyệt</TabsTrigger>
-            <TabsTrigger value="signature">Truy cập khách hàng</TabsTrigger>
+            <TabsTrigger value="customer-access">Truy cập khách hàng</TabsTrigger>
+            <TabsTrigger value="signature">Ký hợp đồng</TabsTrigger>
             <TabsTrigger value="documents">Chứng từ</TabsTrigger>
             <TabsTrigger value="closing">Đóng hợp đồng</TabsTrigger>
             <TabsTrigger value="activity">Lịch sử hoạt động</TabsTrigger>
@@ -931,7 +934,7 @@ export default function ContractDetailPage() {
             />
           </TabsContent>
 
-          <TabsContent value="signature">
+          <TabsContent value="customer-access">
             <ContractSignature
               contract={contract}
               onContractRefetch={() => fetchContractDetail(false)}
@@ -939,6 +942,14 @@ export default function ContractDetailPage() {
               hasUnsavedChanges={hasUnsavedChanges}
               canManage={canManageContract}
               onCustomerAccessLinkChange={handleCustomerAccessLinkChange}
+            />
+          </TabsContent>
+
+          <TabsContent value="signature">
+            <ContractSigningPanel
+              contract={contract}
+              canManage={canManageContract}
+              onContractRefetch={() => fetchContractDetail(false)}
             />
           </TabsContent>
 

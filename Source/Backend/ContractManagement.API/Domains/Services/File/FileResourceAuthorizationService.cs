@@ -17,6 +17,8 @@ public sealed class FileResourceAuthorizationService
     private const string ContractObjectType = "Contract";
     private const string ContractVersionArtifactObjectType =
         "ContractVersionArtifact";
+    private const string ContractSignedEvidenceObjectType =
+        "ContractSignedEvidence";
     private const string ContractTemplateVersionObjectType =
         "ContractTemplateVersion";
     private const string ContractTemplatePreviewObjectType =
@@ -137,6 +139,23 @@ public sealed class FileResourceAuthorizationService
 
                 await _contractAuthorization.EnsureCanReadAsync(
                     contractId.Value,
+                    employeeId,
+                    cancellationToken);
+                return;
+
+            case ContractSignedEvidenceObjectType:
+                // Signed evidence is append-only. It can only be replaced by
+                // the signing workflow, never through generic file mutation.
+                if (isWrite)
+                {
+                    throw new RbacOperationException(
+                        StatusCodes.Status403Forbidden,
+                        AuthorizationErrorCodes.PermissionDenied,
+                        "Signed contract evidence is immutable.");
+                }
+
+                await _contractAuthorization.EnsureCanReadAsync(
+                    objectId,
                     employeeId,
                     cancellationToken);
                 return;

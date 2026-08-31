@@ -26,6 +26,8 @@ export const CONTRACT_AUDIT_ACTION_TYPES = [
   "ApprovalReturned",
   "ApprovalRejected",
   "ApprovalWithdrawn",
+  "SignedEvidenceUploaded",
+  "SignedEvidenceSuperseded",
   "ContractAttachmentUploaded",
   "ContractAttachmentDeleted",
   "NegotiationStarted",
@@ -64,6 +66,7 @@ export const CONTRACT_AUDIT_SUBJECT_TYPES = [
   "CustomerOtpChallenge",
   "CustomerAccessSession",
   "ApprovalRequest",
+  "SignedEvidence",
 ] as const;
 
 export type ContractAuditActorType =
@@ -155,6 +158,7 @@ export const CONTRACT_AUDIT_SUBJECT_LABELS: Record<
   CustomerOtpChallenge: "Yêu cầu OTP",
   CustomerAccessSession: "Phiên khách hàng",
   ApprovalRequest: "Yêu cầu duyệt",
+  SignedEvidence: "Bản scan đã ký",
 };
 
 export const CONTRACT_AUDIT_ACTION_LABELS: Record<
@@ -170,6 +174,8 @@ export const CONTRACT_AUDIT_ACTION_LABELS: Record<
   ApprovalReturned: "Trả hợp đồng để chỉnh sửa",
   ApprovalRejected: "Từ chối version hợp đồng",
   ApprovalWithdrawn: "Rút yêu cầu duyệt",
+  SignedEvidenceUploaded: "Tải bản scan hợp đồng đã ký",
+  SignedEvidenceSuperseded: "Thay bản scan hợp đồng đã ký",
   ContractAttachmentUploaded: "Tải lên tệp đính kèm",
   ContractAttachmentDeleted: "Xóa tệp đính kèm",
   NegotiationStarted: "Bắt đầu đàm phán",

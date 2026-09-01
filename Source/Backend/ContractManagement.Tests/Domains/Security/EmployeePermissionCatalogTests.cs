@@ -22,6 +22,7 @@ public sealed class EmployeePermissionCatalogTests
             RbacPermissions.CatalogManage,
             RbacPermissions.CustomerManage,
             RbacPermissions.ContractReadTenant,
+            RbacPermissions.ContractComplete,
             RbacPermissions.ContractSupport,
             RbacPermissions.ContractAuditReadTenant,
             RbacPermissions.ContractApprovalDecide,
@@ -102,6 +103,7 @@ public sealed class EmployeePermissionCatalogTests
         Assert.Contains(RbacPermissions.ContractSupport, permissions);
         Assert.Contains(RbacPermissions.ContractAuditReadTenant, permissions);
         Assert.Contains(RbacPermissions.ContractApprovalDecide, permissions);
+        Assert.Contains(RbacPermissions.ContractComplete, permissions);
         Assert.Contains(RbacPermissions.SecurityAuditReadTenant, permissions);
         Assert.Contains(RbacPermissions.TenantLegalProfileManage, permissions);
         Assert.DoesNotContain(RbacPermissions.TemplateManage, permissions);

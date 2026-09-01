@@ -59,6 +59,12 @@ public partial class DbDtctechContext : DbContext
     public virtual DbSet<TblContractSignedEvidence>
         TblContractSignedEvidences { get; set; }
 
+    public virtual DbSet<TblContractAcceptanceEvidence>
+        TblContractAcceptanceEvidences { get; set; }
+
+    public virtual DbSet<TblContractPaymentLedger>
+        TblContractPaymentLedgers { get; set; }
+
     public virtual DbSet<TblContractItem> TblContractItems { get; set; }
 
     public virtual DbSet<TblContractTerm> TblContractTerms { get; set; }
@@ -422,7 +428,8 @@ public partial class DbDtctechContext : DbContext
                     "([SubjectType] IN ('Contract', 'ContractVersion', " +
                     "'NegotiationComment', 'CustomerAccessLink', " +
                     "'CustomerOtpChallenge', 'CustomerAccessSession', " +
-                    "'ApprovalRequest', 'SignedEvidence') " +
+                    "'ApprovalRequest', 'SignedEvidence', " +
+                    "'AcceptanceEvidence', 'Payment') " +
                     "AND [SubjectId] > 0)");
 
                 table.HasCheckConstraint(
@@ -1098,6 +1105,52 @@ public partial class DbDtctechContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.SupersededByEmployeeId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<TblContractAcceptanceEvidence>(entity =>
+        {
+            entity.HasKey(e => e.AcceptanceEvidenceId);
+            entity.ToTable("tbl_ContractAcceptanceEvidence", table =>
+            {
+                table.HasCheckConstraint("CK_tbl_ContractAcceptanceEvidence_ContractId", "[ContractId] > 0");
+                table.HasCheckConstraint("CK_tbl_ContractAcceptanceEvidence_VersionId", "[VersionId] > 0");
+                table.HasCheckConstraint("CK_tbl_ContractAcceptanceEvidence_FileId", "[FileId] > 0");
+            });
+            entity.HasIndex(e => new { e.ContractId, e.VersionId }).IsUnique();
+            entity.HasIndex(e => e.FileId).IsUnique();
+            entity.Property(e => e.UploadedAt).HasColumnType("datetime2");
+            entity.Property(e => e.RowVersion).IsRowVersion().IsConcurrencyToken();
+            entity.HasOne<TblContract>().WithMany().HasForeignKey(e => e.ContractId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<TblContractVersion>().WithMany().HasForeignKey(e => e.VersionId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<TblFileStorage>().WithMany().HasForeignKey(e => e.FileId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<TblEmployee>().WithMany().HasForeignKey(e => e.UploadedByEmployeeId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<TblContractPaymentLedger>(entity =>
+        {
+            entity.HasKey(e => e.ContractPaymentId);
+            entity.ToTable("tbl_ContractPaymentLedger", table =>
+            {
+                table.HasCheckConstraint("CK_tbl_ContractPaymentLedger_Amount", "[Amount] > 0");
+                table.HasCheckConstraint("CK_tbl_ContractPaymentLedger_Status", "[Status] IN (1, 2)");
+                table.HasCheckConstraint("CK_tbl_ContractPaymentLedger_VoidMetadata", "([Status] = 1 AND [VoidReason] IS NULL AND [VoidedByEmployeeId] IS NULL AND [VoidedAt] IS NULL) OR ([Status] = 2 AND [VoidReason] IS NOT NULL AND [VoidedByEmployeeId] IS NOT NULL AND [VoidedAt] IS NOT NULL)");
+            });
+            entity.HasIndex(e => new { e.VersionId, e.ReferenceCode }).IsUnique();
+            entity.HasIndex(e => e.EvidenceFileId).IsUnique().HasFilter("[EvidenceFileId] IS NOT NULL");
+            entity.Property(e => e.Amount).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.CurrencyCode).HasMaxLength(3).IsUnicode(false);
+            entity.Property(e => e.PaymentMethod).HasMaxLength(100);
+            entity.Property(e => e.ReferenceCode).HasMaxLength(100);
+            entity.Property(e => e.VoidReason).HasMaxLength(1000);
+            entity.Property(e => e.PaymentDate).HasColumnType("date");
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime2");
+            entity.Property(e => e.VoidedAt).HasColumnType("datetime2");
+            entity.Property(e => e.RowVersion).IsRowVersion().IsConcurrencyToken();
+            entity.HasOne<TblContract>().WithMany().HasForeignKey(e => e.ContractId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<TblContractVersion>().WithMany().HasForeignKey(e => e.VersionId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<TblFileStorage>().WithMany().HasForeignKey(e => e.EvidenceFileId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<TblEmployee>().WithMany().HasForeignKey(e => e.CreatedByEmployeeId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<TblEmployee>().WithMany().HasForeignKey(e => e.VoidedByEmployeeId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<TblContractTemplate>(entity =>

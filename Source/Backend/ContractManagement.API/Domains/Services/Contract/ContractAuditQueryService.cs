@@ -628,7 +628,10 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
             ContractAuditSubjectTypes.CustomerAccessLink,
             ContractAuditSubjectTypes.CustomerOtpChallenge,
             ContractAuditSubjectTypes.CustomerAccessSession,
-            ContractAuditSubjectTypes.ApprovalRequest];
+            ContractAuditSubjectTypes.ApprovalRequest,
+            ContractAuditSubjectTypes.SignedEvidence,
+            ContractAuditSubjectTypes.AcceptanceEvidence,
+            ContractAuditSubjectTypes.Payment];
 
     private static HashSet<string> Results() =>
         [ContractAuditResults.Succeeded, ContractAuditResults.Failed,
@@ -646,6 +649,12 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
         ContractAuditActionTypes.ApprovalReturned,
         ContractAuditActionTypes.ApprovalRejected,
         ContractAuditActionTypes.ApprovalWithdrawn,
+        ContractAuditActionTypes.SignedEvidenceUploaded,
+        ContractAuditActionTypes.SignedEvidenceSuperseded,
+        ContractAuditActionTypes.AcceptanceEvidenceUploaded,
+        ContractAuditActionTypes.PaymentAdded,
+        ContractAuditActionTypes.PaymentVoided,
+        ContractAuditActionTypes.ContractCompleted,
         ContractAuditActionTypes.ContractAttachmentUploaded,
         ContractAuditActionTypes.ContractAttachmentDeleted,
         ContractAuditActionTypes.NegotiationStarted,

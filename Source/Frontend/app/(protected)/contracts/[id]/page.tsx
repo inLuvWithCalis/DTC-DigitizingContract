@@ -73,6 +73,7 @@ import { ContractAuditLog } from "@/components/contracts/contract-audit-log";
 import { TransferResponsibilityModal } from "@/components/contracts/transfer-responsibility-modal";
 import { ContractApprovalPanel } from "@/components/contracts/contract-approval-panel";
 import { ContractSigningPanel } from "@/components/contracts/contract-signing-panel";
+import { ContractSubmittedArtifactActions } from "@/components/contracts/contract-submitted-artifact-actions";
 
 const CONTRACT_TABS = [
   "overview",
@@ -703,6 +704,14 @@ export default function ContractDetailPage() {
                 ]}
               />
             )}
+            <ContractSubmittedArtifactActions
+              contractId={contract.contractId}
+              versionId={contract.currentVersion.versionId}
+              enabled={
+                contract.status !== ContractStatus.Draft &&
+                contract.status !== ContractStatus.Negotiating
+              }
+            />
             {canUpdateDraft && (
               <Button
                 variant="outline"
@@ -817,17 +826,19 @@ export default function ContractDetailPage() {
           </div>
         </div>
 
-        {isCurrentVersionShared && (
-          <Alert className="border-amber-300 bg-amber-50/60 dark:bg-amber-950/20">
-            <LockKeyhole className="size-4 text-amber-700" />
-            <AlertTitle>Phiên bản đã được chia sẻ với khách hàng</AlertTitle>
-            <AlertDescription>
-              Nội dung được giữ ở chế độ chỉ xem kể cả khi link hết hạn hoặc bị
-              thu hồi, nhằm bảo toàn đúng version khách hàng đã nhận. Muốn chỉnh
-              sửa, hãy tạo vòng đàm phán mới.
-            </AlertDescription>
-          </Alert>
-        )}
+        {isCurrentVersionShared &&
+          (contract.status === ContractStatus.Negotiating ||
+            contract.status === ContractStatus.Draft) && (
+            <Alert className="border-amber-300 bg-amber-50/60 dark:bg-amber-950/20">
+              <LockKeyhole className="size-4 text-amber-700" />
+              <AlertTitle>Phiên bản đã được chia sẻ với khách hàng</AlertTitle>
+              <AlertDescription>
+                Nội dung được giữ ở chế độ chỉ xem kể cả khi link hết hạn hoặc
+                bị thu hồi, nhằm bảo toàn đúng version khách hàng đã nhận. Muốn
+                chỉnh sửa, hãy tạo vòng đàm phán mới.
+              </AlertDescription>
+            </Alert>
+          )}
 
         {canManageContract &&
           contract.status === ContractStatus.Negotiating &&
@@ -888,7 +899,9 @@ export default function ContractDetailPage() {
             <TabsTrigger value="negotiation">Vòng đàm phán</TabsTrigger>
             <TabsTrigger value="terms">Điều khoản - Trao đổi</TabsTrigger>
             <TabsTrigger value="approval">Phê duyệt</TabsTrigger>
-            <TabsTrigger value="customer-access">Truy cập khách hàng</TabsTrigger>
+            <TabsTrigger value="customer-access">
+              Truy cập khách hàng
+            </TabsTrigger>
             <TabsTrigger value="signature">Ký hợp đồng</TabsTrigger>
             <TabsTrigger value="documents">Chứng từ</TabsTrigger>
             <TabsTrigger value="closing">Đóng hợp đồng</TabsTrigger>
@@ -961,7 +974,15 @@ export default function ContractDetailPage() {
           </TabsContent>
 
           <TabsContent value="closing">
-            <ContractClosing contract={contract} />
+            <ContractClosing
+              contract={contract}
+              canManage={canManageContract}
+              canComplete={hasPermission(
+                user?.permissions,
+                RBAC_PERMISSIONS.contractComplete,
+              )}
+              onContractRefetch={() => fetchContractDetail(false)}
+            />
           </TabsContent>
 
           <TabsContent value="activity">

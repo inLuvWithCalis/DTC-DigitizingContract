@@ -22,6 +22,7 @@ public static class RbacPermissions
     public const string ContractReadTenant = "contract.read.tenant";
     public const string ContractManageOwn = "contract.manage.own";
     public const string ContractApprovalDecide = "contract.approval.decide";
+    public const string ContractComplete = "contract.complete";
     public const string ContractSupport = "contract.support";
     public const string TemplateAvailableRead = "template.available.read";
     public const string TemplateManage = "template.manage";
@@ -70,6 +71,7 @@ public static class EmployeePermissionCatalog
                 RbacPermissions.CustomerManage,
                 RbacPermissions.ContractReadTenant,
                 RbacPermissions.ContractApprovalDecide,
+                RbacPermissions.ContractComplete,
                 RbacPermissions.ContractSupport,
                 RbacPermissions.ContractAuditReadTenant,
                 RbacPermissions.SecurityAuditReadTenant,

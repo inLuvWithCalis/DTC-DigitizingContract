@@ -10,6 +10,8 @@ public static class ContractAuditSubjectTypes
     public const string CustomerAccessSession = "CustomerAccessSession";
     public const string ApprovalRequest = "ApprovalRequest";
     public const string SignedEvidence = "SignedEvidence";
+    public const string AcceptanceEvidence = "AcceptanceEvidence";
+    public const string Payment = "Payment";
 }
 
 public static class ContractAuditFailureCodes
@@ -59,6 +61,10 @@ public static class ContractAuditActionTypes
     public const string SignedEvidenceUploaded = "SignedEvidenceUploaded";
     public const string SignedEvidenceSuperseded =
         "SignedEvidenceSuperseded";
+    public const string AcceptanceEvidenceUploaded = "AcceptanceEvidenceUploaded";
+    public const string PaymentAdded = "PaymentAdded";
+    public const string PaymentVoided = "PaymentVoided";
+    public const string ContractCompleted = "ContractCompleted";
     public const string ContractAttachmentUploaded =
         "ContractAttachmentUploaded";
     public const string ContractAttachmentDeleted =

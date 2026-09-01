@@ -204,6 +204,16 @@ const FIELD_LABELS: Record<string, string> = {
   SupersedesEvidenceId: "Thay thế bản scan",
   ProviderSigningDate: "Ngày ký nhà cung cấp",
   CustomerSigningDate: "Ngày ký khách hàng",
+  AcceptanceEvidenceId: "Biên bản nghiệm thu",
+  ContractPaymentId: "Khoản thanh toán",
+  PaymentDate: "Ngày thanh toán",
+  Amount: "Số tiền",
+  PaymentMethod: "Phương thức thanh toán",
+  ReferenceCode: "Mã tham chiếu",
+  EvidenceFileId: "Tệp chứng từ",
+  PaymentStatus: "Trạng thái thanh toán",
+  PaidAmount: "Đã thanh toán",
+  RemainingAmount: "Còn phải thanh toán",
 };
 
 const PHONE_SOURCE_LABELS: Record<string, string> = {
@@ -470,6 +480,9 @@ function getAuditSubjectHref(
     case "CustomerOtpChallenge":
     case "CustomerAccessSession":
       return `/contracts/${audit.contractId}#signature`;
+    case "AcceptanceEvidence":
+    case "Payment":
+      return `/contracts/${audit.contractId}#closing`;
     default:
       return null;
   }

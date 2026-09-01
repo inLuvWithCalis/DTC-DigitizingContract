@@ -19,6 +19,10 @@ public sealed class FileResourceAuthorizationService
         "ContractVersionArtifact";
     private const string ContractSignedEvidenceObjectType =
         "ContractSignedEvidence";
+    private const string ContractAcceptanceEvidenceObjectType =
+        "ContractAcceptanceEvidence";
+    private const string ContractPaymentEvidenceObjectType =
+        "ContractPaymentEvidence";
     private const string ContractTemplateVersionObjectType =
         "ContractTemplateVersion";
     private const string ContractTemplatePreviewObjectType =
@@ -144,6 +148,8 @@ public sealed class FileResourceAuthorizationService
                 return;
 
             case ContractSignedEvidenceObjectType:
+            case ContractAcceptanceEvidenceObjectType:
+            case ContractPaymentEvidenceObjectType:
                 // Signed evidence is append-only. It can only be replaced by
                 // the signing workflow, never through generic file mutation.
                 if (isWrite)

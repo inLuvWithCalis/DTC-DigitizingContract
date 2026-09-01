@@ -39,6 +39,7 @@ export const contractAttachmentsApi = {
     contractId: number,
     file: File,
     documentType: ContractDocumentType,
+    onProgress?: (progress: number) => void,
   ) {
     const formData = new FormData();
     formData.append("file", file);
@@ -47,7 +48,17 @@ export const contractAttachmentsApi = {
     return axiosClient.post<any, ContractAttachmentResponse>(
       getBaseUrl(contractId),
       formData,
-      { headers: { "Content-Type": "multipart/form-data" } },
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (event) => {
+          const total = event.total ?? file.size;
+          if (total > 0) {
+            onProgress?.(
+              Math.min(99, Math.round((event.loaded / total) * 100)),
+            );
+          }
+        },
+      },
     );
   },
 

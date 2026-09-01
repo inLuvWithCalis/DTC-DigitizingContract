@@ -14,6 +14,7 @@ export const RBAC_PERMISSIONS = {
   contractReadTenant: "contract.read.tenant",
   contractManageOwn: "contract.manage.own",
   contractApprovalDecide: "contract.approval.decide",
+  contractComplete: "contract.complete",
   contractSupport: "contract.support",
   templateAvailableRead: "template.available.read",
   templateManage: "template.manage",

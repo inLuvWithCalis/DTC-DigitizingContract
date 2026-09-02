@@ -40,7 +40,8 @@ public sealed class CentralSecurityAuditWriter
             DateTime.UtcNow,
             httpContext.Connection.RemoteIpAddress?.ToString(),
             httpContext.Request.Headers.UserAgent.ToString(),
-            httpContext.TraceIdentifier);
+            httpContext.TraceIdentifier,
+            request.ChangedFields);
 
         try
         {

@@ -199,7 +199,7 @@ export default function TenantsPage() {
               <Field label="Mã nhân viên Manager" value={form.employeeCode} onChange={(value) => updateField("employeeCode", value)} />
               <Field label="Tài khoản Manager" required value={form.employeeAccount} onChange={(value) => updateField("employeeAccount", value)} />
               <Field label="Họ tên Manager" required value={form.employeeFullName} onChange={(value) => updateField("employeeFullName", value)} />
-              <Field label="Mật khẩu tạm" required type="password" minLength={8} value={form.employeePassword} onChange={(value) => updateField("employeePassword", value)} />
+              <Field label="Mật khẩu tạm" required type="password" minLength={12} value={form.employeePassword} onChange={(value) => updateField("employeePassword", value)} />
               <Field label="Số điện thoại" value={form.employeeMobile} onChange={(value) => updateField("employeeMobile", value)} />
               <Field label="Email" type="email" value={form.employeeEmail} onChange={(value) => updateField("employeeEmail", value)} />
             </div>

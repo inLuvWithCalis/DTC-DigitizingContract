@@ -2184,6 +2184,17 @@ public partial class DbDtctechContext : DbContext
                 .HasMaxLength(1)
                 .IsFixedLength();
             entity.Property(e => e.HireDate).HasColumnType("datetime");
+            entity.Property(e => e.PasswordChangedAt).HasColumnType("datetime2");
+            entity.Property(e => e.MustChangePassword).HasDefaultValue(false);
+            entity.Property(e => e.SessionVersion).HasDefaultValue(1);
+            entity.Property(e => e.AvatarStorageKey).HasMaxLength(500);
+            entity.Property(e => e.AvatarContentType).HasMaxLength(100).IsUnicode(false);
+            entity.Property(e => e.AvatarSha256).HasMaxLength(64).IsUnicode(false);
+            entity.Property(e => e.AvatarUpdatedAt).HasColumnType("datetime2");
+            entity.Property(e => e.CoverStorageKey).HasMaxLength(500);
+            entity.Property(e => e.CoverContentType).HasMaxLength(100).IsUnicode(false);
+            entity.Property(e => e.CoverSha256).HasMaxLength(64).IsUnicode(false);
+            entity.Property(e => e.CoverUpdatedAt).HasColumnType("datetime2");
             entity.Property(e => e.MaritalStatus)
                 .HasMaxLength(1)
                 .IsFixedLength();
@@ -2206,6 +2217,7 @@ public partial class DbDtctechContext : DbContext
             entity.Property(x => x.FailureCode).HasMaxLength(64).IsUnicode(false);
             entity.Property(x => x.TargetType).HasMaxLength(50).IsUnicode(false);
             entity.Property(x => x.TargetId).HasMaxLength(100).IsUnicode(false);
+            entity.Property(x => x.ChangedFields).HasMaxLength(1000).IsUnicode(false);
             entity.Property(x => x.OccurredAt).HasColumnType("datetime2");
             entity.Property(x => x.IpAddress).HasMaxLength(45).IsUnicode(false);
             entity.Property(x => x.UserAgent).HasMaxLength(1024);

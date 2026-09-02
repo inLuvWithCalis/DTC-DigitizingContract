@@ -134,6 +134,55 @@ public sealed class LocalPrivateFileStorageTests : IDisposable
                 policy)));
     }
 
+    [Theory]
+    [InlineData("avatar.jpg", "image/jpeg", "FFD8FF001122")]
+    [InlineData("cover.png", "image/png", "89504E470D0A1A0A1122")]
+    public async Task ProfileImage_AllowsOnlyValidatedJpegAndPng(
+        string fileName,
+        string contentType,
+        string contentHex)
+    {
+        var storage = CreateStorage();
+        var content = Convert.FromHexString(contentHex);
+
+        var stored = await storage.SaveAsync(new PrivateFileSaveRequest(
+            new MemoryStream(content),
+            fileName,
+            contentType,
+            content.Length,
+            "tenant-a",
+            "EmployeeProfileAvatar",
+            12,
+            PrivateFileUploadPolicies.ProfileImage(5 * 1024 * 1024)));
+
+        Assert.Equal(contentType, stored.ContentType);
+        Assert.Equal(64, stored.Sha256.Length);
+    }
+
+    [Theory]
+    [InlineData("avatar.pdf", "application/pdf", "255044462D74657374")]
+    [InlineData("avatar.png", "image/png", "FFD8FF001122")]
+    [InlineData("avatar.svg", "image/svg+xml", "3C7376673E")]
+    public async Task ProfileImage_RejectsUnsupportedOrSpoofedFiles(
+        string fileName,
+        string contentType,
+        string contentHex)
+    {
+        var storage = CreateStorage();
+        var content = Convert.FromHexString(contentHex);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            storage.SaveAsync(new PrivateFileSaveRequest(
+                new MemoryStream(content),
+                fileName,
+                contentType,
+                content.Length,
+                "tenant-a",
+                "EmployeeProfileAvatar",
+                12,
+                PrivateFileUploadPolicies.ProfileImage(5 * 1024 * 1024))));
+    }
+
     [Fact]
     public async Task OpenRead_BlocksCrossTenantStorageKey()
     {

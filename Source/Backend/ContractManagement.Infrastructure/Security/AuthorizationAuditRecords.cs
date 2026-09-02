@@ -12,6 +12,14 @@ public static class AuthorizationAuditActionTypes
     public const string EmployeeRoleChanged = "EmployeeRoleChanged";
     public const string EmployeeStatusChanged = "EmployeeStatusChanged";
     public const string EmployeePasswordReset = "EmployeePasswordReset";
+    public const string EmployeeProfileUpdated = "EmployeeProfileUpdated";
+    public const string EmployeePasswordChanged = "EmployeePasswordChanged";
+    public const string EmployeePasswordResetByManager = "EmployeePasswordResetByManager";
+    public const string SystemAdminProfileUpdated = "SystemAdminProfileUpdated";
+    public const string SystemAdminPasswordChanged = "SystemAdminPasswordChanged";
+    public const string SystemAdminAccountCreated = "SystemAdminAccountCreated";
+    public const string SystemAdminAccountStatusChanged = "SystemAdminAccountStatusChanged";
+    public const string SystemAdminRoleChanged = "SystemAdminRoleChanged";
     public const string TenantProvisioned = "TenantProvisioned";
     public const string ManagerRoleChanged = "ManagerRoleChanged";
 }
@@ -41,7 +49,8 @@ public static class AuthorizationAuditRecordFactory
         DateTime occurredAt,
         string? ipAddress,
         string? userAgent,
-        string correlationId)
+        string correlationId,
+        string? changedFields = null)
     {
         return new TblAuthorizationAudit
         {
@@ -52,6 +61,7 @@ public static class AuthorizationAuditRecordFactory
             Result = result,
             TargetType = targetType,
             TargetId = targetId,
+            ChangedFields = Normalize(changedFields, 1000),
             PreviousEmployeeType = previousEmployeeType,
             NewEmployeeType = newEmployeeType,
             PreviousStatus = previousStatus,
@@ -81,7 +91,8 @@ public static class AuthorizationAuditRecordFactory
         DateTime occurredAt,
         string? ipAddress,
         string? userAgent,
-        string correlationId)
+        string correlationId,
+        string? changedFields = null)
     {
         return new CentralSecurityAudit
         {
@@ -92,6 +103,7 @@ public static class AuthorizationAuditRecordFactory
             Result = result,
             TargetType = Normalize(targetType, 50),
             TargetId = Normalize(targetId, 100),
+            ChangedFields = Normalize(changedFields, 1000),
             PreviousEmployeeType = previousEmployeeType,
             NewEmployeeType = newEmployeeType,
             PreviousStatus = previousStatus,

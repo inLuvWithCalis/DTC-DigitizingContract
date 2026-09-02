@@ -12,7 +12,8 @@ public sealed record CentralSecurityAuditWriteRequest(
     byte? PreviousEmployeeType = null,
     byte? NewEmployeeType = null,
     byte? PreviousStatus = null,
-    byte? NewStatus = null);
+    byte? NewStatus = null,
+    string? ChangedFields = null);
 
 /// <summary>
 /// Best-effort central audit writer. A failed audit is logged critically and

@@ -55,7 +55,9 @@ public sealed class CentralSeedData : ICentralSeedData
             FullName = _options.FullName.Trim(),
             Email = _options.Email.Trim(),
             IsActive = true,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            MustChangePassword = true,
+            SessionVersion = 1
         };
 
         systemAdmin.PasswordHash =

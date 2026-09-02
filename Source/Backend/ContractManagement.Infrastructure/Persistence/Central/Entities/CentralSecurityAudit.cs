@@ -14,6 +14,7 @@ public sealed class CentralSecurityAudit
     public string? FailureCode { get; set; }
     public string? TargetType { get; set; }
     public string? TargetId { get; set; }
+    public string? ChangedFields { get; set; }
     public byte? PreviousEmployeeType { get; set; }
     public byte? NewEmployeeType { get; set; }
     public byte? PreviousStatus { get; set; }

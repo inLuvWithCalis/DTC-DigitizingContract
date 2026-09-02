@@ -1,6 +1,8 @@
 ﻿using ContractManagement.Domains.DTOs.Requests.Authentication;
 using ContractManagement.API.Common.Security;
+using ContractManagement.API.Domains.DTOs.Requests.Authentication;
 using ContractManagement.API.Domains.DTOs.Responses.Authentication;
+using ContractManagement.API.Domains.Interfaces.Authentication;
 using ContractManagement.Filter;
 using ContractManagement.Infrastructure.MultiTenancy.Interfaces;
 using ContractManagement.Infrastructure.Persistence.Application;
@@ -20,14 +22,132 @@ namespace ContractManagement.Domains.Controllers.Authentication
     {
         private readonly DbDtctechContext _dbDtctechContext;
         private readonly IPasswordHasher<TblEmployee> _passwordHasher;
+        private readonly IEmployeeAccountService? _employeeAccountService;
 
         private readonly ICurrentTenant _currentTenant;
 
-        public AuthController(DbDtctechContext dbDtctechContext, IPasswordHasher<TblEmployee> passwordHasher, ICurrentTenant currentTenant)
+        public AuthController(
+            DbDtctechContext dbDtctechContext,
+            IPasswordHasher<TblEmployee> passwordHasher,
+            ICurrentTenant currentTenant,
+            IEmployeeAccountService? employeeAccountService = null)
         {
             this._dbDtctechContext = dbDtctechContext;
             _passwordHasher = passwordHasher;
             _currentTenant = currentTenant;
+            _employeeAccountService = employeeAccountService;
+        }
+
+        [HttpGet("profile")]
+        [SessionAuthorize(AllowWhenPasswordChangeRequired = true)]
+        public async Task<IActionResult> GetProfile(
+            CancellationToken cancellationToken)
+        {
+            var employeeId = GetAuthenticatedEmployeeId();
+            var profile = await AccountService.GetProfileAsync(
+                employeeId,
+                cancellationToken);
+            return Ok(profile);
+        }
+
+        [HttpPut("profile")]
+        [SessionAuthorize(AllowWhenPasswordChangeRequired = true)]
+        public async Task<IActionResult> UpdateProfile(
+            [FromBody] UpdateEmployeeSelfProfileRequest request,
+            CancellationToken cancellationToken)
+        {
+            var employeeId = GetAuthenticatedEmployeeId();
+            var profile = await AccountService.UpdateProfileAsync(
+                employeeId,
+                request,
+                cancellationToken);
+            HttpContext.Session.SetString(
+                AccountSessionKeys.EmployeeName,
+                profile.FullName ?? string.Empty);
+            return Ok(profile);
+        }
+
+        [HttpGet("profile/avatar")]
+        [SessionAuthorize(AllowWhenPasswordChangeRequired = true)]
+        public Task<IActionResult> GetAvatar(CancellationToken cancellationToken) =>
+            OpenProfileImageAsync(ProfileImageKind.Avatar, cancellationToken);
+
+        [HttpPost("profile/avatar")]
+        [SessionAuthorize(AllowWhenPasswordChangeRequired = true)]
+        public async Task<IActionResult> UploadAvatar(
+            [FromForm] ProfileImageUploadRequest request,
+            CancellationToken cancellationToken)
+        {
+            var profile = await AccountService.UploadProfileImageAsync(
+                GetAuthenticatedEmployeeId(),
+                ProfileImageKind.Avatar,
+                request,
+                cancellationToken);
+            return Ok(profile);
+        }
+
+        [HttpDelete("profile/avatar")]
+        [SessionAuthorize(AllowWhenPasswordChangeRequired = true)]
+        public async Task<IActionResult> DeleteAvatar(
+            [FromQuery] string rowVersion,
+            CancellationToken cancellationToken)
+        {
+            var profile = await AccountService.DeleteProfileImageAsync(
+                GetAuthenticatedEmployeeId(),
+                ProfileImageKind.Avatar,
+                rowVersion,
+                cancellationToken);
+            return Ok(profile);
+        }
+
+        [HttpGet("profile/cover")]
+        [SessionAuthorize(AllowWhenPasswordChangeRequired = true)]
+        public Task<IActionResult> GetCover(CancellationToken cancellationToken) =>
+            OpenProfileImageAsync(ProfileImageKind.Cover, cancellationToken);
+
+        [HttpPost("profile/cover")]
+        [SessionAuthorize(AllowWhenPasswordChangeRequired = true)]
+        public async Task<IActionResult> UploadCover(
+            [FromForm] ProfileImageUploadRequest request,
+            CancellationToken cancellationToken)
+        {
+            var profile = await AccountService.UploadProfileImageAsync(
+                GetAuthenticatedEmployeeId(),
+                ProfileImageKind.Cover,
+                request,
+                cancellationToken);
+            return Ok(profile);
+        }
+
+        [HttpDelete("profile/cover")]
+        [SessionAuthorize(AllowWhenPasswordChangeRequired = true)]
+        public async Task<IActionResult> DeleteCover(
+            [FromQuery] string rowVersion,
+            CancellationToken cancellationToken)
+        {
+            var profile = await AccountService.DeleteProfileImageAsync(
+                GetAuthenticatedEmployeeId(),
+                ProfileImageKind.Cover,
+                rowVersion,
+                cancellationToken);
+            return Ok(profile);
+        }
+
+        [HttpPut("password")]
+        [SessionAuthorize(AllowWhenPasswordChangeRequired = true)]
+        public async Task<IActionResult> ChangeOwnPassword(
+            [FromBody] ChangeOwnPasswordRequest request,
+            CancellationToken cancellationToken)
+        {
+            await AccountService.ChangePasswordAsync(
+                GetAuthenticatedEmployeeId(),
+                request,
+                cancellationToken);
+            HttpContext.Session.Clear();
+            return Ok(new
+            {
+                message = "Đổi mật khẩu thành công. Vui lòng đăng nhập lại."
+            });
         }
 
         [HttpPost("login")]
@@ -79,10 +199,26 @@ namespace ContractManagement.Domains.Controllers.Authentication
                         "Employee role is not valid for RBAC v1."));
             }
 
-            // 4. Set up session or token (this is a placeholder, implement your own logic)
-            HttpContext.Session.SetInt32("EmployeeId", employee.EmployeeId);
+            if (passwordVerificationResult == PasswordVerificationResult.SuccessRehashNeeded)
+            {
+                employee.EmployeePassword = _passwordHasher.HashPassword(
+                    employee,
+                    request.Password);
+                await _dbDtctechContext.SaveChangesAsync(HttpContext.RequestAborted);
+            }
 
-            HttpContext.Session.SetString("EmployeeName", employee.EmployeeFullName ?? "");
+            // 4. Set up session or token (this is a placeholder, implement your own logic)
+            HttpContext.Session.SetInt32(
+                AccountSessionKeys.EmployeeId,
+                employee.EmployeeId);
+
+            HttpContext.Session.SetString(
+                AccountSessionKeys.EmployeeName,
+                employee.EmployeeFullName ?? "");
+
+            HttpContext.Session.SetInt32(
+                AccountSessionKeys.EmployeeSessionVersion,
+                employee.SessionVersion);
 
             HttpContext.Session.SetInt32("TenantId", tenant.TenantId);
 
@@ -101,7 +237,7 @@ namespace ContractManagement.Domains.Controllers.Authentication
         }
 
         [HttpGet("me")]
-        [SessionAuthorize]
+        [SessionAuthorize(AllowWhenPasswordChangeRequired = true)]
         public IActionResult GetCurrentUsers()
         {
             var employee = EmployeeAuthorizationContext.GetEmployee(HttpContext);
@@ -125,7 +261,10 @@ namespace ContractManagement.Domains.Controllers.Authentication
                 tenant.TenantCode,
                 tenant.TenantName,
                 RbacPermissions.Version,
-                employee.Permissions));
+                employee.Permissions,
+                employee.MustChangePassword,
+                employee.PasswordChangedAt,
+                employee.ImageUrl));
         }
 
         [HttpPost("logout")]
@@ -139,6 +278,30 @@ namespace ContractManagement.Domains.Controllers.Authentication
             {
                 message = "Đăng xuất thành công."
             });
+        }
+
+        private IEmployeeAccountService AccountService =>
+            _employeeAccountService
+            ?? throw new InvalidOperationException(
+                "Employee account service is not configured.");
+
+        private int GetAuthenticatedEmployeeId() =>
+            EmployeeAuthorizationContext.GetEmployee(HttpContext)?.EmployeeId
+            ?? throw new RbacOperationException(
+                StatusCodes.Status401Unauthorized,
+                AuthorizationErrorCodes.AuthenticationRequired,
+                "Employee login is required.");
+
+        private async Task<IActionResult> OpenProfileImageAsync(
+            ProfileImageKind kind,
+            CancellationToken cancellationToken)
+        {
+            var image = await AccountService.OpenProfileImageAsync(
+                GetAuthenticatedEmployeeId(),
+                kind,
+                cancellationToken);
+            Response.Headers.CacheControl = "private, max-age=300";
+            return File(image.Content, image.ContentType, enableRangeProcessing: true);
         }
 
         // [HttpGet("generate-hash")]

@@ -51,7 +51,9 @@ public sealed class TenantSeedData : ITenantSeedData
             EmployeeEmail = Normalize(initialManager.EmployeeEmail),
             EmployeeType = 6,
             Status = 1,
-            DateCreated = DateTime.UtcNow
+            DateCreated = DateTime.UtcNow,
+            MustChangePassword = true,
+            SessionVersion = 1
         };
         manager.EmployeePassword = _passwordHasher.HashPassword(
             manager,

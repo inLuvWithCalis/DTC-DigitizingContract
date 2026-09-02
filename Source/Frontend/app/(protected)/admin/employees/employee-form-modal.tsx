@@ -151,8 +151,8 @@ export function EmployeeFormModal({
       }
       if (!employeePassword.trim()) {
         newErrors.employeePassword = "Mật khẩu không được để trống";
-      } else if (employeePassword.length < 6) {
-        newErrors.employeePassword = "Mật khẩu tối thiểu 6 ký tự";
+      } else if (employeePassword.length < 12) {
+        newErrors.employeePassword = "Mật khẩu tối thiểu 12 ký tự";
       }
     }
 
@@ -314,6 +314,7 @@ export function EmployeeFormModal({
                 placeholder="••••••"
                 value={employeePassword}
                 onChange={(e) => setEmployeePassword(e.target.value)}
+                minLength={12}
                 maxLength={100}
                 aria-invalid={!!errors.employeePassword}
               />

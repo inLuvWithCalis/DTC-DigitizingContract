@@ -9,7 +9,7 @@ namespace ContractManagement.API.Domains.DTOs.Requests.Employee
     public class ChangePasswordRequest
     {
         [Required]
-        [MinLength(6)]
+        [MinLength(ContractManagement.API.Common.Security.AccountPasswordPolicy.MinimumLength)]
         [MaxLength(100)]
         public string NewPassword { get; set; } = string.Empty;
 

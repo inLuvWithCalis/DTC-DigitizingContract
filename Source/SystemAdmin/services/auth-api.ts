@@ -15,8 +15,11 @@ export interface UserProfileDto {
   systemAdminId: number;
   username: string;
   fullName: string;
-  email: string;
+  email: string | null;
   isActive: boolean;
+  mustChangePassword: boolean;
+  passwordChangedAt: string | null;
+  imageUrl: string | null;
 }
 
 export const authApi = {

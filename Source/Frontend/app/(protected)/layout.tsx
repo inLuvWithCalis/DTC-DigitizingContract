@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { authApi } from "@/services/auth-api";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuthStore } from "@/hooks/use-auth-store";
@@ -19,7 +19,9 @@ export default function ProtectedLayout({
   const [checkError, setCheckError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const router = useRouter();
+  const pathname = usePathname();
   const setUser = useAuthStore((state) => state.setUser);
+  const user = useAuthStore((state) => state.user);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -30,6 +32,13 @@ export default function ProtectedLayout({
         }
         setUser(userData);
         setCheckError(null);
+        if (
+          userData.mustChangePassword &&
+          pathname !== "/profile" &&
+          pathname !== "/change-password"
+        ) {
+          router.replace("/change-password?required=1");
+        }
       } catch (error) {
         setUser(null);
         const code = getApiErrorCode(error);
@@ -52,7 +61,7 @@ export default function ProtectedLayout({
     };
 
     checkAuth();
-  }, [router, setUser, retryKey]);
+  }, [pathname, router, setUser, retryKey]);
 
   if (isChecking) {
     return (
@@ -75,6 +84,18 @@ export default function ProtectedLayout({
         >
           Thử lại
         </Button>
+      </div>
+    );
+  }
+
+  if (
+    user?.mustChangePassword &&
+    pathname !== "/profile" &&
+    pathname !== "/change-password"
+  ) {
+    return (
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-background">
+        <Spinner text="Đang chuyển tới màn đổi mật khẩu..." />
       </div>
     );
   }

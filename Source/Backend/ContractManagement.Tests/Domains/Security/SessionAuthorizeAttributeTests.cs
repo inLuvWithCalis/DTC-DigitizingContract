@@ -76,7 +76,10 @@ public sealed class SessionAuthorizeAttributeTests
     public async Task ActiveEmployeeWithPermission_IsLoadedFromTenantDatabase()
     {
         await using var context = CreateDbContext();
-        context.TblEmployees.Add(NewEmployee(EmployeeType.Sale));
+        var storedEmployee = NewEmployee(EmployeeType.Sale);
+        storedEmployee.AvatarStorageKey = "tenant-a/EmployeeProfileAvatar/11/avatar.png";
+        storedEmployee.AvatarUpdatedAt = new DateTime(2026, 9, 2, 0, 0, 0, DateTimeKind.Utc);
+        context.TblEmployees.Add(storedEmployee);
         await context.SaveChangesAsync();
         var session = AuthenticatedSession();
         var filterContext = CreateFilterContext(context, session);
@@ -90,6 +93,9 @@ public sealed class SessionAuthorizeAttributeTests
         Assert.NotNull(employee);
         Assert.Equal(EmployeeType.Sale, employee.EmployeeType);
         Assert.Contains(RbacPermissions.CustomerManage, employee.Permissions);
+        Assert.Equal(
+            $"/api/auth/profile/avatar?v={storedEmployee.AvatarUpdatedAt.Value.Ticks}",
+            employee.ImageUrl);
     }
 
     [Fact]
@@ -185,6 +191,61 @@ public sealed class SessionAuthorizeAttributeTests
         Assert.Null(session.GetInt32("EmployeeId"));
     }
 
+    [Fact]
+    public async Task SessionVersionChange_InvalidatesExistingSession()
+    {
+        await using var context = CreateDbContext();
+        var employee = NewEmployee(EmployeeType.Sale);
+        context.TblEmployees.Add(employee);
+        await context.SaveChangesAsync();
+        var session = AuthenticatedSession();
+
+        var allowedRequest = CreateFilterContext(context, session);
+        await new SessionAuthorizeAttribute().OnAuthorizationAsync(allowedRequest);
+        Assert.Null(allowedRequest.Result);
+
+        employee.SessionVersion++;
+        await context.SaveChangesAsync();
+
+        var expiredRequest = CreateFilterContext(context, session);
+        await new SessionAuthorizeAttribute().OnAuthorizationAsync(expiredRequest);
+
+        var result = Assert.IsType<ObjectResult>(expiredRequest.Result);
+        Assert.Equal(StatusCodes.Status401Unauthorized, result.StatusCode);
+        Assert.Equal(
+            AuthorizationErrorCodes.AuthenticationRequired,
+            Assert.IsType<AuthorizationErrorResponse>(result.Value).Code);
+        Assert.Null(session.GetInt32(AccountSessionKeys.EmployeeId));
+    }
+
+    [Fact]
+    public async Task MustChangePassword_BlocksBusinessButAllowsSelfService()
+    {
+        await using var context = CreateDbContext();
+        var employee = NewEmployee(EmployeeType.Sale);
+        employee.MustChangePassword = true;
+        context.TblEmployees.Add(employee);
+        await context.SaveChangesAsync();
+        var session = AuthenticatedSession();
+
+        var deniedRequest = CreateFilterContext(context, session);
+        await new SessionAuthorizeAttribute().OnAuthorizationAsync(deniedRequest);
+
+        var result = Assert.IsType<ObjectResult>(deniedRequest.Result);
+        Assert.Equal(StatusCodes.Status403Forbidden, result.StatusCode);
+        Assert.Equal(
+            AuthorizationErrorCodes.MustChangePassword,
+            Assert.IsType<AuthorizationErrorResponse>(result.Value).Code);
+        Assert.Equal(11, session.GetInt32(AccountSessionKeys.EmployeeId));
+
+        var allowedRequest = CreateFilterContext(context, session);
+        await new SessionAuthorizeAttribute
+        {
+            AllowWhenPasswordChangeRequired = true
+        }.OnAuthorizationAsync(allowedRequest);
+        Assert.Null(allowedRequest.Result);
+    }
+
     private static DbDtctechContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<DbDtctechContext>()
@@ -203,7 +264,8 @@ public sealed class SessionAuthorizeAttributeTests
             EmployeeAccount = "employee11",
             EmployeeFullName = "Employee 11",
             EmployeeType = employeeType.HasValue ? (byte)employeeType.Value : null,
-            Status = status
+            Status = status,
+            SessionVersion = 1
         };
     }
 
@@ -211,6 +273,7 @@ public sealed class SessionAuthorizeAttributeTests
     {
         var session = new TestSession();
         session.SetInt32("EmployeeId", 11);
+        session.SetInt32(AccountSessionKeys.EmployeeSessionVersion, 1);
         session.SetInt32("TenantId", 101);
         session.SetString("TenantCode", "tenant-a");
         return session;

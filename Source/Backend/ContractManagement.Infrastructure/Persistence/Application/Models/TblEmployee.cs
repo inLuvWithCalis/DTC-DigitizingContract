@@ -57,5 +57,31 @@ public partial class TblEmployee
 
     public int? WorkTypeId { get; set; }
 
+    public DateTime? PasswordChangedAt { get; set; }
+
+    public bool MustChangePassword { get; set; }
+
+    public int SessionVersion { get; set; } = 1;
+
+    public string? AvatarStorageKey { get; set; }
+
+    public string? AvatarContentType { get; set; }
+
+    public long? AvatarFileSize { get; set; }
+
+    public string? AvatarSha256 { get; set; }
+
+    public DateTime? AvatarUpdatedAt { get; set; }
+
+    public string? CoverStorageKey { get; set; }
+
+    public string? CoverContentType { get; set; }
+
+    public long? CoverFileSize { get; set; }
+
+    public string? CoverSha256 { get; set; }
+
+    public DateTime? CoverUpdatedAt { get; set; }
+
     public byte[] RowVersion { get; set; } = null!;
 }

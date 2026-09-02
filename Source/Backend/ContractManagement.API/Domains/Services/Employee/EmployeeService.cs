@@ -252,6 +252,7 @@ namespace ContractManagement.API.Domains.Services.Employee
                 await ValidateDepartmentAsync(request.DepartmentId);
 
                 var account = NormalizeRequired(request.EmployeeAccount, nameof(request.EmployeeAccount));
+                AccountPasswordPolicy.EnsureValid(request.EmployeePassword);
                 if (await _dbContext.TblEmployees.AnyAsync(
                         employee => employee.EmployeeAccount == account,
                         cancellationToken))
@@ -271,7 +272,9 @@ namespace ContractManagement.API.Domains.Services.Employee
                     DepartmentId = request.DepartmentId,
                     EmployeeType = request.EmployeeType,
                     Status = 1,
-                    DateCreated = DateTime.UtcNow
+                    DateCreated = DateTime.UtcNow,
+                    MustChangePassword = true,
+                    SessionVersion = 1
                 };
                 employee.EmployeePassword = _passwordHasher.HashPassword(
                     employee,
@@ -349,13 +352,22 @@ namespace ContractManagement.API.Domains.Services.Employee
                 EnsureManagerCanMutateTarget(employee, employee.EmployeeType);
                 SetExpectedRowVersion(employee, request.RowVersion);
 
+                AccountPasswordPolicy.EnsureNotReused(
+                    _passwordHasher,
+                    employee,
+                    employee.EmployeePassword,
+                    request.NewPassword);
+
                 employee.EmployeePassword = _passwordHasher.HashPassword(
                     employee,
                     request.NewPassword);
                 employee.DateModified = DateTime.UtcNow;
+                employee.PasswordChangedAt = DateTime.UtcNow;
+                employee.MustChangePassword = true;
+                employee.SessionVersion = checked(employee.SessionVersion + 1);
                 StageTenantAudit(
                     managerEmployeeId,
-                    AuthorizationAuditActionTypes.EmployeePasswordReset,
+                    AuthorizationAuditActionTypes.EmployeePasswordResetByManager,
                     employee,
                     employee.EmployeeType,
                     employee.Status);

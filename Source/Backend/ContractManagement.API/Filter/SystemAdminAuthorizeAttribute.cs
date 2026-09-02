@@ -16,24 +16,45 @@ namespace ContractManagement.Filter;
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
 public sealed class SystemAdminAuthorizeAttribute : Attribute, IAsyncAuthorizationFilter
 {
+    public bool AllowWhenPasswordChangeRequired { get; set; }
+
     public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
     {
         var httpContext = context.HttpContext;
-        var systemAdminId = httpContext.Session.GetInt32("SystemAdminId");
+        var systemAdminId = httpContext.Session.GetInt32(
+            AccountSessionKeys.SystemAdminId);
+        var sessionVersion = httpContext.Session.GetInt32(
+            AccountSessionKeys.SystemAdminSessionVersion);
         var centralDbContext = httpContext.RequestServices
             .GetRequiredService<CentralDbContext>();
 
-        var isActive = systemAdminId.HasValue
-            && await centralDbContext.SystemAdmins
+        var admin = systemAdminId.HasValue && sessionVersion.HasValue
+            ? await centralDbContext.SystemAdmins
                 .AsNoTracking()
-                .AnyAsync(admin => admin.SystemAdminId == systemAdminId.Value
-                    && admin.IsActive,
-                    httpContext.RequestAborted);
+                .Where(candidate => candidate.SystemAdminId == systemAdminId.Value)
+                .Select(candidate => new
+                {
+                    candidate.IsActive,
+                    candidate.MustChangePassword,
+                    candidate.SessionVersion
+                })
+                .FirstOrDefaultAsync(
+                    httpContext.RequestAborted)
+            : null;
 
-        if (isActive)
+        var hasValidSession = admin is not null
+            && admin.IsActive
+            && admin.SessionVersion == sessionVersion;
+        if (hasValidSession
+            && (!admin!.MustChangePassword
+                || AllowWhenPasswordChangeRequired))
         {
             return;
         }
+
+        var failureCode = hasValidSession
+            ? AuthorizationErrorCodes.MustChangePassword
+            : AuthorizationErrorCodes.AuthenticationRequired;
 
         await httpContext.RequestServices
             .GetRequiredService<ICentralSecurityAuditWriter>()
@@ -47,16 +68,25 @@ public sealed class SystemAdminAuthorizeAttribute : Attribute, IAsyncAuthorizati
                     AuthorizationAuditResultTypes.Denied,
                     "CentralApi",
                     GetTargetId(context),
-                    AuthorizationErrorCodes.AuthenticationRequired),
+                    failureCode),
                 httpContext.RequestAborted);
 
-        httpContext.Session.Remove("SystemAdminId");
-        httpContext.Session.Remove("SystemAdminName");
-        context.Result = new ObjectResult(new AuthorizationErrorResponse(
-            AuthorizationErrorCodes.AuthenticationRequired,
-            "System Admin login is required."))
+        if (!hasValidSession)
         {
-            StatusCode = StatusCodes.Status401Unauthorized
+            httpContext.Session.Remove(AccountSessionKeys.SystemAdminId);
+            httpContext.Session.Remove(AccountSessionKeys.SystemAdminName);
+            httpContext.Session.Remove(
+                AccountSessionKeys.SystemAdminSessionVersion);
+        }
+        context.Result = new ObjectResult(new AuthorizationErrorResponse(
+            failureCode,
+            hasValidSession
+                ? "Bạn phải đổi mật khẩu trước khi tiếp tục."
+                : "System Admin login is required."))
+        {
+            StatusCode = hasValidSession
+                ? StatusCodes.Status403Forbidden
+                : StatusCodes.Status401Unauthorized
         };
     }
 

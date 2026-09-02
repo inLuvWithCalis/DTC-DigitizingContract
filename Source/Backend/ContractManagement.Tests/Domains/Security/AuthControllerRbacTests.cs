@@ -63,7 +63,8 @@ public sealed class AuthControllerRbacTests
                 "manager",
                 "Tenant Manager",
                 EmployeeType.Manager,
-                permissions);
+                permissions,
+                ImageUrl: "/api/auth/profile/avatar?v=123");
 
         var result = controller.GetCurrentUsers();
 
@@ -74,6 +75,7 @@ public sealed class AuthControllerRbacTests
         Assert.Equal(nameof(EmployeeType.Manager), response.RoleName);
         Assert.Equal(RbacPermissions.Version, response.PermissionVersion);
         Assert.Equal(permissions, response.Permissions);
+        Assert.Equal("/api/auth/profile/avatar?v=123", response.ImageUrl);
         Assert.IsNotType<TblEmployee>(ok.Value);
     }
 

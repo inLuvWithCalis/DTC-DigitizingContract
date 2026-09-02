@@ -10,6 +10,10 @@ public static class AuthorizationErrorCodes
     public const string ResourceNotFound = "ResourceNotFound";
     public const string StaleRowVersion = "StaleRowVersion";
     public const string LastActiveManager = "LastActiveManager";
+    public const string CurrentPasswordIncorrect = "CurrentPasswordIncorrect";
+    public const string PasswordPolicyViolation = "PasswordPolicyViolation";
+    public const string PasswordReuseNotAllowed = "PasswordReuseNotAllowed";
+    public const string MustChangePassword = "MustChangePassword";
 }
 
 public sealed record AuthorizationErrorResponse(string Code, string Message);
@@ -33,7 +37,10 @@ public sealed record AuthenticatedEmployee(
     string? Account,
     string? FullName,
     EmployeeType EmployeeType,
-    IReadOnlyList<string> Permissions);
+    IReadOnlyList<string> Permissions,
+    bool MustChangePassword = false,
+    DateTime? PasswordChangedAt = null,
+    string? ImageUrl = null);
 
 public static class EmployeeAuthorizationContext
 {

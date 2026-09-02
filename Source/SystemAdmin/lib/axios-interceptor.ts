@@ -18,10 +18,26 @@ const unwrapApiResponse = (response: AxiosResponse) => {
   return data;
 };
 
+const getResponseErrorCode = (error: AxiosError) => {
+  const data = error.response?.data;
+  if (data && typeof data === "object" && "code" in data) {
+    return typeof data.code === "string" ? data.code : undefined;
+  }
+  return undefined;
+};
+
 axiosClient.interceptors.response.use(
   unwrapApiResponse,
 
   (error: AxiosError) => {
+    if (
+      error.response?.status === 403 &&
+      getResponseErrorCode(error) === "MustChangePassword" &&
+      typeof window !== "undefined" &&
+      window.location.pathname !== "/change-password"
+    ) {
+      window.location.replace("/change-password?required=1");
+    }
     if (error.response?.status === 401) {
       if (typeof window !== "undefined") {
         if (window.location.pathname !== "/") {

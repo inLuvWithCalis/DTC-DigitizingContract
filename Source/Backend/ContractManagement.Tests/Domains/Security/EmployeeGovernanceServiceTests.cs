@@ -7,6 +7,7 @@ using ContractManagement.Infrastructure.MultiTenancy.Models;
 using ContractManagement.Infrastructure.MultiTenancy.Services;
 using ContractManagement.Infrastructure.Persistence.Application;
 using ContractManagement.Infrastructure.Persistence.Application.Models;
+using ContractManagement.Infrastructure.Security;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -157,8 +158,13 @@ public sealed class EmployeeGovernanceServiceTests
                 RowVersion = Convert.ToBase64String(employee.RowVersion)
             });
 
+        Assert.True(employee.MustChangePassword);
+        Assert.Equal(2, employee.SessionVersion);
+        Assert.NotNull(employee.PasswordChangedAt);
         var audit = await dbContext.TblAuthorizationAudits.SingleAsync();
-        Assert.Equal("EmployeePasswordReset", audit.Action);
+        Assert.Equal(
+            AuthorizationAuditActionTypes.EmployeePasswordResetByManager,
+            audit.Action);
         Assert.Equal(1, audit.ActorEmployeeId);
         Assert.Equal(2.ToString(), audit.TargetId);
         Assert.DoesNotContain(newPassword, new[]

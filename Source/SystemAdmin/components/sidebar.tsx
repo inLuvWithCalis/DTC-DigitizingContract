@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +28,7 @@ import { useSidebar } from "./sidebar-context";
 import { useAuthStore } from "@/hooks/use-auth-store";
 import { authApi } from "@/services/auth-api";
 import { cn } from "@/lib/utils";
+import { resolveProfileImageUrl } from "@/services/profile-api";
 
 const navItems = [
   {
@@ -158,9 +160,18 @@ export function Sidebar() {
             mobile || isExpanded ? "gap-3" : "justify-center",
           )}
         >
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
-            {user?.username?.[0]?.toUpperCase() ?? "S"}
-          </div>
+          <Avatar className="size-9">
+            {user?.imageUrl && (
+              <AvatarImage
+                src={resolveProfileImageUrl(user.imageUrl)}
+                alt={user.fullName || "System Admin"}
+                className="object-cover"
+              />
+            )}
+            <AvatarFallback className="bg-primary text-sm font-bold text-primary-foreground">
+              {user?.username?.[0]?.toUpperCase() ?? "S"}
+            </AvatarFallback>
+          </Avatar>
           {(mobile || isExpanded) && (
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold">
@@ -179,9 +190,15 @@ export function Sidebar() {
         className="w-60 rounded-xl"
       >
         <DropdownMenuItem asChild className="cursor-pointer py-2.5">
-          <Link href="/dashboard/profile">
+          <Link href="/profile">
             <User className="mr-2 size-4 text-muted-foreground" />
             Hồ sơ cá nhân
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild className="cursor-pointer py-2.5">
+          <Link href="/change-password">
+            <Settings className="mr-2 size-4 text-muted-foreground" />
+            Đổi mật khẩu
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />

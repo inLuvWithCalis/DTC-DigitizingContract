@@ -29,6 +29,9 @@ export interface UserProfileDto {
   tenantName: string;
   permissionVersion: string;
   permissions: RbacPermission[];
+  mustChangePassword: boolean;
+  passwordChangedAt: string | null;
+  imageUrl: string | null;
 }
 
 export const authApi = {

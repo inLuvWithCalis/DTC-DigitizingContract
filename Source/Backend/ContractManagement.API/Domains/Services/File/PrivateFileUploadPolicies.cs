@@ -41,6 +41,20 @@ public static class PrivateFileUploadPolicies
             });
     }
 
+    public static PrivateFileUploadPolicy ProfileImage(long maximumSizeBytes)
+    {
+        return Create(
+            [".jpg", ".jpeg", ".png"],
+            ["image/jpeg", "image/png"],
+            maximumSizeBytes,
+            new Dictionary<string, IReadOnlyList<byte[]>>(StringComparer.OrdinalIgnoreCase)
+            {
+                [".jpg"] = [JpegSignature],
+                [".jpeg"] = [JpegSignature],
+                [".png"] = [PngSignature]
+            });
+    }
+
     public static PrivateFileUploadPolicy ContractAttachment(
         long maximumSizeBytes = 10 * 1024 * 1024)
     {

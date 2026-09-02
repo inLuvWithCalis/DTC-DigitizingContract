@@ -7,6 +7,10 @@ export const AUTHORIZATION_ERROR_CODES = {
   resourceNotFound: "ResourceNotFound",
   staleRowVersion: "StaleRowVersion",
   lastActiveManager: "LastActiveManager",
+  currentPasswordIncorrect: "CurrentPasswordIncorrect",
+  passwordPolicyViolation: "PasswordPolicyViolation",
+  passwordReuseNotAllowed: "PasswordReuseNotAllowed",
+  mustChangePassword: "MustChangePassword",
 } as const;
 
 export type AuthorizationErrorCode =

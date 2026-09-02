@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using ContractManagement.API.Common.Security;
 
 namespace ContractManagement.Contracts.Tenants;
 
@@ -12,8 +13,8 @@ public sealed class InitialManagerRequest
     public string EmployeeAccount { get; set; } = string.Empty;
 
     [Required]
-    [MinLength(6)]
-    [MaxLength(100)]
+    [MinLength(AccountPasswordPolicy.MinimumLength)]
+    [MaxLength(AccountPasswordPolicy.MaximumLength)]
     public string EmployeePassword { get; set; } = string.Empty;
 
     [Required]

@@ -21,14 +21,20 @@ public sealed class SessionAuthorizeAttribute : Attribute, IAsyncAuthorizationFi
         _requiredPermissions = requiredPermissions ?? Array.Empty<string>();
     }
 
+    public bool AllowWhenPasswordChangeRequired { get; set; }
+
     public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
     {
         var httpContext = context.HttpContext;
         var session = httpContext.Session;
-        var employeeId = session.GetInt32("EmployeeId");
+        var employeeId = session.GetInt32(AccountSessionKeys.EmployeeId);
+        var sessionVersion = session.GetInt32(
+            AccountSessionKeys.EmployeeSessionVersion);
         var tenantId = session.GetInt32("TenantId");
 
-        if (!employeeId.HasValue || !tenantId.HasValue)
+        if (!employeeId.HasValue
+            || !sessionVersion.HasValue
+            || !tenantId.HasValue)
         {
             context.Result = Error(
                 StatusCodes.Status401Unauthorized,
@@ -64,7 +70,12 @@ public sealed class SessionAuthorizeAttribute : Attribute, IAsyncAuthorizationFi
                 Account = x.EmployeeAccount,
                 FullName = x.EmployeeFullName,
                 x.EmployeeType,
-                x.Status
+                x.Status,
+                x.MustChangePassword,
+                x.SessionVersion,
+                x.PasswordChangedAt,
+                x.AvatarStorageKey,
+                x.AvatarUpdatedAt
             })
             .FirstOrDefaultAsync(httpContext.RequestAborted);
 
@@ -90,6 +101,17 @@ public sealed class SessionAuthorizeAttribute : Attribute, IAsyncAuthorizationFi
             return;
         }
 
+        if (employee.SessionVersion != sessionVersion.Value)
+        {
+            PreserveDeniedAuditActor(httpContext, employee.EmployeeId);
+            session.Clear();
+            context.Result = Error(
+                StatusCodes.Status401Unauthorized,
+                AuthorizationErrorCodes.AuthenticationRequired,
+                "Employee session has expired.");
+            return;
+        }
+
         if (!EmployeePermissionCatalog.TryGetPermissions(
                 employee.EmployeeType,
                 out var permissions))
@@ -98,6 +120,16 @@ public sealed class SessionAuthorizeAttribute : Attribute, IAsyncAuthorizationFi
                 StatusCodes.Status403Forbidden,
                 AuthorizationErrorCodes.PermissionDenied,
                 "Employee role is not valid for RBAC v1.");
+            return;
+        }
+
+        if (employee.MustChangePassword
+            && !AllowWhenPasswordChangeRequired)
+        {
+            context.Result = Error(
+                StatusCodes.Status403Forbidden,
+                AuthorizationErrorCodes.MustChangePassword,
+                "Bạn phải đổi mật khẩu trước khi tiếp tục.");
             return;
         }
 
@@ -117,7 +149,12 @@ public sealed class SessionAuthorizeAttribute : Attribute, IAsyncAuthorizationFi
                 employee.Account,
                 employee.FullName,
                 (EmployeeType)employee.EmployeeType!.Value,
-                permissions);
+                permissions,
+                employee.MustChangePassword,
+                employee.PasswordChangedAt,
+                employee.AvatarStorageKey is null
+                    ? null
+                    : $"/api/auth/profile/avatar?v={employee.AvatarUpdatedAt?.Ticks ?? 0}");
     }
 
     private static ObjectResult Error(int statusCode, string code, string message)

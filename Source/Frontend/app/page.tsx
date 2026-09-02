@@ -56,6 +56,15 @@ export default function LoginPage() {
     if (typeof window !== "undefined") {
       const urlParams = new URLSearchParams(window.location.search);
       const error = urlParams.get("error");
+      const passwordChanged = urlParams.get("password_changed");
+
+      if (passwordChanged === "1") {
+        const timer = setTimeout(() => {
+          toast.success("Đổi mật khẩu thành công. Vui lòng đăng nhập lại.");
+          window.history.replaceState(null, "", "/");
+        }, 100);
+        return () => clearTimeout(timer);
+      }
 
       if (error === "session_expired" || error === "employee_inactive") {
         const timer = setTimeout(() => {

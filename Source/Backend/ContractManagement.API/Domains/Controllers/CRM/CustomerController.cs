@@ -27,7 +27,7 @@ namespace ContractManagement.API.Domains.Controllers.CRM
         /// <summary>
         /// Lấy danh sách khách hàng có phân trang, tìm kiếm, lọc trạng thái.
         /// For example:
-        /// GET /api/customers?page=1&pageSize=20&keyword=abc&status=1
+        /// GET /api/customers?page=1&amp;pageSize=20&amp;keyword=abc&amp;status=1
         /// </summary>
         [HttpGet]
         [SessionAuthorize(RbacPermissions.CustomerManage)]

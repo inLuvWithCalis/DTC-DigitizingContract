@@ -6,6 +6,7 @@ import { Loader2, FileText, ShieldCheck, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { authApi } from "@/services/auth-api";
+import { getApiErrorMessage } from "@/lib/api-error";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,13 +57,13 @@ export default function LoginPage() {
   useEffect(() => {
     const checkAlreadyLoggedIn = async () => {
       if (isAuthenticated && user) {
-        router.push("/dashboard");
+        router.push("/tenants");
         return;
       }
 
       try {
         await authApi.getMe();
-        router.push("/dashboard");
+        router.push("/tenants");
       } catch (error) {
         setIsLoading(false);
       }
@@ -125,13 +126,9 @@ export default function LoginPage() {
       });
 
       toast.success(data.message || "Đăng nhập thành công!");
-      router.push("/dashboard");
-    } catch (error: any) {
-      const message =
-        error?.response?.data?.message ||
-        error?.message ||
-        "Đăng nhập thất bại, vui lòng thử lại.";
-      toast.error(message);
+      router.push("/tenants");
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Đăng nhập thất bại, vui lòng thử lại."));
     } finally {
       setIsLoading(false);
     }

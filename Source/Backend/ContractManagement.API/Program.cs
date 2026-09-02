@@ -34,6 +34,22 @@ using ContractManagement.API.Domains.CustomerAccess;
 
 var builder = WebApplication.CreateBuilder(args);
 
+ValidateProductionConfiguration(builder.Configuration, builder.Environment);
+
+var allowedCorsOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .Get<string[]>()
+    ?? [];
+if (builder.Environment.IsDevelopment() && allowedCorsOrigins.Length == 0)
+{
+    allowedCorsOrigins =
+    [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:8081"
+    ];
+}
+
 #region 1. MVC Controllers
 
 /*
@@ -149,8 +165,9 @@ builder.Services.AddSession(options =>
      * Local HTTP vẫn chạy được.
      * Khi request dùng HTTPS thì cookie cũng dùng Secure.
      */
-    options.Cookie.SecurePolicy =
-        CookieSecurePolicy.SameAsRequest;
+    options.Cookie.SecurePolicy = builder.Environment.IsProduction()
+        ? CookieSecurePolicy.Always
+        : CookieSecurePolicy.SameAsRequest;
 });
 
 #endregion
@@ -165,7 +182,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("CorsPolicy", policy =>
     {
         policy
-            .WithOrigins("http://localhost:3000", "http://localhost:3001", "http://localhost:8081")
+            .WithOrigins(allowedCorsOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
@@ -209,6 +226,9 @@ builder.Services.AddOptions<PrivateFileStorageOptions>()
     .Validate(
         options => !string.IsNullOrWhiteSpace(options.RootPath),
         "PrivateFileStorage:RootPath is required.")
+    .Validate(
+        options => options.MinimumFreeSpaceBytes >= 0,
+        "PrivateFileStorage:MinimumFreeSpaceBytes cannot be negative.")
     .ValidateOnStart();
 builder.Services.AddSingleton<IPrivateFileStorage, LocalPrivateFileStorage>();
 
@@ -356,6 +376,10 @@ builder.Services.AddAutoMapper(config =>
 
 var app = builder.Build();
 
+// Khởi tạo sớm để fail-fast khi đường dẫn, quyền ghi hoặc dung lượng private
+// storage không đạt yêu cầu, thay vì đợi tới request upload đầu tiên.
+_ = app.Services.GetRequiredService<IPrivateFileStorage>();
+
 #region 8.5 Seed central Data
 
 using (var scope = app.Services.CreateScope())
@@ -384,6 +408,11 @@ if (app.Environment.IsDevelopment())
 /*
  * Chuyển HTTP sang HTTPS.
  */
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
+
 app.UseHttpsRedirection();
 
 /*
@@ -449,7 +478,11 @@ app.MapControllers();
  */
 app.MapReverseProxy();
 
-FrontendLauncher.Start();
+if (app.Environment.IsDevelopment()
+    && builder.Configuration.GetValue("Development:LaunchFrontends", true))
+{
+    FrontendLauncher.Start();
+}
 #endregion
 
 /*
@@ -476,5 +509,45 @@ static bool IsThirtyTwoByteBase64(string? value)
     catch (FormatException)
     {
         return false;
+    }
+}
+
+static void ValidateProductionConfiguration(
+    IConfiguration configuration,
+    IHostEnvironment environment)
+{
+    if (!environment.IsProduction())
+    {
+        return;
+    }
+
+    var requiredConnections = new[] { "CentralDatabase", "TenantDatabaseTemplate" };
+    foreach (var name in requiredConnections)
+    {
+        var value = configuration.GetConnectionString(name);
+        if (string.IsNullOrWhiteSpace(value)
+            || value.Contains("YOUR_", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"ConnectionStrings:{name} phải được cấp qua environment/secret store trong production.");
+        }
+    }
+
+    var origins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+    if (origins.Length == 0
+        || origins.Any(origin => !Uri.TryCreate(origin, UriKind.Absolute, out var uri)
+            || uri.Scheme != Uri.UriSchemeHttps))
+    {
+        throw new InvalidOperationException(
+            "Cors:AllowedOrigins production phải chứa ít nhất một HTTPS origin cố định.");
+    }
+
+    var allowedHosts = configuration["AllowedHosts"];
+    if (string.IsNullOrWhiteSpace(allowedHosts)
+        || allowedHosts.Contains('*')
+        || string.Equals(allowedHosts, "localhost", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException(
+            "AllowedHosts production phải là hostname triển khai cụ thể.");
     }
 }

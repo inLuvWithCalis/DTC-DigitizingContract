@@ -143,6 +143,32 @@ namespace ContractManagement.Domains.Services.Contract
             return attachments.Select(MapToResponse).ToList();
         }
 
+        public async Task<(Stream Stream, string FileName)?> DownloadAsync(
+            int contractId,
+            int attachmentId,
+            int employeeId)
+        {
+            await _contractAuthorization.EnsureCanReadAsync(contractId, employeeId);
+
+            var attachment = await _dbContext.TblContractAttachments
+                .AsNoTracking()
+                .FirstOrDefaultAsync(candidate => candidate.ContractId == contractId
+                    && candidate.AttachmentId == attachmentId);
+            if (attachment is null)
+            {
+                return null;
+            }
+
+            var fileId = await _dbContext.TblFileStorages
+                .AsNoTracking()
+                .Where(file => file.FilePath == attachment.ContractFilePath)
+                .Select(file => (int?)file.FileId)
+                .FirstOrDefaultAsync();
+            return fileId.HasValue
+                ? await _fileStorageService.DownloadAsync(fileId.Value)
+                : null;
+        }
+
         public async Task DeleteAsync(
             int contractId,
             int attachmentId,

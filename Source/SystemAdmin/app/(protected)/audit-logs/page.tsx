@@ -77,7 +77,7 @@ export default function CentralSecurityAuditsPage() {
     }
   }, [action, actorId, fromUtc, page, queryVersion, result, tenantCode, toUtcValue]);
 
-  useEffect(() => { void loadAudits(); }, [loadAudits]);
+  useEffect(() => { queueMicrotask(() => void loadAudits()); }, [loadAudits]);
 
   const applyFilters = () => {
     setPage(1);

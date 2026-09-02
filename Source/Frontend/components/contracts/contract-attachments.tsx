@@ -346,12 +346,22 @@ export function ContractAttachments({
     }
   };
 
-  const handleDownload = (attachment: ContractAttachmentItem) => {
-    if (!attachment.downloadUrl || mockMode) {
+  const handleDownload = async (attachment: ContractAttachmentItem) => {
+    if (mockMode) {
       toast.info("Bản xem thử chưa có file thật để tải xuống.");
       return;
     }
-    window.open(attachment.downloadUrl, "_blank", "noopener,noreferrer");
+    try {
+      const blob = await contractAttachmentsApi.download(contractId, attachment.id);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = attachment.name;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Không thể tải tài liệu."));
+    }
   };
 
   return (

@@ -26,11 +26,9 @@ function Input({
     return 0;
   });
 
-  React.useEffect(() => {
-    if (value !== undefined) {
-      setCharCount(String(value).length);
-    }
-  }, [value]);
+  const displayedCharCount = value !== undefined
+    ? String(value).length
+    : charCount;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (type === "number" && maxLength && e.target.value.length > maxLength) {
@@ -58,7 +56,7 @@ function Input({
     if (onClear) onClear();
   };
 
-  const showClearButton = charCount > 0 && !props.disabled;
+  const showClearButton = displayedCharCount > 0 && !props.disabled;
 
   return (
     <div className="relative w-full">
@@ -101,7 +99,7 @@ function Input({
 
         {maxLength && (
           <div className="text-[11px] font-medium text-muted-foreground/70 min-w-[28px] text-right select-none shrink-0">
-            {charCount}/{maxLength}
+            {displayedCharCount}/{maxLength}
           </div>
         )}
       </div>

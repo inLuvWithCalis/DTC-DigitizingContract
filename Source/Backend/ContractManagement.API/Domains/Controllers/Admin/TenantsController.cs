@@ -30,6 +30,14 @@ public sealed class TenantsController : ControllerBase
         _managerGovernanceService = managerGovernanceService;
     }
 
+    [HttpGet]
+    public async Task<ActionResult<IReadOnlyList<TenantResponse>>> GetAll(
+        CancellationToken cancellationToken)
+    {
+        var tenants = await _tenantProvisioningService.GetAllAsync(cancellationToken);
+        return Ok(tenants.Select(MapTenantResponse).ToList());
+    }
+
     [HttpPost]
     public async Task<ActionResult<TenantResponse>>
         CreateDedicatedTenant(
@@ -59,15 +67,7 @@ public sealed class TenantsController : ControllerBase
                     command,
                     cancellationToken);
 
-        var response = new TenantResponse
-        {
-            TenantId = result.TenantId,
-            TenantCode = result.TenantCode,
-            TenantName = result.TenantName,
-            DatabaseName = result.DatabaseName,
-            DatabaseMode = result.DatabaseMode,
-            Status = result.Status
-        };
+        var response = MapTenantResponse(result);
 
         return Created(
             $"/api/admin/tenants/{response.TenantId}",
@@ -100,4 +100,15 @@ public sealed class TenantsController : ControllerBase
                 AuthorizationErrorCodes.AuthenticationRequired,
                 "System Admin login is required.");
     }
+
+    private static TenantResponse MapTenantResponse(TenantProvisioningResult result) =>
+        new()
+        {
+            TenantId = result.TenantId,
+            TenantCode = result.TenantCode,
+            TenantName = result.TenantName,
+            DatabaseName = result.DatabaseName,
+            DatabaseMode = result.DatabaseMode,
+            Status = result.Status
+        };
 }

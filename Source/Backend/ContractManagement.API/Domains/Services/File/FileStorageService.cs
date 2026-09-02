@@ -8,8 +8,7 @@ using Microsoft.EntityFrameworkCore;
 namespace ContractManagement.Domains.Services.File
 {
     /// <summary>
-    /// Service lưu file local vào wwwroot/uploads.
-    /// Đồng thời lưu metadata vào bảng tbl_FileStorage.
+    /// Service lưu file mới vào private storage và metadata vào tbl_FileStorage.
     /// 
     /// Lưu ý multi-tenant:
     /// File được tách theo tenantCode để tránh lẫn file giữa các tenant.
@@ -59,54 +58,35 @@ namespace ContractManagement.Domains.Services.File
             // Vì project là database-per-tenant, request nào upload file cũng phải resolve tenant.
             var tenant = _currentTenant.GetRequiredTenant();
 
-            // 3. Xác định wwwroot
-            // Nếu chưa có wwwroot thì tự tạo.
-            var webRootPath = _environment.WebRootPath;
-
-            if (string.IsNullOrWhiteSpace(webRootPath))
-            {
-                webRootPath = Path.Combine(_environment.ContentRootPath, "wwwroot");
-            }
-
-            Directory.CreateDirectory(webRootPath);
-
-            // 4. Tạo folder lưu file theo tenant/objectType/objectId
-            var uploadFolder = Path.Combine(
-                webRootPath,
-                "uploads",
-                tenant.TenantCode,
-                objectType,
-                objectId.ToString());
-
-            Directory.CreateDirectory(uploadFolder);
-
-            // 5. Tạo tên file vật lý để tránh trùng tên
             var originalFileName = Path.GetFileName(file.FileName);
-            var storedFileName = $"{Guid.NewGuid():N}_{originalFileName}";
-
-            var physicalPath = Path.Combine(uploadFolder, storedFileName);
-
-            // 6. Lưu file vào ổ cứng
-            await using (var stream = new FileStream(physicalPath, FileMode.Create))
-            {
-                await file.CopyToAsync(stream);
-            }
-
-            // 7. Lưu đường dẫn tương đối vào DB
-            // Không lưu full path ổ đĩa E:/C:/ để sau này deploy dễ hơn.
-            var relativePath =
-                $"/uploads/{tenant.TenantCode}/{objectType}/{objectId}/{storedFileName}";
+            await using var content = file.OpenReadStream();
+            var stored = await _privateFileStorage.SaveAsync(
+                new PrivateFileSaveRequest(
+                    content,
+                    originalFileName,
+                    file.ContentType,
+                    file.Length,
+                    tenant.TenantCode,
+                    objectType,
+                    objectId,
+                    PrivateFileUploadPolicies.ContractAttachment()));
 
             var fileEntity = new TblFileStorage
             {
                 ObjectType = objectType,
                 ObjectId = objectId,
                 FileName = originalFileName,
-                FilePath = relativePath,
+                // FilePath không còn là URL. Giữ storage key để các bảng legacy
+                // đang liên kết bằng FilePath vẫn tìm được metadata.
+                FilePath = stored.StorageKey,
+                StorageKey = stored.StorageKey,
+                ContentType = stored.ContentType,
+                Sha256 = stored.Sha256,
+                TenantCode = stored.TenantCode,
                 FileType = Path.GetExtension(originalFileName)
                     .TrimStart('.')
                     .ToLowerInvariant(),
-                FileSize = file.Length,
+                FileSize = stored.FileSize,
                 UploadedByUserId = uploadedBy,
                 UploadedDate = DateTime.Now
             };
@@ -124,10 +104,9 @@ namespace ContractManagement.Domains.Services.File
                 _dbContext.Entry(fileEntity).State = EntityState.Detached;
                 try
                 {
-                    if (System.IO.File.Exists(physicalPath))
-                    {
-                        System.IO.File.Delete(physicalPath);
-                    }
+                    await _privateFileStorage.DeleteAsync(
+                        stored.TenantCode,
+                        stored.StorageKey);
                 }
                 catch
                 {
@@ -216,7 +195,7 @@ namespace ContractManagement.Domains.Services.File
                 throw new KeyNotFoundException("Không tìm thấy file.");
             }
 
-            DeletePhysicalFile(file.FilePath);
+            await DeletePhysicalFileAsync(file);
 
             // 2. Xóa metadata trong DB
             _dbContext.TblFileStorages.Remove(file);
@@ -229,7 +208,17 @@ namespace ContractManagement.Domains.Services.File
 
             // Transaction SQL có thể đã rollback metadata, nhưng physical file
             // không transactional nên phải được dọn từ safe relative path này.
-            DeletePhysicalFile(file.FilePath);
+            if (!string.IsNullOrWhiteSpace(file.StorageKey)
+                && !string.IsNullOrWhiteSpace(file.TenantCode))
+            {
+                await _privateFileStorage.DeleteAsync(
+                    file.TenantCode,
+                    file.StorageKey);
+            }
+            else
+            {
+                DeleteLegacyPhysicalFile(file.FilePath);
+            }
 
             if (file.FileId <= 0)
             {
@@ -247,7 +236,19 @@ namespace ContractManagement.Domains.Services.File
             await _dbContext.SaveChangesAsync();
         }
 
-        private void DeletePhysicalFile(string? filePath)
+        private async Task DeletePhysicalFileAsync(TblFileStorage file)
+        {
+            if (!string.IsNullOrWhiteSpace(file.StorageKey)
+                && !string.IsNullOrWhiteSpace(file.TenantCode))
+            {
+                await _privateFileStorage.DeleteAsync(file.TenantCode, file.StorageKey);
+                return;
+            }
+
+            DeleteLegacyPhysicalFile(file.FilePath);
+        }
+
+        private void DeleteLegacyPhysicalFile(string? filePath)
         {
             if (string.IsNullOrWhiteSpace(filePath))
             {
@@ -281,7 +282,9 @@ namespace ContractManagement.Domains.Services.File
                 FileType = file.FileType,
                 FileSize = file.FileSize,
                 UploadedByUserId = file.UploadedByUserId,
-                UploadedDate = file.UploadedDate
+                UploadedDate = file.UploadedDate,
+                StorageKey = file.StorageKey,
+                TenantCode = file.TenantCode
             };
         }
     }

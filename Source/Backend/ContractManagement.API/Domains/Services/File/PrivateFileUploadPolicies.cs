@@ -9,6 +9,8 @@ public static class PrivateFileUploadPolicies
     private static readonly byte[] PngSignature =
         [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
     private static readonly byte[] JpegSignature = [0xFF, 0xD8, 0xFF];
+    private static readonly byte[] OleCompoundSignature =
+        [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
 
     public static PrivateFileUploadPolicy SoftwareSupplyTemplateDocument(
         long maximumSizeBytes = 20 * 1024 * 1024)
@@ -36,6 +38,37 @@ public static class PrivateFileUploadPolicies
                 [".jpg"] = [JpegSignature],
                 [".jpeg"] = [JpegSignature],
                 [".png"] = [PngSignature]
+            });
+    }
+
+    public static PrivateFileUploadPolicy ContractAttachment(
+        long maximumSizeBytes = 10 * 1024 * 1024)
+    {
+        return Create(
+            [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".png", ".jpg", ".jpeg", ".zip"],
+            [
+                "application/pdf",
+                "application/msword",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "application/vnd.ms-excel",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "image/png",
+                "image/jpeg",
+                "application/zip",
+                "application/x-zip-compressed"
+            ],
+            maximumSizeBytes,
+            new Dictionary<string, IReadOnlyList<byte[]>>(StringComparer.OrdinalIgnoreCase)
+            {
+                [".pdf"] = [PdfSignature],
+                [".doc"] = [OleCompoundSignature],
+                [".docx"] = [ZipSignature],
+                [".xls"] = [OleCompoundSignature],
+                [".xlsx"] = [ZipSignature],
+                [".jpg"] = [JpegSignature],
+                [".jpeg"] = [JpegSignature],
+                [".png"] = [PngSignature],
+                [".zip"] = [ZipSignature]
             });
     }
 

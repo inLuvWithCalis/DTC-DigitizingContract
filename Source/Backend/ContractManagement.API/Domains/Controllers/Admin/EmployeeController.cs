@@ -29,7 +29,7 @@ namespace ContractManagement.Domains.Controllers.Admin
         /// <summary>
         /// Lấy danh sách nhân viên có phân trang và tìm kiếm.
         /// Ví dụ:
-        /// GET /api/admin/employees?page=1&pageSize=20&keyword=an
+        /// GET /api/admin/employees?page=1&amp;pageSize=20&amp;keyword=an
         /// </summary>
         [HttpGet]
         public async Task<IActionResult> GetList([FromQuery] EmployeeFilterRequest filter)

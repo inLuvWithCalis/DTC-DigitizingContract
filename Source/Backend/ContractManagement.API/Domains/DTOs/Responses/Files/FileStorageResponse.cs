@@ -23,5 +23,11 @@
         public int? UploadedByUserId { get; set; }
 
         public DateTime? UploadedDate { get; set; }
+
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string? StorageKey { get; set; }
+
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string? TenantCode { get; set; }
     }
 }

@@ -67,4 +67,12 @@ export const contractAttachmentsApi = {
       `${getBaseUrl(contractId)}/${attachmentId}`,
     );
   },
+
+  async download(contractId: number, attachmentId: number) {
+    const blob = await axiosClient.get<unknown, Blob>(
+      `${getBaseUrl(contractId)}/${attachmentId}/download`,
+      { responseType: "blob" },
+    );
+    return blob;
+  },
 };

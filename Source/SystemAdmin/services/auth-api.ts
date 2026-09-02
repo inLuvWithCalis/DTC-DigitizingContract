@@ -21,8 +21,8 @@ export interface UserProfileDto {
 
 export const authApi = {
   login: (payload: LoginRequestDto) => {
-    return axiosClient.post<any, LoginResponseDto>(
-      "/system-auth/login",
+    return axiosClient.post<unknown, LoginResponseDto>(
+      "/api/system-auth/login",
       payload,
       {
         withCredentials: true,
@@ -31,12 +31,12 @@ export const authApi = {
   },
 
   getMe: () => {
-    return axiosClient.get<any, UserProfileDto>("/system-auth/me");
+    return axiosClient.get<unknown, UserProfileDto>("/api/system-auth/me");
   },
 
   logout: async () => {
-    await axiosClient.post<any, void>(
-      "/system-auth/logout",
+    await axiosClient.post<unknown, void>(
+      "/api/system-auth/logout",
       {},
       {
         withCredentials: true,

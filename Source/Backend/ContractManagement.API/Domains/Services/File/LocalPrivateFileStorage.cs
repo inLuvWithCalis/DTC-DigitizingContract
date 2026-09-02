@@ -25,6 +25,12 @@ public sealed partial class LocalPrivateFileStorage : IPrivateFileStorage
                 ? configuredRoot
                 : Path.Combine(environment.ContentRootPath, configuredRoot));
 
+        if (environment.IsProduction() && !Path.IsPathRooted(configuredRoot))
+        {
+            throw new InvalidOperationException(
+                "PrivateFileStorage:RootPath phải là đường dẫn tuyệt đối trong production.");
+        }
+
         var webRoot = string.IsNullOrWhiteSpace(environment.WebRootPath)
             ? Path.Combine(environment.ContentRootPath, "wwwroot")
             : environment.WebRootPath;
@@ -34,7 +40,62 @@ public sealed partial class LocalPrivateFileStorage : IPrivateFileStorage
                 "Private storage không được đặt trong wwwroot.");
         }
 
+
+        if (environment.IsProduction()
+            && IsWithinRoot(_rootPath, Path.GetFullPath(environment.ContentRootPath)))
+        {
+            throw new InvalidOperationException(
+                "Private storage production phải nằm ngoài thư mục ứng dụng.");
+        }
+
         Directory.CreateDirectory(_rootPath);
+        VerifyWriteAccess();
+        VerifyCapacity(options.Value.MinimumFreeSpaceBytes);
+    }
+
+    private void VerifyWriteAccess()
+    {
+        var probePath = Path.Combine(_rootPath, $".write-probe-{Guid.NewGuid():N}");
+        try
+        {
+            using (System.IO.File.Create(probePath, 1, FileOptions.DeleteOnClose))
+            {
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new InvalidOperationException(
+                "API không có quyền ghi vào private storage.",
+                exception);
+        }
+        finally
+        {
+            if (System.IO.File.Exists(probePath))
+            {
+                System.IO.File.Delete(probePath);
+            }
+        }
+    }
+
+    private void VerifyCapacity(long minimumFreeSpaceBytes)
+    {
+        if (minimumFreeSpaceBytes <= 0)
+        {
+            return;
+        }
+
+        var root = Path.GetPathRoot(_rootPath);
+        if (string.IsNullOrWhiteSpace(root))
+        {
+            throw new InvalidOperationException("Không xác định được ổ private storage.");
+        }
+
+        var drive = new DriveInfo(root);
+        if (drive.AvailableFreeSpace < minimumFreeSpaceBytes)
+        {
+            throw new InvalidOperationException(
+                $"Private storage chỉ còn {drive.AvailableFreeSpace:N0} bytes, thấp hơn ngưỡng {minimumFreeSpaceBytes:N0} bytes.");
+        }
     }
 
     public async Task<StoredPrivateFile> SaveAsync(

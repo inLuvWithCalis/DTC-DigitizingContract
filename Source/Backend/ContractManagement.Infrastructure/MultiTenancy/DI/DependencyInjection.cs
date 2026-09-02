@@ -27,12 +27,29 @@ public static class DependencyInjection
             configuration.GetSection(
                 MultiTenancyOptions.SectionName));
 
+        services.AddOptions<SystemAdminBootstrapOptions>()
+            .Bind(configuration.GetSection(SystemAdminBootstrapOptions.SectionName))
+            .Validate(
+                options => !options.Enabled
+                    || (!string.IsNullOrWhiteSpace(options.Username)
+                        && options.Password.Length >= 12
+                        && !string.IsNullOrWhiteSpace(options.FullName)
+                        && !string.IsNullOrWhiteSpace(options.Email)),
+                "SystemAdminBootstrap requires username, a password of at least 12 characters, full name and email.")
+            .ValidateOnStart();
+
         string centralConnectionString =
             configuration.GetConnectionString(
                 "CentralDatabase")
             ?? throw new InvalidOperationException(
                 "Không tìm thấy connection string "
                 + "'CentralDatabase'.");
+
+        if (string.IsNullOrWhiteSpace(centralConnectionString))
+        {
+            throw new InvalidOperationException(
+                "ConnectionStrings:CentralDatabase chưa được cấu hình.");
+        }
 
         /*
          * CentralDbContext luôn kết nối một database cố định.

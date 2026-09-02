@@ -75,6 +75,27 @@ namespace ContractManagement.Domains.Controllers.Contract
                     "Xóa file đính kèm hợp đồng thành công."));
         }
 
+        [HttpGet("{attachmentId:int}/download")]
+        public async Task<IActionResult> Download(
+            int contractId,
+            int attachmentId)
+        {
+            var result = await _service.DownloadAsync(
+                contractId,
+                attachmentId,
+                GetEmployeeId());
+            if (result is null)
+            {
+                return NotFound();
+            }
+
+            return File(
+                result.Value.Stream,
+                "application/octet-stream",
+                result.Value.FileName,
+                enableRangeProcessing: true);
+        }
+
         private int GetEmployeeId()
         {
             var employeeId = HttpContext.Session.GetInt32("EmployeeId");

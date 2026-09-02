@@ -120,7 +120,7 @@ namespace ContractManagement.Domains.Controllers.File
 
         /// <summary>
         /// Lấy danh sách file theo objectType + objectId.
-        /// Ví dụ: /api/files?objectType=Contract&objectId=12
+        /// Ví dụ: /api/files?objectType=Contract&amp;objectId=12
         /// </summary>
         [HttpGet]
         public async Task<IActionResult> GetByObject(

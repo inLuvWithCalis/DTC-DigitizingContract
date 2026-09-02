@@ -41,19 +41,15 @@ function Select({
     value || defaultValue,
   );
 
-  React.useEffect(() => {
-    if (value !== undefined) {
-      setInternalValue(value);
-    }
-  }, [value]);
-
   const handleValueChange = (val: string) => {
-    setInternalValue(val);
+    if (value === undefined) {
+      setInternalValue(val);
+    }
     onValueChange?.(val);
   };
 
   return (
-    <SelectValueContext.Provider value={internalValue}>
+    <SelectValueContext.Provider value={value ?? internalValue}>
       <SelectPrimitive.Root
         data-slot="select"
         value={value}

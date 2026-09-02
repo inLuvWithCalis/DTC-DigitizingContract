@@ -51,15 +51,17 @@ export interface ManagerGovernanceResponseDto {
 }
 
 export const adminTenantsApi = {
+  getAll: () =>
+    axiosClient.get<unknown, TenantResponseDto[]>("/api/admin/tenants"),
   create: (payload: CreateTenantRequestDto) =>
-    axiosClient.post<any, TenantResponseDto>("/admin/tenants", payload),
+    axiosClient.post<unknown, TenantResponseDto>("/api/admin/tenants", payload),
   changeEmployeeRole: (
     tenantCode: string,
     employeeId: number,
     payload: ChangeEmployeeRoleRequestDto,
   ) =>
-    axiosClient.put<any, ManagerGovernanceResponseDto>(
-      `/admin/tenants/${encodeURIComponent(tenantCode)}/employees/${employeeId}/role`,
+    axiosClient.put<unknown, ManagerGovernanceResponseDto>(
+      `/api/admin/tenants/${encodeURIComponent(tenantCode)}/employees/${employeeId}/role`,
       payload,
     ),
 };

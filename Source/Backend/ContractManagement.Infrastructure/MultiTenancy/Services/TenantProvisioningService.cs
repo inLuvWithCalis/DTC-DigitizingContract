@@ -43,6 +43,23 @@ public sealed class TenantProvisioningService
         _tenantSeedData = tenantSeedData;
     }
 
+    public async Task<IReadOnlyList<TenantProvisioningResult>> GetAllAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _centralDbContext.Tenants
+            .AsNoTracking()
+            .Include(tenant => tenant.TenantDatabase)
+            .OrderBy(tenant => tenant.TenantCode)
+            .Select(tenant => new TenantProvisioningResult(
+                tenant.TenantId,
+                tenant.TenantCode,
+                tenant.TenantName,
+                tenant.TenantDatabase.DatabaseName,
+                tenant.TenantDatabase.Mode,
+                tenant.Status))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<TenantProvisioningResult>
         CreateDedicatedAsync(
             TenantProvisioningCommand command,

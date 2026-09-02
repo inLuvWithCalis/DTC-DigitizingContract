@@ -21,7 +21,7 @@ export default function ProtectedLayout({
       try {
         const userData = await authApi.getMe();
         setUser(userData);
-      } catch (error) {
+      } catch {
         setUser(null);
         router.replace("/?error=session_expired");
       } finally {

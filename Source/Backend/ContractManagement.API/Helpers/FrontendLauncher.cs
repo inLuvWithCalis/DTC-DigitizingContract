@@ -9,10 +9,6 @@ public static class FrontendLauncher
 
     public static void Start()
     {
-#if !DEBUG
-        return;
-#endif
-
         if (_started)
             return;
 

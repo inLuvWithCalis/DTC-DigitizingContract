@@ -17,6 +17,11 @@ namespace ContractManagement.Domains.Interfaces.Contract
             int contractId,
             int employeeId);
 
+        Task<(Stream Stream, string FileName)?> DownloadAsync(
+            int contractId,
+            int attachmentId,
+            int employeeId);
+
         Task DeleteAsync(int contractId, int attachmentId, int employeeId);
     }
 }

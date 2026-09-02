@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -8,12 +8,10 @@ import {
   ChevronLeft,
   FileText,
   HeartPulse,
-  LayoutDashboard,
   LogOut,
   Menu,
   ScrollText,
   Settings,
-  ShieldCheck,
   User,
   X,
 } from "lucide-react";
@@ -32,21 +30,9 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   {
-    label: "Tổng quan",
-    icon: LayoutDashboard,
-    href: "/dashboard",
-    disabled: false,
-  },
-  {
     label: "Quản lý tenant",
     icon: Building2,
     href: "/tenants",
-    disabled: false,
-  },
-  {
-    label: "Quản trị viên",
-    icon: ShieldCheck,
-    href: "/administrators",
     disabled: false,
   },
   {
@@ -76,10 +62,6 @@ export function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
 
-  useEffect(() => {
-    setIsMobileOpen(false);
-  }, [pathname]);
-
   const handleLogout = async () => {
     logout();
     router.push("/");
@@ -92,21 +74,18 @@ export function Sidebar() {
 
   const renderNavigation = (mobile = false) => (
     <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-4">
-      <p
+      {/* <p
         className={cn(
           "mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground",
           !mobile && !isExpanded && "sr-only",
         )}
       >
         Quản trị hệ thống
-      </p>
+      </p> */}
 
       {navItems.map((item) => {
         const Icon = item.icon;
-        const isActive =
-          item.href === "/dashboard"
-            ? pathname === "/dashboard"
-            : pathname.startsWith(item.href);
+        const isActive = pathname.startsWith(item.href);
         const showLabel = mobile || isExpanded;
         const commonClassName = cn(
           "group relative flex min-h-10 items-center rounded-xl text-sm transition-colors",
@@ -161,6 +140,7 @@ export function Sidebar() {
             href={item.href}
             className={commonClassName}
             title={showLabel ? undefined : item.label}
+            onClick={() => setIsMobileOpen(false)}
           >
             {content}
           </Link>
@@ -239,7 +219,7 @@ export function Sidebar() {
           )}
         >
           {isExpanded && (
-            <Link href="/dashboard" className="flex min-w-0 items-center gap-2.5">
+            <Link href="/tenants" className="flex min-w-0 items-center gap-2.5">
               <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm shadow-primary/20">
                 <FileText className="size-4" />
               </div>
@@ -283,7 +263,7 @@ export function Sidebar() {
           <aside className="fixed inset-y-0 left-0 z-50 flex w-[290px] flex-col bg-card shadow-2xl lg:hidden">
             <div className="flex h-16 items-center justify-between border-b px-4">
               <Link
-                href="/dashboard"
+                href="/tenants"
                 className="flex min-w-0 items-center gap-2.5"
               >
                 <div className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">

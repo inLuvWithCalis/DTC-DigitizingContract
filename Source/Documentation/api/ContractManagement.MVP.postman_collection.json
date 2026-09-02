@@ -1,0 +1,50 @@
+{
+  "info": {
+    "name": "ContractManagement MVP",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://api.example.com" },
+    { "key": "tenantCode", "value": "" },
+    { "key": "contractId", "value": "" },
+    { "key": "attachmentId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Employee - Me",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/auth/me" }
+    },
+    {
+      "name": "System Admin - Tenants",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/admin/tenants" }
+    },
+    {
+      "name": "Contracts - Detail",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "X-Tenant-Code", "value": "{{tenantCode}}" }],
+        "url": "{{baseUrl}}/api/contracts/{{contractId}}"
+      }
+    },
+    {
+      "name": "Contract attachment - Download",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "X-Tenant-Code", "value": "{{tenantCode}}" }],
+        "url": "{{baseUrl}}/api/contracts/{{contractId}}/attachments/{{attachmentId}}/download"
+      }
+    },
+    {
+      "name": "Tenant security audits",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "X-Tenant-Code", "value": "{{tenantCode}}" }],
+        "url": "{{baseUrl}}/api/security-audits?page=1&pageSize=20"
+      }
+    },
+    {
+      "name": "Central security audits",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/admin/security-audits?page=1&pageSize=20" }
+    }
+  ]
+}

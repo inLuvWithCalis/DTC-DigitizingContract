@@ -46,8 +46,7 @@ namespace ContractManagement.API.Domains.Policies.Contract
              *
              * Chỉ Signed mới được phép đi tiếp sang Completed.
              */
-            if ((contractStatus is not ContractStatus.Signed
-                    and not ContractStatus.Completed)
+            if (contractStatus != ContractStatus.Signed
                 || !hasActiveSignedEvidence)
             {
                 blockers.Add(new ContractCompletionBlocker(

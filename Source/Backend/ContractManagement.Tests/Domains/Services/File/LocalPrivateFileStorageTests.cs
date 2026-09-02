@@ -62,6 +62,78 @@ public sealed class LocalPrivateFileStorageTests : IDisposable
                 PrivateFileUploadPolicies.ContractEvidence())));
     }
 
+    [Theory]
+    [InlineData("signed.pdf", "application/pdf", "255044462D74657374")]
+    [InlineData("signed.jpg", "image/jpeg", "FFD8FF001122")]
+    [InlineData("signed.jpeg", "image/jpeg", "FFD8FF334455")]
+    [InlineData("signed.png", "image/png", "89504E470D0A1A0A1122")]
+    public async Task ContractEvidence_AllAllowedFormatsPassMetadataAndSignatureValidation(
+        string fileName,
+        string contentType,
+        string contentHex)
+    {
+        var storage = CreateStorage();
+        var content = Convert.FromHexString(contentHex);
+
+        var stored = await storage.SaveAsync(new PrivateFileSaveRequest(
+            new MemoryStream(content),
+            fileName,
+            contentType,
+            content.Length,
+            "tenant-a",
+            "contract-evidence",
+            12,
+            PrivateFileUploadPolicies.ContractEvidence()));
+
+        Assert.Equal(fileName, stored.OriginalFileName);
+        Assert.Equal(contentType, stored.ContentType);
+        Assert.Equal(content.Length, stored.FileSize);
+        Assert.Equal(64, stored.Sha256.Length);
+    }
+
+    [Theory]
+    [InlineData("signed.exe", "application/pdf", "255044462D74657374")]
+    [InlineData("signed.pdf", "text/plain", "255044462D74657374")]
+    [InlineData("signed.pdf", "application/pdf", "6E6F742D612D706466")]
+    public async Task ContractEvidence_RejectsInvalidExtensionContentTypeOrSignature(
+        string fileName,
+        string contentType,
+        string contentHex)
+    {
+        var storage = CreateStorage();
+        var content = Convert.FromHexString(contentHex);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            storage.SaveAsync(new PrivateFileSaveRequest(
+                new MemoryStream(content),
+                fileName,
+                contentType,
+                content.Length,
+                "tenant-a",
+                "contract-evidence",
+                12,
+                PrivateFileUploadPolicies.ContractEvidence())));
+    }
+
+    [Fact]
+    public async Task ContractEvidence_RejectsDeclaredFileLargerThanPolicyLimit()
+    {
+        var storage = CreateStorage();
+        var content = "%PDF-test"u8.ToArray();
+        var policy = PrivateFileUploadPolicies.ContractEvidence();
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            storage.SaveAsync(new PrivateFileSaveRequest(
+                new MemoryStream(content),
+                "signed.pdf",
+                "application/pdf",
+                policy.MaximumSizeBytes + 1,
+                "tenant-a",
+                "contract-evidence",
+                12,
+                policy)));
+    }
+
     [Fact]
     public async Task OpenRead_BlocksCrossTenantStorageKey()
     {

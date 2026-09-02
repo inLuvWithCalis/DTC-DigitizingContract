@@ -32,6 +32,23 @@ public sealed class ContractCompletionPolicyTests
         Assert.Equal(3, result.Blockers.Count);
     }
 
+    [Fact]
+    public void Evaluate_completed_contract_is_not_ready_again()
+    {
+        var result = ContractCompletionPolicy.Evaluate(
+            ContractStatus.Completed,
+            hasActiveSignedEvidence: true,
+            hasAcceptanceEvidence: true,
+            totalAmount: 100m,
+            paidAmount: 100m);
+
+        Assert.False(result.CanComplete);
+        Assert.Contains(
+            result.Blockers,
+            blocker => blocker.Code ==
+                ContractCompletionBlockerCode.ContractMustBeSigned);
+    }
+
     [Theory]
     [InlineData(0, 0)]
     [InlineData(100, -1)]

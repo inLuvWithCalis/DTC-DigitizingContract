@@ -201,6 +201,126 @@ public sealed class ContractApprovalServicePhase8DTests
         Assert.Equal("Owner", item.SubmittedByEmployeeName);
     }
 
+    [Theory]
+    [InlineData(
+        ApprovalRequestStatus.Returned,
+        ContractStatus.Negotiating,
+        ContractAuditActionTypes.ApprovalReturned)]
+    [InlineData(
+        ApprovalRequestStatus.Rejected,
+        ContractStatus.Rejected,
+        ContractAuditActionTypes.ApprovalRejected)]
+    public async Task ReturnOrReject_WithReason_ResolvesRequestAndAuditsResult(
+        ApprovalRequestStatus decision,
+        ContractStatus expectedContractStatus,
+        string expectedAuditAction)
+    {
+        await using var context = CreateContext();
+        var storage = await SeedPendingApprovalAsync(context);
+        var service = CreateService(context, storage, CreateAuditWriter(context));
+
+        var response = await service.DecideAsync(
+            ApprovalRequestId,
+            decision,
+            DecisionRequest("Nội dung cần xử lý trước bước tiếp theo."),
+            ManagerAId);
+
+        Assert.Equal(expectedContractStatus, response.ContractStatus);
+        Assert.Equal(
+            (byte)decision,
+            (await context.TblContractApprovalRequests
+                .AsNoTracking()
+                .SingleAsync()).Status);
+        Assert.Contains(
+            context.TblContractAudits,
+            audit => audit.ActionType == expectedAuditAction
+                && audit.SubjectType == ContractAuditSubjectTypes.ApprovalRequest
+                && audit.SubjectId == ApprovalRequestId);
+    }
+
+    [Theory]
+    [InlineData(ApprovalRequestStatus.Returned)]
+    [InlineData(ApprovalRequestStatus.Rejected)]
+    public async Task ReturnOrReject_WithoutReason_DoesNotResolveRequest(
+        ApprovalRequestStatus decision)
+    {
+        await using var context = CreateContext();
+        var storage = await SeedPendingApprovalAsync(context);
+        var service = CreateService(
+            context,
+            storage,
+            new RecordingAuditWriter());
+
+        var exception = await Assert.ThrowsAsync<BusinessRuleException>(() =>
+            service.DecideAsync(
+                ApprovalRequestId,
+                decision,
+                DecisionRequest(" "),
+                ManagerAId));
+
+        Assert.Equal(
+            ContractApprovalErrorCodes.ApprovalReasonRequired,
+            exception.Code);
+        Assert.Equal(
+            (byte)ApprovalRequestStatus.Pending,
+            (await context.TblContractApprovalRequests
+                .AsNoTracking()
+                .SingleAsync()).Status);
+        Assert.Empty(context.TblApprovalHistories);
+    }
+
+    [Fact]
+    public async Task Submitter_CannotApproveOwnRequest()
+    {
+        await using var context = CreateContext();
+        var storage = await SeedPendingApprovalAsync(context);
+        var submitter = await context.TblEmployees.SingleAsync(employee =>
+            employee.EmployeeId == OwnerId);
+        submitter.EmployeeType = (byte)EmployeeType.Manager;
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var exception = await Assert.ThrowsAsync<BusinessRuleException>(() =>
+            CreateService(context, storage, new RecordingAuditWriter())
+                .DecideAsync(
+                    ApprovalRequestId,
+                    ApprovalRequestStatus.Approved,
+                    DecisionRequest(null),
+                    OwnerId));
+
+        Assert.Equal(ContractApprovalErrorCodes.SelfApprovalDenied, exception.Code);
+        Assert.Equal(
+            (byte)ApprovalRequestStatus.Pending,
+            (await context.TblContractApprovalRequests
+                .AsNoTracking()
+                .SingleAsync()).Status);
+    }
+
+    [Fact]
+    public async Task StaleRowVersion_DoesNotResolveApprovalRequest()
+    {
+        await using var context = CreateContext();
+        var storage = await SeedPendingApprovalAsync(context);
+        var request = DecisionRequest("Dữ liệu trên màn hình đã cũ.");
+        request.RowVersion = Convert.ToBase64String(
+            [8, 7, 6, 5, 4, 3, 2, 1]);
+
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() =>
+            CreateService(context, storage, new RecordingAuditWriter())
+                .DecideAsync(
+                    ApprovalRequestId,
+                    ApprovalRequestStatus.Rejected,
+                    request,
+                    ManagerAId));
+
+        Assert.Equal(
+            (byte)ApprovalRequestStatus.Pending,
+            (await context.TblContractApprovalRequests
+                .AsNoTracking()
+                .SingleAsync()).Status);
+        Assert.Empty(context.TblApprovalHistories);
+    }
+
     private static DbDtctechContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<DbDtctechContext>()

@@ -1,5 +1,7 @@
 using ContractManagement.API.Common.Enums;
+using ContractManagement.API.Common.Exceptions;
 using ContractManagement.API.Domains.DTOs.Requests.ContractTemplate;
+using ContractManagement.API.Domains.DTOs.Responses.ContractTemplate;
 using ContractManagement.Common.Enums;
 using ContractManagement.Domains.Services.ContractTemplate;
 using ContractManagement.Infrastructure.Persistence.Application;
@@ -191,6 +193,20 @@ public sealed class ContractTemplateServiceTests
         Assert.Null(copy.DocumentHash);
         Assert.Equal("PAYMENT", Assert.Single(copy.Terms).TermCode);
         Assert.NotEqual(source.TemplateVersionId, copy.TemplateVersionId);
+
+        var exception = await Assert.ThrowsAsync<BusinessRuleException>(() =>
+            service.CopyVersionAsync(
+                source.TemplateVersionId,
+                new CopyContractTemplateVersionRequest
+                {
+                    RowVersion = Encode(source.RowVersion)
+                },
+                AdminOfficerId));
+
+        Assert.Equal(409, exception.StatusCode);
+        Assert.Equal(
+            ContractTemplateErrorCodes.DraftVersionAlreadyExists,
+            exception.Code);
     }
 
     [Fact]
@@ -228,7 +244,7 @@ public sealed class ContractTemplateServiceTests
             (TemplateVersionStatus)source.Status);
         Assert.Null(template.CurrentPublishedVersionId);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<BusinessRuleException>(() =>
             service.CopyVersionAsync(
                 source.TemplateVersionId,
                 new CopyContractTemplateVersionRequest
@@ -236,6 +252,29 @@ public sealed class ContractTemplateServiceTests
                     RowVersion = Encode(source.RowVersion)
                 },
                 AdminOfficerId));
+
+        Assert.Equal(409, exception.StatusCode);
+        Assert.Equal(
+            ContractTemplateErrorCodes.DraftVersionAlreadyExists,
+            exception.Code);
+    }
+
+    [Fact]
+    public void Model_HasUniqueFilteredIndexForSingleDraftPerTemplate()
+    {
+        using var context = CreateContext();
+        var entityType = context.Model.FindEntityType(
+            typeof(TblContractTemplateVersion));
+        var index = Assert.Single(
+            entityType!.GetIndexes(),
+            candidate => candidate.GetDatabaseName()
+                == "UX_tbl_ContractTemplateVersion_OneDraftPerTemplate");
+
+        Assert.True(index.IsUnique);
+        Assert.Equal("[Status] = 0", index.GetFilter());
+        Assert.Equal(
+            nameof(TblContractTemplateVersion.TemplateId),
+            Assert.Single(index.Properties).Name);
     }
 
     [Fact]

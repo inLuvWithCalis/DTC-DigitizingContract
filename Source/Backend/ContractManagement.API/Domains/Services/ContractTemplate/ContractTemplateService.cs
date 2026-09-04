@@ -1,4 +1,5 @@
 using ContractManagement.API.Common.Enums;
+using ContractManagement.API.Common.Exceptions;
 using ContractManagement.API.Common.Responses;
 using ContractManagement.API.Domains.DTOs.Requests.ContractTemplate;
 using ContractManagement.API.Domains.DTOs.Responses.ContractTemplate;
@@ -9,6 +10,7 @@ using ContractManagement.Domains.Interfaces.File;
 using ContractManagement.Domains.Policies.ContractTemplate;
 using ContractManagement.Infrastructure.Persistence.Application;
 using ContractManagement.Infrastructure.Persistence.Application.Models;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography;
 using System.Text;
@@ -478,6 +480,11 @@ public sealed class ContractTemplateService : IContractTemplateService
                     version.TemplateId == template.TemplateId
                     && version.Status == (byte)TemplateVersionStatus.Draft,
                     cancellationToken);
+            if (hasExistingDraft)
+            {
+                throw CreateDraftVersionAlreadyExistsException();
+            }
+
             var canCreateDraft = ContractTemplatePolicy.CanCreateDraftFromSource(
                 (TemplateVersionStatus)source.Status,
                 template.CurrentPublishedVersionId == source.TemplateVersionId,
@@ -487,7 +494,7 @@ public sealed class ContractTemplateService : IContractTemplateService
             if (!canCreateDraft)
             {
                 throw new InvalidOperationException(
-                    "Chỉ bản Published hiện hành hoặc bản Retired mới nhất của mẫu không còn bản phát hành mới được dùng để tạo Draft. Mẫu không được có Draft đang làm việc.");
+                    "Chỉ bản Published hiện hành hoặc bản Retired mới nhất của mẫu không còn bản phát hành mới được dùng để tạo Draft.");
             }
 
             EnsureRowVersionMatches(
@@ -517,7 +524,15 @@ public sealed class ContractTemplateService : IContractTemplateService
             template.UpdatedEmployeeId = employeeId;
             template.UpdatedDate = now;
             RotateTemplateRowVersionIfNeeded(template);
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException exception)
+                when (IsUniqueConstraintViolation(exception))
+            {
+                throw CreateDraftVersionAlreadyExistsException();
+            }
 
             var sourceTerms = await _dbContext.TblContractTemplateTerms
                 .AsNoTracking()
@@ -2552,6 +2567,28 @@ public sealed class ContractTemplateService : IContractTemplateService
     private static byte[] NewSyntheticRowVersion() =>
         BitConverter.GetBytes(
             Interlocked.Increment(ref _syntheticRowVersionSeed));
+
+    private static BusinessRuleException
+        CreateDraftVersionAlreadyExistsException() => new(
+            StatusCodes.Status409Conflict,
+            ContractTemplateErrorCodes.DraftVersionAlreadyExists,
+            "Mẫu hợp đồng đã có một bản nháp đang làm việc. Hãy tiếp tục chỉnh sửa bản nháp hiện tại.");
+
+    private static bool IsUniqueConstraintViolation(
+        DbUpdateException exception)
+    {
+        for (Exception? current = exception;
+             current is not null;
+             current = current.InnerException)
+        {
+            if (current is SqlException { Number: 2601 or 2627 })
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private async Task<T> ExecuteInTransactionAsync<T>(
         Func<Task<T>> operation,

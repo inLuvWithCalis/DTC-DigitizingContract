@@ -208,6 +208,23 @@ public class ContractTemplatePolicyTests
             isCurrentPublished: true,
             hasCurrentPublished: true,
             isLatestRetired: false,
+            hasExistingDraft: false));
+    }
+
+    [Theory]
+    [InlineData(TemplateVersionStatus.Published, true, true, false)]
+    [InlineData(TemplateVersionStatus.Retired, false, false, true)]
+    public void CanCreateDraftFromSource_ExistingDraft_ReturnsFalse(
+        TemplateVersionStatus sourceStatus,
+        bool isCurrentPublished,
+        bool hasCurrentPublished,
+        bool isLatestRetired)
+    {
+        Assert.False(ContractTemplatePolicy.CanCreateDraftFromSource(
+            sourceStatus,
+            isCurrentPublished,
+            hasCurrentPublished,
+            isLatestRetired,
             hasExistingDraft: true));
     }
 

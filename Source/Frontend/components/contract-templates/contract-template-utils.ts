@@ -5,13 +5,25 @@ export const getContractTemplateErrorMessage = (
   const apiError = error as {
     response?: {
       status?: number;
-      data?: { message?: string; errors?: string[] | Record<string, string[]> };
+      data?: {
+        code?: string;
+        message?: string;
+        errors?: string[] | Record<string, string[]>;
+      };
     };
     message?: string;
   };
   const data = apiError.response?.data;
 
   if (apiError.response?.status === 409) {
+    if (
+      data?.code === "DraftVersionAlreadyExists" ||
+      (Array.isArray(data?.errors) &&
+        data.errors.includes("DraftVersionAlreadyExists"))
+    ) {
+      return "Mẫu hợp đồng đã có một bản nháp đang làm việc. Hãy tiếp tục chỉnh sửa bản nháp hiện tại.";
+    }
+
     return "Dữ liệu đã được thay đổi bởi người khác. Vui lòng tải lại và thử lại.";
   }
 

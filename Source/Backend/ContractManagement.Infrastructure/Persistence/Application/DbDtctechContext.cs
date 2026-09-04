@@ -1326,6 +1326,17 @@ public partial class DbDtctechContext : DbContext
                     "IX_tbl_ContractTemplateVersion_TemplateId_Status");
 
             /*
+             * Mỗi Template chỉ có một Draft đang làm việc. Policy/service
+             * cung cấp lỗi nghiệp vụ thân thiện; unique filtered index là
+             * hàng rào cuối cùng khi hai request tạo Draft chạy đồng thời.
+             */
+            entity.HasIndex(e => e.TemplateId)
+                .IsUnique()
+                .HasFilter("[Status] = 0")
+                .HasDatabaseName(
+                    "UX_tbl_ContractTemplateVersion_OneDraftPerTemplate");
+
+            /*
              * Một FileStorage record chỉ đại diện cho DOCX
              * của một template version.
              */

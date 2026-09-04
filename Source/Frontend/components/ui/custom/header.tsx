@@ -95,9 +95,9 @@ export function Header({ title }: { title?: string }) {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild className="cursor-pointer py-2">
-                <Link href="/change-password">
+                <Link href="/settings">
                   <Settings className="mr-2 h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium">Đổi mật khẩu</span>
+                  <span className="font-medium">Cấu hình cá nhân</span>
                 </Link>
               </DropdownMenuItem>
 

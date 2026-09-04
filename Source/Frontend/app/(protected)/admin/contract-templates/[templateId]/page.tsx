@@ -86,7 +86,7 @@ export default function ContractTemplateDetailPage() {
       [...(template?.versions ?? [])].sort((a, b) => b.versionNo - a.versionNo),
     [template?.versions],
   );
-  const hasDraft = versions.some(
+  const draftVersion = versions.find(
     (version) => version.status === TemplateVersionStatus.Draft,
   );
   const latestRetiredVersionId = versions.find(
@@ -234,12 +234,11 @@ export default function ContractTemplateDetailPage() {
                     const isCurrentPublished =
                       template.currentPublishedVersionId ===
                       version.templateVersionId;
-                    const canCreateDraft =
+                    const canUseAsDraftSource =
                       (version.status === TemplateVersionStatus.Published &&
                         isCurrentPublished) ||
                       (version.status === TemplateVersionStatus.Retired &&
                         !template.currentPublishedVersionId &&
-                        !hasDraft &&
                         version.templateVersionId === latestRetiredVersionId);
                     return (
                       <div
@@ -274,7 +273,7 @@ export default function ContractTemplateDetailPage() {
                               Mở workspace
                             </Link>
                           </Button>
-                          {canCreateDraft && (
+                          {canUseAsDraftSource && !draftVersion && (
                             <Button
                               variant="outline"
                               size="sm"

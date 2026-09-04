@@ -139,7 +139,6 @@ const navItems: NavItem[] = [
     href: "/admin/legal-profile",
     requiredPermissions: [RBAC_PERMISSIONS.tenantLegalProfileManage],
   },
-  { label: "Cấu hình", icon: Settings, href: "/settings" },
 ];
 
 export function Sidebar() {

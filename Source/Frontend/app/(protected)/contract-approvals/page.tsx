@@ -50,7 +50,7 @@ import {
   getBlobApiErrorMessage,
   isStaleRowVersion,
 } from "@/lib/api-error";
-import { formatDateTime } from "@/lib/format-date-time";
+import { formatDateTime, parseApiDate } from "@/lib/format-date-time";
 import { RBAC_PERMISSIONS } from "@/lib/rbac";
 import {
   contractApprovalApi,
@@ -88,7 +88,7 @@ const pendingStatusClassName =
   "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
 
 function formatShortDate(value: string) {
-  return new Date(value).toLocaleDateString("vi-VN", {
+  return parseApiDate(value).toLocaleDateString("vi-VN", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -101,7 +101,7 @@ function formatWaitingTime(value?: string, referenceTime?: number | null) {
 
   const elapsedMilliseconds = Math.max(
     0,
-    referenceTime - new Date(value).getTime(),
+    referenceTime - parseApiDate(value).getTime(),
   );
   const elapsedHours = Math.floor(elapsedMilliseconds / 3_600_000);
 
@@ -302,7 +302,7 @@ export default function ContractApprovalsPage() {
     () =>
       data.reduce<string | undefined>((oldest, request) => {
         if (!oldest) return request.submittedDate;
-        return new Date(request.submittedDate) < new Date(oldest)
+        return parseApiDate(request.submittedDate) < parseApiDate(oldest)
           ? request.submittedDate
           : oldest;
       }, undefined),

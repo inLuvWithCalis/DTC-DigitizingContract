@@ -7,6 +7,7 @@ import { downloadBlob } from "@/components/contract-templates/contract-template-
 import { SplitActionMenu } from "@/components/ui/custom/split-action-menu";
 import { toast } from "@/components/ui/sonner";
 import { getBlobApiErrorMessage } from "@/lib/api-error";
+import { parseApiDate } from "@/lib/format-date-time";
 import {
   contractApprovalApi,
   type ContractApprovalArtifactResponse,
@@ -45,8 +46,8 @@ export function ContractSubmittedArtifactActions({
         .filter((request) => request.versionId === versionId)
         .sort(
           (left, right) =>
-            new Date(right.submittedDate).getTime() -
-            new Date(left.submittedDate).getTime(),
+            parseApiDate(right.submittedDate).getTime() -
+            parseApiDate(left.submittedDate).getTime(),
         )[0];
 
       setDetail(

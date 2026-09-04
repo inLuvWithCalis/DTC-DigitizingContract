@@ -333,6 +333,7 @@ export const contractTemplateApi = {
   getById: (templateId: number) =>
     axiosClient.get<unknown, ContractTemplateDetailResponse>(
       `${BASE_URL}/${templateId}`,
+      { headers: { "Cache-Control": "no-cache" } },
     ),
 
   update: (templateId: number, data: UpdateContractTemplateRequest) =>
@@ -344,6 +345,7 @@ export const contractTemplateApi = {
   getVersion: (versionId: number) =>
     axiosClient.get<unknown, ContractTemplateVersionDetailResponse>(
       `${BASE_URL}/versions/${versionId}`,
+      { headers: { "Cache-Control": "no-cache" } },
     ),
 
   copyVersion: (

@@ -554,6 +554,7 @@ export default function ContractTemplateVersionWorkspacePage() {
 
                 <TabsContent value="terms">
                   <ContractTemplateTermsEditor
+                    key={`${version.templateVersionId}-${version.status}-${version.rowVersion}`}
                     version={version}
                     isBilingual={
                       template.languageMode === ContractLanguageMode.Bilingual

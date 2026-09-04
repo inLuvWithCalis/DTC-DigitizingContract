@@ -92,6 +92,7 @@ export function ContractTemplateTermsEditor({
     field: ContractTermEditableField,
     value: string | boolean,
   ) => {
+    if (!isDraft) return;
     if (isOrderDirty) {
       toast.error("Vui lòng lưu thứ tự trước khi sửa nội dung điều khoản.");
       return;
@@ -105,6 +106,7 @@ export function ContractTemplateTermsEditor({
   };
 
   const moveTerm = (index: number, direction: -1 | 1) => {
+    if (!isDraft) return;
     if (hasUnsavedContent) {
       toast.error(
         "Vui lòng lưu nội dung điều khoản trước khi thay đổi thứ tự.",
@@ -125,6 +127,7 @@ export function ContractTemplateTermsEditor({
   };
 
   const saveDirtyTerms = async () => {
+    if (!isDraft) return;
     const pendingTerms = terms.filter((term) =>
       dirtyIds.has(term.templateTermId),
     );
@@ -185,6 +188,7 @@ export function ContractTemplateTermsEditor({
   };
 
   const saveOrder = async () => {
+    if (!isDraft) return;
     if (hasUnsavedContent) {
       toast.error("Vui lòng lưu nội dung các điều khoản trước khi lưu thứ tự.");
       return;
@@ -202,6 +206,7 @@ export function ContractTemplateTermsEditor({
   };
 
   const saveChanges = async () => {
+    if (!isDraft) return;
     try {
       setIsSavingChanges(true);
       if (isOrderDirty) {
@@ -217,6 +222,7 @@ export function ContractTemplateTermsEditor({
   };
 
   const openAddDialog = () => {
+    if (!isDraft) return;
     if (hasUnsavedChanges) {
       toast.error("Vui lòng lưu các thay đổi điều khoản trước khi thêm mới.");
       return;
@@ -232,6 +238,7 @@ export function ContractTemplateTermsEditor({
   };
 
   const addTerm = async () => {
+    if (!isDraft) return;
     if (!newTermCode.trim() || !newTermTitle.trim()) {
       toast.error("Vui lòng nhập mã và tiêu đề điều khoản.");
       return;
@@ -264,6 +271,7 @@ export function ContractTemplateTermsEditor({
   };
 
   const confirmDelete = async () => {
+    if (!isDraft) return;
     if (!deleteTerm) return;
     try {
       setIsDeleting(true);
@@ -287,6 +295,7 @@ export function ContractTemplateTermsEditor({
   };
 
   const requestDeleteTerm = (term: ContractTemplateTermResponse) => {
+    if (!isDraft) return;
     if (hasUnsavedChanges) {
       toast.error("Vui lòng lưu các thay đổi điều khoản trước khi xóa.");
       return;

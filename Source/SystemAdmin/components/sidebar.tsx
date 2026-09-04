@@ -12,6 +12,7 @@ import {
   Menu,
   ScrollText,
   Settings,
+  LayoutDashboard,
   User,
   X,
 } from "lucide-react";
@@ -32,6 +33,12 @@ import { resolveProfileImageUrl } from "@/services/profile-api";
 
 const navItems = [
   {
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    href: "/dashboard",
+    disabled: false,
+  },
+  {
     label: "Quản lý tenant",
     icon: Building2,
     href: "/tenants",
@@ -41,7 +48,7 @@ const navItems = [
     label: "Giám sát hệ thống",
     icon: HeartPulse,
     href: "/system-health",
-    disabled: true,
+    disabled: false,
   },
   {
     label: "Nhật ký bảo mật",
@@ -236,7 +243,7 @@ export function Sidebar() {
           )}
         >
           {isExpanded && (
-            <Link href="/tenants" className="flex min-w-0 items-center gap-2.5">
+            <Link href="/dashboard" className="flex min-w-0 items-center gap-2.5">
               <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm shadow-primary/20">
                 <FileText className="size-4" />
               </div>

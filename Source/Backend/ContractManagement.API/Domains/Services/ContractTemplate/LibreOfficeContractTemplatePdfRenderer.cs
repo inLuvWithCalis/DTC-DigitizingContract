@@ -168,7 +168,7 @@ public sealed class LibreOfficeContractTemplatePdfRenderer
         return info;
     }
 
-    private static string? ResolveExecutablePath(string? configuredPath)
+    internal static string? ResolveExecutablePath(string? configuredPath)
     {
         var configured = configuredPath?.Trim().Trim('"');
         if (!string.IsNullOrWhiteSpace(configured))

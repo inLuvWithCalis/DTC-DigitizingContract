@@ -66,14 +66,14 @@ export default function LoginPage() {
   useEffect(() => {
     const checkAlreadyLoggedIn = async () => {
       if (isAuthenticated && user) {
-        router.push("/tenants");
+        router.push("/dashboard");
         return;
       }
 
       try {
         await authApi.getMe();
-        router.push("/tenants");
-      } catch (error) {
+        router.push("/dashboard");
+      } catch {
         setIsLoading(false);
       }
     };
@@ -135,7 +135,7 @@ export default function LoginPage() {
       });
 
       toast.success(data.message || "Đăng nhập thành công!");
-      router.push("/tenants");
+      router.push("/dashboard");
     } catch (error: unknown) {
       toast.error(getApiErrorMessage(error, "Đăng nhập thất bại, vui lòng thử lại."));
     } finally {

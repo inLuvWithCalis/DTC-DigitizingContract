@@ -3,6 +3,8 @@ using ContractManagement.API.Domains.Interfaces.Customer;
 using ContractManagement.API.Domains.Interfaces.CustomerInteraction;
 using ContractManagement.API.Domains.Interfaces.Department;
 using ContractManagement.API.Domains.Interfaces.Authentication;
+using ContractManagement.API.Domains.Interfaces.Admin;
+using ContractManagement.API.Domains.Interfaces.Dashboard;
 using ContractManagement.API.Domains.Interfaces.SystemAuthentication;
 using ContractManagement.API.Domains.Interfaces.Security;
 using ContractManagement.API.Domains.Interfaces.LegalProfiles;
@@ -11,6 +13,8 @@ using ContractManagement.API.Domains.Services.Customer;
 using ContractManagement.API.Domains.Services.CustomerInteraction;
 using ContractManagement.API.Domains.Services.Department;
 using ContractManagement.API.Domains.Services.Authentication;
+using ContractManagement.API.Domains.Services.Admin;
+using ContractManagement.API.Domains.Services.Dashboard;
 using ContractManagement.API.Domains.Services.SystemAuthentication;
 using ContractManagement.API.Domains.Services.Employee;
 using ContractManagement.API.Domains.Services.Security;
@@ -234,7 +238,11 @@ builder.Services.AddOptions<PrivateFileStorageOptions>()
         options => options.MinimumFreeSpaceBytes >= 0,
         "PrivateFileStorage:MinimumFreeSpaceBytes cannot be negative.")
     .ValidateOnStart();
-builder.Services.AddSingleton<IPrivateFileStorage, LocalPrivateFileStorage>();
+builder.Services.AddSingleton<LocalPrivateFileStorage>();
+builder.Services.AddSingleton<IPrivateFileStorage>(provider =>
+    provider.GetRequiredService<LocalPrivateFileStorage>());
+builder.Services.AddSingleton<IPrivateFileStorageHealthProbe>(provider =>
+    provider.GetRequiredService<LocalPrivateFileStorage>());
 
 builder.Services.AddScoped<
     IContractResourceAuthorizationService,
@@ -259,6 +267,10 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     ICentralSecurityAuditQueryService,
     CentralSecurityAuditQueryService>();
+
+builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddScoped<IAdminDashboardService, AdminDashboardService>();
+builder.Services.AddScoped<ISystemHealthService, SystemHealthService>();
 
 builder.Services.AddScoped<
     IContractAttachmentService,

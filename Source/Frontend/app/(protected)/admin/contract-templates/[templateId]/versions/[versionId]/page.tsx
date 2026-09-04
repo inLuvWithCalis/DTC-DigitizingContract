@@ -374,16 +374,15 @@ export default function ContractTemplateVersionWorkspacePage() {
     ),
   );
   const latestRetiredVersionId = [...(template?.versions ?? [])]
-    .filter(
-      (candidate) => candidate.status === TemplateVersionStatus.Retired,
-    )
-    .sort((left, right) => right.versionNo - left.versionNo)[0]
-    ?.templateVersionId;
+    .filter((candidate) => candidate.status === TemplateVersionStatus.Retired)
+    .sort(
+      (left, right) => right.versionNo - left.versionNo,
+    )[0]?.templateVersionId;
   const canCreateDraftFromRetired = Boolean(
     version?.status === TemplateVersionStatus.Retired &&
-      !template?.currentPublishedVersionId &&
-      !templateHasDraft &&
-      version.templateVersionId === latestRetiredVersionId,
+    !template?.currentPublishedVersionId &&
+    !templateHasDraft &&
+    version.templateVersionId === latestRetiredVersionId,
   );
   const validationMessages = parseValidationMessages(
     version?.validationMessage,
@@ -798,8 +797,14 @@ export default function ContractTemplateVersionWorkspacePage() {
                             còn chế độ xem.
                           </p>
                           {canCreateDraftFromRetired && (
-                            <Button asChild className="w-full" variant="outline">
-                              <Link href={`/admin/contract-templates/${templateId}`}>
+                            <Button
+                              asChild
+                              className="w-full"
+                              variant="outline"
+                            >
+                              <Link
+                                href={`/admin/contract-templates/${templateId}`}
+                              >
                                 Quản lý và tạo bản nháp mới
                               </Link>
                             </Button>

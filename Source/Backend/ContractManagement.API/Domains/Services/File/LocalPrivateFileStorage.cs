@@ -5,9 +5,11 @@ using Microsoft.Extensions.Options;
 
 namespace ContractManagement.Domains.Services.File;
 
-public sealed partial class LocalPrivateFileStorage : IPrivateFileStorage
+public sealed partial class LocalPrivateFileStorage
+    : IPrivateFileStorage, IPrivateFileStorageHealthProbe
 {
     private readonly string _rootPath;
+    private readonly long _minimumFreeSpaceBytes;
 
     public LocalPrivateFileStorage(
         IOptions<PrivateFileStorageOptions> options,
@@ -24,6 +26,7 @@ public sealed partial class LocalPrivateFileStorage : IPrivateFileStorage
             Path.IsPathRooted(configuredRoot)
                 ? configuredRoot
                 : Path.Combine(environment.ContentRootPath, configuredRoot));
+        _minimumFreeSpaceBytes = options.Value.MinimumFreeSpaceBytes;
 
         if (environment.IsProduction() && !Path.IsPathRooted(configuredRoot))
         {
@@ -51,6 +54,37 @@ public sealed partial class LocalPrivateFileStorage : IPrivateFileStorage
         Directory.CreateDirectory(_rootPath);
         VerifyWriteAccess();
         VerifyCapacity(options.Value.MinimumFreeSpaceBytes);
+    }
+
+    public Task<PrivateFileStorageHealthResult> CheckHealthAsync(
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            VerifyWriteAccess();
+            var root = Path.GetPathRoot(_rootPath);
+            long? available = string.IsNullOrWhiteSpace(root)
+                ? null
+                : new DriveInfo(root).AvailableFreeSpace;
+            var meetsThreshold = _minimumFreeSpaceBytes <= 0
+                || available.HasValue && available.Value >= _minimumFreeSpaceBytes;
+            return Task.FromResult(new PrivateFileStorageHealthResult(
+                true,
+                meetsThreshold,
+                available,
+                _minimumFreeSpaceBytes));
+        }
+        catch (Exception exception) when (exception is IOException
+            or UnauthorizedAccessException
+            or InvalidOperationException)
+        {
+            return Task.FromResult(new PrivateFileStorageHealthResult(
+                false,
+                false,
+                null,
+                _minimumFreeSpaceBytes));
+        }
     }
 
     private void VerifyWriteAccess()

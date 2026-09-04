@@ -66,16 +66,18 @@ public sealed class DashboardService : IDashboardService
             .ToListAsync(cancellationToken);
 
         var expiryTo = now.AddDays(filter.ExpiryDays);
+        var expiringQuery = scopedContracts.Where(contract =>
+            contract.ExpireDate.HasValue
+            && contract.ExpireDate.Value >= now
+            && contract.ExpireDate.Value <= expiryTo
+            && (contract.Status == (byte)ContractStatus.Signed
+                || contract.Status == (byte)ContractStatus.Completed));
+        var expiringCount = await expiringQuery.CountAsync(cancellationToken);
         var expiringContracts = await (
-            from contract in scopedContracts
+            from contract in expiringQuery
             join employeeRow in _dbContext.TblEmployees.AsNoTracking()
                 on contract.EmployeeId equals employeeRow.EmployeeId into employees
             from responsible in employees.DefaultIfEmpty()
-            where contract.ExpireDate.HasValue
-                && contract.ExpireDate.Value >= now
-                && contract.ExpireDate.Value <= expiryTo
-                && (contract.Status == (byte)ContractStatus.Signed
-                    || contract.Status == (byte)ContractStatus.Completed)
             orderby contract.ExpireDate, contract.ContractId
             select new ExpiringContractResponse(
                 contract.ContractId,
@@ -118,7 +120,7 @@ public sealed class DashboardService : IDashboardService
             Summary = BuildSummary(
                 currentRows.Select(row => row.Status),
                 previousStatuses,
-                expiringContracts.Count),
+                expiringCount),
             AmountByCurrency = currentRows
                 .GroupBy(row => NormalizeCurrency(row.CurrencyCode))
                 .OrderBy(group => group.Key)

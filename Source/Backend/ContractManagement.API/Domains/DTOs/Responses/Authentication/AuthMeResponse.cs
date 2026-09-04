@@ -13,4 +13,5 @@ public sealed record AuthMeResponse(
     IReadOnlyList<string> Permissions,
     bool MustChangePassword,
     DateTime? PasswordChangedAt,
-    string? ImageUrl);
+    string? ImageUrl,
+    string DefaultPage);

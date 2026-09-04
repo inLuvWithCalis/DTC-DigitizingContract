@@ -71,7 +71,6 @@ export interface ContractAttachmentItem {
 interface ContractAttachmentsProps {
   contractId: number;
   initialAttachments?: ContractAttachmentItem[];
-  mockMode?: boolean;
   canManage?: boolean;
 }
 
@@ -131,7 +130,6 @@ function mapAttachment(
 export function ContractAttachments({
   contractId,
   initialAttachments = [],
-  mockMode = true,
   canManage = true,
 }: ContractAttachmentsProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -141,12 +139,10 @@ export function ContractAttachments({
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [isLoadingAttachments, setIsLoadingAttachments] = useState(!mockMode);
+  const [isLoadingAttachments, setIsLoadingAttachments] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadAttachments = useCallback(async () => {
-    if (mockMode) return;
-
     setIsLoadingAttachments(true);
     setLoadError(null);
 
@@ -158,7 +154,7 @@ export function ContractAttachments({
     } finally {
       setIsLoadingAttachments(false);
     }
-  }, [contractId, mockMode]);
+  }, [contractId]);
 
   useEffect(() => {
     void loadAttachments();
@@ -241,40 +237,27 @@ export function ContractAttachments({
       errorMessage: undefined,
     });
     try {
-      if (mockMode) {
-        const newAttachment: ContractAttachmentItem = {
-          id: Date.now() + Math.floor(Math.random() * 1000),
-          name: item.file.name,
+      const response = await contractAttachmentsApi.upload(
+        contractId,
+        item.file,
+        item.documentType,
+        (progress) => updateQueueItem(item.id, { progress }),
+      );
+      setAttachments((current) => [
+        {
+          id: response.attachmentId,
+          name: response.contractFileName || item.file.name,
           size: item.file.size,
-          documentType: item.documentType,
-          documentTypeName: documentTypeLabel(item.documentType),
-          uploadedAt: new Date().toISOString(),
-          uploadedBy: "Bạn",
-        };
-        setAttachments((current) => [newAttachment, ...current]);
-      } else {
-        const response = await contractAttachmentsApi.upload(
-          contractId,
-          item.file,
-          item.documentType,
-          (progress) => updateQueueItem(item.id, { progress }),
-        );
-        setAttachments((current) => [
-          {
-            id: response.attachmentId,
-            name: response.contractFileName || item.file.name,
-            size: item.file.size,
-            documentType: response.documentType,
-            documentTypeName: response.documentTypeName,
-            uploadedAt: response.uploadDate,
-            uploadedBy: response.uploadEmployeeId
-              ? `Nhân viên #${response.uploadEmployeeId}`
-              : undefined,
-            downloadUrl: response.contractFilePath,
-          },
-          ...current,
-        ]);
-      }
+          documentType: response.documentType,
+          documentTypeName: response.documentTypeName,
+          uploadedAt: response.uploadDate,
+          uploadedBy: response.uploadEmployeeId
+            ? `Nhân viên #${response.uploadEmployeeId}`
+            : undefined,
+          downloadUrl: response.contractFilePath,
+        },
+        ...current,
+      ]);
 
       updateQueueItem(item.id, { status: "success", progress: 100 });
       return true;
@@ -308,9 +291,7 @@ export function ContractAttachments({
     const successCount = results.filter(Boolean).length;
     if (successCount > 0) {
       toast.success(
-        mockMode
-          ? `Đã thêm ${successCount} tài liệu vào bản xem thử.`
-          : `Đã tải lên ${successCount}/${pendingItems.length} tài liệu.`,
+        `Đã tải lên ${successCount}/${pendingItems.length} tài liệu.`,
       );
     }
     if (successCount < pendingItems.length) {
@@ -332,13 +313,11 @@ export function ContractAttachments({
     if (!canManage) return;
     setDeletingId(attachment.id);
     try {
-      if (!mockMode) {
-        await contractAttachmentsApi.delete(contractId, attachment.id);
-      }
+      await contractAttachmentsApi.delete(contractId, attachment.id);
       setAttachments((current) =>
         current.filter((item) => item.id !== attachment.id),
       );
-      toast.success(mockMode ? "Đã xóa khỏi bản xem thử." : "Đã xóa tài liệu.");
+      toast.success("Đã xóa tài liệu.");
     } catch {
       toast.error("Không thể xóa tài liệu. Vui lòng thử lại.");
     } finally {
@@ -347,10 +326,6 @@ export function ContractAttachments({
   };
 
   const handleDownload = async (attachment: ContractAttachmentItem) => {
-    if (mockMode) {
-      toast.info("Bản xem thử chưa có file thật để tải xuống.");
-      return;
-    }
     try {
       const blob = await contractAttachmentsApi.download(contractId, attachment.id);
       const url = URL.createObjectURL(blob);
@@ -378,14 +353,6 @@ export function ContractAttachments({
                 {attachments.length} file đang được lưu trong hồ sơ
               </p>
             </div>
-            {mockMode && (
-              <Badge
-                variant="outline"
-                className="border-amber-200 bg-amber-50 text-amber-700"
-              >
-                Chế độ xem thử
-              </Badge>
-            )}
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -750,7 +717,6 @@ export function ContractDocuments({
     <ContractAttachments
       contractId={contract.contractId}
       canManage={canManage}
-      mockMode={false}
     />
   );
 }

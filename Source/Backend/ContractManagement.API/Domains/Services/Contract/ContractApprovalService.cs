@@ -121,6 +121,31 @@ public sealed class ContractApprovalService : IContractApprovalService
                     && row.Submitter.EmployeeFullName.Contains(keyword)));
         }
 
+        if (filter.FromDate.HasValue
+            && filter.ToDate.HasValue
+            && filter.FromDate.Value.Date > filter.ToDate.Value.Date)
+        {
+            throw new ArgumentException(
+                "Từ ngày không được lớn hơn đến ngày.");
+        }
+
+        if (filter.FromDate.HasValue)
+        {
+            var fromDate = filter.FromDate.Value.Date;
+            query = query.Where(row =>
+                row.Request.SubmittedDate >= fromDate);
+        }
+
+        if (filter.ToDate.HasValue)
+        {
+            var toDate = filter.ToDate.Value.Date;
+            query = toDate < DateTime.MaxValue.Date
+                ? query.Where(row =>
+                    row.Request.SubmittedDate < toDate.AddDays(1))
+                : query.Where(row =>
+                    row.Request.SubmittedDate <= toDate);
+        }
+
         var totalCount = await query.CountAsync(cancellationToken);
         var rawRows = await query
             .OrderBy(row => row.Request.SubmittedDate)
@@ -238,6 +263,117 @@ public sealed class ContractApprovalService : IContractApprovalService
             managerEmployeeId,
             ownerWithdraw: false,
             cancellationToken);
+    }
+
+    public async Task<ContractApprovalBulkDecisionResponse> DecideBulkAsync(
+        ContractApprovalBulkDecisionRequest request,
+        int managerEmployeeId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.Items.Count is < 1 or > 100)
+        {
+            throw new ArgumentException(
+                "Mỗi lần chỉ được xử lý từ 1 đến 100 yêu cầu duyệt.");
+        }
+
+        if (request.Items
+            .GroupBy(item => item.ApprovalRequestId)
+            .Any(group => group.Count() > 1))
+        {
+            throw new ArgumentException(
+                "Danh sách bulk không được chứa ApprovalRequestId trùng nhau.");
+        }
+
+        if (request.Decision is not (
+                ApprovalRequestStatus.Approved
+                or ApprovalRequestStatus.Returned
+                or ApprovalRequestStatus.Rejected))
+        {
+            throw new ArgumentException("Kết quả duyệt không hợp lệ.");
+        }
+
+        var comment = NormalizeComment(request.Comment);
+        if (request.Decision is ApprovalRequestStatus.Returned
+                or ApprovalRequestStatus.Rejected
+            && comment is null)
+        {
+            throw Rule(
+                StatusCodes.Status400BadRequest,
+                ContractApprovalErrorCodes.ApprovalReasonRequired,
+                "Return hoặc Reject bắt buộc phải nhập lý do.");
+        }
+
+        await EnsureManagerAsync(managerEmployeeId, cancellationToken);
+
+        var itemResults = new List<ContractApprovalBulkDecisionItemResponse>(
+            request.Items.Count);
+        foreach (var item in request.Items)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                var result = await ResolveAsync(
+                    item.ApprovalRequestId,
+                    request.Decision,
+                    item.RowVersion,
+                    comment,
+                    managerEmployeeId,
+                    ownerWithdraw: false,
+                    cancellationToken);
+                itemResults.Add(new ContractApprovalBulkDecisionItemResponse
+                {
+                    ApprovalRequestId = item.ApprovalRequestId,
+                    Success = true,
+                    Result = result
+                });
+            }
+            catch (BusinessRuleException exception)
+            {
+                itemResults.Add(FailedBulkItem(
+                    item.ApprovalRequestId,
+                    exception.Code,
+                    exception.Message));
+            }
+            catch (RbacOperationException exception)
+            {
+                itemResults.Add(FailedBulkItem(
+                    item.ApprovalRequestId,
+                    exception.Code,
+                    exception.Message));
+            }
+            catch (DbUpdateConcurrencyException exception)
+            {
+                itemResults.Add(FailedBulkItem(
+                    item.ApprovalRequestId,
+                    AuthorizationErrorCodes.StaleRowVersion,
+                    exception.Message));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                itemResults.Add(FailedBulkItem(
+                    item.ApprovalRequestId,
+                    AuthorizationErrorCodes.ResourceNotFound,
+                    exception.Message));
+            }
+            catch (ArgumentException exception)
+            {
+                itemResults.Add(FailedBulkItem(
+                    item.ApprovalRequestId,
+                    "InvalidRequest",
+                    exception.Message));
+            }
+        }
+
+        var successCount = itemResults.Count(item => item.Success);
+        return new ContractApprovalBulkDecisionResponse
+        {
+            Decision = request.Decision,
+            TotalCount = itemResults.Count,
+            SuccessCount = successCount,
+            FailureCount = itemResults.Count - successCount,
+            Items = itemResults
+        };
     }
 
     public async Task<ContractApprovalActionResponse> WithdrawAsync(
@@ -760,6 +896,17 @@ public sealed class ContractApprovalService : IContractApprovalService
         StatusCodes.Status409Conflict,
         ContractApprovalErrorCodes.ApprovalArtifactMissing,
         "DOCX/PDF bất biến của version gửi duyệt bị thiếu hoặc sai hash.");
+
+    private static ContractApprovalBulkDecisionItemResponse FailedBulkItem(
+        int approvalRequestId,
+        string errorCode,
+        string errorMessage) => new()
+        {
+            ApprovalRequestId = approvalRequestId,
+            Success = false,
+            ErrorCode = errorCode,
+            ErrorMessage = errorMessage
+        };
 
     private static BusinessRuleException Rule(
         int statusCode,

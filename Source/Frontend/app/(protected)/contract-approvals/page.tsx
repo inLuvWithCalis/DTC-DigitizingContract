@@ -1,20 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef, PaginationState } from "@tanstack/react-table";
 import {
   CalendarDays,
-  CheckCircle2,
   Clock3,
   Copy,
-  Download,
   Eye,
   ExternalLink,
   FileCheck2,
   FileText,
-  Loader2,
   RefreshCw,
   RotateCcw,
   ShieldX,
@@ -22,28 +18,28 @@ import {
 } from "lucide-react";
 
 import { PermissionGuard } from "@/components/auth/permission-guard";
+import {
+  APPROVAL_DECISION_CONFIG,
+  ContractApprovalDecisionDialog,
+  type ApprovalDecision,
+} from "@/components/contracts/contract-approval-decision-dialog";
 import { downloadBlob } from "@/components/contract-templates/contract-template-utils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable } from "@/components/ui/custom/data-table-server";
+import {
+  DateRangeFilter,
+  type DateRange,
+} from "@/components/ui/custom/date-range-filter";
 import { Header } from "@/components/ui/custom/header";
 import { SplitActionMenu } from "@/components/ui/custom/split-action-menu";
 import {
   type SummaryCardItem,
   SummaryCards,
 } from "@/components/ui/custom/summary-cards";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
 import {
   getApiErrorMessage,
@@ -61,28 +57,6 @@ import {
   ApprovalRequestStatus,
   getApprovalRequestStatusLabel,
 } from "@/services/contract-api";
-
-type Decision = "approve" | "return" | "reject";
-
-const decisionConfig = {
-  approve: {
-    label: "Duyệt hợp đồng",
-    description: "Hợp đồng sẽ chuyển sang trạng thái Chờ ký.",
-    buttonClass: "bg-emerald-600 text-white hover:bg-emerald-700",
-  },
-  return: {
-    label: "Yêu cầu sửa lại",
-    description:
-      "Hợp đồng sẽ quay về Đang đàm phán. Owner phải tạo version mới trước khi chỉnh sửa.",
-    buttonClass: "bg-amber-600 text-white hover:bg-amber-700",
-  },
-  reject: {
-    label: "Từ chối",
-    description:
-      "Version hiện tại bị từ chối và vẫn bất biến. Owner có thể tạo version mới nếu tiếp tục.",
-    buttonClass: "bg-rose-600 text-white hover:bg-rose-700",
-  },
-} as const;
 
 const pendingStatusClassName =
   "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
@@ -110,6 +84,14 @@ function formatWaitingTime(value?: string, referenceTime?: number | null) {
   return `${Math.floor(elapsedHours / 24)} ngày`;
 }
 
+function formatFilterDate(value?: Date) {
+  if (!value) return undefined;
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export default function ContractApprovalsPage() {
   const router = useRouter();
   const [data, setData] = useState<ContractApprovalRequestResponse[]>([]);
@@ -120,14 +102,24 @@ export default function ContractApprovalsPage() {
     pageSize: 10,
   });
   const [search, setSearch] = useState("");
+  const [dateRange, setDateRange] = useState<DateRange>({
+    from: undefined,
+    to: undefined,
+  });
   const [referenceTime, setReferenceTime] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] =
     useState<ContractApprovalDetailResponse | null>(null);
+  const [dialogRequests, setDialogRequests] = useState<
+    ContractApprovalRequestResponse[]
+  >([]);
+  const [dialogMode, setDialogMode] = useState<"single" | "bulk">("single");
+  const [initialDecision, setInitialDecision] =
+    useState<ApprovalDecision>("approve");
+  const [isDecisionDialogOpen, setIsDecisionDialogOpen] = useState(false);
+  const resetBulkSelectionRef = useRef<(() => void) | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
-  const [decision, setDecision] = useState<Decision>("approve");
-  const [comment, setComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [downloadingFileId, setDownloadingFileId] = useState<number | null>(
     null,
@@ -141,6 +133,8 @@ export default function ContractApprovalsPage() {
         page: pagination.pageIndex + 1,
         pageSize: pagination.pageSize,
         keyword: search || undefined,
+        fromDate: formatFilterDate(dateRange.from),
+        toDate: formatFilterDate(dateRange.to),
       });
       setData(result.items);
       setRowCount(result.totalCount);
@@ -158,7 +152,13 @@ export default function ContractApprovalsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [pagination.pageIndex, pagination.pageSize, search]);
+  }, [
+    dateRange.from,
+    dateRange.to,
+    pagination.pageIndex,
+    pagination.pageSize,
+    search,
+  ]);
 
   useEffect(() => {
     void loadInbox();
@@ -171,24 +171,83 @@ export default function ContractApprovalsPage() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const openRequest = useCallback(async (approvalRequestId: number) => {
-    try {
-      setIsLoadingDetail(true);
-      setComment("");
-      setDecision("approve");
-      const detail = await contractApprovalApi.getDetail(approvalRequestId);
-      setSelected(detail);
-    } catch (loadError) {
-      toast.error(
-        getApiErrorMessage(loadError, "Không thể tải yêu cầu duyệt."),
-      );
-    } finally {
-      setIsLoadingDetail(false);
-    }
-  }, []);
+  const openRequest = useCallback(
+    async (request: ContractApprovalRequestResponse) => {
+      try {
+        setDialogMode("single");
+        setDialogRequests([request]);
+        setInitialDecision("approve");
+        setSelected(null);
+        setIsDecisionDialogOpen(true);
+        setIsLoadingDetail(true);
+        const detail = await contractApprovalApi.getDetail(
+          request.approvalRequestId,
+        );
+        setSelected(detail);
+      } catch (loadError) {
+        toast.error(
+          getApiErrorMessage(loadError, "Không thể tải yêu cầu duyệt."),
+        );
+        setIsDecisionDialogOpen(false);
+        setDialogRequests([]);
+      } finally {
+        setIsLoadingDetail(false);
+      }
+    },
+    [],
+  );
+
+  const openBulkDecision = useCallback(
+    (
+      requests: ContractApprovalRequestResponse[],
+      decision: ApprovalDecision,
+      resetSelection: () => void,
+    ) => {
+      setDialogMode("bulk");
+      setDialogRequests(requests);
+      setSelected(null);
+      setInitialDecision(decision);
+      resetBulkSelectionRef.current = resetSelection;
+      setIsDecisionDialogOpen(true);
+    },
+    [],
+  );
 
   const columns = useMemo<ColumnDef<ContractApprovalRequestResponse>[]>(
     () => [
+      {
+        id: "select",
+        header: ({ table }) => (
+          <div className="flex justify-center">
+            <Checkbox
+              checked={
+                table.getIsAllPageRowsSelected() ||
+                (table.getIsSomePageRowsSelected() && "indeterminate")
+              }
+              onCheckedChange={(value) =>
+                table.toggleAllPageRowsSelected(Boolean(value))
+              }
+              aria-label="Chọn tất cả yêu cầu trên trang"
+              className="translate-y-0.5"
+            />
+          </div>
+        ),
+        cell: ({ row }) => (
+          <div
+            className="flex justify-center"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <Checkbox
+              checked={row.getIsSelected()}
+              onCheckedChange={(value) => row.toggleSelected(Boolean(value))}
+              aria-label={`Chọn yêu cầu duyệt ${row.original.contractCode || row.original.approvalRequestId}`}
+              className="translate-y-0.5"
+            />
+          </div>
+        ),
+        enableSorting: false,
+        size: 44,
+      },
       {
         accessorKey: "contractCode",
         header: "Mã hợp đồng",
@@ -272,7 +331,7 @@ export default function ContractApprovalsPage() {
             <SplitActionMenu
               primaryLabel="Xem và xử lý"
               primaryIcon={<Eye className="size-4" />}
-              onPrimaryClick={() => void openRequest(item.approvalRequestId)}
+              onPrimaryClick={() => void openRequest(item)}
               menuItems={[
                 {
                   label: "Mở chi tiết hợp đồng",
@@ -374,40 +433,77 @@ export default function ContractApprovalsPage() {
     }
   };
 
-  const submitDecision = async () => {
-    if (!selected || isSubmitting) return;
-    const normalizedComment = comment.trim();
-    if (decision !== "approve" && !normalizedComment) {
-      toast.error("Vui lòng nhập lý do trước khi xử lý.");
-      return;
-    }
-
+  const submitDecision = async (
+    decision: ApprovalDecision,
+    comment: string,
+  ) => {
+    if (isSubmitting || dialogRequests.length === 0) return;
     try {
       setIsSubmitting(true);
-      const payload = {
-        rowVersion: selected.rowVersion,
-        comment: normalizedComment || null,
-      };
-      if (decision === "approve") {
-        await contractApprovalApi.approve(selected.approvalRequestId, payload);
-      } else if (decision === "return") {
-        await contractApprovalApi.returnForRevision(
-          selected.approvalRequestId,
-          payload,
-        );
+      if (dialogMode === "bulk") {
+        const result = await contractApprovalApi.bulkDecide({
+          decision:
+            decision === "approve"
+              ? ApprovalRequestStatus.Approved
+              : decision === "return"
+                ? ApprovalRequestStatus.Returned
+                : ApprovalRequestStatus.Rejected,
+          comment: comment || null,
+          items: dialogRequests.map((request) => ({
+            approvalRequestId: request.approvalRequestId,
+            rowVersion: request.rowVersion,
+          })),
+        });
+
+        if (result.successCount > 0) {
+          toast.success(
+            `${APPROVAL_DECISION_CONFIG[decision].label} thành công ${result.successCount}/${result.totalCount} yêu cầu.`,
+          );
+        }
+        if (result.failureCount > 0) {
+          const firstFailure = result.items.find((item) => !item.success);
+          toast.error(
+            `${result.failureCount} yêu cầu không xử lý được${firstFailure?.errorMessage ? `: ${firstFailure.errorMessage}` : "."}`,
+          );
+        }
+
+        resetBulkSelectionRef.current?.();
       } else {
-        await contractApprovalApi.reject(selected.approvalRequestId, payload);
+        if (!selected) return;
+        const payload = {
+          rowVersion: selected.rowVersion,
+          comment: comment || null,
+        };
+        if (decision === "approve") {
+          await contractApprovalApi.approve(
+            selected.approvalRequestId,
+            payload,
+          );
+        } else if (decision === "return") {
+          await contractApprovalApi.returnForRevision(
+            selected.approvalRequestId,
+            payload,
+          );
+        } else {
+          await contractApprovalApi.reject(selected.approvalRequestId, payload);
+        }
+        toast.success(
+          `${APPROVAL_DECISION_CONFIG[decision].label} thành công.`,
+        );
       }
 
-      toast.success(`${decisionConfig[decision].label} thành công.`);
+      setIsDecisionDialogOpen(false);
       setSelected(null);
+      setDialogRequests([]);
       await loadInbox();
     } catch (submitError) {
       if (isStaleRowVersion(submitError)) {
         toast.error(
           "Yêu cầu đã được người khác xử lý. Danh sách đã được tải lại.",
         );
+        setIsDecisionDialogOpen(false);
         setSelected(null);
+        setDialogRequests([]);
         await loadInbox();
       } else {
         toast.error(
@@ -476,8 +572,35 @@ export default function ContractApprovalsPage() {
                     }));
                   }}
                   searchPlaceholder="Tìm mã, tên hợp đồng hoặc nhân viên..."
+                  filterSlot={
+                    <DateRangeFilter
+                      dateRange={dateRange}
+                      onChange={(nextRange) => {
+                        setDateRange(nextRange);
+                        setPagination((current) => ({
+                          ...current,
+                          pageIndex: 0,
+                        }));
+                      }}
+                    />
+                  }
                   isLoading={isLoading}
-                  onRowClick={(row) => void openRequest(row.approvalRequestId)}
+                  getRowId={(row) => String(row.approvalRequestId)}
+                  bulkActions={(selectedRows, resetSelection) => (
+                    <SplitActionMenu
+                      primaryLabel={`Quyết định (${selectedRows.length})`}
+                      primaryIcon={<FileCheck2 className="size-4" />}
+                      onPrimaryClick={() =>
+                        openBulkDecision(
+                          selectedRows,
+                          "approve",
+                          resetSelection,
+                        )
+                      }
+                      menuItems={[]}
+                    />
+                  )}
+                  onRowClick={(row) => void openRequest(row)}
                   mobileCardRenderer={(row, { isSelected, actionCell }) => {
                     const request = row.original;
                     return (
@@ -560,158 +683,30 @@ export default function ContractApprovalsPage() {
         </PermissionGuard>
       </main>
 
-      <Dialog
-        open={selected !== null || isLoadingDetail}
-        onOpenChange={(open) => {
-          if (!open && !isSubmitting) setSelected(null);
-        }}
-      >
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
-          {isLoadingDetail || !selected ? (
-            <div className="flex min-h-48 items-center justify-center">
-              <DialogTitle className="sr-only">
-                Đang tải thông tin...
-              </DialogTitle>
-              <Loader2 className="size-7 animate-spin text-primary" />
-            </div>
-          ) : (
-            <>
-              <DialogHeader>
-                <DialogTitle>
-                  {selected.contractCode || `Hợp đồng #${selected.contractId}`}
-                  {" · "}Version {selected.versionNo}
-                </DialogTitle>
-                <DialogDescription>
-                  Gửi bởi {selected.submittedByEmployeeName || "Nhân viên"} lúc{" "}
-                  {formatDateTime(selected.submittedDate)}.
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                {selected.artifacts.map((artifact) => {
-                  const isPdf = artifact.fileType.toLowerCase() === "pdf";
-                  return (
-                    <div
-                      key={artifact.fileId}
-                      className="rounded-xl border bg-muted/20 p-4"
-                    >
-                      <div className="flex items-start gap-3">
-                        <FileText className="mt-0.5 size-5 text-primary" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium">
-                            {artifact.fileName}
-                          </p>
-                          <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
-                            SHA-256: {artifact.sha256}
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        className="mt-3 w-full"
-                        variant="outline"
-                        disabled={downloadingFileId === artifact.fileId}
-                        onClick={() =>
-                          void downloadArtifact(
-                            artifact.fileId,
-                            artifact.fileName,
-                            isPdf,
-                          )
-                        }
-                      >
-                        {downloadingFileId === artifact.fileId ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : isPdf ? (
-                          <Eye className="size-4" />
-                        ) : (
-                          <Download className="size-4" />
-                        )}
-                        {isPdf ? "Xem PDF đã gửi" : "Tải DOCX đã gửi"}
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="rounded-lg border bg-muted/20 p-4 text-sm">
-                <Link
-                  href={`/contracts/${selected.contractId}#approval`}
-                  target="_blank"
-                  className="font-medium text-primary hover:underline"
-                >
-                  Mở trang chi tiết hợp đồng
-                </Link>
-              </div>
-
-              <div className="space-y-3">
-                <Label>Quyết định</Label>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  {(["approve", "return", "reject"] as const).map((value) => (
-                    <Button
-                      key={value}
-                      type="button"
-                      variant={decision === value ? "default" : "outline"}
-                      onClick={() => setDecision(value)}
-                    >
-                      {value === "approve" ? (
-                        <CheckCircle2 className="size-4" />
-                      ) : value === "return" ? (
-                        <RotateCcw className="size-4" />
-                      ) : (
-                        <ShieldX className="size-4" />
-                      )}
-                      {decisionConfig[value].label}
-                    </Button>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {decisionConfig[decision].description}
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="approval-comment">
-                  {decision === "approve" ? (
-                    "Ghi chú (không bắt buộc)"
-                  ) : (
-                    <span>
-                      Lý do <span className="text-rose-500">*</span>
-                    </span>
-                  )}
-                </Label>
-                <Textarea
-                  id="approval-comment"
-                  value={comment}
-                  maxLength={1000}
-                  onChange={(event) => setComment(event.target.value)}
-                  placeholder={
-                    decision === "approve"
-                      ? "Ghi chú cho Owner..."
-                      : "Nêu rõ nội dung cần sửa hoặc lý do từ chối..."
-                  }
-                />
-              </div>
-
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  disabled={isSubmitting}
-                  onClick={() => setSelected(null)}
-                >
-                  Đóng
-                </Button>
-                <Button
-                  className={decisionConfig[decision].buttonClass}
-                  disabled={isSubmitting}
-                  onClick={() => void submitDecision()}
-                >
-                  {isSubmitting && <Loader2 className="size-4 animate-spin" />}
-                  {decisionConfig[decision].label}
-                </Button>
-              </DialogFooter>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+      {isDecisionDialogOpen && (
+        <ContractApprovalDecisionDialog
+          open
+          mode={dialogMode}
+          requests={dialogRequests}
+          detail={selected}
+          initialDecision={initialDecision}
+          isLoadingDetail={isLoadingDetail}
+          isSubmitting={isSubmitting}
+          downloadingFileId={downloadingFileId}
+          onOpenChange={(open) => {
+            setIsDecisionDialogOpen(open);
+            if (!open && !isSubmitting) {
+              setSelected(null);
+              setDialogRequests([]);
+              resetBulkSelectionRef.current = null;
+            }
+          }}
+          onSubmit={submitDecision}
+          onDownloadArtifact={(artifact, openPdf) =>
+            downloadArtifact(artifact.fileId, artifact.fileName, openPdf)
+          }
+        />
+      )}
     </>
   );
 }

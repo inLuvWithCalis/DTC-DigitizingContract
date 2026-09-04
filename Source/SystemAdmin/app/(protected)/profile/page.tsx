@@ -10,7 +10,6 @@ import {
   LifeBuoy,
   RefreshCw,
   ShieldCheck,
-  Users,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -182,18 +181,7 @@ export default function SystemAdminProfilePage() {
                           size="sm"
                           className="w-full justify-start gap-2 text-xs font-normal hover:text-foreground"
                         >
-                          <Link href="/administrators">
-                            <Users className="size-3.5 text-primary" />
-                            <span>Danh sách Quản trị viên</span>
-                          </Link>
-                        </Button>
-                        <Button
-                          asChild
-                          variant="ghost"
-                          size="sm"
-                          className="w-full justify-start gap-2 text-xs font-normal hover:text-foreground"
-                        >
-                          <Link href="/security-audits">
+                          <Link href="/audit-logs">
                             <ShieldCheck className="size-3.5 text-primary" />
                             <span>Nhật ký Kiểm toán Bảo mật</span>
                           </Link>

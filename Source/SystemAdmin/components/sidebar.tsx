@@ -56,12 +56,6 @@ const navItems = [
     href: "/audit-logs",
     disabled: false,
   },
-  {
-    label: "Cấu hình",
-    icon: Settings,
-    href: "/settings",
-    disabled: true,
-  },
 ];
 
 export function Sidebar() {

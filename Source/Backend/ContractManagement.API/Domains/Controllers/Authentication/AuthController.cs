@@ -150,6 +150,30 @@ namespace ContractManagement.Domains.Controllers.Authentication
             });
         }
 
+        [HttpGet("preferences")]
+        [SessionAuthorize]
+        public async Task<IActionResult> GetPreferences(
+            CancellationToken cancellationToken)
+        {
+            var preferences = await AccountService.GetPreferencesAsync(
+                GetAuthenticatedEmployeeId(),
+                cancellationToken);
+            return Ok(preferences);
+        }
+
+        [HttpPut("preferences")]
+        [SessionAuthorize]
+        public async Task<IActionResult> UpdatePreferences(
+            [FromBody] UpdateEmployeePreferencesRequest request,
+            CancellationToken cancellationToken)
+        {
+            var preferences = await AccountService.UpdatePreferencesAsync(
+                GetAuthenticatedEmployeeId(),
+                request,
+                cancellationToken);
+            return Ok(preferences);
+        }
+
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromHeader(Name = "X-Tenant-Code")] string tenantCode,[FromBody] LoginRequest request)
         {
@@ -264,7 +288,10 @@ namespace ContractManagement.Domains.Controllers.Authentication
                 employee.Permissions,
                 employee.MustChangePassword,
                 employee.PasswordChangedAt,
-                employee.ImageUrl));
+                employee.ImageUrl,
+                EmployeePreferenceRoutes.ResolveDefault(
+                    employee.DefaultPage,
+                    employee.Permissions)));
         }
 
         [HttpPost("logout")]

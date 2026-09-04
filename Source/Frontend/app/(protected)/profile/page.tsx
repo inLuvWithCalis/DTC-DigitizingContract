@@ -26,6 +26,7 @@ import { AccountSecurityCard } from "@/components/account/account-security-card"
 import { EmployeeProfileForm } from "@/components/account/employee-profile-form";
 import { ProfileHeroBanner } from "@/components/account/profile-hero-banner";
 import { getApiErrorMessage } from "@/lib/api-error";
+import { hasPermission, RBAC_PERMISSIONS } from "@/lib/rbac";
 import { profileApi, type EmployeeProfile } from "@/services/profile-api";
 import { useAuthStore } from "@/hooks/use-auth-store";
 
@@ -174,17 +175,22 @@ export default function ProfilePage() {
                             <span>Danh sách hợp đồng của tôi</span>
                           </Link>
                         </Button>
-                        <Button
-                          asChild
-                          variant="ghost"
-                          size="sm"
-                          className="w-full justify-start gap-2 text-xs font-normal hover:text-foreground"
-                        >
-                          <Link href="/security-audits">
-                            <ShieldCheck className="size-3.5 text-primary" />
-                            <span>Nhật ký bảo mật & phân quyền</span>
-                          </Link>
-                        </Button>
+                        {hasPermission(
+                          user?.permissions,
+                          RBAC_PERMISSIONS.securityAuditReadTenant,
+                        ) && (
+                          <Button
+                            asChild
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start gap-2 text-xs font-normal hover:text-foreground"
+                          >
+                            <Link href="/security-audits">
+                              <ShieldCheck className="size-3.5 text-primary" />
+                              <span>Nhật ký bảo mật & phân quyền</span>
+                            </Link>
+                          </Button>
+                        )}
                       </div>
 
                       <div className="rounded-xl border border-border/50 bg-muted/20 p-3 text-[11px] leading-relaxed text-muted-foreground">

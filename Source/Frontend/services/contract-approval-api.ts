@@ -11,6 +11,8 @@ export interface ContractApprovalInboxFilterRequest {
   page?: number;
   pageSize?: number;
   keyword?: string;
+  fromDate?: string;
+  toDate?: string;
 }
 
 export interface ContractApprovalArtifactResponse {
@@ -66,6 +68,33 @@ export interface ContractApprovalDecisionRequest {
   comment?: string | null;
 }
 
+export interface ContractApprovalBulkDecisionItemRequest {
+  approvalRequestId: number;
+  rowVersion: string;
+}
+
+export interface ContractApprovalBulkDecisionRequest {
+  items: ContractApprovalBulkDecisionItemRequest[];
+  decision: ApprovalRequestStatus;
+  comment?: string | null;
+}
+
+export interface ContractApprovalBulkDecisionItemResponse {
+  approvalRequestId: number;
+  success: boolean;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  result?: ContractApprovalActionResponse | null;
+}
+
+export interface ContractApprovalBulkDecisionResponse {
+  decision: ApprovalRequestStatus;
+  totalCount: number;
+  successCount: number;
+  failureCount: number;
+  items: ContractApprovalBulkDecisionItemResponse[];
+}
+
 export interface WithdrawContractApprovalRequest {
   rowVersion: string;
   reason: string;
@@ -107,6 +136,11 @@ export const contractApprovalApi = {
   ) =>
     axiosClient.post<unknown, ContractApprovalActionResponse>(
       `${BASE_URL}/${approvalRequestId}/reject`,
+      data,
+    ),
+  bulkDecide: (data: ContractApprovalBulkDecisionRequest) =>
+    axiosClient.post<unknown, ContractApprovalBulkDecisionResponse>(
+      `${BASE_URL}/bulk-decide`,
       data,
     ),
   withdraw: (

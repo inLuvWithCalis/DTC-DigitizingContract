@@ -90,6 +90,69 @@ public sealed class EmployeeSelfServiceTests
     }
 
     [Fact]
+    public async Task Preferences_UpdateAllowedLandingPage_PersistsAndAudits()
+    {
+        await using var dbContext = CreateDbContext();
+        var employee = CreateEmployee();
+        dbContext.TblEmployees.Add(employee);
+        await dbContext.SaveChangesAsync();
+        var service = CreateService(dbContext);
+
+        var initial = await service.GetPreferencesAsync(employee.EmployeeId);
+        Assert.Equal("/dashboard", initial.DefaultPage);
+        Assert.Contains(
+            initial.AvailableLandingPages,
+            option => option.Path == "/customers");
+        Assert.DoesNotContain(
+            initial.AvailableLandingPages,
+            option => option.Path == "/admin/employees");
+
+        var updated = await service.UpdatePreferencesAsync(
+            employee.EmployeeId,
+            new UpdateEmployeePreferencesRequest
+            {
+                DefaultPage = "/customers",
+                RowVersion = Convert.ToBase64String(RowVersion)
+            });
+
+        Assert.Equal("/customers", updated.DefaultPage);
+        Assert.Equal(
+            "/customers",
+            (await dbContext.TblEmployees.SingleAsync()).DefaultPage);
+        var audit = await dbContext.TblAuthorizationAudits.SingleAsync();
+        Assert.Equal(
+            AuthorizationAuditActionTypes.EmployeePreferencesUpdated,
+            audit.Action);
+        Assert.Equal("DefaultPage", audit.ChangedFields);
+    }
+
+    [Fact]
+    public async Task Preferences_RejectLandingPageWithoutPermission()
+    {
+        await using var dbContext = CreateDbContext();
+        var employee = CreateEmployee();
+        dbContext.TblEmployees.Add(employee);
+        await dbContext.SaveChangesAsync();
+        var service = CreateService(dbContext);
+
+        var exception = await Assert.ThrowsAsync<RbacOperationException>(() =>
+            service.UpdatePreferencesAsync(
+                employee.EmployeeId,
+                new UpdateEmployeePreferencesRequest
+                {
+                    DefaultPage = "/admin/employees",
+                    RowVersion = Convert.ToBase64String(RowVersion)
+                }));
+
+        Assert.Equal(StatusCodes.Status403Forbidden, exception.StatusCode);
+        Assert.Equal(AuthorizationErrorCodes.PermissionDenied, exception.Code);
+        Assert.Null((await dbContext.TblEmployees.SingleAsync()).DefaultPage);
+        var audit = await dbContext.TblAuthorizationAudits.SingleAsync();
+        Assert.Equal(AuthorizationAuditResultTypes.Denied, audit.Result);
+        Assert.Equal(AuthorizationErrorCodes.PermissionDenied, audit.FailureCode);
+    }
+
+    [Fact]
     public async Task Password_RequiresCurrentPolicyAndNoReuse_ThenInvalidatesSessions()
     {
         await using var dbContext = CreateDbContext();

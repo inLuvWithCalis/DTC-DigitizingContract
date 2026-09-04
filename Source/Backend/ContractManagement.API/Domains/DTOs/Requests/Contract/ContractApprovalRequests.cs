@@ -13,12 +13,39 @@ public sealed class ContractApprovalInboxFilterRequest
 
     [MaxLength(200)]
     public string? Keyword { get; set; }
+
+    public DateTime? FromDate { get; set; }
+
+    public DateTime? ToDate { get; set; }
 }
 
 public sealed class ContractApprovalDecisionRequest
 {
     [Required]
     public string RowVersion { get; set; } = string.Empty;
+
+    [MaxLength(1000)]
+    public string? Comment { get; set; }
+}
+
+public sealed class ContractApprovalBulkDecisionItemRequest
+{
+    [Range(1, int.MaxValue)]
+    public int ApprovalRequestId { get; set; }
+
+    [Required]
+    public string RowVersion { get; set; } = string.Empty;
+}
+
+public sealed class ContractApprovalBulkDecisionRequest
+{
+    [Required]
+    [MinLength(1)]
+    [MaxLength(100)]
+    public List<ContractApprovalBulkDecisionItemRequest> Items { get; set; }
+        = [];
+
+    public ApprovalRequestStatus Decision { get; set; }
 
     [MaxLength(1000)]
     public string? Comment { get; set; }

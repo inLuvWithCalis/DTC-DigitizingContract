@@ -13,6 +13,7 @@ public static class AuthorizationAuditActionTypes
     public const string EmployeeStatusChanged = "EmployeeStatusChanged";
     public const string EmployeePasswordReset = "EmployeePasswordReset";
     public const string EmployeeProfileUpdated = "EmployeeProfileUpdated";
+    public const string EmployeePreferencesUpdated = "EmployeePreferencesUpdated";
     public const string EmployeePasswordChanged = "EmployeePasswordChanged";
     public const string EmployeePasswordResetByManager = "EmployeePasswordResetByManager";
     public const string SystemAdminProfileUpdated = "SystemAdminProfileUpdated";

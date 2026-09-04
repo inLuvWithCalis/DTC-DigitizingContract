@@ -83,13 +83,22 @@ export default function LoginPage() {
   useEffect(() => {
     const checkAlreadyLoggedIn = async () => {
       if (isAuthenticated && user) {
-        router.push("/dashboard");
+        router.push(
+          user.mustChangePassword
+            ? "/change-password?required=1"
+            : user.defaultPage || "/dashboard",
+        );
         return;
       }
 
       try {
-        await authApi.getMe();
-        router.push("/dashboard");
+        const profile = await authApi.getMe();
+        setUser(profile);
+        router.push(
+          profile.mustChangePassword
+            ? "/change-password?required=1"
+            : profile.defaultPage || "/dashboard",
+        );
       } catch (error) {
         setIsLoading(false);
       }
@@ -181,7 +190,13 @@ export default function LoginPage() {
       );
 
       toast.success(data.message || "Đăng nhập thành công!");
-      router.push("/dashboard");
+      const profile = await authApi.getMe();
+      setUser(profile);
+      router.push(
+        profile.mustChangePassword
+          ? "/change-password?required=1"
+          : profile.defaultPage || "/dashboard",
+      );
     } catch (error: any) {
       const message =
         error?.response?.data?.message ||

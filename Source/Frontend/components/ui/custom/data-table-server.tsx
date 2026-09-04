@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ColumnDef,
   SortingState,
@@ -45,6 +45,10 @@ import {
   TableHeaderSkeleton,
   TablePaginationSkeleton,
 } from "./table-skeleton";
+import {
+  getStoredTablePageSize,
+  storeTablePageSize,
+} from "@/services/preferences-api";
 
 interface MobileCardRenderContext {
   isSelectionMode: boolean;
@@ -99,6 +103,7 @@ interface DataTableProps<TData, TValue> {
     selectedRows: TData[],
     resetSelection: () => void,
   ) => React.ReactNode;
+  getRowId?: (originalRow: TData, index: number) => string;
   onRowClick?: (row: TData) => void;
   mobileCardRenderer?: (
     row: Row<TData>,
@@ -122,10 +127,12 @@ export function DataTable<TData, TValue>({
   isLoading = false,
 
   bulkActions,
+  getRowId,
   onRowClick,
   mobileCardRenderer,
 }: DataTableProps<TData, TValue>) {
   const [rowSelection, setRowSelection] = useState({});
+  const appliedStoredPageSize = useRef(false);
   const isMobile = useMediaQuery("(max-width: 767px)");
 
   const [localSearch, setLocalSearch] = useState(searchValue);
@@ -157,6 +164,15 @@ export function DataTable<TData, TValue>({
     setLocalSearch(searchValue);
   }, [searchValue]);
 
+  useEffect(() => {
+    if (appliedStoredPageSize.current) return;
+    appliedStoredPageSize.current = true;
+    const storedPageSize = getStoredTablePageSize();
+    if (storedPageSize && storedPageSize !== pagination.pageSize) {
+      onPaginationChange({ pageIndex: 0, pageSize: storedPageSize });
+    }
+  }, [onPaginationChange, pagination.pageSize]);
+
   const table = useReactTable({
     data,
     columns,
@@ -173,6 +189,7 @@ export function DataTable<TData, TValue>({
     onPaginationChange,
     onSortingChange,
     onRowSelectionChange: setRowSelection,
+    getRowId,
     getCoreRowModel: getCoreRowModel(),
   });
 
@@ -564,7 +581,11 @@ export function DataTable<TData, TValue>({
               </span>
               <Select
                 value={table.getState().pagination.pageSize.toString()}
-                onValueChange={(val) => table.setPageSize(Number(val))}
+                onValueChange={(val) => {
+                  const nextPageSize = Number(val);
+                  storeTablePageSize(nextPageSize);
+                  table.setPageSize(nextPageSize);
+                }}
                 disabled={isLoading || rowCount <= 0}
               >
                 <SelectTrigger className="h-8 w-[75px] bg-background border-border">

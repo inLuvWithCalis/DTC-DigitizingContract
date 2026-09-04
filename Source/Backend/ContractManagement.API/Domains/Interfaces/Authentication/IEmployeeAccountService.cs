@@ -14,6 +14,15 @@ public interface IEmployeeAccountService
         UpdateEmployeeSelfProfileRequest request,
         CancellationToken cancellationToken = default);
 
+    Task<EmployeePreferencesResponse> GetPreferencesAsync(
+        int employeeId,
+        CancellationToken cancellationToken = default);
+
+    Task<EmployeePreferencesResponse> UpdatePreferencesAsync(
+        int employeeId,
+        UpdateEmployeePreferencesRequest request,
+        CancellationToken cancellationToken = default);
+
     Task ChangePasswordAsync(
         int employeeId,
         ChangeOwnPasswordRequest request,

@@ -125,6 +125,82 @@ public sealed class EmployeeAccountService : IEmployeeAccountService
         return Map(employee, departmentName);
     }
 
+    public async Task<EmployeePreferencesResponse> GetPreferencesAsync(
+        int employeeId,
+        CancellationToken cancellationToken = default)
+    {
+        var employee = await GetEmployeeAsync(
+            employeeId,
+            asTracking: false,
+            cancellationToken);
+        var permissions = GetEmployeePermissions(employee);
+        return MapPreferences(employee, permissions);
+    }
+
+    public async Task<EmployeePreferencesResponse> UpdatePreferencesAsync(
+        int employeeId,
+        UpdateEmployeePreferencesRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var employee = await GetEmployeeAsync(
+            employeeId,
+            asTracking: true,
+            cancellationToken);
+
+        try
+        {
+            SetExpectedRowVersion(employee, request.RowVersion);
+        }
+        catch (RbacOperationException exception)
+        {
+            StageAudit(
+                employeeId,
+                AuthorizationAuditActionTypes.EmployeePreferencesUpdated,
+                employeeId,
+                null,
+                AuthorizationAuditResultTypes.Denied,
+                exception.Code);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            throw;
+        }
+
+        var permissions = GetEmployeePermissions(employee);
+        var requestedPage = request.DefaultPage.Trim();
+        if (!EmployeePreferenceRoutes.IsAvailable(requestedPage, permissions))
+        {
+            StageAudit(
+                employeeId,
+                AuthorizationAuditActionTypes.EmployeePreferencesUpdated,
+                employeeId,
+                null,
+                AuthorizationAuditResultTypes.Denied,
+                AuthorizationErrorCodes.PermissionDenied);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            throw new RbacOperationException(
+                StatusCodes.Status403Forbidden,
+                AuthorizationErrorCodes.PermissionDenied,
+                "Trang mặc định không hợp lệ hoặc bạn không có quyền truy cập.");
+        }
+
+        if (!string.Equals(
+                employee.DefaultPage,
+                requestedPage,
+                StringComparison.Ordinal))
+        {
+            employee.DefaultPage = requestedPage;
+            employee.DateModified = DateTime.UtcNow;
+            StageAudit(
+                employeeId,
+                AuthorizationAuditActionTypes.EmployeePreferencesUpdated,
+                employeeId,
+                "DefaultPage");
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return MapPreferences(employee, permissions);
+    }
+
     public async Task ChangePasswordAsync(
         int employeeId,
         ChangeOwnPasswordRequest request,
@@ -437,6 +513,37 @@ public sealed class EmployeeAccountService : IEmployeeAccountService
                 ? Convert.ToBase64String(employee.RowVersion)
                 : string.Empty
         };
+
+    private static EmployeePreferencesResponse MapPreferences(
+        TblEmployee employee,
+        IReadOnlyList<string> permissions) =>
+        new()
+        {
+            DefaultPage = EmployeePreferenceRoutes.ResolveDefault(
+                employee.DefaultPage,
+                permissions),
+            AvailableLandingPages = EmployeePreferenceRoutes.GetAvailable(
+                permissions),
+            RowVersion = employee.RowVersion is { Length: > 0 }
+                ? Convert.ToBase64String(employee.RowVersion)
+                : string.Empty
+        };
+
+    private static IReadOnlyList<string> GetEmployeePermissions(
+        TblEmployee employee)
+    {
+        if (EmployeePermissionCatalog.TryGetPermissions(
+                employee.EmployeeType,
+                out var permissions))
+        {
+            return permissions;
+        }
+
+        throw new RbacOperationException(
+            StatusCodes.Status403Forbidden,
+            AuthorizationErrorCodes.PermissionDenied,
+            "Employee role is not valid for RBAC v1.");
+    }
 
     private static string? BuildImageUrl(
         string? storageKey,

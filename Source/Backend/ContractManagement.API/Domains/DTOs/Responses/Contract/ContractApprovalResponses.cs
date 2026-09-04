@@ -54,3 +54,22 @@ public sealed class ContractApprovalActionResponse
     public string ApprovalRequestRowVersion { get; set; } = string.Empty;
     public string ContractRowVersion { get; set; } = string.Empty;
 }
+
+public sealed class ContractApprovalBulkDecisionItemResponse
+{
+    public int ApprovalRequestId { get; set; }
+    public bool Success { get; set; }
+    public string? ErrorCode { get; set; }
+    public string? ErrorMessage { get; set; }
+    public ContractApprovalActionResponse? Result { get; set; }
+}
+
+public sealed class ContractApprovalBulkDecisionResponse
+{
+    public ApprovalRequestStatus Decision { get; set; }
+    public int TotalCount { get; set; }
+    public int SuccessCount { get; set; }
+    public int FailureCount { get; set; }
+    public IReadOnlyList<ContractApprovalBulkDecisionItemResponse> Items
+        { get; set; } = Array.Empty<ContractApprovalBulkDecisionItemResponse>();
+}

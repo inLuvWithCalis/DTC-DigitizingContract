@@ -2,6 +2,7 @@ using System.Net;
 using System.Security.Cryptography;
 using ContractManagement.API.Common.Enums;
 using ContractManagement.API.Common.Exceptions;
+using ContractManagement.API.Common.Security;
 using ContractManagement.API.Domains.DTOs.Requests.Contract;
 using ContractManagement.Domains.Interfaces.Contract;
 using ContractManagement.Domains.Interfaces.File;
@@ -319,6 +320,81 @@ public sealed class ContractApprovalServicePhase8DTests
                 .AsNoTracking()
                 .SingleAsync()).Status);
         Assert.Empty(context.TblApprovalHistories);
+    }
+
+    [Fact]
+    public async Task Inbox_FiltersSubmittedDateInclusively()
+    {
+        await using var context = CreateContext();
+        var storage = await SeedPendingApprovalAsync(context);
+        var service = CreateService(
+            context,
+            storage,
+            new RecordingAuditWriter());
+        var submittedDate = (await context.TblContractApprovalRequests
+            .AsNoTracking()
+            .SingleAsync()).SubmittedDate.Date;
+
+        var included = await service.GetInboxAsync(
+            new ContractApprovalInboxFilterRequest
+            {
+                FromDate = submittedDate,
+                ToDate = submittedDate
+            },
+            ManagerAId);
+        var excluded = await service.GetInboxAsync(
+            new ContractApprovalInboxFilterRequest
+            {
+                FromDate = submittedDate.AddDays(1),
+                ToDate = submittedDate.AddDays(1)
+            },
+            ManagerAId);
+
+        Assert.Single(included.Items);
+        Assert.Empty(excluded.Items);
+    }
+
+    [Fact]
+    public async Task BulkDecision_ReturnsPerItemSuccessAndFailure()
+    {
+        await using var context = CreateContext();
+        var storage = await SeedPendingApprovalAsync(context);
+        var service = CreateService(context, storage, CreateAuditWriter(context));
+
+        var response = await service.DecideBulkAsync(
+            new ContractApprovalBulkDecisionRequest
+            {
+                Decision = ApprovalRequestStatus.Returned,
+                Comment = "Cần chỉnh sửa trước khi gửi lại.",
+                Items =
+                [
+                    new ContractApprovalBulkDecisionItemRequest
+                    {
+                        ApprovalRequestId = ApprovalRequestId,
+                        RowVersion = EncodedRowVersion()
+                    },
+                    new ContractApprovalBulkDecisionItemRequest
+                    {
+                        ApprovalRequestId = ApprovalRequestId + 999,
+                        RowVersion = EncodedRowVersion()
+                    }
+                ]
+            },
+            ManagerAId);
+
+        Assert.Equal(2, response.TotalCount);
+        Assert.Equal(1, response.SuccessCount);
+        Assert.Equal(1, response.FailureCount);
+        Assert.True(response.Items[0].Success);
+        Assert.False(response.Items[1].Success);
+        Assert.Equal(
+            AuthorizationErrorCodes.ResourceNotFound,
+            response.Items[1].ErrorCode);
+        Assert.Equal(
+            (byte)ApprovalRequestStatus.Returned,
+            (await context.TblContractApprovalRequests
+                .AsNoTracking()
+                .SingleAsync()).Status);
     }
 
     private static DbDtctechContext CreateContext()

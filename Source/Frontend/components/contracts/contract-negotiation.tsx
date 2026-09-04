@@ -91,8 +91,7 @@ export function ContractNegotiation({
   const canBranchFromApprovalDecision =
     contract.status === ContractStatus.Negotiating ||
     contract.status === ContractStatus.Rejected;
-  const canCreateRound =
-    canManage && canBranchFromApprovalDecision;
+  const canCreateRound = canManage && canBranchFromApprovalDecision;
   const loadVersionHistory = useCallback(async () => {
     if (
       contract.status !== ContractStatus.Negotiating &&
@@ -601,9 +600,9 @@ export function ContractNegotiation({
               <AlertTitle>Ảnh hưởng sau khi tạo vòng mới</AlertTitle>
               <AlertDescription>
                 Các luồng trao đổi còn mở sẽ được chuyển sang version mới để
-                tiếp tục xử lý; các luồng đã đóng chỉ còn trong lịch sử. Link
-                và phiên truy cập khách hàng hiện tại sẽ mất hiệu lực; sau khi
-                sửa version mới, bạn cần tạo link khác để gửi khách hàng.
+                tiếp tục xử lý; các luồng đã đóng chỉ còn trong lịch sử. Link và
+                phiên truy cập khách hàng hiện tại sẽ mất hiệu lực; sau khi sửa
+                version mới, bạn cần tạo link khác để gửi khách hàng.
               </AlertDescription>
             </Alert>
 

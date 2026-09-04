@@ -32,6 +32,7 @@ export interface UserProfileDto {
   mustChangePassword: boolean;
   passwordChangedAt: string | null;
   imageUrl: string | null;
+  defaultPage: string;
 }
 
 export const authApi = {

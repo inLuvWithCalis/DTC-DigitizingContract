@@ -86,6 +86,24 @@ public sealed class ContractApprovalController : ControllerBase
             "Duyệt hợp đồng thành công.",
             cancellationToken);
 
+    [HttpPost("bulk-decide")]
+    [SessionAuthorize(RbacPermissions.ContractApprovalDecide)]
+    [ProducesResponseType(
+        typeof(ApiResponse<ContractApprovalBulkDecisionResponse>),
+        StatusCodes.Status200OK)]
+    public async Task<IActionResult> DecideBulk(
+        [FromBody] ContractApprovalBulkDecisionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _service.DecideBulkAsync(
+            request,
+            GetEmployeeId(),
+            cancellationToken);
+        return Ok(ApiResponse<ContractApprovalBulkDecisionResponse>.Ok(
+            result,
+            $"Đã xử lý {result.SuccessCount}/{result.TotalCount} yêu cầu duyệt."));
+    }
+
     [HttpPost("{approvalRequestId:int}/return")]
     [SessionAuthorize(RbacPermissions.ContractApprovalDecide)]
     public Task<IActionResult> Return(

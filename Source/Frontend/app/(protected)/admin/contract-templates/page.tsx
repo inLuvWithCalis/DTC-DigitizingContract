@@ -245,7 +245,7 @@ export default function ContractTemplateListPage() {
             title="Không có quyền truy cập"
             description="Chỉ Admin Officer đang hoạt động được quản trị mẫu hợp đồng."
           >
-            <Card className="flex min-h-[500px] flex-col gap-0 border-border bg-card p-0 shadow-sm">
+            <Card className="min-h-125 flex-col gap-0 border-border bg-card p-0 shadow-sm">
               <CardContent className="flex flex-1 flex-col justify-between p-4 pb-0">
                 <DataTable
                   columns={columns}

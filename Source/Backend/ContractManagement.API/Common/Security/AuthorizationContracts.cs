@@ -40,7 +40,8 @@ public sealed record AuthenticatedEmployee(
     IReadOnlyList<string> Permissions,
     bool MustChangePassword = false,
     DateTime? PasswordChangedAt = null,
-    string? ImageUrl = null);
+    string? ImageUrl = null,
+    string? DefaultPage = null);
 
 public static class EmployeeAuthorizationContext
 {

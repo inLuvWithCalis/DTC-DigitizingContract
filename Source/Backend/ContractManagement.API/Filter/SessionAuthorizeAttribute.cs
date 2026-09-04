@@ -74,6 +74,7 @@ public sealed class SessionAuthorizeAttribute : Attribute, IAsyncAuthorizationFi
                 x.MustChangePassword,
                 x.SessionVersion,
                 x.PasswordChangedAt,
+                x.DefaultPage,
                 x.AvatarStorageKey,
                 x.AvatarUpdatedAt
             })
@@ -154,7 +155,8 @@ public sealed class SessionAuthorizeAttribute : Attribute, IAsyncAuthorizationFi
                 employee.PasswordChangedAt,
                 employee.AvatarStorageKey is null
                     ? null
-                    : $"/api/auth/profile/avatar?v={employee.AvatarUpdatedAt?.Ticks ?? 0}");
+                    : $"/api/auth/profile/avatar?v={employee.AvatarUpdatedAt?.Ticks ?? 0}",
+                employee.DefaultPage);
     }
 
     private static ObjectResult Error(int statusCode, string code, string message)

@@ -80,6 +80,9 @@ export default function PublicContractPage() {
   const [step, setStep] = useState<AccessStep>("checking");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp] = useState("");
+  const [deliveryChannel, setDeliveryChannel] = useState<"Email" | "Sms">(
+    "Sms",
+  );
   const [publicChallengeId, setPublicChallengeId] = useState<string | null>(
     null,
   );
@@ -150,9 +153,7 @@ export default function PublicContractPage() {
 
       await loadSharedContract();
     } catch (error: any) {
-      setPageError(
-        getErrorMessage(error, "Không thể kiểm tra link truy cập."),
-      );
+      setPageError(getErrorMessage(error, "Không thể kiểm tra link truy cập."));
       setStep("error");
     }
   }, [linkToken, loadSharedContract, showLinkUnavailable, tenantCode]);
@@ -199,6 +200,7 @@ export default function PublicContractPage() {
         phoneNumber: normalizedPhone,
       });
       setPublicChallengeId(result.publicChallengeId);
+      setDeliveryChannel(result.deliveryChannel ?? "Sms");
       setOtp("");
       setStep("otp");
       toast.info("Nếu thông tin hợp lệ, mã xác thực sẽ được gửi.");
@@ -234,9 +236,7 @@ export default function PublicContractPage() {
       toast.success("Xác thực thành công!");
       await initializeAccess();
     } catch (error: any) {
-      resetToPhone(
-        getErrorMessage(error, "Không thể xác thực mã. Hãy yêu cầu mã mới."),
-      );
+      toast.error("Không thể xác thực mã. Hãy yêu cầu mã mới.");
     } finally {
       setIsVerifyingOtp(false);
     }
@@ -336,7 +336,9 @@ export default function PublicContractPage() {
             <p className="text-sm text-muted-foreground">
               {step === "phone"
                 ? "Nhập số điện thoại đã được chọn để truy cập hợp đồng."
-                : "Nhập mã xác thực được gửi tới số điện thoại của bạn."}
+                : deliveryChannel === "Email"
+                  ? "Nhập mã xác thực gửi tới email đã đăng ký của khách hàng. Vui lòng kiểm tra cả thư mục Spam. Nếu chưa nhận được mã, hãy liên hệ nhân viên phụ trách để kiểm tra email."
+                  : "Nhập mã xác thực được gửi tới số điện thoại của bạn."}
             </p>
           </CardHeader>
           <CardContent className="space-y-4">

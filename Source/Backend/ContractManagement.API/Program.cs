@@ -112,15 +112,25 @@ builder.Services.AddOptions<CustomerOtpOptions>()
     .Bind(builder.Configuration.GetSection(CustomerOtpOptions.SectionName))
     .Validate(options => builder.Environment.IsDevelopment()
         || (IsThirtyTwoByteBase64(options.HashKey)
-            && IsThirtyTwoByteBase64(options.EncryptionKey)
-            && !string.Equals(options.Provider, "Fake", StringComparison.OrdinalIgnoreCase)
-            && !string.IsNullOrWhiteSpace(options.ProviderEndpoint)
-            && !string.IsNullOrWhiteSpace(options.ProviderApiKey)),
-        "Production customer OTP requires configured hash/encryption keys and a delivery provider.")
+            && IsThirtyTwoByteBase64(options.EncryptionKey)),
+        "Production customer OTP requires configured 32-byte hash/encryption keys.")
+    .Validate(options => options.UsesSmtp
+        ? options.Smtp.IsConfigured()
+        : string.Equals(options.Provider, "Fake", StringComparison.OrdinalIgnoreCase)
+            ? builder.Environment.IsDevelopment()
+            : string.Equals(options.Provider, "Http", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(options.ProviderEndpoint)
+                && !string.IsNullOrWhiteSpace(options.ProviderApiKey),
+        "CustomerOtp:Provider must be Fake (Development only), Http (endpoint/API key required), or Smtp (host, port 587, username, app password, from address and timeout 1-45 seconds required).")
     .ValidateOnStart();
 builder.Services.AddSingleton<CustomerAccessCryptography>();
 
-if (builder.Environment.IsDevelopment())
+var otpProvider = builder.Configuration["CustomerOtp:Provider"] ?? "Fake";
+if (string.Equals(otpProvider, "Smtp", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddSingleton<ICustomerOtpDeliveryProvider, SmtpCustomerOtpDeliveryProvider>();
+}
+else if (string.Equals(otpProvider, "Fake", StringComparison.OrdinalIgnoreCase))
 {
     builder.Services.AddSingleton<ICustomerOtpDeliveryProvider, FakeCustomerOtpDeliveryProvider>();
 }

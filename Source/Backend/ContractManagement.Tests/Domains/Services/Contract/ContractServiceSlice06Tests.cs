@@ -26,12 +26,14 @@ public sealed class ContractServiceSlice06Tests
     private const int CustomerId = 603;
     private const int TermId = 604;
 
-    [Fact]
-    public async Task DraftToNegotiating_OtpCustomerCommentAndNewRound_ShouldRevokeOldAccess()
+    [Theory]
+    [InlineData("Fake")]
+    [InlineData("Smtp")]
+    public async Task DraftToNegotiating_OtpCustomerCommentAndNewRound_ShouldRevokeOldAccess(string provider)
     {
         await using var context = CreateContext();
         await SeedAsync(context);
-        var (contractService, customerAccess, cryptography) = CreateServices(context);
+        var (contractService, customerAccess, cryptography) = CreateServices(context, provider);
         var rowVersion = Convert.ToBase64String(InitialRowVersion());
 
         var phone = await contractService.UpdateCustomerVerificationPhoneAsync(
@@ -89,6 +91,9 @@ public sealed class ContractServiceSlice06Tests
             "+84912345678");
         var outbox = await context.TblContractCustomerOtpDeliveryOutbox.SingleAsync();
         var message = cryptography.DecryptDeliveryPayload(outbox.EncryptedPayload);
+        Assert.Equal(provider == "Smtp" ? "Email" : "Sms", challengeResponse.DeliveryChannel);
+        Assert.Equal(provider == "Smtp" ? "customer@example.test" : null, message.EmailAddress);
+        Assert.Equal((await context.TblContractCustomerOtpChallenges.SingleAsync()).ExpiresAt, message.ExpiresAt);
         var issue = await customerAccess.VerifyOtpAsync(
             pendingToken,
             challengeResponse.PublicChallengeId,
@@ -269,7 +274,7 @@ public sealed class ContractServiceSlice06Tests
 
     private static (ContractService ContractService,
         CustomerContractAccessService CustomerAccess,
-        CustomerAccessCryptography Cryptography) CreateServices(DbDtctechContext context)
+        CustomerAccessCryptography Cryptography) CreateServices(DbDtctechContext context, string provider = "Fake")
     {
         var tenant = new CurrentTenant();
         tenant.Set(new ResolvedTenant(
@@ -287,6 +292,7 @@ public sealed class ContractServiceSlice06Tests
             });
         var options = Options.Create(new CustomerOtpOptions
         {
+            Provider = provider,
             HashKey = Convert.ToBase64String(Enumerable.Repeat((byte)1, 32).ToArray()),
             EncryptionKey = Convert.ToBase64String(Enumerable.Repeat((byte)2, 32).ToArray())
         });
@@ -299,8 +305,41 @@ public sealed class ContractServiceSlice06Tests
                 tenant,
                 cryptography,
                 contractService,
-                audit),
+                audit,
+                options),
             cryptography);
+    }
+
+    [Theory]
+    [InlineData(null, "+84912345678")]
+    [InlineData("invalid-email", "+84912345678")]
+    [InlineData("customer@example.test", "+84999999999")]
+    public async Task Smtp_InvalidRecipientOrWrongPhone_DoesNotEnqueueOrDiscloseEmail(
+        string? email, string suppliedPhone)
+    {
+        await using var context = CreateContext();
+        await SeedAsync(context);
+        (await context.TblCustomers.SingleAsync()).CustomerEmail = email;
+        await context.SaveChangesAsync();
+        var (contracts, access, _) = CreateServices(context, "Smtp");
+        var rowVersion = Convert.ToBase64String(InitialRowVersion());
+        await contracts.UpdateCustomerVerificationPhoneAsync(ContractId,
+            new UpdateContractCustomerVerificationPhoneRequest
+            {
+                PhoneSource = "CustomerMobile", Reason = "Select contact", RowVersion = rowVersion
+            }, EmployeeId);
+        var link = await contracts.CreateCustomerAccessLinkAsync(ContractId,
+            new CreateContractCustomerAccessLinkRequest { RowVersion = rowVersion },
+            EmployeeId, "https://public.example.test");
+        await contracts.StartNegotiationAsync(ContractId,
+            new StartContractNegotiationRequest { RowVersion = rowVersion }, EmployeeId);
+        var token = new Uri(link.PublicUrl).Segments.Last().Trim('/');
+        var response = await access.RequestOtpAsync(token, suppliedPhone);
+        Assert.Equal("Email", response.DeliveryChannel);
+        Assert.False(string.IsNullOrWhiteSpace(response.PublicChallengeId));
+        Assert.Empty(context.TblContractCustomerOtpDeliveryOutbox);
+        Assert.Empty(context.TblContractCustomerOtpChallenges);
+        Assert.DoesNotContain("@", JsonSerializer.Serialize(response));
     }
 
     private static async Task SeedAsync(DbDtctechContext context)
@@ -322,6 +361,7 @@ public sealed class ContractServiceSlice06Tests
             CustomerRepresentativeName = "Slice 06 Representative",
             CustomerRepresentativeTitle = "Director",
             CustomerMobile = "+84912345678",
+            CustomerEmail = "customer@example.test",
             Status = 1
         });
         context.TblTenantLegalProfiles.Add(new TblTenantLegalProfile

@@ -1,6 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
+import Link from "next/link";
 import {
   CircleCheckBig,
   Clock3,
@@ -77,22 +78,30 @@ const definitions: Record<string, Definition> = {
   },
 };
 
-export function DashboardSummaryCards({ items }: { items: DashboardSummaryItem[] }) {
+interface DashboardSummaryCardsProps {
+  items: DashboardSummaryItem[];
+  hrefs?: Partial<Record<string, string>>;
+}
+
+export function DashboardSummaryCards({
+  items,
+  hrefs,
+}: DashboardSummaryCardsProps) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
       {items.map((item) => {
         const definition = definitions[item.key] ?? definitions.total;
         const Icon = definition.icon;
         const delta = item.previousCount == null ? null : item.count - item.previousCount;
-
-        return (
-          <div
-            key={item.key}
-            className={cn(
-              "group relative flex flex-col justify-between overflow-hidden rounded-2xl border bg-card p-5 shadow-xs transition-all duration-300 hover:-translate-y-1 hover:shadow-md",
-              definition.cardBorderClass,
-            )}
-          >
+        const href = hrefs?.[item.key];
+        const cardClassName = cn(
+          "group relative flex flex-col justify-between overflow-hidden rounded-2xl border bg-card p-5 shadow-xs transition-all duration-300 hover:-translate-y-1 hover:shadow-md",
+          href &&
+            "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+          definition.cardBorderClass,
+        );
+        const card = (
+          <>
             {/* Top subtle gradient effect */}
             <div
               className={cn(
@@ -123,17 +132,17 @@ export function DashboardSummaryCards({ items }: { items: DashboardSummaryItem[]
               </div>
             </div>
 
-            <div className="relative mt-4 pt-2 border-t border-border/50">
+            <div className="relative mt-4 border-t border-border/50 pt-2">
               {delta != null ? (
                 <div className="flex items-center gap-1.5 text-xs">
                   <span
                     className={cn(
-                      "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-semibold text-[11px]",
+                      "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold",
                       delta > 0
                         ? "bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400"
                         : delta < 0
-                        ? "bg-rose-500/10 text-rose-600 dark:bg-rose-500/15 dark:text-rose-400"
-                        : "bg-muted text-muted-foreground",
+                          ? "bg-rose-500/10 text-rose-600 dark:bg-rose-500/15 dark:text-rose-400"
+                          : "bg-muted text-muted-foreground",
                     )}
                   >
                     {delta > 0 ? (
@@ -143,14 +152,34 @@ export function DashboardSummaryCards({ items }: { items: DashboardSummaryItem[]
                     ) : (
                       <Minus className="size-3" />
                     )}
-                    {delta > 0 ? `+${delta.toLocaleString("vi-VN")}` : delta.toLocaleString("vi-VN")}
+                    {delta > 0
+                      ? `+${delta.toLocaleString("vi-VN")}`
+                      : delta.toLocaleString("vi-VN")}
                   </span>
-                  <span className="text-muted-foreground truncate">so với kỳ trước</span>
+                  <span className="truncate text-muted-foreground">
+                    so với kỳ trước
+                  </span>
                 </div>
               ) : (
-                <span className="text-xs text-muted-foreground">Kỳ hiện tại</span>
+                <span className="text-xs text-muted-foreground">
+                  Kỳ hiện tại
+                </span>
               )}
             </div>
+          </>
+        );
+
+        if (href) {
+          return (
+            <Link key={item.key} href={href} className={cardClassName}>
+              {card}
+            </Link>
+          );
+        }
+
+        return (
+          <div key={item.key} className={cardClassName}>
+            {card}
           </div>
         );
       })}

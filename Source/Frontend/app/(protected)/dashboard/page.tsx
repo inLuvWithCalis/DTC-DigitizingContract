@@ -8,7 +8,6 @@ import {
   FilePlus2,
   RefreshCw,
   Sparkles,
-  UserCheck,
 } from "lucide-react";
 
 import { ContractStatusChart } from "@/components/dashboard/contract-status-chart";
@@ -27,7 +26,10 @@ import {
 } from "@/components/ui/custom/date-range-filter";
 import { Header } from "@/components/ui/custom/header";
 import { useAuthStore } from "@/hooks/use-auth-store";
+import { usePermission } from "@/hooks/use-permission";
 import { getApiErrorMessage } from "@/lib/api-error";
+import { RBAC_PERMISSIONS } from "@/lib/rbac";
+import { contractApprovalApi } from "@/services/contract-approval-api";
 import { dashboardApi, type DashboardResponse } from "@/services/dashboard-api";
 import { cn } from "@/lib/utils";
 
@@ -63,6 +65,8 @@ type PresetKey = "7d" | "30d" | "90d" | "year";
 
 export default function DashboardPage() {
   const user = useAuthStore((state) => state.user);
+  const { can } = usePermission();
+  const canDecideApprovals = can(RBAC_PERMISSIONS.contractApprovalDecide);
   const [dateRange, setDateRange] = useState<DateRange>(initialRange);
   const [activePreset, setActivePreset] = useState<PresetKey | null>("30d");
   const [data, setData] = useState<DashboardResponse | null>(null);
@@ -78,12 +82,38 @@ export default function DashboardPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await dashboardApi.get({
-        from: startOfLocalDay(dateRange.from),
-        to: endOfLocalDay(dateRange.to),
-        expiryDays: 30,
-      });
-      setData(response);
+      const [response, approvalInbox] = await Promise.all([
+        dashboardApi.get({
+          from: startOfLocalDay(dateRange.from),
+          to: endOfLocalDay(dateRange.to),
+          expiryDays: 30,
+        }),
+        canDecideApprovals
+          ? contractApprovalApi.getInbox({ page: 1, pageSize: 1 })
+          : Promise.resolve(null),
+      ]);
+      const summary = approvalInbox
+        ? response.summary.some((item) => item.key === "pendingApproval")
+          ? response.summary.map((item) =>
+              item.key === "pendingApproval"
+                ? {
+                    ...item,
+                    count: approvalInbox.totalCount,
+                    previousCount: null,
+                  }
+                : item,
+            )
+          : [
+              ...response.summary,
+              {
+                key: "pendingApproval",
+                count: approvalInbox.totalCount,
+                previousCount: null,
+              },
+            ]
+        : response.summary;
+
+      setData({ ...response, summary });
       setLastUpdated(
         new Date().toLocaleTimeString("vi-VN", {
           hour: "2-digit",
@@ -98,7 +128,7 @@ export default function DashboardPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [dateRange.from, dateRange.to]);
+  }, [canDecideApprovals, dateRange.from, dateRange.to]);
 
   useEffect(() => {
     queueMicrotask(() => void loadDashboard());
@@ -268,7 +298,20 @@ export default function DashboardPage() {
           ) : data ? (
             <div className="space-y-6">
               {/* Section 1: KPI Summary Cards */}
-              <DashboardSummaryCards items={data.summary} />
+              <DashboardSummaryCards
+                items={data.summary}
+                hrefs={{
+                  total: "/contracts",
+                  drafting: "/contracts",
+                  pendingApproval: canDecideApprovals
+                    ? "/contract-approvals"
+                    : "/contracts",
+                  pendingSignature: "/contracts",
+                  signed: "/contracts",
+                  completedRejected: "/contracts",
+                  expiring: "/contracts",
+                }}
+              />
 
               {/* Section 2: Charts Grid */}
               <div className="grid gap-6 xl:grid-cols-2">

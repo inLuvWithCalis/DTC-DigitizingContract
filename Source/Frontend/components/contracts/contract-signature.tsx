@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Check,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -144,11 +145,21 @@ export function ContractSignature({
   const [activeLink, setActiveLink] =
     useState<ContractCustomerAccessLinkResponse | null>(null);
   const [oneTimePublicUrl, setOneTimePublicUrl] = useState<string | null>(null);
+  const [isCopied, setIsCopied] = useState(false);
+  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isCreatingLink, setIsCreatingLink] = useState(false);
   const [isCreateLinkConfirmOpen, setIsCreateLinkConfirmOpen] = useState(false);
   const [linkAction, setLinkAction] = useState<LinkAction | null>(null);
   const [linkActionReason, setLinkActionReason] = useState("");
   const [isSubmittingLinkAction, setIsSubmittingLinkAction] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const currentPhone = useMemo(
     () => phones.find((phone) => phone.isCurrent) ?? null,
@@ -325,6 +336,13 @@ export function ContractSignature({
     try {
       await navigator.clipboard.writeText(oneTimePublicUrl);
       toast.success("Đã sao chép link truy cập.");
+      setIsCopied(true);
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+      copyTimeoutRef.current = setTimeout(() => {
+        setIsCopied(false);
+      }, 5000);
     } catch {
       toast.error(
         "Không thể sao chép tự động. Vui lòng sao chép link thủ công.",
@@ -676,8 +694,24 @@ export function ContractSignature({
                     </p>
                   )}
                   <div className="flex flex-wrap gap-2">
-                    <Button size="sm" onClick={handleCopyLink}>
-                      <Copy /> Sao chép link
+                    <Button
+                      size="sm"
+                      onClick={handleCopyLink}
+                      className={
+                        isCopied
+                          ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                          : undefined
+                      }
+                    >
+                      {isCopied ? (
+                        <>
+                          <Check className="size-4" /> Đã sao chép
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="size-4" /> Sao chép link
+                        </>
+                      )}
                     </Button>
                     {activeLink && (
                       <>

@@ -17,4 +17,8 @@ public sealed class CustomerOtpOptions
     public int MaxDeliveryAttempts { get; set; } = 3;
 
     public int RetryDelaySeconds { get; set; } = 30;
+
+    public CustomerOtpSmtpOptions Smtp { get; set; } = new();
+
+    public bool UsesSmtp => string.Equals(Provider, "Smtp", StringComparison.OrdinalIgnoreCase);
 }

@@ -23,6 +23,7 @@ export type CustomerNegotiationCommentLifecycleState = "Open" | "Resolved";
 
 export interface CustomerOtpRequestAcceptedResponse {
   publicChallengeId: string;
+  deliveryChannel?: "Email" | "Sms";
 }
 
 export type CustomerAccessLinkAvailabilityState =

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 
@@ -36,8 +37,7 @@ public sealed class CustomerAccessCryptography
     public string EncryptDeliveryPayload(CustomerOtpDeliveryMessage message)
     {
         var nonce = RandomNumberGenerator.GetBytes(12);
-        var plaintext = Encoding.UTF8.GetBytes(
-            $"{message.PhoneNumberNormalized}\n{message.Otp}");
+        var plaintext = JsonSerializer.SerializeToUtf8Bytes(message);
         var ciphertext = new byte[plaintext.Length];
         var tag = new byte[16];
 
@@ -65,7 +65,15 @@ public sealed class CustomerAccessCryptography
 
         using var algorithm = new AesGcm(_encryptionKey, tagSizeInBytes: 16);
         algorithm.Decrypt(nonce, ciphertext, tag, plaintext);
-        var parts = Encoding.UTF8.GetString(plaintext).Split('\n', 2);
+        var decoded = Encoding.UTF8.GetString(plaintext);
+        if (decoded.StartsWith('{'))
+        {
+            return JsonSerializer.Deserialize<CustomerOtpDeliveryMessage>(decoded)
+                ?? throw new CryptographicException("OTP delivery payload is invalid.");
+        }
+
+        // Drain pre-SMTP outbox rows using the legacy phone/OTP payload format.
+        var parts = decoded.Split('\n', 2);
         if (parts.Length != 2)
         {
             throw new CryptographicException("OTP delivery payload is invalid.");

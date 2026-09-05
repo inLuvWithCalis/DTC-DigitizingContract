@@ -3,6 +3,7 @@ namespace ContractManagement.API.Domains.DTOs.Responses.Public;
 public sealed class CustomerOtpRequestAcceptedResponse
 {
     public string PublicChallengeId { get; init; } = string.Empty;
+    public string DeliveryChannel { get; init; } = "Sms";
 }
 
 public sealed class CustomerAccessLinkAvailabilityResponse

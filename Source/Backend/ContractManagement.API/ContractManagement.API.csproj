@@ -4,6 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>ContractManagement-API-local</UserSecretsId>
 
 	 <!-- Sinh tài liệu XML từ các comment /// để Swagger hiển thị -->
 	 <GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -29,6 +30,10 @@
 		<Content Update="appsettings.Development.json">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</Content>
+		<None Update="Assets\Email\logo_light.png">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+		</None>
 	</ItemGroup>
 
   <ItemGroup>

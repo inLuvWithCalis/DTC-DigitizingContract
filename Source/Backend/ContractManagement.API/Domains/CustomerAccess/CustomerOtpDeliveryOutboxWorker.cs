@@ -111,7 +111,8 @@ public sealed class CustomerOtpDeliveryOutboxWorker : BackgroundService
                 .SingleOrDefaultAsync(x => x.CustomerOtpChallengeId == candidate.ChallengeId,
                     cancellationToken);
             if (challenge is null || challenge.ExpiresAt <= DateTime.UtcNow
-                || challenge.InvalidatedAt.HasValue || challenge.LockedAt.HasValue)
+                || challenge.InvalidatedAt.HasValue || challenge.LockedAt.HasValue
+                || challenge.UsedAt.HasValue)
             {
                 candidate.Status = "Failed";
                 candidate.FailedAt = DateTime.UtcNow;
@@ -158,6 +159,13 @@ public sealed class CustomerOtpDeliveryOutboxWorker : BackgroundService
                 candidate.LeaseId = null;
                 candidate.LeaseUntil = null;
                 candidate.LastFailure = exception.GetType().Name;
+                // SMTP exception messages can contain recipient addresses; log only safe metadata.
+                _logger.LogWarning(
+                    "Customer OTP delivery failed. Tenant {TenantId}, outbox {OutboxId}, attempt {Attempt}, error {ErrorType}, SMTP status {SmtpStatus}",
+                    tenant.TenantId, candidate.CustomerOtpDeliveryOutboxId, candidate.AttemptCount,
+                    exception.GetType().Name,
+                    exception is System.Net.Mail.SmtpException smtpException
+                        ? (int?)smtpException.StatusCode : null);
                 if (candidate.AttemptCount >= _options.MaxDeliveryAttempts
                     || challenge.ExpiresAt <= failedAt)
                 {

@@ -101,7 +101,7 @@ public sealed class ContractApprovalServicePhase8DTests
         var exception = await Assert.ThrowsAsync<BusinessRuleException>(() =>
             service.DecideAsync(
                 ApprovalRequestId,
-                ApprovalRequestStatus.Rejected,
+                ApprovalRequestStatus.Approved,
                 staleRequest,
                 ManagerBId));
 
@@ -202,19 +202,8 @@ public sealed class ContractApprovalServicePhase8DTests
         Assert.Equal("Owner", item.SubmittedByEmployeeName);
     }
 
-    [Theory]
-    [InlineData(
-        ApprovalRequestStatus.Returned,
-        ContractStatus.Negotiating,
-        ContractAuditActionTypes.ApprovalReturned)]
-    [InlineData(
-        ApprovalRequestStatus.Rejected,
-        ContractStatus.Rejected,
-        ContractAuditActionTypes.ApprovalRejected)]
-    public async Task ReturnOrReject_WithReason_ResolvesRequestAndAuditsResult(
-        ApprovalRequestStatus decision,
-        ContractStatus expectedContractStatus,
-        string expectedAuditAction)
+    [Fact]
+    public async Task Return_WithReason_ResolvesRequestAndAuditsResult()
     {
         await using var context = CreateContext();
         var storage = await SeedPendingApprovalAsync(context);
@@ -222,28 +211,25 @@ public sealed class ContractApprovalServicePhase8DTests
 
         var response = await service.DecideAsync(
             ApprovalRequestId,
-            decision,
+            ApprovalRequestStatus.Returned,
             DecisionRequest("Nội dung cần xử lý trước bước tiếp theo."),
             ManagerAId);
 
-        Assert.Equal(expectedContractStatus, response.ContractStatus);
+        Assert.Equal(ContractStatus.Negotiating, response.ContractStatus);
         Assert.Equal(
-            (byte)decision,
+            (byte)ApprovalRequestStatus.Returned,
             (await context.TblContractApprovalRequests
                 .AsNoTracking()
                 .SingleAsync()).Status);
         Assert.Contains(
             context.TblContractAudits,
-            audit => audit.ActionType == expectedAuditAction
+            audit => audit.ActionType == ContractAuditActionTypes.ApprovalReturned
                 && audit.SubjectType == ContractAuditSubjectTypes.ApprovalRequest
                 && audit.SubjectId == ApprovalRequestId);
     }
 
-    [Theory]
-    [InlineData(ApprovalRequestStatus.Returned)]
-    [InlineData(ApprovalRequestStatus.Rejected)]
-    public async Task ReturnOrReject_WithoutReason_DoesNotResolveRequest(
-        ApprovalRequestStatus decision)
+    [Fact]
+    public async Task Return_WithoutReason_DoesNotResolveRequest()
     {
         await using var context = CreateContext();
         var storage = await SeedPendingApprovalAsync(context);
@@ -255,13 +241,38 @@ public sealed class ContractApprovalServicePhase8DTests
         var exception = await Assert.ThrowsAsync<BusinessRuleException>(() =>
             service.DecideAsync(
                 ApprovalRequestId,
-                decision,
+                ApprovalRequestStatus.Returned,
                 DecisionRequest(" "),
                 ManagerAId));
 
         Assert.Equal(
             ContractApprovalErrorCodes.ApprovalReasonRequired,
             exception.Code);
+        Assert.Equal(
+            (byte)ApprovalRequestStatus.Pending,
+            (await context.TblContractApprovalRequests
+                .AsNoTracking()
+                .SingleAsync()).Status);
+        Assert.Empty(context.TblApprovalHistories);
+    }
+
+    [Fact]
+    public async Task Reject_IsNotAnAvailableDecision()
+    {
+        await using var context = CreateContext();
+        var storage = await SeedPendingApprovalAsync(context);
+        var service = CreateService(
+            context,
+            storage,
+            new RecordingAuditWriter());
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.DecideAsync(
+                ApprovalRequestId,
+                ApprovalRequestStatus.Rejected,
+                DecisionRequest("Không còn hỗ trợ từ chối."),
+                ManagerAId));
+
         Assert.Equal(
             (byte)ApprovalRequestStatus.Pending,
             (await context.TblContractApprovalRequests
@@ -310,7 +321,7 @@ public sealed class ContractApprovalServicePhase8DTests
             CreateService(context, storage, new RecordingAuditWriter())
                 .DecideAsync(
                     ApprovalRequestId,
-                    ApprovalRequestStatus.Rejected,
+                    ApprovalRequestStatus.Returned,
                     request,
                     ManagerAId));
 

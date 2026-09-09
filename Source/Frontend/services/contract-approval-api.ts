@@ -130,14 +130,6 @@ export const contractApprovalApi = {
       `${BASE_URL}/${approvalRequestId}/return`,
       data,
     ),
-  reject: (
-    approvalRequestId: number,
-    data: ContractApprovalDecisionRequest,
-  ) =>
-    axiosClient.post<unknown, ContractApprovalActionResponse>(
-      `${BASE_URL}/${approvalRequestId}/reject`,
-      data,
-    ),
   bulkDecide: (data: ContractApprovalBulkDecisionRequest) =>
     axiosClient.post<unknown, ContractApprovalBulkDecisionResponse>(
       `${BASE_URL}/bulk-decide`,

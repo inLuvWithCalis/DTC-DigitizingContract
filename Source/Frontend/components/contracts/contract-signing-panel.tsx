@@ -173,34 +173,30 @@ export function ContractSigningPanel({
 
   const submit = async () => {
     if (!detail || !selectedFile || !canSubmit) return;
-    const requiredValues = [
-      form.providerSignerName,
-      form.providerSignerTitle,
-      form.providerSigningDate,
-      form.customerSignerName,
-      form.customerSignerTitle,
-      form.customerSigningDate,
-    ];
-    if (requiredValues.some((value) => !value.trim())) {
-      toast.error("Vui lòng nhập đủ thông tin người ký của hai bên.");
-      return;
+    if (isInitialUpload) {
+      const requiredValues = [
+        form.providerSignerName,
+        form.providerSignerTitle,
+        form.providerSigningDate,
+        form.customerSignerName,
+        form.customerSignerTitle,
+        form.customerSigningDate,
+      ];
+      if (requiredValues.some((value) => !value.trim())) {
+        toast.error("Vui lòng nhập đủ thông tin người ký của hai bên.");
+        return;
+      }
     }
     if (isSupersede && !form.reason.trim()) {
       toast.error("Vui lòng nhập lý do thay bản scan.");
       return;
     }
 
-    const payload = {
+    const filePayload = {
       file: selectedFile,
       currentVersionId: detail.versionId,
       contractRowVersion: detail.contractRowVersion,
       versionRowVersion: detail.versionRowVersion,
-      providerSignerName: form.providerSignerName.trim(),
-      providerSignerTitle: form.providerSignerTitle.trim(),
-      providerSigningDate: form.providerSigningDate,
-      customerSignerName: form.customerSignerName.trim(),
-      customerSignerTitle: form.customerSignerTitle.trim(),
-      customerSigningDate: form.customerSigningDate,
     };
 
     try {
@@ -210,14 +206,22 @@ export function ContractSigningPanel({
           contract.contractId,
           detail.activeEvidence.signedEvidenceId,
           {
-            ...payload,
+            ...filePayload,
             evidenceRowVersion: detail.activeEvidence.rowVersion,
             reason: form.reason.trim(),
           },
         );
         toast.success("Đã thay bản scan và giữ lại bản cũ trong lịch sử.");
       } else {
-        await contractSigningApi.upload(contract.contractId, payload);
+        await contractSigningApi.upload(contract.contractId, {
+          ...filePayload,
+          providerSignerName: form.providerSignerName.trim(),
+          providerSignerTitle: form.providerSignerTitle.trim(),
+          providerSigningDate: form.providerSigningDate,
+          customerSignerName: form.customerSignerName.trim(),
+          customerSignerTitle: form.customerSignerTitle.trim(),
+          customerSigningDate: form.customerSigningDate,
+        });
         toast.success("Đã lưu bản scan. Hợp đồng đã chuyển sang Đã ký.");
       }
       setSelectedFile(null);
@@ -395,26 +399,28 @@ export function ContractSigningPanel({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="grid gap-4 lg:grid-cols-2">
-              <SignerFields
-                prefix="provider"
-                title="Nhà cung cấp"
-                name={form.providerSignerName}
-                signerTitle={form.providerSignerTitle}
-                date={form.providerSigningDate}
-                disabled={isSubmitting}
-                onChange={updateForm}
-              />
-              <SignerFields
-                prefix="customer"
-                title="Khách hàng"
-                name={form.customerSignerName}
-                signerTitle={form.customerSignerTitle}
-                date={form.customerSigningDate}
-                disabled={isSubmitting}
-                onChange={updateForm}
-              />
-            </div>
+            {isInitialUpload && (
+              <div className="grid gap-4 lg:grid-cols-2">
+                <SignerFields
+                  prefix="provider"
+                  title="Nhà cung cấp"
+                  name={form.providerSignerName}
+                  signerTitle={form.providerSignerTitle}
+                  date={form.providerSigningDate}
+                  disabled={isSubmitting}
+                  onChange={updateForm}
+                />
+                <SignerFields
+                  prefix="customer"
+                  title="Khách hàng"
+                  name={form.customerSignerName}
+                  signerTitle={form.customerSignerTitle}
+                  date={form.customerSigningDate}
+                  disabled={isSubmitting}
+                  onChange={updateForm}
+                />
+              </div>
+            )}
 
             {isSupersede && (
               <div className="space-y-2">

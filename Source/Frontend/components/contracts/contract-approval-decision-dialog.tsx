@@ -9,7 +9,6 @@ import {
   FileText,
   Loader2,
   RotateCcw,
-  ShieldX,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -30,7 +29,7 @@ import type {
   ContractApprovalRequestResponse,
 } from "@/services/contract-approval-api";
 
-export type ApprovalDecision = "approve" | "return" | "reject";
+export type ApprovalDecision = "approve" | "return";
 
 export const APPROVAL_DECISION_CONFIG = {
   approve: {
@@ -45,13 +44,6 @@ export const APPROVAL_DECISION_CONFIG = {
       "Hợp đồng sẽ quay về Đang đàm phán. Owner phải tạo version mới trước khi chỉnh sửa.",
     buttonClass: "bg-amber-600 text-white hover:bg-amber-700",
     icon: RotateCcw,
-  },
-  reject: {
-    label: "Từ chối",
-    description:
-      "Version hiện tại bị từ chối và vẫn bất biến. Owner có thể tạo version mới nếu tiếp tục.",
-    buttonClass: "bg-rose-600 text-white hover:bg-rose-700",
-    icon: ShieldX,
   },
 } as const;
 
@@ -210,7 +202,7 @@ export function ContractApprovalDecisionDialog({
 
             <div className="space-y-3">
               <Label>Quyết định</Label>
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div className="grid gap-2 sm:grid-cols-2">
                 {(Object.keys(APPROVAL_DECISION_CONFIG) as ApprovalDecision[])
                   .map((value) => {
                     const itemConfig = APPROVAL_DECISION_CONFIG[value];
@@ -252,7 +244,7 @@ export function ContractApprovalDecisionDialog({
                 placeholder={
                   decision === "approve"
                     ? "Ghi chú cho Owner..."
-                    : "Nêu rõ nội dung cần sửa hoặc lý do từ chối..."
+                    : "Nêu rõ nội dung cần sửa..."
                 }
               />
             </div>

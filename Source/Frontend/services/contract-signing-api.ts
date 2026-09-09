@@ -59,11 +59,15 @@ export interface ContractSigningDetailResponse {
   evidenceHistory: ContractSignedEvidenceResponse[];
 }
 
-export interface UploadContractSignedEvidenceRequest {
+interface ContractSignedEvidenceFileRequest {
   file: File;
   currentVersionId: number;
   contractRowVersion: string;
   versionRowVersion: string;
+}
+
+export interface UploadContractSignedEvidenceRequest
+  extends ContractSignedEvidenceFileRequest {
   providerSignerName: string;
   providerSignerTitle: string;
   providerSigningDate: string;
@@ -73,7 +77,7 @@ export interface UploadContractSignedEvidenceRequest {
 }
 
 export interface SupersedeContractSignedEvidenceRequest
-  extends UploadContractSignedEvidenceRequest {
+  extends ContractSignedEvidenceFileRequest {
   evidenceRowVersion: string;
   reason: string;
 }

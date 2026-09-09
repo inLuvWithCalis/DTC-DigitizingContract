@@ -236,22 +236,19 @@ public sealed class ContractApprovalService : IContractApprovalService
     {
         if (decision is not (
                 ApprovalRequestStatus.Approved
-                or ApprovalRequestStatus.Returned
-                or ApprovalRequestStatus.Rejected))
+                or ApprovalRequestStatus.Returned))
         {
             throw new ArgumentException("Kết quả duyệt không hợp lệ.");
         }
 
         ArgumentNullException.ThrowIfNull(request);
         var comment = NormalizeComment(request.Comment);
-        if (decision is ApprovalRequestStatus.Returned
-                or ApprovalRequestStatus.Rejected
-            && comment is null)
+        if (decision is ApprovalRequestStatus.Returned && comment is null)
         {
             throw Rule(
                 StatusCodes.Status400BadRequest,
                 ContractApprovalErrorCodes.ApprovalReasonRequired,
-                "Return hoặc Reject bắt buộc phải nhập lý do.");
+                "Return bắt buộc phải nhập lý do.");
         }
 
         await EnsureManagerAsync(managerEmployeeId, cancellationToken);
@@ -287,21 +284,19 @@ public sealed class ContractApprovalService : IContractApprovalService
 
         if (request.Decision is not (
                 ApprovalRequestStatus.Approved
-                or ApprovalRequestStatus.Returned
-                or ApprovalRequestStatus.Rejected))
+                or ApprovalRequestStatus.Returned))
         {
             throw new ArgumentException("Kết quả duyệt không hợp lệ.");
         }
 
         var comment = NormalizeComment(request.Comment);
         if (request.Decision is ApprovalRequestStatus.Returned
-                or ApprovalRequestStatus.Rejected
             && comment is null)
         {
             throw Rule(
                 StatusCodes.Status400BadRequest,
                 ContractApprovalErrorCodes.ApprovalReasonRequired,
-                "Return hoặc Reject bắt buộc phải nhập lý do.");
+                "Return bắt buộc phải nhập lý do.");
         }
 
         await EnsureManagerAsync(managerEmployeeId, cancellationToken);

@@ -1,6 +1,6 @@
 namespace ContractManagement.API.Domains.DTOs.Requests.Contract;
 
-public class UploadContractSignedEvidenceRequest
+public abstract class ContractSignedEvidenceFileRequest
 {
     public IFormFile File { get; set; } = null!;
 
@@ -9,6 +9,11 @@ public class UploadContractSignedEvidenceRequest
     public string ContractRowVersion { get; set; } = string.Empty;
 
     public string VersionRowVersion { get; set; } = string.Empty;
+}
+
+public sealed class UploadContractSignedEvidenceRequest
+    : ContractSignedEvidenceFileRequest
+{
 
     public string ProviderSignerName { get; set; } = string.Empty;
 
@@ -24,7 +29,7 @@ public class UploadContractSignedEvidenceRequest
 }
 
 public sealed class SupersedeContractSignedEvidenceRequest
-    : UploadContractSignedEvidenceRequest
+    : ContractSignedEvidenceFileRequest
 {
     public string EvidenceRowVersion { get; set; } = string.Empty;
 

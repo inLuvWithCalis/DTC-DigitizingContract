@@ -30,7 +30,6 @@ namespace ContractManagement.API.Domains.Policies.Contract
                 {
                     ApprovalRequestStatus.Approved,
                     ApprovalRequestStatus.Returned,
-                    ApprovalRequestStatus.Rejected,
                     ApprovalRequestStatus.Withdrawn
                 },
 

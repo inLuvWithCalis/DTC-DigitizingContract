@@ -117,19 +117,6 @@ public sealed class ContractApprovalController : ControllerBase
             "Trả hợp đồng về chỉnh sửa thành công.",
             cancellationToken);
 
-    [HttpPost("{approvalRequestId:int}/reject")]
-    [SessionAuthorize(RbacPermissions.ContractApprovalDecide)]
-    public Task<IActionResult> Reject(
-        int approvalRequestId,
-        [FromBody] ContractApprovalDecisionRequest request,
-        CancellationToken cancellationToken) =>
-        Decide(
-            approvalRequestId,
-            ApprovalRequestStatus.Rejected,
-            request,
-            "Từ chối hợp đồng thành công.",
-            cancellationToken);
-
     [HttpPost("{approvalRequestId:int}/withdraw")]
     [SessionAuthorize(RbacPermissions.ContractManageOwn)]
     public async Task<IActionResult> Withdraw(

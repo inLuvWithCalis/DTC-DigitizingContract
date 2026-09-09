@@ -50,6 +50,8 @@ namespace ContractManagement.API.Domains.Services.Customer
                     (x.CustomerCompany != null && x.CustomerCompany.Contains(keyword)) ||
                     (x.CustomerEmail != null && x.CustomerEmail.Contains(keyword)) ||
                     (x.CustomerMobile != null && x.CustomerMobile.Contains(keyword)) ||
+                    (x.CustomerContactPersonName != null && x.CustomerContactPersonName.Contains(keyword)) ||
+                    (x.CustomerContactPersonPhone != null && x.CustomerContactPersonPhone.Contains(keyword)) ||
                     (x.CustomerTaxCode != null && x.CustomerTaxCode.Contains(keyword)));
             }
 
@@ -101,7 +103,9 @@ namespace ContractManagement.API.Domains.Services.Customer
                     || (x.CustomerCompany != null && x.CustomerCompany.Contains(normalizedKeyword))
                     || (x.CustomerTaxCode != null && x.CustomerTaxCode.Contains(normalizedKeyword))
                     || (x.CustomerMobile != null && x.CustomerMobile.Contains(normalizedKeyword))
-                    || (x.CustomerPhone != null && x.CustomerPhone.Contains(normalizedKeyword)));
+                    || (x.CustomerPhone != null && x.CustomerPhone.Contains(normalizedKeyword))
+                    || (x.CustomerContactPersonName != null && x.CustomerContactPersonName.Contains(normalizedKeyword))
+                    || (x.CustomerContactPersonPhone != null && x.CustomerContactPersonPhone.Contains(normalizedKeyword)));
             }
 
             return await query
@@ -170,6 +174,9 @@ namespace ContractManagement.API.Domains.Services.Customer
                 CustomerTaxCode = request.CustomerTaxCode?.Trim(),
                 CustomerRepresentativeName = request.CustomerRepresentativeName?.Trim(),
                 CustomerRepresentativeTitle = request.CustomerRepresentativeTitle?.Trim(),
+                CustomerContactPersonName = request.CustomerContactPersonName?.Trim(),
+                CustomerContactPersonPhone = request.CustomerContactPersonPhone?.Trim(),
+                CustomerContactPersonTitle = request.CustomerContactPersonTitle?.Trim(),
                 CustomerBankAccountNumber = request.CustomerBankAccountNumber?.Trim(),
                 CustomerBankName = request.CustomerBankName?.Trim(),
                 CustomerAddress = request.CustomerAddress?.Trim(),
@@ -230,6 +237,9 @@ namespace ContractManagement.API.Domains.Services.Customer
             customer.CustomerTaxCode = request.CustomerTaxCode?.Trim();
             customer.CustomerRepresentativeName = request.CustomerRepresentativeName?.Trim();
             customer.CustomerRepresentativeTitle = request.CustomerRepresentativeTitle?.Trim();
+            customer.CustomerContactPersonName = request.CustomerContactPersonName?.Trim();
+            customer.CustomerContactPersonPhone = request.CustomerContactPersonPhone?.Trim();
+            customer.CustomerContactPersonTitle = request.CustomerContactPersonTitle?.Trim();
             customer.CustomerBankAccountNumber = request.CustomerBankAccountNumber?.Trim();
             customer.CustomerBankName = request.CustomerBankName?.Trim();
             customer.CustomerAddress = request.CustomerAddress?.Trim();
@@ -308,6 +318,9 @@ namespace ContractManagement.API.Domains.Services.Customer
                 CustomerTaxCode = customer.CustomerTaxCode,
                 CustomerRepresentativeName = customer.CustomerRepresentativeName,
                 CustomerRepresentativeTitle = customer.CustomerRepresentativeTitle,
+                CustomerContactPersonName = customer.CustomerContactPersonName,
+                CustomerContactPersonPhone = customer.CustomerContactPersonPhone,
+                CustomerContactPersonTitle = customer.CustomerContactPersonTitle,
                 CustomerBankAccountNumber = customer.CustomerBankAccountNumber,
                 CustomerBankName = customer.CustomerBankName,
                 CustomerAddress = customer.CustomerAddress,

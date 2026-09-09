@@ -265,9 +265,26 @@ function CustomerListPageContent() {
         header: "Liên hệ",
         cell: ({ row }) => {
           const item = row.original;
-          const phone = item.customerMobile || item.customerPhone;
+          const contactName = item.customerContactPersonName;
+          const contactTitle = item.customerContactPersonTitle;
+          const phone =
+            item.customerContactPersonPhone ||
+            item.customerMobile ||
+            item.customerPhone;
           return (
             <div className="flex flex-col gap-1 text-sm min-w-[160px]">
+              {contactName ? (
+                <div className="max-w-[200px]">
+                  <span className="block truncate font-medium text-foreground">
+                    {contactName}
+                  </span>
+                  {contactTitle ? (
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {contactTitle}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
               {item.customerEmail ? (
                 <div className="flex items-center gap-1.5 text-foreground truncate max-w-[200px]">
                   <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
@@ -280,7 +297,7 @@ function CustomerListPageContent() {
                   <span>{phone}</span>
                 </div>
               ) : null}
-              {!item.customerEmail && !phone && (
+              {!contactName && !item.customerEmail && !phone && (
                 <span className="text-muted-foreground italic text-xs">
                   Chưa có thông tin
                 </span>

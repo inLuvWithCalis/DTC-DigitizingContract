@@ -52,6 +52,12 @@ export function CustomerFormModal({
     useState("");
   const [customerRepresentativeTitle, setCustomerRepresentativeTitle] =
     useState("");
+  const [customerContactPersonName, setCustomerContactPersonName] =
+    useState("");
+  const [customerContactPersonPhone, setCustomerContactPersonPhone] =
+    useState("");
+  const [customerContactPersonTitle, setCustomerContactPersonTitle] =
+    useState("");
   const [customerBankAccountNumber, setCustomerBankAccountNumber] =
     useState("");
   const [customerBankName, setCustomerBankName] = useState("");
@@ -77,6 +83,9 @@ export function CustomerFormModal({
         setCustomerTaxCode(item.customerTaxCode || "");
         setCustomerRepresentativeName(item.customerRepresentativeName || "");
         setCustomerRepresentativeTitle(item.customerRepresentativeTitle || "");
+        setCustomerContactPersonName(item.customerContactPersonName || "");
+        setCustomerContactPersonPhone(item.customerContactPersonPhone || "");
+        setCustomerContactPersonTitle(item.customerContactPersonTitle || "");
         setCustomerBankAccountNumber(item.customerBankAccountNumber || "");
         setCustomerBankName(item.customerBankName || "");
         setCustomerAddress(item.customerAddress || "");
@@ -95,6 +104,9 @@ export function CustomerFormModal({
         setCustomerTaxCode("");
         setCustomerRepresentativeName("");
         setCustomerRepresentativeTitle("");
+        setCustomerContactPersonName("");
+        setCustomerContactPersonPhone("");
+        setCustomerContactPersonTitle("");
         setCustomerBankAccountNumber("");
         setCustomerBankName("");
         setCustomerAddress("");
@@ -145,6 +157,11 @@ export function CustomerFormModal({
             customerRepresentativeName.trim() || null,
           customerRepresentativeTitle:
             customerRepresentativeTitle.trim() || null,
+          customerContactPersonName: customerContactPersonName.trim() || null,
+          customerContactPersonPhone:
+            customerContactPersonPhone.trim() || null,
+          customerContactPersonTitle:
+            customerContactPersonTitle.trim() || null,
           customerBankAccountNumber:
             customerBankAccountNumber.trim() || null,
           customerBankName: customerBankName.trim() || null,
@@ -170,6 +187,11 @@ export function CustomerFormModal({
             customerRepresentativeName.trim() || null,
           customerRepresentativeTitle:
             customerRepresentativeTitle.trim() || null,
+          customerContactPersonName: customerContactPersonName.trim() || null,
+          customerContactPersonPhone:
+            customerContactPersonPhone.trim() || null,
+          customerContactPersonTitle:
+            customerContactPersonTitle.trim() || null,
           customerBankAccountNumber:
             customerBankAccountNumber.trim() || null,
           customerBankName: customerBankName.trim() || null,
@@ -371,6 +393,58 @@ export function CustomerFormModal({
                 }
                 disabled={viewOnly}
                 maxLength={200}
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-3 rounded-lg border bg-muted/20 p-4">
+            <div>
+              <p className="text-sm font-medium">Người làm việc trực tiếp</p>
+              <p className="text-xs text-muted-foreground">
+                Đầu mối phối hợp công việc, không thay thế người đại diện pháp
+                luật.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="customerContactPersonName">Họ và tên</Label>
+                <Input
+                  id="customerContactPersonName"
+                  placeholder="Họ và tên người liên hệ"
+                  value={customerContactPersonName}
+                  onChange={(event) =>
+                    setCustomerContactPersonName(event.target.value)
+                  }
+                  disabled={viewOnly}
+                  maxLength={200}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="customerContactPersonTitle">Chức danh</Label>
+                <Input
+                  id="customerContactPersonTitle"
+                  placeholder="Ví dụ: Trưởng phòng mua hàng"
+                  value={customerContactPersonTitle}
+                  onChange={(event) =>
+                    setCustomerContactPersonTitle(event.target.value)
+                  }
+                  disabled={viewOnly}
+                  maxLength={200}
+                />
+              </div>
+            </div>
+            <div className="grid gap-2 sm:w-1/2 sm:pr-2">
+              <Label htmlFor="customerContactPersonPhone">Số điện thoại</Label>
+              <Input
+                id="customerContactPersonPhone"
+                type="tel"
+                placeholder="0912345678"
+                value={customerContactPersonPhone}
+                onChange={(event) =>
+                  setCustomerContactPersonPhone(event.target.value)
+                }
+                disabled={viewOnly}
+                maxLength={20}
               />
             </div>
           </div>

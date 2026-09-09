@@ -1066,14 +1066,6 @@ public partial class DbDtctechContext : DbContext
                 .HasDatabaseName(
                     "UX_tbl_ContractSignedEvidence_ActiveVersion");
 
-            entity.Property(e => e.ProviderSignerName).HasMaxLength(200);
-            entity.Property(e => e.ProviderSignerTitle).HasMaxLength(200);
-            entity.Property(e => e.ProviderSigningDate)
-                .HasColumnType("date");
-            entity.Property(e => e.CustomerSignerName).HasMaxLength(200);
-            entity.Property(e => e.CustomerSignerTitle).HasMaxLength(200);
-            entity.Property(e => e.CustomerSigningDate)
-                .HasColumnType("date");
             entity.Property(e => e.SupersedeReason).HasMaxLength(1000);
             entity.Property(e => e.UploadedAt).HasColumnType("datetime2");
             entity.Property(e => e.SupersededAt).HasColumnType("datetime2");
@@ -2079,6 +2071,13 @@ public partial class DbDtctechContext : DbContext
             entity.Property(e => e.CustomerRepresentativeName)
                 .HasMaxLength(200);
             entity.Property(e => e.CustomerRepresentativeTitle)
+                .HasMaxLength(200);
+            entity.Property(e => e.CustomerContactPersonName)
+                .HasMaxLength(200);
+            entity.Property(e => e.CustomerContactPersonPhone)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.CustomerContactPersonTitle)
                 .HasMaxLength(200);
             entity.Property(e => e.CustomerBankAccountNumber)
                 .HasMaxLength(100)

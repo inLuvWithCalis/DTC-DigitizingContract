@@ -20,7 +20,7 @@ public static class ContractSigningErrorCodes
     public const string ApprovedArtifactMissing = "ApprovedArtifactMissing";
     public const string ActiveEvidenceExists = "ActiveEvidenceExists";
     public const string SupersedeReasonRequired = "SupersedeReasonRequired";
-    public const string SignatureMetadataInvalid = "SignatureMetadataInvalid";
+    public const string EvidenceFileRequired = "EvidenceFileRequired";
 }
 
 /// <summary>
@@ -115,11 +115,9 @@ public sealed class ContractSigningService : IContractSigningService
     {
         ArgumentNullException.ThrowIfNull(request);
         ValidateFile(request.File);
-        ValidateMetadata(request);
         return SaveAsync(
             contractId,
             null,
-            request,
             request,
             null,
             null,
@@ -145,7 +143,6 @@ public sealed class ContractSigningService : IContractSigningService
             contractId,
             signedEvidenceId,
             request,
-            null,
             request.EvidenceRowVersion,
             reason,
             employeeId,
@@ -156,7 +153,6 @@ public sealed class ContractSigningService : IContractSigningService
         int contractId,
         int? supersededEvidenceId,
         ContractSignedEvidenceFileRequest request,
-        UploadContractSignedEvidenceRequest? initialSignerMetadata,
         string? evidenceRowVersion,
         string? supersedeReason,
         int employeeId,
@@ -333,22 +329,6 @@ public sealed class ContractSigningService : IContractSigningService
                     VersionId = version.VersionId,
                     FileId = fileMetadata.FileId,
                     Status = (byte)SignedEvidenceStatus.Active,
-                    ProviderSignerName = activeEvidence?.ProviderSignerName
-                        ?? NormalizeMetadata(
-                            initialSignerMetadata!.ProviderSignerName),
-                    ProviderSignerTitle = activeEvidence?.ProviderSignerTitle
-                        ?? NormalizeMetadata(
-                            initialSignerMetadata!.ProviderSignerTitle),
-                    ProviderSigningDate = activeEvidence?.ProviderSigningDate
-                        ?? initialSignerMetadata!.ProviderSigningDate.Date,
-                    CustomerSignerName = activeEvidence?.CustomerSignerName
-                        ?? NormalizeMetadata(
-                            initialSignerMetadata!.CustomerSignerName),
-                    CustomerSignerTitle = activeEvidence?.CustomerSignerTitle
-                        ?? NormalizeMetadata(
-                            initialSignerMetadata!.CustomerSignerTitle),
-                    CustomerSigningDate = activeEvidence?.CustomerSigningDate
-                        ?? initialSignerMetadata!.CustomerSigningDate.Date,
                     SupersedesEvidenceId = activeEvidence?.SignedEvidenceId,
                     UploadedByEmployeeId = employeeId,
                     UploadedAt = now
@@ -360,10 +340,6 @@ public sealed class ContractSigningService : IContractSigningService
                     contract.Status = (byte)ContractStatus.Signed;
                 }
 
-                contract.SignDate = evidence.ProviderSigningDate >
-                    evidence.CustomerSigningDate
-                    ? evidence.ProviderSigningDate
-                    : evidence.CustomerSigningDate;
                 contract.UpdatedEmployeeId = employeeId;
                 contract.UpdateDate = now;
                 await _dbContext.SaveChangesAsync(cancellationToken);
@@ -402,11 +378,7 @@ public sealed class ContractSigningService : IContractSigningService
                             ("Sha256", fileMetadata.Sha256),
                             ("EvidenceStatus", evidence.Status),
                             ("SupersedesEvidenceId",
-                                evidence.SupersedesEvidenceId),
-                            ("ProviderSigningDate",
-                                evidence.ProviderSigningDate),
-                            ("CustomerSigningDate",
-                                evidence.CustomerSigningDate)))
+                                evidence.SupersedesEvidenceId)))
                 ]);
                 await _dbContext.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
@@ -532,12 +504,6 @@ public sealed class ContractSigningService : IContractSigningService
             FileSize = row.File.FileSize ?? 0,
             Sha256 = row.File.Sha256 ?? string.Empty,
             Status = (SignedEvidenceStatus)row.Evidence.Status,
-            ProviderSignerName = row.Evidence.ProviderSignerName,
-            ProviderSignerTitle = row.Evidence.ProviderSignerTitle,
-            ProviderSigningDate = row.Evidence.ProviderSigningDate,
-            CustomerSignerName = row.Evidence.CustomerSignerName,
-            CustomerSignerTitle = row.Evidence.CustomerSignerTitle,
-            CustomerSigningDate = row.Evidence.CustomerSigningDate,
             SupersedesEvidenceId = row.Evidence.SupersedesEvidenceId,
             SupersedeReason = row.Evidence.SupersedeReason,
             UploadedByEmployeeId = row.Evidence.UploadedByEmployeeId,
@@ -586,51 +552,16 @@ public sealed class ContractSigningService : IContractSigningService
             UploadedDate = stored.CreatedAt
         };
 
-    private static void ValidateMetadata(
-        UploadContractSignedEvidenceRequest request)
-    {
-        _ = NormalizeRequired(
-            request.ProviderSignerName,
-            200,
-            ContractSigningErrorCodes.SignatureMetadataInvalid,
-            "Tên người ký phía nhà cung cấp là bắt buộc.");
-        _ = NormalizeRequired(
-            request.ProviderSignerTitle,
-            200,
-            ContractSigningErrorCodes.SignatureMetadataInvalid,
-            "Chức danh người ký phía nhà cung cấp là bắt buộc.");
-        _ = NormalizeRequired(
-            request.CustomerSignerName,
-            200,
-            ContractSigningErrorCodes.SignatureMetadataInvalid,
-            "Tên người ký phía khách hàng là bắt buộc.");
-        _ = NormalizeRequired(
-            request.CustomerSignerTitle,
-            200,
-            ContractSigningErrorCodes.SignatureMetadataInvalid,
-            "Chức danh người ký phía khách hàng là bắt buộc.");
-        if (request.ProviderSigningDate == default
-            || request.CustomerSigningDate == default)
-        {
-            throw Rule(
-                StatusCodes.Status400BadRequest,
-                ContractSigningErrorCodes.SignatureMetadataInvalid,
-                "Ngày ký của hai bên là bắt buộc.");
-        }
-    }
-
     private static void ValidateFile(IFormFile? file)
     {
         if (file is null || file.Length <= 0)
         {
             throw Rule(
                 StatusCodes.Status400BadRequest,
-                ContractSigningErrorCodes.SignatureMetadataInvalid,
+                ContractSigningErrorCodes.EvidenceFileRequired,
                 "Vui lòng chọn file scan đã ký.");
         }
     }
-
-    private static string NormalizeMetadata(string value) => value.Trim();
 
     private static string NormalizeRequired(
         string value,

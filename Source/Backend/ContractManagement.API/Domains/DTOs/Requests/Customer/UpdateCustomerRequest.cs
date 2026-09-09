@@ -39,6 +39,15 @@ namespace ContractManagement.API.Domains.DTOs.Requests.Customer
         [MaxLength(200)]
         public string? CustomerRepresentativeTitle { get; set; }
 
+        [MaxLength(200)]
+        public string? CustomerContactPersonName { get; set; }
+
+        [MaxLength(20)]
+        public string? CustomerContactPersonPhone { get; set; }
+
+        [MaxLength(200)]
+        public string? CustomerContactPersonTitle { get; set; }
+
         [MaxLength(100)]
         public string? CustomerBankAccountNumber { get; set; }
 

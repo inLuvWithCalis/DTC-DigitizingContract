@@ -18,7 +18,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DateFilter } from "@/components/ui/custom/date-filter";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -43,52 +42,12 @@ import {
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
 const ACCEPTED_EXTENSIONS = ["pdf", "jpg", "jpeg", "png"];
 
-type SigningForm = {
-  providerSignerName: string;
-  providerSignerTitle: string;
-  providerSigningDate: string;
-  customerSignerName: string;
-  customerSignerTitle: string;
-  customerSigningDate: string;
-  reason: string;
-};
-
-const EMPTY_FORM: SigningForm = {
-  providerSignerName: "",
-  providerSignerTitle: "",
-  providerSigningDate: "",
-  customerSignerName: "",
-  customerSignerTitle: "",
-  customerSigningDate: "",
-  reason: "",
-};
-
 const getExtension = (fileName: string) =>
   fileName.split(".").pop()?.toLowerCase() ?? "";
 
 const formatFileSize = (size: number) => {
   if (size < 1024 * 1024) return `${Math.ceil(size / 1024)} KB`;
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-};
-
-const dateInputValue = (value: string) => value.slice(0, 10);
-
-const parseDateInputValue = (value: string) => {
-  if (!value) return undefined;
-
-  const [year, month, day] = value.split("-").map(Number);
-  if (!year || !month || !day) return undefined;
-
-  return new Date(year, month - 1, day);
-};
-
-const toDateInputValue = (value: Date | undefined) => {
-  if (!value) return "";
-
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 };
 
 interface ContractSigningPanelProps {
@@ -108,7 +67,7 @@ export function ContractSigningPanel({
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [form, setForm] = useState<SigningForm>(EMPTY_FORM);
+  const [supersedeReason, setSupersedeReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [downloadingFileId, setDownloadingFileId] = useState<number | null>(
     null,
@@ -120,18 +79,6 @@ export function ContractSigningPanel({
       setLoadError(null);
       const response = await contractSigningApi.get(contract.contractId);
       setDetail(response);
-      if (response.activeEvidence) {
-        const active = response.activeEvidence;
-        setForm((current) => ({
-          ...current,
-          providerSignerName: active.providerSignerName,
-          providerSignerTitle: active.providerSignerTitle,
-          providerSigningDate: dateInputValue(active.providerSigningDate),
-          customerSignerName: active.customerSignerName,
-          customerSignerTitle: active.customerSignerTitle,
-          customerSigningDate: dateInputValue(active.customerSigningDate),
-        }));
-      }
     } catch (error) {
       setLoadError(
         getApiErrorMessage(error, "Không thể tải hồ sơ ký hợp đồng."),
@@ -152,10 +99,6 @@ export function ContractSigningPanel({
     detail?.contractStatus === ContractStatus.Signed && !!detail.activeEvidence;
   const canSubmit = canManage && (isInitialUpload || isSupersede);
 
-  const updateForm = (field: keyof SigningForm, value: string) => {
-    setForm((current) => ({ ...current, [field]: value }));
-  };
-
   const selectFile = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
     event.target.value = "";
@@ -173,21 +116,7 @@ export function ContractSigningPanel({
 
   const submit = async () => {
     if (!detail || !selectedFile || !canSubmit) return;
-    if (isInitialUpload) {
-      const requiredValues = [
-        form.providerSignerName,
-        form.providerSignerTitle,
-        form.providerSigningDate,
-        form.customerSignerName,
-        form.customerSignerTitle,
-        form.customerSigningDate,
-      ];
-      if (requiredValues.some((value) => !value.trim())) {
-        toast.error("Vui lòng nhập đủ thông tin người ký của hai bên.");
-        return;
-      }
-    }
-    if (isSupersede && !form.reason.trim()) {
+    if (isSupersede && !supersedeReason.trim()) {
       toast.error("Vui lòng nhập lý do thay bản scan.");
       return;
     }
@@ -208,24 +137,16 @@ export function ContractSigningPanel({
           {
             ...filePayload,
             evidenceRowVersion: detail.activeEvidence.rowVersion,
-            reason: form.reason.trim(),
+            reason: supersedeReason.trim(),
           },
         );
         toast.success("Đã thay bản scan và giữ lại bản cũ trong lịch sử.");
       } else {
-        await contractSigningApi.upload(contract.contractId, {
-          ...filePayload,
-          providerSignerName: form.providerSignerName.trim(),
-          providerSignerTitle: form.providerSignerTitle.trim(),
-          providerSigningDate: form.providerSigningDate,
-          customerSignerName: form.customerSignerName.trim(),
-          customerSignerTitle: form.customerSignerTitle.trim(),
-          customerSigningDate: form.customerSigningDate,
-        });
+        await contractSigningApi.upload(contract.contractId, filePayload);
         toast.success("Đã lưu bản scan. Hợp đồng đã chuyển sang Đã ký.");
       }
       setSelectedFile(null);
-      setForm((current) => ({ ...current, reason: "" }));
+      setSupersedeReason("");
       await Promise.all([loadDetail(), Promise.resolve(onContractRefetch())]);
     } catch (error) {
       if (isStaleRowVersion(error)) {
@@ -399,29 +320,6 @@ export function ContractSigningPanel({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            {isInitialUpload && (
-              <div className="grid gap-4 lg:grid-cols-2">
-                <SignerFields
-                  prefix="provider"
-                  title="Nhà cung cấp"
-                  name={form.providerSignerName}
-                  signerTitle={form.providerSignerTitle}
-                  date={form.providerSigningDate}
-                  disabled={isSubmitting}
-                  onChange={updateForm}
-                />
-                <SignerFields
-                  prefix="customer"
-                  title="Khách hàng"
-                  name={form.customerSignerName}
-                  signerTitle={form.customerSignerTitle}
-                  date={form.customerSigningDate}
-                  disabled={isSubmitting}
-                  onChange={updateForm}
-                />
-              </div>
-            )}
-
             {isSupersede && (
               <div className="space-y-2">
                 <Label htmlFor="signed-evidence-reason">
@@ -430,11 +328,11 @@ export function ContractSigningPanel({
                 </Label>
                 <Textarea
                   id="signed-evidence-reason"
-                  value={form.reason}
+                  value={supersedeReason}
                   maxLength={1000}
                   disabled={isSubmitting}
                   placeholder="Ví dụ: bản trước bị thiếu trang có chữ ký..."
-                  onChange={(event) => updateForm("reason", event.target.value)}
+                  onChange={(event) => setSupersedeReason(event.target.value)}
                 />
               </div>
             )}
@@ -503,70 +401,6 @@ export function ContractSigningPanel({
   );
 }
 
-function SignerFields({
-  prefix,
-  title,
-  name,
-  signerTitle,
-  date,
-  disabled,
-  onChange,
-}: {
-  prefix: "provider" | "customer";
-  title: string;
-  name: string;
-  signerTitle: string;
-  date: string;
-  disabled: boolean;
-  onChange: (field: keyof SigningForm, value: string) => void;
-}) {
-  const nameField = `${prefix}SignerName` as keyof SigningForm;
-  const titleField = `${prefix}SignerTitle` as keyof SigningForm;
-  const dateField = `${prefix}SigningDate` as keyof SigningForm;
-  return (
-    <div className="space-y-4 rounded-xl border p-4">
-      <h3 className="font-semibold">Người ký phía {title}</h3>
-      <div className="space-y-2">
-        <Label htmlFor={`${prefix}-signer-name`}>
-          Họ tên <span className="text-red-500">*</span>
-        </Label>
-        <Input
-          id={`${prefix}-signer-name`}
-          value={name}
-          maxLength={200}
-          disabled={disabled}
-          onChange={(event) => onChange(nameField, event.target.value)}
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor={`${prefix}-signer-title`}>
-          Chức danh <span className="text-red-500">*</span>
-        </Label>
-        <Input
-          id={`${prefix}-signer-title`}
-          value={signerTitle}
-          maxLength={200}
-          disabled={disabled}
-          onChange={(event) => onChange(titleField, event.target.value)}
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor={`${prefix}-signing-date`}>
-          Ngày ký <span className="text-red-500">*</span>
-        </Label>
-        <DateFilter
-          id={`${prefix}-signing-date`}
-          date={parseDateInputValue(date)}
-          placeholder="Chọn ngày ký"
-          className="flex-1"
-          disabled={disabled}
-          onChange={(value) => onChange(dateField, toDateInputValue(value))}
-        />
-      </div>
-    </div>
-  );
-}
-
 function EvidenceCard({
   evidence,
   downloading,
@@ -617,24 +451,6 @@ function EvidenceCard({
           )}
           {isPdf ? "Xem" : "Tải"}
         </Button>
-      </div>
-      <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
-        <div className="rounded-lg bg-muted/50 p-3">
-          <p className="font-medium">Nhà cung cấp</p>
-          <p>{evidence.providerSignerName}</p>
-          <p className="text-muted-foreground">
-            {evidence.providerSignerTitle} ·{" "}
-            {new Date(evidence.providerSigningDate).toLocaleDateString("vi-VN")}
-          </p>
-        </div>
-        <div className="rounded-lg bg-muted/50 p-3">
-          <p className="font-medium">Khách hàng</p>
-          <p>{evidence.customerSignerName}</p>
-          <p className="text-muted-foreground">
-            {evidence.customerSignerTitle} ·{" "}
-            {new Date(evidence.customerSigningDate).toLocaleDateString("vi-VN")}
-          </p>
-        </div>
       </div>
       {evidence.supersedeReason && (
         <p className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-sm">

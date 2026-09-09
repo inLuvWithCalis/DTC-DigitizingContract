@@ -4,16 +4,19 @@ using ContractManagement.Infrastructure.Persistence.Application;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace ContractManagement.Migrations
+namespace ContractManagement.Infrastructure.Migrations.Application
 {
     [DbContext(typeof(DbDtctechContext))]
-    partial class DbDtctechContextModelSnapshot : ModelSnapshot
+    [Migration("20260909095839_AddCustomerContactPersonDetails")]
+    partial class AddCustomerContactPersonDetails
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1643,8 +1646,34 @@ namespace ContractManagement.Migrations
                     b.Property<int>("ContractId")
                         .HasColumnType("int");
 
+                    b.Property<string>("CustomerSignerName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("CustomerSignerTitle")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("CustomerSigningDate")
+                        .HasColumnType("date");
+
                     b.Property<int>("FileId")
                         .HasColumnType("int");
+
+                    b.Property<string>("ProviderSignerName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ProviderSignerTitle")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("ProviderSigningDate")
+                        .HasColumnType("date");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()

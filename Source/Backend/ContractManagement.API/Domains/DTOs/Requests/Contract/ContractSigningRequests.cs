@@ -14,18 +14,6 @@ public abstract class ContractSignedEvidenceFileRequest
 public sealed class UploadContractSignedEvidenceRequest
     : ContractSignedEvidenceFileRequest
 {
-
-    public string ProviderSignerName { get; set; } = string.Empty;
-
-    public string ProviderSignerTitle { get; set; } = string.Empty;
-
-    public DateTime ProviderSigningDate { get; set; }
-
-    public string CustomerSignerName { get; set; } = string.Empty;
-
-    public string CustomerSignerTitle { get; set; } = string.Empty;
-
-    public DateTime CustomerSigningDate { get; set; }
 }
 
 public sealed class SupersedeContractSignedEvidenceRequest

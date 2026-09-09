@@ -36,6 +36,9 @@ export interface CreateCustomerRequest {
   customerTaxCode?: string | null;
   customerRepresentativeName?: string | null;
   customerRepresentativeTitle?: string | null;
+  customerContactPersonName?: string | null;
+  customerContactPersonPhone?: string | null;
+  customerContactPersonTitle?: string | null;
   customerBankAccountNumber?: string | null;
   customerBankName?: string | null;
   customerAddress?: string | null;
@@ -56,6 +59,9 @@ export interface UpdateCustomerRequest {
   customerTaxCode?: string | null;
   customerRepresentativeName?: string | null;
   customerRepresentativeTitle?: string | null;
+  customerContactPersonName?: string | null;
+  customerContactPersonPhone?: string | null;
+  customerContactPersonTitle?: string | null;
   customerBankAccountNumber?: string | null;
   customerBankName?: string | null;
   customerAddress?: string | null;
@@ -77,6 +83,9 @@ export interface CustomerResponse {
   customerTaxCode?: string | null;
   customerRepresentativeName?: string | null;
   customerRepresentativeTitle?: string | null;
+  customerContactPersonName?: string | null;
+  customerContactPersonPhone?: string | null;
+  customerContactPersonTitle?: string | null;
   customerBankAccountNumber?: string | null;
   customerBankName?: string | null;
   customerAddress?: string | null;

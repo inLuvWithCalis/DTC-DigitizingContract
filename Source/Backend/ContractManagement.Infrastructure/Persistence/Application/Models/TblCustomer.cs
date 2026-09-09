@@ -37,6 +37,16 @@ public partial class TblCustomer
 
     public string? CustomerRepresentativeTitle { get; set; }
 
+    /// <summary>
+    /// Người trực tiếp phối hợp công việc với doanh nghiệp.
+    /// Khác với người đại diện pháp luật dùng trong nội dung hợp đồng.
+    /// </summary>
+    public string? CustomerContactPersonName { get; set; }
+
+    public string? CustomerContactPersonPhone { get; set; }
+
+    public string? CustomerContactPersonTitle { get; set; }
+
     public string? CustomerBankAccountNumber { get; set; }
 
     public string? CustomerBankName { get; set; }

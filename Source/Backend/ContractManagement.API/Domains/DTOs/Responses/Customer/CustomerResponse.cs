@@ -47,6 +47,12 @@
 
         public string? CustomerRepresentativeTitle { get; set; }
 
+        public string? CustomerContactPersonName { get; set; }
+
+        public string? CustomerContactPersonPhone { get; set; }
+
+        public string? CustomerContactPersonTitle { get; set; }
+
         public string? CustomerBankAccountNumber { get; set; }
 
         public string? CustomerBankName { get; set; }

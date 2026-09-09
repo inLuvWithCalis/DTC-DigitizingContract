@@ -202,8 +202,6 @@ const FIELD_LABELS: Record<string, string> = {
   FileType: "Định dạng tệp",
   Sha256: "Mã băm SHA-256",
   SupersedesEvidenceId: "Thay thế bản scan",
-  ProviderSigningDate: "Ngày ký nhà cung cấp",
-  CustomerSigningDate: "Ngày ký khách hàng",
   AcceptanceEvidenceId: "Biên bản nghiệm thu",
   ContractPaymentId: "Khoản thanh toán",
   PaymentDate: "Ngày thanh toán",

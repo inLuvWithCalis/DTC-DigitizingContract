@@ -494,12 +494,6 @@ public sealed class ContractCompletionServicePhase10Tests
                 VersionId = VersionId,
                 FileId = 12008,
                 Status = (byte)SignedEvidenceStatus.Active,
-                ProviderSignerName = "Provider Signer",
-                ProviderSignerTitle = "Director",
-                ProviderSigningDate = DateTime.UtcNow.AddDays(-2),
-                CustomerSignerName = "Customer Signer",
-                CustomerSignerTitle = "CEO",
-                CustomerSigningDate = DateTime.UtcNow.AddDays(-1),
                 UploadedByEmployeeId = OwnerId,
                 UploadedAt = DateTime.UtcNow.AddDays(-1),
                 RowVersion = InitialRowVersion.ToArray()

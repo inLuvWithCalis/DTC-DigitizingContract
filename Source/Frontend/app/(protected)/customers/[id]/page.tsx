@@ -273,6 +273,9 @@ function CustomerDetailPageContent() {
     customerTaxCode: "",
     customerRepresentativeName: "",
     customerRepresentativeTitle: "",
+    customerContactPersonName: "",
+    customerContactPersonPhone: "",
+    customerContactPersonTitle: "",
     customerBankAccountNumber: "",
     customerBankName: "",
     customerAddress: "",
@@ -303,6 +306,9 @@ function CustomerDetailPageContent() {
         customerTaxCode: res.customerTaxCode,
         customerRepresentativeName: res.customerRepresentativeName,
         customerRepresentativeTitle: res.customerRepresentativeTitle,
+        customerContactPersonName: res.customerContactPersonName,
+        customerContactPersonPhone: res.customerContactPersonPhone,
+        customerContactPersonTitle: res.customerContactPersonTitle,
         customerBankAccountNumber: res.customerBankAccountNumber,
         customerBankName: res.customerBankName,
         customerAddress: res.customerAddress,
@@ -525,6 +531,78 @@ function CustomerDetailPageContent() {
                         })
                       }
                     />
+                  </div>
+                </div>
+
+                <div className="grid gap-3 rounded-lg border bg-muted/20 p-4">
+                  <div>
+                    <p className="text-sm font-semibold">
+                      Người làm việc trực tiếp
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Đầu mối phối hợp công việc, không thay thế người đại diện
+                      pháp luật.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <div className="grid gap-2">
+                      <Label className="text-xs font-semibold uppercase text-muted-foreground">
+                        Họ và tên
+                      </Label>
+                      <Input
+                        readOnly={!isEditingProfile}
+                        className={`h-9 ${!isEditingProfile ? "bg-muted/40 border-transparent shadow-none cursor-default font-medium text-foreground focus-visible:ring-0" : ""}`}
+                        placeholder="Họ và tên người liên hệ"
+                        value={formData.customerContactPersonName ?? ""}
+                        onChange={(event) =>
+                          setFormData({
+                            ...formData,
+                            customerContactPersonName: event.target.value,
+                          })
+                        }
+                        maxLength={200}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label className="text-xs font-semibold uppercase text-muted-foreground">
+                        Chức danh
+                      </Label>
+                      <Input
+                        readOnly={!isEditingProfile}
+                        className={`h-9 ${!isEditingProfile ? "bg-muted/40 border-transparent shadow-none cursor-default font-medium text-foreground focus-visible:ring-0" : ""}`}
+                        placeholder="VD: Trưởng phòng mua hàng"
+                        value={formData.customerContactPersonTitle ?? ""}
+                        onChange={(event) =>
+                          setFormData({
+                            ...formData,
+                            customerContactPersonTitle: event.target.value,
+                          })
+                        }
+                        maxLength={200}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label className="text-xs font-semibold uppercase text-muted-foreground">
+                        Số điện thoại
+                      </Label>
+                      <div className="relative">
+                        <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          type="tel"
+                          readOnly={!isEditingProfile}
+                          className={`h-9 pl-9 ${!isEditingProfile ? "bg-muted/40 border-transparent shadow-none cursor-default font-medium text-foreground focus-visible:ring-0" : ""}`}
+                          placeholder="0912345678"
+                          value={formData.customerContactPersonPhone ?? ""}
+                          onChange={(event) =>
+                            setFormData({
+                              ...formData,
+                              customerContactPersonPhone: event.target.value,
+                            })
+                          }
+                          maxLength={20}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -788,6 +866,12 @@ function CustomerDetailPageContent() {
                               customer.customerRepresentativeName,
                             customerRepresentativeTitle:
                               customer.customerRepresentativeTitle,
+                            customerContactPersonName:
+                              customer.customerContactPersonName,
+                            customerContactPersonPhone:
+                              customer.customerContactPersonPhone,
+                            customerContactPersonTitle:
+                              customer.customerContactPersonTitle,
                             customerBankAccountNumber:
                               customer.customerBankAccountNumber,
                             customerBankName: customer.customerBankName,

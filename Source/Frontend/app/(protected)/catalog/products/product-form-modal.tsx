@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +15,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Loader2, Package, FileText, Globe } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import {
@@ -23,6 +30,10 @@ import {
   CreateProductRequest,
   UpdateProductRequest,
 } from "@/services/catalog/products-api";
+import {
+  categoryApi,
+  CategoryResponse,
+} from "@/services/catalog/category-api";
 
 interface ProductFormModalProps {
   isOpen: boolean;
@@ -67,6 +78,69 @@ export function ProductFormModal({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
+
+  const [categories, setCategories] = useState<CategoryResponse[]>([]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      const fetchCategories = async () => {
+        setIsLoadingCategories(true);
+        try {
+          const res = await categoryApi.getList({ page: 1, pageSize: 1000 });
+          setCategories(res.items || []);
+        } catch (error) {
+          console.error("Lỗi khi tải danh sách danh mục", error);
+        } finally {
+          setIsLoadingCategories(false);
+        }
+      };
+
+      fetchCategories();
+    }
+  }, [isOpen]);
+
+  const categoryOptions = useMemo(() => {
+    if (!categories.length) return [];
+
+    const parentMap = new Map<number, CategoryResponse>();
+    categories.forEach((cat) => parentMap.set(cat.categoryId, cat));
+
+    const childrenMap = new Map<number, CategoryResponse[]>();
+    const roots: CategoryResponse[] = [];
+
+    categories.forEach((cat) => {
+      if (cat.categoryParentId && parentMap.has(cat.categoryParentId)) {
+        const list = childrenMap.get(cat.categoryParentId) || [];
+        list.push(cat);
+        childrenMap.set(cat.categoryParentId, list);
+      } else {
+        roots.push(cat);
+      }
+    });
+
+    const result: { id: number; name: string }[] = [];
+    const traverse = (cats: CategoryResponse[], prefix = "") => {
+      cats.forEach((c) => {
+        result.push({
+          id: c.categoryId,
+          name: `${prefix}${c.categoryName || `Danh mục #${c.categoryId}`}`,
+        });
+        const children = childrenMap.get(c.categoryId);
+        if (children && children.length > 0) {
+          traverse(children, `${prefix}— `);
+        }
+      });
+    };
+
+    traverse(roots);
+    return result;
+  }, [categories]);
+
+  const selectedCategoryExists = useMemo(() => {
+    if (!categoryId) return true;
+    return categories.some((c) => String(c.categoryId) === String(categoryId));
+  }, [categories, categoryId]);
 
   useEffect(() => {
     if (isOpen) {
@@ -336,16 +410,49 @@ export function ProductFormModal({
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="categoryId">ID Danh mục</Label>
-                <Input
-                  id="categoryId"
-                  type="number"
-                  placeholder="Ví dụ: 10"
-                  value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                  disabled={viewOnly}
-                  aria-invalid={!!errors.categoryId}
-                />
+                <Label htmlFor="categoryId">Danh mục</Label>
+                <Select
+                  value={categoryId || "none"}
+                  onValueChange={(val) =>
+                    setCategoryId(val === "none" ? "" : val)
+                  }
+                  disabled={viewOnly || isLoadingCategories}
+                >
+                  <SelectTrigger
+                    id="categoryId"
+                    className="w-full"
+                    aria-invalid={!!errors.categoryId}
+                  >
+                    <SelectValue
+                      placeholder={
+                        isLoadingCategories
+                          ? "Đang tải danh mục..."
+                          : "-- Chọn danh mục --"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      value="none"
+                      className="font-semibold text-primary"
+                    >
+                      -- Không chọn danh mục --
+                    </SelectItem>
+                    {categoryOptions.map((cat) => (
+                      <SelectItem
+                        key={cat.id}
+                        value={String(cat.id)}
+                      >
+                        {cat.name}
+                      </SelectItem>
+                    ))}
+                    {!selectedCategoryExists && item?.categoryName && categoryId && (
+                      <SelectItem value={String(categoryId)}>
+                        {item.categoryName}
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
                 {errors.categoryId && (
                   <p className="text-xs text-destructive">
                     {errors.categoryId}

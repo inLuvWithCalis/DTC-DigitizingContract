@@ -1,3 +1,4 @@
+using ContractManagement.API.Domains.DTOs.Requests.Customer;
 using ContractManagement.API.Domains.Services.Customer;
 using ContractManagement.Infrastructure.Persistence.Application;
 using ContractManagement.Infrastructure.Persistence.Application.Models;
@@ -40,6 +41,48 @@ public sealed class CustomerLookupServiceTests
         Assert.Equal("Alice", customer.CustomerFullName);
         Assert.Equal("Acme Corp", customer.CustomerCompany);
         Assert.Equal((byte)1, customer.Status);
+    }
+
+    [Fact]
+    public async Task CreateAndUpdate_PersistDirectContactSeparatelyFromLegalRepresentative()
+    {
+        await using var context = CreateContext();
+        var service = new CustomerService(context);
+
+        var created = await service.CreateAsync(
+            new CreateCustomerRequest
+            {
+                CustomerFullName = "Công ty khách hàng",
+                CustomerRepresentativeName = "Nguyễn Văn Đại Diện",
+                CustomerContactPersonName = "  Trần Thị Liên Hệ  ",
+                CustomerContactPersonPhone = " 0901234567 ",
+                CustomerContactPersonTitle = " Chuyên viên mua hàng "
+            },
+            createdBy: 11);
+
+        Assert.Equal("Nguyễn Văn Đại Diện", created.CustomerRepresentativeName);
+        Assert.Equal("Trần Thị Liên Hệ", created.CustomerContactPersonName);
+        Assert.Equal("0901234567", created.CustomerContactPersonPhone);
+        Assert.Equal("Chuyên viên mua hàng", created.CustomerContactPersonTitle);
+
+        await service.UpdateAsync(
+            created.CustomerId,
+            new UpdateCustomerRequest
+            {
+                CustomerFullName = "Công ty khách hàng",
+                CustomerRepresentativeName = "Nguyễn Văn Đại Diện",
+                CustomerContactPersonName = "Lê Văn Đầu Mối",
+                CustomerContactPersonPhone = "02812345678",
+                CustomerContactPersonTitle = "Trưởng phòng mua hàng"
+            },
+            updatedBy: 12);
+
+        var updated = await service.GetByIdAsync(created.CustomerId);
+
+        Assert.Equal("Nguyễn Văn Đại Diện", updated.CustomerRepresentativeName);
+        Assert.Equal("Lê Văn Đầu Mối", updated.CustomerContactPersonName);
+        Assert.Equal("02812345678", updated.CustomerContactPersonPhone);
+        Assert.Equal("Trưởng phòng mua hàng", updated.CustomerContactPersonTitle);
     }
 
     private static DbDtctechContext CreateContext()

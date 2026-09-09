@@ -25,12 +25,6 @@ public sealed class ContractSignedEvidenceResponse
     public long FileSize { get; set; }
     public string Sha256 { get; set; } = string.Empty;
     public SignedEvidenceStatus Status { get; set; }
-    public string ProviderSignerName { get; set; } = string.Empty;
-    public string ProviderSignerTitle { get; set; } = string.Empty;
-    public DateTime ProviderSigningDate { get; set; }
-    public string CustomerSignerName { get; set; } = string.Empty;
-    public string CustomerSignerTitle { get; set; } = string.Empty;
-    public DateTime CustomerSigningDate { get; set; }
     public int? SupersedesEvidenceId { get; set; }
     public string? SupersedeReason { get; set; }
     public int UploadedByEmployeeId { get; set; }

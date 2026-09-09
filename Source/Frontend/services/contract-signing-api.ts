@@ -29,12 +29,6 @@ export interface ContractSignedEvidenceResponse {
   fileSize: number;
   sha256: string;
   status: SignedEvidenceStatus;
-  providerSignerName: string;
-  providerSignerTitle: string;
-  providerSigningDate: string;
-  customerSignerName: string;
-  customerSignerTitle: string;
-  customerSigningDate: string;
   supersedesEvidenceId?: number | null;
   supersedeReason?: string | null;
   uploadedByEmployeeId: number;
@@ -66,15 +60,8 @@ interface ContractSignedEvidenceFileRequest {
   versionRowVersion: string;
 }
 
-export interface UploadContractSignedEvidenceRequest
-  extends ContractSignedEvidenceFileRequest {
-  providerSignerName: string;
-  providerSignerTitle: string;
-  providerSigningDate: string;
-  customerSignerName: string;
-  customerSignerTitle: string;
-  customerSigningDate: string;
-}
+export type UploadContractSignedEvidenceRequest =
+  ContractSignedEvidenceFileRequest;
 
 export interface SupersedeContractSignedEvidenceRequest
   extends ContractSignedEvidenceFileRequest {

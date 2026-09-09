@@ -355,8 +355,7 @@ public sealed class ContractAuditWriter : IContractAuditWriter
 
     private static HashSet<string> SignedEvidenceFields() => Fields(
         "Status", "CurrentVersionId", "SignedEvidenceId", "FileId",
-        "FileType", "Sha256", "EvidenceStatus", "SupersedesEvidenceId",
-        "ProviderSigningDate", "CustomerSigningDate");
+        "FileType", "Sha256", "EvidenceStatus", "SupersedesEvidenceId");
 
     private static HashSet<string> PaymentFields() => Fields(
         "ContractPaymentId", "CurrentVersionId", "PaymentDate", "Amount",

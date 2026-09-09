@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Net.Mime;
 using System.Text;
 using ContractManagement.API.Domains.CustomerAccess;
 using Microsoft.Extensions.Options;
@@ -31,6 +32,37 @@ public sealed class CustomerOtpSmtpTests
             $"src=\"cid:{CustomerOtpEmailTemplate.LogoContentId}\"",
             html);
         Assert.DoesNotContain("🔐", html);
+    }
+
+    [Fact]
+    public void SmtpMessage_EmbedsLogoInTheHtmlViewWithoutAttachmentMetadata()
+    {
+        var options = CreateOptions();
+        var expiresAt = DateTime.UtcNow.AddMinutes(5);
+        using var mail = SmtpCustomerOtpDeliveryProvider.BuildMailMessage(
+            new CustomerOtpDeliveryMessage(
+                "+84912345678",
+                "012345",
+                "customer@example.test",
+                expiresAt),
+            expiresAt,
+            options.Smtp,
+            [1, 2, 3, 4]);
+
+        Assert.False(mail.IsBodyHtml);
+        Assert.Contains("Mã xác thực (OTP) của bạn", mail.Body);
+        Assert.Empty(mail.Attachments);
+
+        var htmlView = Assert.Single(mail.AlternateViews);
+        Assert.Equal(MediaTypeNames.Text.Html, htmlView.ContentType.MediaType);
+        var logo = Assert.Single(htmlView.LinkedResources);
+        Assert.Equal(CustomerOtpEmailTemplate.LogoContentId, logo.ContentId);
+        Assert.Equal(
+            $"cid:{CustomerOtpEmailTemplate.LogoContentId}",
+            logo.ContentLink!.AbsoluteUri);
+        Assert.Equal(MediaTypeNames.Image.Png, logo.ContentType.MediaType);
+        Assert.Null(logo.ContentType.Name);
+        Assert.Equal(TransferEncoding.Base64, logo.TransferEncoding);
     }
 
     [Fact]

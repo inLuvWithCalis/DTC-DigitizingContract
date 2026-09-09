@@ -15,18 +15,6 @@ public sealed class TblContractSignedEvidence
 
     public byte Status { get; set; }
 
-    public string ProviderSignerName { get; set; } = null!;
-
-    public string ProviderSignerTitle { get; set; } = null!;
-
-    public DateTime ProviderSigningDate { get; set; }
-
-    public string CustomerSignerName { get; set; } = null!;
-
-    public string CustomerSignerTitle { get; set; } = null!;
-
-    public DateTime CustomerSigningDate { get; set; }
-
     /// <summary>
     /// Evidence cũ mà record hiện tại thay thế. Null với lần upload đầu tiên.
     /// </summary>

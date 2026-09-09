@@ -48,6 +48,7 @@ public sealed class ContractSigningServicePhase9Tests
                 "SignedEvidenceUploaded");
 
         Assert.Equal((byte)ContractStatus.Signed, contract.Status);
+        Assert.Null(contract.SignDate);
         Assert.Equal(SignedEvidenceStatus.Active, response.Status);
         Assert.Equal((byte)SignedEvidenceStatus.Active, evidence.Status);
         Assert.Equal("ContractSignedEvidence", file.ObjectType);
@@ -101,12 +102,6 @@ public sealed class ContractSigningServicePhase9Tests
         Assert.Equal("Bản trước bị thiếu một trang.", oldEvidence.SupersedeReason);
         Assert.Equal(oldEvidence.SignedEvidenceId, activeEvidence.SupersedesEvidenceId);
         Assert.Equal(activeEvidence.SignedEvidenceId, response.SignedEvidenceId);
-        Assert.Equal(oldEvidence.ProviderSignerName, activeEvidence.ProviderSignerName);
-        Assert.Equal(oldEvidence.ProviderSignerTitle, activeEvidence.ProviderSignerTitle);
-        Assert.Equal(oldEvidence.ProviderSigningDate, activeEvidence.ProviderSigningDate);
-        Assert.Equal(oldEvidence.CustomerSignerName, activeEvidence.CustomerSignerName);
-        Assert.Equal(oldEvidence.CustomerSignerTitle, activeEvidence.CustomerSignerTitle);
-        Assert.Equal(oldEvidence.CustomerSigningDate, activeEvidence.CustomerSigningDate);
         Assert.Equal(4, await context.TblFileStorages.CountAsync());
         Assert.Single(storage.SavedKeys);
         Assert.Empty(storage.DeletedKeys);
@@ -273,12 +268,6 @@ public sealed class ContractSigningServicePhase9Tests
                     VersionId = VersionId,
                     FileId = 919,
                     Status = (byte)SignedEvidenceStatus.Active,
-                    ProviderSignerName = "Provider Signer",
-                    ProviderSignerTitle = "Director",
-                    ProviderSigningDate = new DateTime(2026, 8, 18),
-                    CustomerSignerName = "Customer Signer",
-                    CustomerSignerTitle = "CEO",
-                    CustomerSigningDate = new DateTime(2026, 8, 19),
                     UploadedByEmployeeId = OwnerId,
                     UploadedAt = DateTime.UtcNow.AddHours(-1),
                     RowVersion = InitialRowVersion
@@ -316,13 +305,7 @@ public sealed class ContractSigningServicePhase9Tests
             File = CreateFile(fileName, contentType),
             CurrentVersionId = VersionId,
             ContractRowVersion = Encode(InitialRowVersion),
-            VersionRowVersion = Encode(InitialRowVersion),
-            ProviderSignerName = "Provider Signer",
-            ProviderSignerTitle = "Director",
-            ProviderSigningDate = new DateTime(2026, 8, 20),
-            CustomerSignerName = "Customer Signer",
-            CustomerSignerTitle = "CEO",
-            CustomerSigningDate = new DateTime(2026, 8, 21)
+            VersionRowVersion = Encode(InitialRowVersion)
         };
 
     private static IFormFile CreateFile(string fileName, string contentType)

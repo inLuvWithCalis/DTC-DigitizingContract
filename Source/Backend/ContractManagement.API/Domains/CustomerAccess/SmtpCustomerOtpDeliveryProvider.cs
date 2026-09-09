@@ -27,36 +27,10 @@ public sealed class SmtpCustomerOtpDeliveryProvider(IOptions<CustomerOtpOptions>
         if (message.ExpiresAt is not { } expiresAt || expiresAt <= DateTime.UtcNow)
             throw new InvalidOperationException("Customer OTP delivery has expired. Request a new code.");
 
-        using var mail = new MailMessage
-        {
-            From = new MailAddress(smtp.FromAddress!, smtp.FromName, Encoding.UTF8),
-            Subject = CustomerOtpEmailTemplate.Subject,
-            SubjectEncoding = Encoding.UTF8,
-            Body = CustomerOtpEmailTemplate.BuildBody(message.Otp, expiresAt),
-            BodyEncoding = Encoding.UTF8,
-            IsBodyHtml = true
-        };
-        mail.AlternateViews.Add(
-            AlternateView.CreateAlternateViewFromString(
-                CustomerOtpEmailTemplate.BuildPlainTextBody(message.Otp, expiresAt),
-                Encoding.UTF8,
-                "text/plain"));
-        var htmlView = AlternateView.CreateAlternateViewFromString(
-            CustomerOtpEmailTemplate.BuildBody(message.Otp, expiresAt),
-            Encoding.UTF8,
-            MediaTypeNames.Text.Html);
-        if (File.Exists(LogoPath))
-        {
-            htmlView.LinkedResources.Add(new LinkedResource(
-                LogoPath,
-                MediaTypeNames.Image.Png)
-            {
-                ContentId = CustomerOtpEmailTemplate.LogoContentId,
-                TransferEncoding = TransferEncoding.Base64
-            });
-        }
-
-        mail.AlternateViews.Add(htmlView);
+        var logoBytes = File.Exists(LogoPath)
+            ? await File.ReadAllBytesAsync(LogoPath, cancellationToken)
+            : null;
+        using var mail = BuildMailMessage(message, expiresAt, smtp, logoBytes);
         mail.To.Add(new MailAddress(message.EmailAddress!));
 
         // Require STARTTLS; never fall back to an unencrypted connection.
@@ -78,5 +52,49 @@ public sealed class SmtpCustomerOtpDeliveryProvider(IOptions<CustomerOtpOptions>
             // Let the outbox retry a timeout instead of treating it as worker shutdown.
             throw new TimeoutException("Customer OTP SMTP delivery timed out.");
         }
+    }
+
+    internal static MailMessage BuildMailMessage(
+        CustomerOtpDeliveryMessage message,
+        DateTime expiresAt,
+        CustomerOtpSmtpOptions smtp,
+        byte[]? logoBytes)
+    {
+        // Keep only the plain-text fallback in MailMessage.Body. The HTML body
+        // must live in the AlternateView that owns the linked logo; otherwise
+        // some clients select a duplicate HTML body where the cid cannot resolve.
+        var mail = new MailMessage
+        {
+            From = new MailAddress(smtp.FromAddress!, smtp.FromName, Encoding.UTF8),
+            Subject = CustomerOtpEmailTemplate.Subject,
+            SubjectEncoding = Encoding.UTF8,
+            Body = CustomerOtpEmailTemplate.BuildPlainTextBody(message.Otp, expiresAt),
+            BodyEncoding = Encoding.UTF8,
+            IsBodyHtml = false
+        };
+        var htmlView = AlternateView.CreateAlternateViewFromString(
+            CustomerOtpEmailTemplate.BuildBody(message.Otp, expiresAt),
+            Encoding.UTF8,
+            MediaTypeNames.Text.Html);
+        if (logoBytes is { Length: > 0 })
+        {
+            var logo = new LinkedResource(
+                new MemoryStream(logoBytes, writable: false),
+                MediaTypeNames.Image.Png)
+            {
+                ContentId = CustomerOtpEmailTemplate.LogoContentId,
+                ContentLink = new Uri(
+                    $"cid:{CustomerOtpEmailTemplate.LogoContentId}",
+                    UriKind.Absolute),
+                TransferEncoding = TransferEncoding.Base64
+            };
+            // A filename encourages Gmail and other clients to expose the
+            // related MIME part as a downloadable attachment.
+            logo.ContentType.Name = null;
+            htmlView.LinkedResources.Add(logo);
+        }
+
+        mail.AlternateViews.Add(htmlView);
+        return mail;
     }
 }

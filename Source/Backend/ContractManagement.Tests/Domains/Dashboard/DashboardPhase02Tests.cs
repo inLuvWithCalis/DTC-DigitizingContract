@@ -63,13 +63,35 @@ public sealed class DashboardPhase02Tests
         context.TblEmployees.AddRange(
             Employee(1, EmployeeType.Manager),
             Employee(2, EmployeeType.Sale));
-        context.TblContracts.Add(Contract(
+        var pendingContract = Contract(
             100,
             1,
             ContractStatus.PendingApproval,
             1,
             "VND",
-            now));
+            now);
+        pendingContract.CurrentVersionId = 1000;
+        context.TblContracts.Add(pendingContract);
+        context.TblContractVersions.Add(new TblContractVersion
+        {
+            VersionId = 1000,
+            ContractId = 100,
+            VersionNo = 1,
+            CurrencyCode = "VND",
+            CreatedEmployeeId = 2,
+            CreatedDate = now,
+            RowVersion = [1]
+        });
+        context.TblContractApprovalRequests.Add(new TblContractApprovalRequest
+        {
+            ApprovalRequestId = 1000,
+            ContractId = 100,
+            VersionId = 1000,
+            Status = (byte)ApprovalRequestStatus.Pending,
+            SubmittedByEmployeeId = 2,
+            SubmittedDate = now,
+            RowVersion = [1]
+        });
         for (var index = 0; index < 9; index++)
         {
             context.TblContracts.Add(Contract(
@@ -94,6 +116,10 @@ public sealed class DashboardPhase02Tests
 
         Assert.Equal("Tenant", result.Scope);
         Assert.Equal(10, result.Summary.Single(item => item.Key == "total").Count);
+        var pendingApproval = result.Summary.Single(item =>
+            item.Key == "pendingApproval");
+        Assert.Equal(1, pendingApproval.Count);
+        Assert.Null(pendingApproval.PreviousCount);
         Assert.Equal(9, result.Summary.Single(item => item.Key == "expiring").Count);
         Assert.Equal(8, result.ExpiringContracts.Count);
     }

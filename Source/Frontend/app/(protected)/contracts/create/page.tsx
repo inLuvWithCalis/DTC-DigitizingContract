@@ -1741,10 +1741,10 @@ export default function CreateContractPage() {
                           </div>
 
                           {selected && (
-                            <div className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-2 xl:grid-cols-5">
+                            <div className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-2 xl:grid-cols-4">
                               {languageMode ===
                                 ContractLanguageMode.Bilingual && (
-                                <div className="space-y-1.5 sm:col-span-2 xl:col-span-5">
+                                <div className="space-y-1.5 sm:col-span-2 xl:col-span-4">
                                   <Label className="text-xs text-muted-foreground">
                                     Tên sản phẩm / dịch vụ tiếng Anh
                                   </Label>
@@ -1767,7 +1767,7 @@ export default function CreateContractPage() {
                                 <DecimalInput
                                   min={0}
                                   value={item.unitPrice}
-                                  className="bg-white"
+                                  className="bg-background"
                                   onValueChange={(value) =>
                                     updateCatalogItem(item.id, {
                                       unitPrice: value,
@@ -1789,7 +1789,7 @@ export default function CreateContractPage() {
                                     )
                                   }
                                 >
-                                  <SelectTrigger className="w-full bg-white">
+                                  <SelectTrigger className="w-full bg-background">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -1843,7 +1843,7 @@ export default function CreateContractPage() {
                                       ? item.fixedDiscountAmount
                                       : item.discountPercent
                                   }
-                                  className="bg-white"
+                                  className="bg-background"
                                   onValueChange={(value) => {
                                     updateCatalogItem(
                                       item.id,
@@ -1862,39 +1862,36 @@ export default function CreateContractPage() {
                               </div>
 
                               <div className="space-y-1.5">
-                                <Label className="text-xs text-muted-foreground">
-                                  Thuế
-                                </Label>
-                                <div className="flex h-9 items-center justify-between rounded-md border bg-white px-3">
-                                  <span className="text-sm">
-                                    {item.isTaxable
-                                      ? "Chịu thuế"
-                                      : "Không chịu thuế"}
-                                  </span>
-                                  <Switch
-                                    checked={item.isTaxable}
-                                    onCheckedChange={(checked) =>
-                                      updateCatalogItem(item.id, {
-                                        isTaxable: checked,
-                                        vatPercent: checked
-                                          ? item.vatPercent || 10
-                                          : 0,
-                                      })
-                                    }
-                                  />
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-xs text-muted-foreground">
+                                    Thuế VAT (%)
+                                  </Label>
+                                  <label className="flex cursor-pointer items-center gap-1.5 transition-colors hover:text-foreground">
+                                    <span className="text-[11px] text-muted-foreground select-none">
+                                      {item.isTaxable
+                                        ? "Chịu thuế"
+                                        : "Không thuế"}
+                                    </span>
+                                    <Switch
+                                      checked={item.isTaxable}
+                                      onCheckedChange={(checked) =>
+                                        updateCatalogItem(item.id, {
+                                          isTaxable: checked,
+                                          vatPercent: checked
+                                            ? item.vatPercent || 10
+                                            : 0,
+                                        })
+                                      }
+                                    />
+                                  </label>
                                 </div>
-                              </div>
-
-                              <div className="space-y-1.5">
-                                <Label className="text-xs text-muted-foreground">
-                                  VAT (%)
-                                </Label>
                                 <DecimalInput
                                   min={0}
                                   max={100}
                                   disabled={!item.isTaxable}
                                   value={item.vatPercent}
-                                  className="bg-white"
+                                  placeholder={item.isTaxable ? "10" : "0"}
+                                  className="bg-background"
                                   onValueChange={(value) =>
                                     updateCatalogItem(item.id, {
                                       vatPercent: value,
@@ -1903,7 +1900,7 @@ export default function CreateContractPage() {
                                 />
                               </div>
 
-                              <div className="grid gap-2 rounded-lg bg-muted/40 p-3 text-xs sm:col-span-2 sm:grid-cols-4 xl:col-span-5">
+                              <div className="grid gap-2 rounded-lg bg-muted/40 p-3 text-xs sm:col-span-2 sm:grid-cols-4 xl:col-span-4">
                                 <div>
                                   <p className="text-muted-foreground">
                                     Tạm tính

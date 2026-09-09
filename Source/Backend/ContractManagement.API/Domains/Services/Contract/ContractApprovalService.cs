@@ -67,24 +67,10 @@ public sealed class ContractApprovalService : IContractApprovalService
         var pageSize = Math.Clamp(filter.PageSize, 1, 100);
         var keyword = filter.Keyword?.Trim();
 
-        var allowedWorkflowIds = await _dbContext.TblApprovalWorkflows
-            .AsNoTracking()
-            .Where(workflow =>
-                workflow.IsActive
-                && workflow.ObjectType == "Contract"
-                && workflow.StepNo == 1
-                && (!workflow.ApproverEmployeeId.HasValue
-                    || workflow.ApproverEmployeeId.Value == managerEmployeeId))
-            .Select(workflow => workflow.WorkflowId)
-            .ToListAsync(cancellationToken);
-
-        var requestQuery = _dbContext.TblContractApprovalRequests
-            .AsNoTracking()
-            .Where(request =>
-                request.Status == (byte)ApprovalRequestStatus.Pending
-                && request.SubmittedByEmployeeId != managerEmployeeId
-                && (!request.WorkflowId.HasValue
-                    || allowedWorkflowIds.Contains(request.WorkflowId.Value)));
+        var requestQuery = await ContractApprovalInboxQuery.CreateAsync(
+            _dbContext,
+            managerEmployeeId,
+            cancellationToken);
         var query =
             from request in requestQuery
             join contract in _dbContext.TblContracts.AsNoTracking()

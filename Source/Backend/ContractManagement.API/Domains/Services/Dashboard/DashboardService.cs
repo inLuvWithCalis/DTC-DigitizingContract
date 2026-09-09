@@ -3,6 +3,7 @@ using ContractManagement.API.Common.Security;
 using ContractManagement.API.Domains.DTOs.Requests.Dashboard;
 using ContractManagement.API.Domains.DTOs.Responses.Dashboard;
 using ContractManagement.API.Domains.Interfaces.Dashboard;
+using ContractManagement.Domains.Services.Contract;
 using ContractManagement.Infrastructure.Persistence.Application;
 using Microsoft.EntityFrameworkCore;
 
@@ -65,6 +66,17 @@ public sealed class DashboardService : IDashboardService
             .Select(contract => contract.Status)
             .ToListAsync(cancellationToken);
 
+        int? pendingApprovalInboxCount = null;
+        if (isManager)
+        {
+            var approvalInbox = await ContractApprovalInboxQuery.CreateAsync(
+                _dbContext,
+                employeeId,
+                cancellationToken);
+            pendingApprovalInboxCount = await approvalInbox.CountAsync(
+                cancellationToken);
+        }
+
         var expiryTo = now.AddDays(filter.ExpiryDays);
         var expiringQuery = scopedContracts.Where(contract =>
             contract.ExpireDate.HasValue
@@ -120,7 +132,8 @@ public sealed class DashboardService : IDashboardService
             Summary = BuildSummary(
                 currentRows.Select(row => row.Status),
                 previousStatuses,
-                expiringCount),
+                expiringCount,
+                pendingApprovalInboxCount),
             AmountByCurrency = currentRows
                 .GroupBy(row => NormalizeCurrency(row.CurrencyCode))
                 .OrderBy(group => group.Key)
@@ -180,7 +193,8 @@ public sealed class DashboardService : IDashboardService
     private static IReadOnlyList<DashboardSummaryItemResponse> BuildSummary(
         IEnumerable<byte> current,
         IEnumerable<byte> previous,
-        int expiringCount)
+        int expiringCount,
+        int? pendingApprovalInboxCount)
     {
         var currentStatuses = current.ToList();
         var previousStatuses = previous.ToList();
@@ -190,8 +204,12 @@ public sealed class DashboardService : IDashboardService
             Summary("drafting", currentStatuses, previousStatuses, status =>
                 status is (byte)ContractStatus.Draft
                     or (byte)ContractStatus.Negotiating),
-            Summary("pendingApproval", currentStatuses, previousStatuses,
-                status => status == (byte)ContractStatus.PendingApproval),
+            pendingApprovalInboxCount.HasValue
+                ? new DashboardSummaryItemResponse(
+                    "pendingApproval",
+                    pendingApprovalInboxCount.Value)
+                : Summary("pendingApproval", currentStatuses, previousStatuses,
+                    status => status == (byte)ContractStatus.PendingApproval),
             Summary("pendingSignature", currentStatuses, previousStatuses,
                 status => status == (byte)ContractStatus.PendingSignature),
             Summary("signed", currentStatuses, previousStatuses,

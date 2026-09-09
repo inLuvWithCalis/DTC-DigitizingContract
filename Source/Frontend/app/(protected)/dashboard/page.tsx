@@ -29,7 +29,6 @@ import { useAuthStore } from "@/hooks/use-auth-store";
 import { usePermission } from "@/hooks/use-permission";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { RBAC_PERMISSIONS } from "@/lib/rbac";
-import { contractApprovalApi } from "@/services/contract-approval-api";
 import { dashboardApi, type DashboardResponse } from "@/services/dashboard-api";
 import { cn } from "@/lib/utils";
 
@@ -82,38 +81,13 @@ export default function DashboardPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const [response, approvalInbox] = await Promise.all([
-        dashboardApi.get({
-          from: startOfLocalDay(dateRange.from),
-          to: endOfLocalDay(dateRange.to),
-          expiryDays: 30,
-        }),
-        canDecideApprovals
-          ? contractApprovalApi.getInbox({ page: 1, pageSize: 1 })
-          : Promise.resolve(null),
-      ]);
-      const summary = approvalInbox
-        ? response.summary.some((item) => item.key === "pendingApproval")
-          ? response.summary.map((item) =>
-              item.key === "pendingApproval"
-                ? {
-                    ...item,
-                    count: approvalInbox.totalCount,
-                    previousCount: null,
-                  }
-                : item,
-            )
-          : [
-              ...response.summary,
-              {
-                key: "pendingApproval",
-                count: approvalInbox.totalCount,
-                previousCount: null,
-              },
-            ]
-        : response.summary;
+      const response = await dashboardApi.get({
+        from: startOfLocalDay(dateRange.from),
+        to: endOfLocalDay(dateRange.to),
+        expiryDays: 30,
+      });
 
-      setData({ ...response, summary });
+      setData(response);
       setLastUpdated(
         new Date().toLocaleTimeString("vi-VN", {
           hour: "2-digit",
@@ -128,7 +102,7 @@ export default function DashboardPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [canDecideApprovals, dateRange.from, dateRange.to]);
+  }, [dateRange.from, dateRange.to]);
 
   useEffect(() => {
     queueMicrotask(() => void loadDashboard());

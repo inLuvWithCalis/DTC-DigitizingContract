@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { CodeInput } from "@/components/ui/custom/code-input";
 import { ConfirmDialog } from "@/components/ui/custom/confirm-dialog";
+import { ContractRichTextEditor } from "@/components/ui/custom/contract-rich-text-editor";
 import {
   Dialog,
   DialogContent,
@@ -22,7 +23,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   contractTemplateApi,
   TemplateVersionStatus,
@@ -387,10 +387,10 @@ export function ContractTemplateTermsEditor({
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="new-term-content">Nội dung</Label>
-              <Textarea
+              <ContractRichTextEditor
                 id="new-term-content"
                 value={newTermContent}
-                onChange={(event) => setNewTermContent(event.target.value)}
+                onChange={setNewTermContent}
               />
             </div>
             {isBilingual && (
@@ -407,12 +407,11 @@ export function ContractTemplateTermsEditor({
                   <Label htmlFor="new-term-content-en">
                     Nội dung tiếng Anh
                   </Label>
-                  <Textarea
+                  <ContractRichTextEditor
                     id="new-term-content-en"
                     value={newTermContentEn}
-                    onChange={(event) =>
-                      setNewTermContentEn(event.target.value)
-                    }
+                    ariaLabel="Nội dung điều khoản tiếng Anh"
+                    onChange={setNewTermContentEn}
                   />
                 </div>
               </>

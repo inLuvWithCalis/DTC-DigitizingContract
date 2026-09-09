@@ -11,9 +11,10 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ContractRichTextContent } from "@/components/ui/custom/contract-rich-text-content";
+import { ContractRichTextEditor } from "@/components/ui/custom/contract-rich-text-editor";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 export type ContractTermEditableField =
@@ -156,14 +157,12 @@ export function ContractTermCard({
             <Label htmlFor={`term-content-${inputId}`}>
               Nội dung điều khoản
             </Label>
-            <Textarea
+            <ContractRichTextEditor
               id={`term-content-${inputId}`}
               value={term.termContent ?? ""}
-              className="min-h-24 resize-y break-all"
               placeholder="Nhập nội dung điều khoản..."
-              onChange={(event) =>
-                onChange?.("termContent", event.target.value)
-              }
+              ariaLabel="Nội dung điều khoản"
+              onChange={(value) => onChange?.("termContent", value)}
             />
           </div>
 
@@ -186,14 +185,12 @@ export function ContractTermCard({
                 <Label htmlFor={`term-content-en-${inputId}`}>
                   Nội dung tiếng Anh
                 </Label>
-                <Textarea
+                <ContractRichTextEditor
                   id={`term-content-en-${inputId}`}
                   value={term.termContentEn ?? ""}
-                  className="min-h-24 resize-y"
                   placeholder={englishContentPlaceholder}
-                  onChange={(event) =>
-                    onChange?.("termContentEn", event.target.value)
-                  }
+                  ariaLabel="Nội dung điều khoản tiếng Anh"
+                  onChange={(value) => onChange?.("termContentEn", value)}
                 />
               </div>
             </div>
@@ -218,17 +215,20 @@ export function ContractTermCard({
       ) : (
         <div>
           <p className="text-sm font-semibold">{term.termTitle}</p>
-          <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-            {term.termContent || "Chưa có nội dung"}
-          </p>
+          <ContractRichTextContent
+            value={term.termContent}
+            className="mt-1 text-muted-foreground"
+          />
           {isBilingual && (
             <div className="mt-4 rounded-xl border border-dashed p-3">
               <p className="text-sm font-semibold">
                 {term.termTitleEn || "Chưa có tiêu đề tiếng Anh"}
               </p>
-              <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-                {term.termContentEn || "Chưa có nội dung tiếng Anh"}
-              </p>
+              <ContractRichTextContent
+                value={term.termContentEn}
+                emptyText="Chưa có nội dung tiếng Anh"
+                className="mt-1 text-muted-foreground"
+              />
             </div>
           )}
         </div>

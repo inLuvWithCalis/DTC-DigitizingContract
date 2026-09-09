@@ -24,6 +24,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ContractRichTextContent } from "@/components/ui/custom/contract-rich-text-content";
 import { Input } from "@/components/ui/input";
 import {
   InputOTP,
@@ -611,13 +612,15 @@ export default function PublicContractPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3 text-sm leading-7">
-                  <p className="whitespace-pre-wrap">
-                    {term.termContent || "—"}
-                  </p>
+                  <ContractRichTextContent
+                    value={term.termContent}
+                    emptyText="—"
+                  />
                   {term.termContentEn && (
-                    <p className="whitespace-pre-wrap text-muted-foreground italic">
-                      {term.termContentEn}
-                    </p>
+                    <ContractRichTextContent
+                      value={term.termContentEn}
+                      className="text-muted-foreground italic"
+                    />
                   )}
                 </div>
                 <PublicContractDiscussionModal

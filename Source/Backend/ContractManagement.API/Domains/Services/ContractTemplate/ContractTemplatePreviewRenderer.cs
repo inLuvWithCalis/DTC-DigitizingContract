@@ -14,7 +14,7 @@ namespace ContractManagement.Domains.Services.ContractTemplate;
 /// </summary>
 public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRenderer
 {
-    public const string FormatVersion = "V2";
+    public const string FormatVersion = "V3";
 
     private const string GeneratedContentFont = "Times New Roman";
     private const string GeneratedContentFontSize = "24";
@@ -148,8 +148,7 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                 [
                     (OpenXmlElement)CreatePaymentTable(languageMode, renderData)
                 ],
-                "CONTRACT_TERMS" => CreateTermParagraphs(languageMode, renderData)
-                    .Cast<OpenXmlElement>(),
+                "CONTRACT_TERMS" => CreateTermElements(languageMode, renderData),
                 "SIGNATURE_PROVIDER" =>
                 [
                     (OpenXmlElement)CreateSignatureBlock(
@@ -194,14 +193,14 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
         }
     }
 
-    private static IEnumerable<W.Paragraph> CreateTermParagraphs(
+    private static IEnumerable<OpenXmlElement> CreateTermElements(
         ContractLanguageMode languageMode,
         ContractTemplateRenderData renderData)
     {
-        var paragraphs = new List<W.Paragraph>();
+        var elements = new List<OpenXmlElement>();
         if (!string.IsNullOrWhiteSpace(renderData.Notice))
         {
-            paragraphs.Add(CreateParagraph(renderData.Notice, bold: true));
+            elements.Add(CreateParagraph(renderData.Notice, bold: true));
         }
 
         foreach (var term in renderData.Terms)
@@ -209,15 +208,111 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
             var title = languageMode == ContractLanguageMode.Bilingual
                 ? $"Điều {term.No}. {term.TitleVi} / Article {term.No}. {term.TitleEn}"
                 : $"Điều {term.No}. {term.TitleVi}";
-            paragraphs.Add(CreateParagraph(title, bold: true));
-            paragraphs.Add(CreateParagraph(term.ContentVi));
+            elements.Add(CreateParagraph(title, bold: true));
+            elements.AddRange(CreateTermContentElements(term.ContentVi));
             if (languageMode == ContractLanguageMode.Bilingual)
             {
-                paragraphs.Add(CreateParagraph(term.ContentEn));
+                elements.AddRange(CreateTermContentElements(term.ContentEn));
             }
         }
 
-        return paragraphs;
+        return elements;
+    }
+
+    private static IEnumerable<OpenXmlElement> CreateTermContentElements(string? value)
+    {
+        if (!ContractTermRichText.IsEncoded(value))
+        {
+            return (value ?? string.Empty)
+                .Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Split('\n')
+                .Select(line => (OpenXmlElement)CreateParagraph(line))
+                .ToList();
+        }
+
+        if (!ContractTermRichText.TryParse(value, out var document))
+        {
+            throw new ContractTemplatePreviewException(
+                "ContractTermRichTextInvalid",
+                "Nội dung điều khoản có định dạng rich text không hợp lệ.");
+        }
+
+        var elements = new List<OpenXmlElement>();
+        foreach (var block in document.Blocks)
+        {
+            if (block.Type == "paragraph")
+            {
+                elements.Add(CreateRichParagraph(block.Runs));
+                continue;
+            }
+
+            elements.Add(CreateRichTable(block.Rows));
+        }
+
+        if (elements.Count == 0)
+        {
+            elements.Add(CreateParagraph(string.Empty));
+        }
+
+        return elements;
+    }
+
+    private static W.Paragraph CreateRichParagraph(
+        IEnumerable<ContractTermRichTextRun> runs)
+    {
+        var paragraph = new W.Paragraph();
+        foreach (var run in runs)
+        {
+            paragraph.Append(CreateRichRun(run));
+        }
+
+        return paragraph;
+    }
+
+    private static W.Run CreateRichRun(ContractTermRichTextRun value)
+    {
+        var run = new W.Run(CreateGeneratedRunProperties(
+            bold: value.Bold,
+            fontSize: value.FontSize is null
+                ? null
+                : (value.FontSize.Value * 2).ToString(),
+            italic: value.Italic,
+            underline: value.Underline));
+        var parts = value.Text
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Split('\n');
+        for (var index = 0; index < parts.Length; index++)
+        {
+            if (index > 0) run.Append(new W.Break());
+            if (parts[index].Length > 0) run.Append(Text(parts[index]));
+        }
+
+        return run;
+    }
+
+    private static W.Table CreateRichTable(
+        IEnumerable<ContractTermRichTextRow> rows)
+    {
+        var table = new W.Table(CreateGeneratedTableProperties());
+        foreach (var sourceRow in rows)
+        {
+            var row = new W.TableRow();
+            foreach (var cell in sourceRow.Cells)
+            {
+                row.Append(new W.TableCell(
+                    new W.TableCellProperties(
+                        new W.TableCellWidth
+                        {
+                            Type = W.TableWidthUnitValues.Auto,
+                            Width = "0"
+                        }),
+                    CreateRichParagraph(cell.Runs)));
+            }
+
+            table.Append(row);
+        }
+
+        return table;
     }
 
     private static W.Paragraph CreateSignatureBlock(
@@ -312,16 +407,7 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
         IEnumerable<IEnumerable<string>> rows,
         bool headerRow)
     {
-        var table = new W.Table(
-            new W.TableProperties(
-                new W.TableWidth { Type = W.TableWidthUnitValues.Pct, Width = "5000" },
-                new W.TableBorders(
-                    new W.TopBorder { Val = W.BorderValues.Single, Size = 4 },
-                    new W.LeftBorder { Val = W.BorderValues.Single, Size = 4 },
-                    new W.BottomBorder { Val = W.BorderValues.Single, Size = 4 },
-                    new W.RightBorder { Val = W.BorderValues.Single, Size = 4 },
-                    new W.InsideHorizontalBorder { Val = W.BorderValues.Single, Size = 4 },
-                    new W.InsideVerticalBorder { Val = W.BorderValues.Single, Size = 4 })));
+        var table = new W.Table(CreateGeneratedTableProperties());
 
         var rowIndex = 0;
         foreach (var values in rows)
@@ -346,6 +432,17 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
 
         return table;
     }
+
+    private static W.TableProperties CreateGeneratedTableProperties() =>
+        new(
+            new W.TableWidth { Type = W.TableWidthUnitValues.Pct, Width = "5000" },
+            new W.TableBorders(
+                new W.TopBorder { Val = W.BorderValues.Single, Size = 4 },
+                new W.LeftBorder { Val = W.BorderValues.Single, Size = 4 },
+                new W.BottomBorder { Val = W.BorderValues.Single, Size = 4 },
+                new W.RightBorder { Val = W.BorderValues.Single, Size = 4 },
+                new W.InsideHorizontalBorder { Val = W.BorderValues.Single, Size = 4 },
+                new W.InsideVerticalBorder { Val = W.BorderValues.Single, Size = 4 }));
 
     private static void ReplaceScalarTokens(
         OpenXmlPartRootElement root,
@@ -452,7 +549,11 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
     private static W.Run CreateBreakRun() =>
         new(CreateGeneratedRunProperties(), new W.Break());
 
-    private static W.RunProperties CreateGeneratedRunProperties(bool bold = false) =>
+    private static W.RunProperties CreateGeneratedRunProperties(
+        bool bold = false,
+        string? fontSize = null,
+        bool italic = false,
+        bool underline = false) =>
         new(
             new W.RunFonts
             {
@@ -462,8 +563,13 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                 ComplexScript = GeneratedContentFont
             },
             new W.Bold { Val = bold },
-            new W.FontSize { Val = GeneratedContentFontSize },
-            new W.FontSizeComplexScript { Val = GeneratedContentFontSize });
+            new W.Italic { Val = italic },
+            new W.Underline
+            {
+                Val = underline ? W.UnderlineValues.Single : W.UnderlineValues.None
+            },
+            new W.FontSize { Val = fontSize ?? GeneratedContentFontSize },
+            new W.FontSizeComplexScript { Val = fontSize ?? GeneratedContentFontSize });
 
     private static W.Text Text(string value) => new(value)
     {

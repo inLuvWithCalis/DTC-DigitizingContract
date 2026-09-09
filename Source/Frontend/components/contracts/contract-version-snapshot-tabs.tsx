@@ -12,6 +12,7 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ContractRichTextContent } from "@/components/ui/custom/contract-rich-text-content";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatCurrency } from "@/lib/format-currency";
 import {
@@ -238,17 +239,21 @@ export function ContractVersionSnapshotTabs({
                   {term.isNegotiable ? "Cho phép đàm phán" : "Điều khoản cứng"}
                 </Badge>
               </div>
-              <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-                {term.termContent || "Chưa có nội dung."}
-              </p>
+              <ContractRichTextContent
+                value={term.termContent}
+                emptyText="Chưa có nội dung."
+                className="mt-3 text-muted-foreground"
+              />
               {(term.termTitleEn || term.termContentEn) && (
                 <div className="mt-4 border-t pt-4">
                   <p className="font-medium">
                     {term.termTitleEn || "English content"}
                   </p>
-                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-                    {term.termContentEn || "No content."}
-                  </p>
+                  <ContractRichTextContent
+                    value={term.termContentEn}
+                    emptyText="No content."
+                    className="mt-2 text-muted-foreground"
+                  />
                 </div>
               )}
             </div>

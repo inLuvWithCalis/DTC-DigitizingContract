@@ -153,6 +153,76 @@ public sealed class ContractTemplatePreviewTests
         Assert.DoesNotContain("CUS-DEMO-2026", text);
     }
 
+    [Fact]
+    public void Renderer_WithRichTermContent_PreservesBoldFontSizeAndTable()
+    {
+        var scalarValues = SoftwareSupplyPlaceholderCatalog.GetAll()
+            .Where(item => item.DataKind == TemplatePlaceholderDataKind.Scalar)
+            .ToDictionary(item => item.Key, _ => string.Empty, StringComparer.Ordinal);
+        var richContent = ContractTermRichText.Prefix +
+            """{"blocks":[{"type":"paragraph","runs":[{"text":"Nội dung đậm","bold":true,"italic":true,"underline":true,"fontSize":18}]},{"type":"table","rows":[{"cells":[{"runs":[{"text":"Cột một"}]},{"runs":[{"text":"Cột hai","bold":true}]}]}]}]}""";
+        var renderData = new ContractTemplateRenderData(
+            scalarValues,
+            [],
+            [],
+            [new ContractTemplateRenderTerm(
+                1, "Điều khoản rich text", string.Empty, richContent, string.Empty)],
+            new ContractTemplateRenderSignature(string.Empty, string.Empty),
+            new ContractTemplateRenderSignature(string.Empty, string.Empty),
+            string.Empty);
+
+        var rendered = new ContractTemplatePreviewRenderer().Render(
+            CreateSourceDocument(),
+            ContractLanguageMode.Vietnamese,
+            renderData);
+
+        using var stream = new MemoryStream(rendered);
+        using var document = WordprocessingDocument.Open(stream, false);
+        var mainPart = document.MainDocumentPart!;
+        var boldRun = mainPart.Document!.Descendants<W.Run>()
+            .Single(run => run.InnerText == "Nội dung đậm");
+        Assert.True(boldRun.RunProperties?.Bold?.Val?.Value);
+        Assert.True(boldRun.RunProperties?.Italic?.Val?.Value);
+        Assert.Equal(
+            W.UnderlineValues.Single,
+            boldRun.RunProperties?.Underline?.Val?.Value);
+        Assert.Equal("36", boldRun.RunProperties?.FontSize?.Val?.Value);
+
+        var richTable = mainPart.Document.Descendants<W.Table>()
+            .Single(table => table.InnerText.Contains("Cột một", StringComparison.Ordinal));
+        Assert.Contains("Cột hai", richTable.InnerText, StringComparison.Ordinal);
+        Assert.Equal(2, richTable.Descendants<W.TableCell>().Count());
+    }
+
+    [Fact]
+    public void Renderer_WithMalformedRichTermContent_RejectsDocument()
+    {
+        var scalarValues = SoftwareSupplyPlaceholderCatalog.GetAll()
+            .Where(item => item.DataKind == TemplatePlaceholderDataKind.Scalar)
+            .ToDictionary(item => item.Key, _ => string.Empty, StringComparer.Ordinal);
+        var renderData = new ContractTemplateRenderData(
+            scalarValues,
+            [],
+            [],
+            [new ContractTemplateRenderTerm(
+                1,
+                "Điều khoản lỗi",
+                string.Empty,
+                ContractTermRichText.Prefix + "{invalid",
+                string.Empty)],
+            new ContractTemplateRenderSignature(string.Empty, string.Empty),
+            new ContractTemplateRenderSignature(string.Empty, string.Empty),
+            string.Empty);
+
+        var exception = Assert.Throws<ContractTemplatePreviewException>(() =>
+            new ContractTemplatePreviewRenderer().Render(
+                CreateSourceDocument(),
+                ContractLanguageMode.Vietnamese,
+                renderData));
+
+        Assert.Equal("ContractTermRichTextInvalid", exception.FailureCode);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

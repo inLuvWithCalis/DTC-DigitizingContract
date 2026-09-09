@@ -99,6 +99,8 @@ export default function ContractDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
+  const currentEmployeeId = user?.employeeId;
+  const currentPermissions = user?.permissions;
 
   const [contract, setContract] = useState<ContractDetailResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -163,10 +165,13 @@ export default function ContractDetailPage() {
       try {
         if (showLoading) setIsLoading(true);
         const contractId = Number(params.id);
-        const [res, currentLink] = await Promise.all([
-          contractApi.getDetail(contractId),
-          contractApi.getCurrentCustomerAccessLink(contractId),
-        ]);
+        const res = await contractApi.getDetail(contractId);
+        const canReadCustomerAccess =
+          res.responsibleEmployee?.employeeId === currentEmployeeId ||
+          hasPermission(currentPermissions, RBAC_PERMISSIONS.contractSupport);
+        const currentLink = canReadCustomerAccess
+          ? await contractApi.getCurrentCustomerAccessLink(contractId)
+          : null;
         setContract(res);
         setKnownCustomerAccessLink(currentLink);
         setHasUnsavedChanges(false);
@@ -188,7 +193,7 @@ export default function ContractDetailPage() {
         if (showLoading) setIsLoading(false);
       }
     },
-    [params.id],
+    [currentEmployeeId, currentPermissions, params.id],
   );
 
   // Gọi API lấy dữ liệu hợp đồng
@@ -523,6 +528,9 @@ export default function ContractDetailPage() {
   const canManageContract =
     isResponsibleEmployee &&
     hasPermission(user?.permissions, RBAC_PERMISSIONS.contractManageOwn);
+  const canViewCustomerAccess =
+    isResponsibleEmployee ||
+    hasPermission(user?.permissions, RBAC_PERMISSIONS.contractSupport);
   const canManageSigning = hasPermission(
     user?.permissions,
     RBAC_PERMISSIONS.contractSigningManage,
@@ -539,6 +547,14 @@ export default function ContractDetailPage() {
     user?.permissions,
     RBAC_PERMISSIONS.contractComplete,
   );
+  const visibleActiveTab =
+    activeTab === "customer-access" && !canViewCustomerAccess
+      ? canManageSigning
+        ? "signature"
+        : canManageAcceptance || canManagePayment || canCompleteContract
+          ? "closing"
+          : "overview"
+      : activeTab;
   const effectiveApprovalBlockers = contract.approvalReadiness.blockers;
   const canSubmitApproval = contract.approvalReadiness.canSubmit;
   const isCurrentVersionShared = contract.approvalReadiness.hasEverBeenShared;
@@ -863,7 +879,7 @@ export default function ContractDetailPage() {
         )}
 
         <Tabs
-          value={activeTab}
+          value={visibleActiveTab}
           onValueChange={handleTabChange}
           className="space-y-4"
         >
@@ -872,9 +888,11 @@ export default function ContractDetailPage() {
             <TabsTrigger value="negotiation">Vòng đàm phán</TabsTrigger>
             <TabsTrigger value="terms">Điều khoản - Trao đổi</TabsTrigger>
             <TabsTrigger value="approval">Phê duyệt</TabsTrigger>
-            <TabsTrigger value="customer-access">
-              Truy cập khách hàng
-            </TabsTrigger>
+            {canViewCustomerAccess && (
+              <TabsTrigger value="customer-access">
+                Truy cập khách hàng
+              </TabsTrigger>
+            )}
             <TabsTrigger value="signature">Ký hợp đồng</TabsTrigger>
             <TabsTrigger value="documents">Chứng từ</TabsTrigger>
             <TabsTrigger value="closing">Đóng hợp đồng</TabsTrigger>
@@ -920,16 +938,18 @@ export default function ContractDetailPage() {
             />
           </TabsContent>
 
-          <TabsContent value="customer-access">
-            <ContractSignature
-              contract={contract}
-              onContractRefetch={() => fetchContractDetail(false)}
-              knownLink={knownCustomerAccessLink}
-              hasUnsavedChanges={hasUnsavedChanges}
-              canManage={canManageContract}
-              onCustomerAccessLinkChange={handleCustomerAccessLinkChange}
-            />
-          </TabsContent>
+          {canViewCustomerAccess && (
+            <TabsContent value="customer-access">
+              <ContractSignature
+                contract={contract}
+                onContractRefetch={() => fetchContractDetail(false)}
+                knownLink={knownCustomerAccessLink}
+                hasUnsavedChanges={hasUnsavedChanges}
+                canManage={canManageContract}
+                onCustomerAccessLinkChange={handleCustomerAccessLinkChange}
+              />
+            </TabsContent>
+          )}
 
           <TabsContent value="signature">
             <ContractSigningPanel

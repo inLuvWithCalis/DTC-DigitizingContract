@@ -442,7 +442,7 @@ function CustomerDetailPageContent() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="lg:col-span-1 space-y-6">
             <Card className="border-border shadow-sm bg-card gap-0 pb-0">
               <CardHeader className="flex flex-col gap-3 border-b border-border/50 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -918,7 +918,7 @@ function CustomerDetailPageContent() {
             </Card>
           </div>
 
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-1 space-y-6">
             <Card className="border-border shadow-sm bg-card flex flex-col gap-0 min-h-[600px] pb-0">
               <CardHeader className="top-0 z-10 flex shrink-0 flex-col gap-3 rounded-t-xl border-b border-border/50 bg-card py-4 sm:flex-row sm:items-center sm:justify-between">
                 <CardTitle className="text-base font-semibold flex items-center gap-2 text-foreground">

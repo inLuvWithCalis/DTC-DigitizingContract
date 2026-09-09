@@ -373,7 +373,7 @@ export function ContractSigningPanel({
         </Card>
       )}
 
-      <Card>
+      {/* <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileClock className="size-5 text-primary" />
@@ -396,7 +396,7 @@ export function ContractSigningPanel({
             ))
           )}
         </CardContent>
-      </Card>
+      </Card> */}
     </div>
   );
 }

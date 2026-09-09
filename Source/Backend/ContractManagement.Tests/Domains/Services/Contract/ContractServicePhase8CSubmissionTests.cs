@@ -105,27 +105,37 @@ public sealed class ContractServicePhase8CSubmissionTests
     }
 
     [Fact]
-    public async Task Submit_WithoutSharedCurrentVersion_IsRejectedBeforeRender()
+    public async Task Submit_WithoutSharedCurrentVersion_IsAllowed()
     {
         await using var context = CreateContext();
         await SeedReadyContractAsync(context, includeCustomerAccess: false);
         var renderer = new StubRenderer();
         var storage = new TrackingPrivateStorage();
+        var service = CreateService(context, renderer, storage);
 
-        var exception = await Assert.ThrowsAsync<BusinessRuleException>(() =>
-            CreateService(context, renderer, storage).SubmitForApprovalAsync(
-                ContractId, CreateRequest(), OwnerId));
+        var readiness = (await service.GetDetailAsync(ContractId, OwnerId))
+            .ApprovalReadiness;
+        Assert.True(readiness.CanSubmit);
+        Assert.False(readiness.HasEverBeenShared);
+        Assert.False(readiness.HasActiveCurrentVersionLink);
+        Assert.Empty(readiness.Blockers);
 
+        var response = await service
+            .SubmitForApprovalAsync(ContractId, CreateRequest(), OwnerId);
+
+        Assert.Equal(ContractStatus.PendingApproval, response.ContractStatus);
+        Assert.Equal(1, renderer.CallCount);
+        Assert.Equal(2, storage.SavedKeys.Count);
         Assert.Equal(
-            ContractApprovalReadinessCodes.CurrentVersionNotShared,
-            exception.Code);
-        Assert.Equal(0, renderer.CallCount);
-        Assert.Empty(storage.SavedKeys);
-        await AssertSubmissionStateUnchangedAsync(context);
+            (byte)ContractStatus.PendingApproval,
+            (await context.TblContracts.AsNoTracking().SingleAsync()).Status);
+        Assert.True(
+            (await context.TblContractVersions.AsNoTracking().SingleAsync())
+                .IsLocked);
     }
 
     [Fact]
-    public async Task Submit_ExpiredCurrentVersionLink_IsRejectedBeforeRender()
+    public async Task Submit_ExpiredCurrentVersionLink_IsAllowed()
     {
         await using var context = CreateContext();
         await SeedReadyContractAsync(context);
@@ -135,21 +145,33 @@ public sealed class ContractServicePhase8CSubmissionTests
         context.ChangeTracker.Clear();
         var renderer = new StubRenderer();
         var storage = new TrackingPrivateStorage();
+        var service = CreateService(context, renderer, storage);
 
-        var exception = await Assert.ThrowsAsync<BusinessRuleException>(() =>
-            CreateService(context, renderer, storage).SubmitForApprovalAsync(
-                ContractId, CreateRequest(), OwnerId));
+        var readiness = (await service.GetDetailAsync(ContractId, OwnerId))
+            .ApprovalReadiness;
+        Assert.True(readiness.CanSubmit);
+        Assert.True(readiness.HasEverBeenShared);
+        Assert.False(readiness.HasActiveCurrentVersionLink);
+        Assert.Empty(readiness.Blockers);
 
-        Assert.Equal(
-            ContractApprovalReadinessCodes.ActiveCustomerAccessLinkRequired,
-            exception.Code);
-        Assert.Equal(0, renderer.CallCount);
-        Assert.Empty(storage.SavedKeys);
-        await AssertSubmissionStateUnchangedAsync(context);
+        var response = await service
+            .SubmitForApprovalAsync(ContractId, CreateRequest(), OwnerId);
+
+        context.ChangeTracker.Clear();
+        Assert.Equal(ContractStatus.PendingApproval, response.ContractStatus);
+        Assert.Equal(1, renderer.CallCount);
+        Assert.Equal(2, storage.SavedKeys.Count);
+        Assert.Null(
+            (await context.TblContracts.AsNoTracking().SingleAsync())
+                .CurrentCustomerAccessLinkId);
+        Assert.NotNull(
+            (await context.TblContractCustomerAccessLinks
+                .AsNoTracking()
+                .SingleAsync()).RevokedAt);
     }
 
     [Fact]
-    public async Task Submit_WithOpenNegotiationComment_IsRejectedBeforeRender()
+    public async Task Submit_WithOpenNegotiationComment_IsAllowedAndKeepsCommentOpen()
     {
         await using var context = CreateContext();
         await SeedReadyContractAsync(context);
@@ -169,17 +191,26 @@ public sealed class ContractServicePhase8CSubmissionTests
         context.ChangeTracker.Clear();
         var renderer = new StubRenderer();
         var storage = new TrackingPrivateStorage();
+        var service = CreateService(context, renderer, storage);
 
-        var exception = await Assert.ThrowsAsync<BusinessRuleException>(() =>
-            CreateService(context, renderer, storage).SubmitForApprovalAsync(
-                ContractId, CreateRequest(), OwnerId));
+        var readiness = (await service.GetDetailAsync(ContractId, OwnerId))
+            .ApprovalReadiness;
+        Assert.True(readiness.CanSubmit);
+        Assert.Equal(1, readiness.OpenCommentCount);
+        Assert.Empty(readiness.Blockers);
 
+        var response = await service
+            .SubmitForApprovalAsync(ContractId, CreateRequest(), OwnerId);
+
+        context.ChangeTracker.Clear();
+        Assert.Equal(ContractStatus.PendingApproval, response.ContractStatus);
+        Assert.Equal(1, renderer.CallCount);
+        Assert.Equal(2, storage.SavedKeys.Count);
         Assert.Equal(
-            ContractApprovalReadinessCodes.OpenNegotiationCommentsExist,
-            exception.Code);
-        Assert.Equal(0, renderer.CallCount);
-        Assert.Empty(storage.SavedKeys);
-        await AssertSubmissionStateUnchangedAsync(context);
+            (byte)ContractNegotiationCommentState.Open,
+            (await context.TblContractNegotiationComments
+                .AsNoTracking()
+                .SingleAsync()).State);
     }
 
     [Fact]

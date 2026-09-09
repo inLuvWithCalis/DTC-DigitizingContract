@@ -18,6 +18,7 @@ public sealed class Slice04ResourceAuthorizationTests
     private const int ManagerEmployeeId = 2;
     private const int OtherEmployeeId = 3;
     private const int AdminOfficerEmployeeId = 4;
+    private const int AccountantEmployeeId = 5;
     private const int ContractId = 100;
 
     [Fact]
@@ -48,6 +49,61 @@ public sealed class Slice04ResourceAuthorizationTests
 
         Assert.Equal(StatusCodes.Status404NotFound, exception.StatusCode);
         Assert.Equal(AuthorizationErrorCodes.ResourceNotFound, exception.Code);
+    }
+
+    [Fact]
+    public async Task ExecutionRoles_ReadAndMutateOnlyTheirAssignedCapabilities()
+    {
+        await using var context = CreateContext();
+        await SeedAsync(context);
+        var contract = await context.TblContracts.SingleAsync();
+        contract.Status = (byte)ContractStatus.PendingSignature;
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var service = new ContractResourceAuthorizationService(context);
+
+        await service.EnsureCanReadAsync(ContractId, OtherEmployeeId);
+        await service.EnsureCanManageSigningAsync(
+            ContractId,
+            OtherEmployeeId);
+        await service.EnsureCanManageAcceptanceAsync(
+            ContractId,
+            OtherEmployeeId);
+        await service.EnsureCanReadAsync(ContractId, AccountantEmployeeId);
+        await service.EnsureCanManagePaymentAsync(
+            ContractId,
+            AccountantEmployeeId);
+        await service.EnsureCanManageSigningAsync(
+            ContractId,
+            ManagerEmployeeId);
+        await service.EnsureCanManageAcceptanceAsync(
+            ContractId,
+            ManagerEmployeeId);
+        await service.EnsureCanManagePaymentAsync(
+            ContractId,
+            ManagerEmployeeId);
+        await service.EnsureCanCompleteAsync(
+            ContractId,
+            ManagerEmployeeId);
+
+        var ownerSigning = await Assert.ThrowsAsync<RbacOperationException>(() =>
+            service.EnsureCanManageSigningAsync(
+                ContractId,
+                ResponsibleEmployeeId));
+        var technicalPayment = await Assert.ThrowsAsync<RbacOperationException>(() =>
+            service.EnsureCanManagePaymentAsync(
+                ContractId,
+                OtherEmployeeId));
+        var technicalCompletion = await Assert.ThrowsAsync<RbacOperationException>(() =>
+            service.EnsureCanCompleteAsync(
+                ContractId,
+                OtherEmployeeId));
+
+        Assert.Equal(AuthorizationErrorCodes.PermissionDenied, ownerSigning.Code);
+        Assert.Equal(AuthorizationErrorCodes.PermissionDenied, technicalPayment.Code);
+        Assert.Equal(
+            AuthorizationErrorCodes.PermissionDenied,
+            technicalCompletion.Code);
     }
 
     [Fact]
@@ -95,10 +151,28 @@ public sealed class Slice04ResourceAuthorizationTests
             new ContractFilterRequest { Page = 1, PageSize = 20 },
             ManagerEmployeeId,
             canReadTenant: true);
+        var executionScope = await service.GetListAsync(
+            new ContractFilterRequest { Page = 1, PageSize = 20 },
+            ManagerEmployeeId,
+            canReadExecution: true);
 
         Assert.Empty(ownScope.Items);
         Assert.Equal(new[] { ContractId, 101 },
             tenantScope.Items.Select(item => item.ContractId).Order());
+        Assert.Empty(executionScope.Items);
+
+        var operationalContract = await context.TblContracts
+            .SingleAsync(candidate => candidate.ContractId == 101);
+        operationalContract.Status = (byte)ContractStatus.PendingSignature;
+        await context.SaveChangesAsync();
+
+        executionScope = await service.GetListAsync(
+            new ContractFilterRequest { Page = 1, PageSize = 20 },
+            ManagerEmployeeId,
+            canReadExecution: true);
+        Assert.Equal(
+            [101],
+            executionScope.Items.Select(item => item.ContractId));
     }
 
     [Fact]
@@ -245,7 +319,8 @@ public sealed class Slice04ResourceAuthorizationTests
             Employee(ResponsibleEmployeeId, EmployeeType.Sale),
             Employee(ManagerEmployeeId, EmployeeType.Manager),
             Employee(OtherEmployeeId, EmployeeType.Technical),
-            Employee(AdminOfficerEmployeeId, EmployeeType.AdminOfficer));
+            Employee(AdminOfficerEmployeeId, EmployeeType.AdminOfficer),
+            Employee(AccountantEmployeeId, EmployeeType.Accountant));
         context.TblCustomers.Add(new TblCustomer
         {
             CustomerId = 10,

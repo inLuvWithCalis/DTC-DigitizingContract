@@ -251,8 +251,7 @@ export function ContractTerms({
         </CardHeader>
         <CardContent className="space-y-4">
           {paginatedTerms.map((term, pageIndex) => {
-            const termIndex =
-              (currentPage - 1) * itemsPerPage + pageIndex;
+            const termIndex = (currentPage - 1) * itemsPerPage + pageIndex;
 
             return (
               <ContractTermCard
@@ -268,9 +267,7 @@ export function ContractTerms({
                 onChange={(field, value) =>
                   handleTermChange(term.termId, field, value)
                 }
-                onMove={(direction) =>
-                  handleMoveTerm(term.termId, direction)
-                }
+                onMove={(direction) => handleMoveTerm(term.termId, direction)}
                 onRemove={() => handleRemoveTerm(term.termId)}
               >
                 {term.isNegotiable &&

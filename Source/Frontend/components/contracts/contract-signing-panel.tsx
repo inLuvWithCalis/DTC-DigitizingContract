@@ -52,13 +52,13 @@ const formatFileSize = (size: number) => {
 
 interface ContractSigningPanelProps {
   contract: ContractDetailResponse;
-  canManage: boolean;
+  canManageSigning: boolean;
   onContractRefetch: () => void | Promise<void>;
 }
 
 export function ContractSigningPanel({
   contract,
-  canManage,
+  canManageSigning,
   onContractRefetch,
 }: ContractSigningPanelProps) {
   const [detail, setDetail] = useState<ContractSigningDetailResponse | null>(
@@ -97,7 +97,7 @@ export function ContractSigningPanel({
     !detail.activeEvidence;
   const isSupersede =
     detail?.contractStatus === ContractStatus.Signed && !!detail.activeEvidence;
-  const canSubmit = canManage && (isInitialUpload || isSupersede);
+  const canSubmit = canManageSigning && (isInitialUpload || isSupersede);
 
   const selectFile = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;

@@ -15,4 +15,24 @@ public interface IContractResourceAuthorizationService
         int contractId,
         int employeeId,
         CancellationToken cancellationToken = default);
+
+    Task EnsureCanManageSigningAsync(
+        int contractId,
+        int employeeId,
+        CancellationToken cancellationToken = default);
+
+    Task EnsureCanManageAcceptanceAsync(
+        int contractId,
+        int employeeId,
+        CancellationToken cancellationToken = default);
+
+    Task EnsureCanManagePaymentAsync(
+        int contractId,
+        int employeeId,
+        CancellationToken cancellationToken = default);
+
+    Task EnsureCanCompleteAsync(
+        int contractId,
+        int employeeId,
+        CancellationToken cancellationToken = default);
 }

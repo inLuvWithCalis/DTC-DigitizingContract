@@ -453,10 +453,6 @@ export interface ContractEmployeeSummaryResponse {
 export const CONTRACT_APPROVAL_READINESS_CODES = {
   contractNotNegotiating: "ContractNotNegotiating",
   currentVersionLocked: "CurrentVersionLocked",
-  currentVersionAlreadyShared: "CurrentVersionAlreadyShared",
-  currentVersionNotShared: "CurrentVersionNotShared",
-  activeCustomerAccessLinkRequired: "ActiveCustomerAccessLinkRequired",
-  openNegotiationCommentsExist: "OpenNegotiationCommentsExist",
   contractCodeRequired: "ContractCodeRequired",
   contractNameRequired: "ContractNameRequired",
   contractItemRequired: "ContractItemRequired",

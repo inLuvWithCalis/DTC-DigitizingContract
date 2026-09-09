@@ -28,14 +28,16 @@ import {
 
 interface Props {
   contract: ContractDetailResponse;
-  canManage: boolean;
+  canManageAcceptance: boolean;
+  canManagePayment: boolean;
   canComplete: boolean;
   onContractRefetch: () => void | Promise<void>;
 }
 
 export function ContractClosing({
   contract,
-  canManage,
+  canManageAcceptance,
+  canManagePayment,
   canComplete,
   onContractRefetch,
 }: Props) {
@@ -90,7 +92,10 @@ export function ContractClosing({
         </CardContent>
       </Card>
     );
-  const editable = canManage && contract.status === ContractStatus.Signed;
+  const acceptanceEditable =
+    canManageAcceptance && contract.status === ContractStatus.Signed;
+  const paymentEditable =
+    canManagePayment && contract.status === ContractStatus.Signed;
   const checks = [
     detail.readiness.signed,
     detail.readiness.acceptanceEvidenceAvailable,
@@ -205,7 +210,7 @@ export function ContractClosing({
                 )}
               </p>
             </div>
-          ) : editable ? (
+          ) : acceptanceEditable ? (
             <div className="flex flex-col gap-3 sm:flex-row">
               <Input
                 type="file"
@@ -250,7 +255,7 @@ export function ContractClosing({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
-          {editable && (
+          {paymentEditable && (
             <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>
@@ -368,7 +373,7 @@ export function ContractClosing({
                     </Badge>
                   </div>
                   {payment.status === ContractPaymentStatus.Active &&
-                    editable && (
+                    paymentEditable && (
                       <Button
                         className="mt-3"
                         size="sm"

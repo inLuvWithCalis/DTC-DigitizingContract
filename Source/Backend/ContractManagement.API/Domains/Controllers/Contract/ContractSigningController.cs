@@ -38,7 +38,7 @@ public sealed class ContractSigningController : ControllerBase
     }
 
     [HttpPost("evidence")]
-    [SessionAuthorize(RbacPermissions.ContractManageOwn)]
+    [SessionAuthorize(RbacPermissions.ContractSigningManage)]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> Upload(
         int contractId,
@@ -56,7 +56,7 @@ public sealed class ContractSigningController : ControllerBase
     }
 
     [HttpPost("evidence/{signedEvidenceId:int}/supersede")]
-    [SessionAuthorize(RbacPermissions.ContractManageOwn)]
+    [SessionAuthorize(RbacPermissions.ContractSigningManage)]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> Supersede(
         int contractId,

@@ -103,7 +103,8 @@ namespace ContractManagement.Domains.Services.Contract
         public async Task<PagedResult<ContractListItemResponse>> GetListAsync(
             ContractFilterRequest filter,
             int employeeId,
-            bool canReadTenant = false)
+            bool canReadTenant = false,
+            bool canReadExecution = false)
         {
             if (employeeId <= 0)
             {
@@ -162,7 +163,15 @@ namespace ContractManagement.Domains.Services.Contract
                 join employee in _dbContext.TblEmployees.AsNoTracking()
                     on contract.EmployeeId equals employee.EmployeeId
 
-                where canReadTenant || contract.EmployeeId == employeeId
+                where canReadTenant
+                    || contract.EmployeeId == employeeId
+                    || (canReadExecution
+                        && (contract.Status ==
+                                (byte)ContractStatus.PendingSignature
+                            || contract.Status ==
+                                (byte)ContractStatus.Signed
+                            || contract.Status ==
+                                (byte)ContractStatus.Completed))
 
                 select new
                 {
@@ -1185,7 +1194,8 @@ namespace ContractManagement.Domains.Services.Contract
         public async Task<ContractDetailResponse> GetDetailAsync(
             int contractId,
             int employeeId,
-            bool canReadTenant = false)
+            bool canReadTenant = false,
+            bool canReadExecution = false)
         {
             if (contractId <= 0)
             {
@@ -1220,7 +1230,14 @@ namespace ContractManagement.Domains.Services.Contract
 
                 where contracts.ContractId == contractId
                       && (canReadTenant
-                          || contracts.EmployeeId == employeeId)
+                          || contracts.EmployeeId == employeeId
+                          || (canReadExecution
+                              && (contracts.Status ==
+                                      (byte)ContractStatus.PendingSignature
+                                  || contracts.Status ==
+                                      (byte)ContractStatus.Signed
+                                  || contracts.Status ==
+                                      (byte)ContractStatus.Completed)))
 
                 select new
                 {
@@ -1581,23 +1598,6 @@ namespace ContractManagement.Domains.Services.Contract
                         versionEntry
                             .Property(x => x.RowVersion)
                             .OriginalValue = expectedVersionRowVersion;
-
-                        var hasEverBeenShared = await _dbContext
-                            .TblContractCustomerAccessLinks
-                            .AsNoTracking()
-                            .AnyAsync(link =>
-                                link.ContractId == contract.ContractId
-                                && link.VersionId == version.VersionId
-                                && link.ActivatedAt.HasValue);
-
-                        if (hasEverBeenShared)
-                        {
-                            throw new BusinessRuleException(
-                                StatusCodes.Status409Conflict,
-                                ContractApprovalReadinessCodes
-                                    .CurrentVersionAlreadyShared,
-                                "Version hiện tại đã được chia sẻ với khách hàng. Hãy tạo vòng đàm phán mới để chỉnh sửa.");
-                        }
 
                         /*
                          * Đánh dấu version đã tham gia lần cập nhật này.
@@ -5873,31 +5873,6 @@ namespace ContractManagement.Domains.Services.Contract
                 }
             }
 
-            if (!hasEverBeenShared)
-            {
-                AddBlocker(
-                    blockers,
-                    ContractApprovalReadinessCodes.CurrentVersionNotShared,
-                    "Version hiện tại chưa được chia sẻ với khách hàng.");
-            }
-            else if (!hasActiveCurrentVersionLink)
-            {
-                AddBlocker(
-                    blockers,
-                    ContractApprovalReadinessCodes
-                        .ActiveCustomerAccessLinkRequired,
-                    "Version hiện tại cần một link khách hàng đang hoạt động trước khi gửi duyệt.");
-            }
-
-            if (openCommentCount > 0)
-            {
-                AddBlocker(
-                    blockers,
-                    ContractApprovalReadinessCodes
-                        .OpenNegotiationCommentsExist,
-                    $"Còn {openCommentCount} trao đổi chưa được xử lý.");
-            }
-
             return new ContractApprovalReadinessResponse
             {
                 CanSubmit = blockers.Count == 0,
@@ -5920,12 +5895,7 @@ namespace ContractManagement.Domains.Services.Contract
 
             var isStateConflict = blocker.Code is
                 ContractApprovalReadinessCodes.ContractNotNegotiating
-                or ContractApprovalReadinessCodes.CurrentVersionLocked
-                or ContractApprovalReadinessCodes.CurrentVersionNotShared
-                or ContractApprovalReadinessCodes
-                    .ActiveCustomerAccessLinkRequired
-                or ContractApprovalReadinessCodes
-                    .OpenNegotiationCommentsExist;
+                or ContractApprovalReadinessCodes.CurrentVersionLocked;
 
             throw new BusinessRuleException(
                 isStateConflict

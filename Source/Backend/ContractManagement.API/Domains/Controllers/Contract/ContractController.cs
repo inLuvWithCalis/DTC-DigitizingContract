@@ -58,7 +58,8 @@ namespace ContractManagement.Domains.Controllers.Contract
             var result = await _contractService.GetListAsync(
                 filter,
                 employeeId.Value,
-                CanReadTenantContracts());
+                CanReadTenantContracts(),
+                CanReadExecutionContracts());
 
             return Ok(
                 ApiResponse<PagedResult<ContractListItemResponse>>.Ok(
@@ -264,7 +265,8 @@ namespace ContractManagement.Domains.Controllers.Contract
             var result = await _contractService.GetDetailAsync(
                 contractId,
                 employeeId.Value,
-                CanReadTenantContracts());
+                CanReadTenantContracts(),
+                CanReadExecutionContracts());
 
             return Ok(
                 ApiResponse<ContractDetailResponse>.Ok(
@@ -894,7 +896,13 @@ namespace ContractManagement.Domains.Controllers.Contract
             $"{Request.Scheme}://{Request.Host.Value}";
 
         private bool CanReadTenantContracts() =>
-            EmployeeAuthorizationContext.GetEmployee(HttpContext)?.EmployeeType
-            == EmployeeType.Manager;
+            HasPermission(RbacPermissions.ContractReadTenant);
+
+        private bool CanReadExecutionContracts() =>
+            HasPermission(RbacPermissions.ContractExecutionRead);
+
+        private bool HasPermission(string permission) =>
+            EmployeeAuthorizationContext.GetEmployee(HttpContext)?.Permissions
+                .Contains(permission, StringComparer.Ordinal) == true;
     }
 }

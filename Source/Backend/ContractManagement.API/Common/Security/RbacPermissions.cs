@@ -7,7 +7,7 @@ namespace ContractManagement.API.Common.Security;
 /// </summary>
 public static class RbacPermissions
 {
-    public const string Version = "rbac-v1";
+    public const string Version = "rbac-v2";
 
     public const string EmployeeDirectoryRead = "employee.directory.read";
     public const string EmployeeManage = "employee.manage";
@@ -22,6 +22,10 @@ public static class RbacPermissions
     public const string ContractReadTenant = "contract.read.tenant";
     public const string ContractManageOwn = "contract.manage.own";
     public const string ContractApprovalDecide = "contract.approval.decide";
+    public const string ContractExecutionRead = "contract.execution.read";
+    public const string ContractSigningManage = "contract.signing.manage";
+    public const string ContractAcceptanceManage = "contract.acceptance.manage";
+    public const string ContractPaymentManage = "contract.payment.manage";
     public const string ContractComplete = "contract.complete";
     public const string ContractSupport = "contract.support";
     public const string TemplateAvailableRead = "template.available.read";
@@ -62,8 +66,13 @@ public static class EmployeePermissionCatalog
                 RbacPermissions.ContractSupport,
                 RbacPermissions.TemplateManage,
                 RbacPermissions.ContractAuditReadTenant),
-            [EmployeeType.Technical] = Merge(),
-            [EmployeeType.Accountant] = Merge(),
+            [EmployeeType.Technical] = Merge(
+                RbacPermissions.ContractExecutionRead,
+                RbacPermissions.ContractSigningManage,
+                RbacPermissions.ContractAcceptanceManage),
+            [EmployeeType.Accountant] = Merge(
+                RbacPermissions.ContractExecutionRead,
+                RbacPermissions.ContractPaymentManage),
             [EmployeeType.Manager] = Merge(
                 RbacPermissions.EmployeeManage,
                 RbacPermissions.DepartmentManage,
@@ -71,6 +80,10 @@ public static class EmployeePermissionCatalog
                 RbacPermissions.CustomerManage,
                 RbacPermissions.ContractReadTenant,
                 RbacPermissions.ContractApprovalDecide,
+                RbacPermissions.ContractExecutionRead,
+                RbacPermissions.ContractSigningManage,
+                RbacPermissions.ContractAcceptanceManage,
+                RbacPermissions.ContractPaymentManage,
                 RbacPermissions.ContractComplete,
                 RbacPermissions.ContractSupport,
                 RbacPermissions.ContractAuditReadTenant,

@@ -14,14 +14,23 @@ public sealed class EmployeePermissionCatalogTests
             RbacPermissions.ContractSupport,
             RbacPermissions.TemplateManage,
             RbacPermissions.ContractAuditReadTenant)],
-        [EmployeeType.Technical, Expected()],
-        [EmployeeType.Accountant, Expected()],
+        [EmployeeType.Technical, Expected(
+            RbacPermissions.ContractExecutionRead,
+            RbacPermissions.ContractSigningManage,
+            RbacPermissions.ContractAcceptanceManage)],
+        [EmployeeType.Accountant, Expected(
+            RbacPermissions.ContractExecutionRead,
+            RbacPermissions.ContractPaymentManage)],
         [EmployeeType.Manager, Expected(
             RbacPermissions.EmployeeManage,
             RbacPermissions.DepartmentManage,
             RbacPermissions.CatalogManage,
             RbacPermissions.CustomerManage,
             RbacPermissions.ContractReadTenant,
+            RbacPermissions.ContractExecutionRead,
+            RbacPermissions.ContractSigningManage,
+            RbacPermissions.ContractAcceptanceManage,
+            RbacPermissions.ContractPaymentManage,
             RbacPermissions.ContractComplete,
             RbacPermissions.ContractSupport,
             RbacPermissions.ContractAuditReadTenant,
@@ -107,6 +116,38 @@ public sealed class EmployeePermissionCatalogTests
         Assert.Contains(RbacPermissions.SecurityAuditReadTenant, permissions);
         Assert.Contains(RbacPermissions.TenantLegalProfileManage, permissions);
         Assert.DoesNotContain(RbacPermissions.TemplateManage, permissions);
+    }
+
+    [Fact]
+    public void ExecutionPermissions_AreSeparatedByOperationalRole()
+    {
+        var owner = EmployeePermissionCatalog.GetPermissions(EmployeeType.Sale);
+        var technical = EmployeePermissionCatalog.GetPermissions(
+            EmployeeType.Technical);
+        var accountant = EmployeePermissionCatalog.GetPermissions(
+            EmployeeType.Accountant);
+        var manager = EmployeePermissionCatalog.GetPermissions(
+            EmployeeType.Manager);
+
+        Assert.DoesNotContain(RbacPermissions.ContractSigningManage, owner);
+        Assert.DoesNotContain(RbacPermissions.ContractAcceptanceManage, owner);
+        Assert.DoesNotContain(RbacPermissions.ContractPaymentManage, owner);
+        Assert.DoesNotContain(RbacPermissions.ContractComplete, owner);
+
+        Assert.Contains(RbacPermissions.ContractSigningManage, technical);
+        Assert.Contains(RbacPermissions.ContractAcceptanceManage, technical);
+        Assert.DoesNotContain(RbacPermissions.ContractPaymentManage, technical);
+        Assert.DoesNotContain(RbacPermissions.ContractComplete, technical);
+
+        Assert.Contains(RbacPermissions.ContractPaymentManage, accountant);
+        Assert.DoesNotContain(RbacPermissions.ContractSigningManage, accountant);
+        Assert.DoesNotContain(RbacPermissions.ContractAcceptanceManage, accountant);
+        Assert.DoesNotContain(RbacPermissions.ContractComplete, accountant);
+
+        Assert.Contains(RbacPermissions.ContractSigningManage, manager);
+        Assert.Contains(RbacPermissions.ContractAcceptanceManage, manager);
+        Assert.Contains(RbacPermissions.ContractPaymentManage, manager);
+        Assert.Contains(RbacPermissions.ContractComplete, manager);
     }
 
     [Theory]

@@ -36,13 +36,11 @@ import { formatCurrency } from "@/lib/format-currency";
 import { downloadBlob } from "@/components/contract-templates/contract-template-utils";
 
 import {
-  CONTRACT_APPROVAL_READINESS_CODES,
   contractApi,
   CurrentContractCustomerAccessLinkResponse,
   ContractDetailResponse,
   ContractItemDiscountMode,
   ContractLanguageMode,
-  ContractNegotiationCommentState,
   ContractStatus,
   ContractType,
   getContractTypeLabel,
@@ -525,40 +523,32 @@ export default function ContractDetailPage() {
   const canManageContract =
     isResponsibleEmployee &&
     hasPermission(user?.permissions, RBAC_PERMISSIONS.contractManageOwn);
-  const localOpenCommentCount = contract.currentVersion.comments.filter(
-    (comment) => comment.state === ContractNegotiationCommentState.Open,
-  ).length;
-  const effectiveApprovalBlockers = contract.approvalReadiness.blockers.filter(
-    (blocker) =>
-      blocker.code !==
-      CONTRACT_APPROVAL_READINESS_CODES.openNegotiationCommentsExist,
+  const canManageSigning = hasPermission(
+    user?.permissions,
+    RBAC_PERMISSIONS.contractSigningManage,
   );
-  if (localOpenCommentCount > 0) {
-    effectiveApprovalBlockers.push({
-      code: CONTRACT_APPROVAL_READINESS_CODES.openNegotiationCommentsExist,
-      message: `Còn ${localOpenCommentCount} trao đổi chưa được xử lý.`,
-    });
-  }
-  const canSubmitApproval = effectiveApprovalBlockers.length === 0;
-  const hasCustomerAccessBlocker = effectiveApprovalBlockers.some(
-    (blocker) =>
-      blocker.code ===
-        CONTRACT_APPROVAL_READINESS_CODES.currentVersionNotShared ||
-      blocker.code ===
-        CONTRACT_APPROVAL_READINESS_CODES.activeCustomerAccessLinkRequired,
+  const canManageAcceptance = hasPermission(
+    user?.permissions,
+    RBAC_PERMISSIONS.contractAcceptanceManage,
   );
-  const hasOpenCommentBlocker = effectiveApprovalBlockers.some(
-    (blocker) =>
-      blocker.code ===
-      CONTRACT_APPROVAL_READINESS_CODES.openNegotiationCommentsExist,
+  const canManagePayment = hasPermission(
+    user?.permissions,
+    RBAC_PERMISSIONS.contractPaymentManage,
   );
+  const canCompleteContract = hasPermission(
+    user?.permissions,
+    RBAC_PERMISSIONS.contractComplete,
+  );
+  const effectiveApprovalBlockers = contract.approvalReadiness.blockers;
+  const canSubmitApproval = contract.approvalReadiness.canSubmit;
   const isCurrentVersionShared = contract.approvalReadiness.hasEverBeenShared;
+  const hasActiveCurrentVersionLink =
+    contract.approvalReadiness.hasActiveCurrentVersionLink;
   const canUpdateDraft =
     canManageContract &&
     (contract.status === ContractStatus.Draft ||
       contract.status === ContractStatus.Negotiating) &&
-    !contract.currentVersion.isLocked &&
-    !isCurrentVersionShared;
+    !contract.currentVersion.isLocked;
   const canCommentOnCurrentVersion =
     canManageContract &&
     contract.status === ContractStatus.Negotiating &&
@@ -830,12 +820,16 @@ export default function ContractDetailPage() {
           (contract.status === ContractStatus.Negotiating ||
             contract.status === ContractStatus.Draft) && (
             <Alert className="border-amber-300 bg-amber-50/60 dark:bg-amber-950/20">
-              <LockKeyhole className="size-4 text-amber-700" />
-              <AlertTitle>Phiên bản đã được chia sẻ với khách hàng</AlertTitle>
+              <Users className="size-4 text-amber-700" />
+              <AlertTitle>
+                {hasActiveCurrentVersionLink
+                  ? "Phiên bản đang được chia sẻ với khách hàng"
+                  : "Phiên bản đã từng được chia sẻ với khách hàng"}
+              </AlertTitle>
               <AlertDescription>
-                Nội dung được giữ ở chế độ chỉ xem kể cả khi link hết hạn hoặc
-                bị thu hồi, nhằm bảo toàn đúng version khách hàng đã nhận. Muốn
-                chỉnh sửa, hãy tạo vòng đàm phán mới.
+                {hasActiveCurrentVersionLink
+                  ? "Mọi thay đổi sau khi lưu sẽ được khách hàng nhìn thấy trên cùng link truy cập."
+                  : "Link cũ hiện không còn hoạt động. Bạn vẫn có thể chỉnh sửa và lưu; chỉ cần tạo link mới nếu muốn chia sẻ lại."}
               </AlertDescription>
             </Alert>
           )}
@@ -846,34 +840,12 @@ export default function ContractDetailPage() {
             <Alert className="border-amber-300 bg-amber-50/60 dark:bg-amber-950/20">
               <Send className="size-4 text-amber-700" />
               <AlertTitle>Chưa đủ điều kiện gửi duyệt</AlertTitle>
-              <AlertDescription className="space-y-3">
+              <AlertDescription>
                 <ul className="list-disc space-y-1 pl-5">
                   {effectiveApprovalBlockers.map((blocker) => (
                     <li key={blocker.code}>{blocker.message}</li>
                   ))}
                 </ul>
-                <div className="flex flex-wrap gap-2">
-                  {hasCustomerAccessBlocker && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleTabChange("customer-access")}
-                    >
-                      Truy cập khách hàng
-                    </Button>
-                  )}
-                  {hasOpenCommentBlocker && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleTabChange("terms")}
-                    >
-                      Xử lý trao đổi
-                    </Button>
-                  )}
-                </div>
               </AlertDescription>
             </Alert>
           )}
@@ -883,8 +855,9 @@ export default function ContractDetailPage() {
             <LockKeyhole className="size-4" />
             <AlertTitle>Chế độ chỉ xem</AlertTitle>
             <AlertDescription>
-              Bạn có thể xem hợp đồng này, nhưng chỉ người phụ trách mới được
-              chỉnh sửa hoặc thực hiện các thao tác nghiệp vụ.
+              Nội dung hợp đồng chỉ người phụ trách mới được chỉnh sửa. Các thao
+              tác ký, nghiệm thu, thanh toán và hoàn tất phụ thuộc vào vai trò
+              của bạn.
             </AlertDescription>
           </Alert>
         )}
@@ -961,7 +934,7 @@ export default function ContractDetailPage() {
           <TabsContent value="signature">
             <ContractSigningPanel
               contract={contract}
-              canManage={canManageContract}
+              canManageSigning={canManageSigning}
               onContractRefetch={() => fetchContractDetail(false)}
             />
           </TabsContent>
@@ -976,11 +949,9 @@ export default function ContractDetailPage() {
           <TabsContent value="closing">
             <ContractClosing
               contract={contract}
-              canManage={canManageContract}
-              canComplete={hasPermission(
-                user?.permissions,
-                RBAC_PERMISSIONS.contractComplete,
-              )}
+              canManageAcceptance={canManageAcceptance}
+              canManagePayment={canManagePayment}
+              canComplete={canCompleteContract}
               onContractRefetch={() => fetchContractDetail(false)}
             />
           </TabsContent>

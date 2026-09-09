@@ -24,6 +24,8 @@ public sealed class ContractCompletionServicePhase10Tests
     private const int OwnerId = 12002;
     private const int ManagerId = 12003;
     private const int OtherEmployeeId = 12004;
+    private const int TechnicalId = 12008;
+    private const int AccountantId = 12009;
     private const int CustomerId = 12005;
     private const int ContractId = 12006;
     private const int VersionId = 12007;
@@ -64,7 +66,7 @@ public sealed class ContractCompletionServicePhase10Tests
             .UploadAcceptanceAsync(
                 ContractId,
                 AcceptanceRequest(VersionId),
-                OwnerId);
+                TechnicalId);
 
         var evidence = await context.TblContractAcceptanceEvidences
             .AsNoTracking()
@@ -83,6 +85,7 @@ public sealed class ContractCompletionServicePhase10Tests
         Assert.Equal(64, file.Sha256?.Length);
         Assert.Equal(ContractAuditSubjectTypes.AcceptanceEvidence, audit.SubjectType);
         Assert.Equal(evidence.AcceptanceEvidenceId, audit.SubjectId);
+        Assert.Equal(TechnicalId, audit.ActorEmployeeId);
         Assert.Single(storage.SavedKeys);
         Assert.Empty(storage.DeletedKeys);
     }
@@ -98,7 +101,7 @@ public sealed class ContractCompletionServicePhase10Tests
             CreateService(context, storage).UploadAcceptanceAsync(
                 ContractId,
                 AcceptanceRequest(VersionId + 1),
-                OwnerId));
+                TechnicalId));
 
         Assert.Equal("CompletionStateChanged", exception.Code);
         Assert.Single(storage.SavedKeys);
@@ -119,14 +122,14 @@ public sealed class ContractCompletionServicePhase10Tests
         var partial = await service.AddPaymentAsync(
             ContractId,
             PaymentRequest(400m, "ref-001"),
-            OwnerId);
+            AccountantId);
         var partialReadiness = await service.GetReadinessAsync(
             ContractId,
-            OwnerId);
+            AccountantId);
         var final = await service.AddPaymentAsync(
             ContractId,
             PaymentRequest(600m, "ref-002"),
-            OwnerId);
+            AccountantId);
         var finalReadiness = await service.GetReadinessAsync(
             ContractId,
             OwnerId);
@@ -142,7 +145,8 @@ public sealed class ContractCompletionServicePhase10Tests
         Assert.Equal(
             2,
             await context.TblContractAudits.CountAsync(candidate =>
-                candidate.ActionType == ContractAuditActionTypes.PaymentAdded));
+                candidate.ActionType == ContractAuditActionTypes.PaymentAdded
+                && candidate.ActorEmployeeId == AccountantId));
     }
 
     [Fact]
@@ -155,18 +159,18 @@ public sealed class ContractCompletionServicePhase10Tests
         await service.AddPaymentAsync(
             ContractId,
             PaymentRequest(700m, "bank-001"),
-            OwnerId);
+            AccountantId);
 
         var duplicate = await Assert.ThrowsAsync<BusinessRuleException>(() =>
             service.AddPaymentAsync(
                 ContractId,
                 PaymentRequest(100m, "BANK-001"),
-                OwnerId));
+                AccountantId));
         var overpayment = await Assert.ThrowsAsync<BusinessRuleException>(() =>
             service.AddPaymentAsync(
                 ContractId,
                 PaymentRequest(301m, "BANK-002"),
-                OwnerId));
+                AccountantId));
 
         Assert.Equal("PaymentReferenceDuplicated", duplicate.Code);
         Assert.Equal("PaymentExceedsContractTotal", overpayment.Code);
@@ -183,7 +187,7 @@ public sealed class ContractCompletionServicePhase10Tests
 
         var exception = await Assert.ThrowsAsync<BusinessRuleException>(() =>
             CreateService(context, new TrackingPrivateStorage())
-                .AddPaymentAsync(ContractId, request, OwnerId));
+                .AddPaymentAsync(ContractId, request, AccountantId));
 
         Assert.Equal("PaymentCurrencyMismatch", exception.Code);
         Assert.Empty(context.TblContractPaymentLedgers);
@@ -208,13 +212,13 @@ public sealed class ContractCompletionServicePhase10Tests
                 ContractId,
                 payment.ContractPaymentId,
                 VoidRequest(payment.RowVersion, " "),
-                OwnerId));
+                AccountantId));
 
         var response = await service.VoidPaymentAsync(
             ContractId,
             payment.ContractPaymentId,
             VoidRequest(payment.RowVersion, "Chứng từ ngân hàng nhập nhầm."),
-            OwnerId);
+            AccountantId);
         var readiness = await service.GetReadinessAsync(ContractId, OwnerId);
 
         Assert.Equal(ContractPaymentStatus.Voided, response.Status);
@@ -259,7 +263,7 @@ public sealed class ContractCompletionServicePhase10Tests
         await SeedAsync(context, ContractStatus.Signed);
         var service = CreateService(context, new TrackingPrivateStorage());
 
-        var forbidden = await Assert.ThrowsAsync<BusinessRuleException>(() =>
+        var forbidden = await Assert.ThrowsAsync<RbacOperationException>(() =>
             service.CompleteAsync(ContractId, CompleteRequest(), OwnerId));
         var notReady = await Assert.ThrowsAsync<BusinessRuleException>(() =>
             service.CompleteAsync(ContractId, CompleteRequest(), ManagerId));
@@ -348,18 +352,18 @@ public sealed class ContractCompletionServicePhase10Tests
             service.UploadAcceptanceAsync(
                 ContractId,
                 AcceptanceRequest(VersionId),
-                OwnerId));
+                TechnicalId));
         var addPayment = await Assert.ThrowsAsync<BusinessRuleException>(() =>
             service.AddPaymentAsync(
                 ContractId,
                 PaymentRequest(1m, "late-payment"),
-                OwnerId));
+                AccountantId));
         var voidPayment = await Assert.ThrowsAsync<BusinessRuleException>(() =>
             service.VoidPaymentAsync(
                 ContractId,
                 payment.ContractPaymentId,
                 VoidRequest(payment.RowVersion, "Không được sửa sau hoàn tất."),
-                OwnerId));
+                AccountantId));
         var completeAgain = await Assert.ThrowsAsync<BusinessRuleException>(() =>
             service.CompleteAsync(ContractId, CompleteRequest(), ManagerId));
 
@@ -373,20 +377,28 @@ public sealed class ContractCompletionServicePhase10Tests
     }
 
     [Fact]
-    public async Task OwnerCannotMutateAnotherEmployeesCompletionData()
+    public async Task OwnerCannotMutateAcceptanceOrPaymentData()
     {
         await using var context = CreateContext();
         await SeedAsync(context, ContractStatus.Signed);
         var storage = new TrackingPrivateStorage();
+        var service = CreateService(context, storage);
 
-        var exception = await Assert.ThrowsAsync<RbacOperationException>(() =>
-            CreateService(context, storage).AddPaymentAsync(
+        var acceptance = await Assert.ThrowsAsync<RbacOperationException>(() =>
+            service.UploadAcceptanceAsync(
+                ContractId,
+                AcceptanceRequest(VersionId),
+                OwnerId));
+        var payment = await Assert.ThrowsAsync<RbacOperationException>(() =>
+            service.AddPaymentAsync(
                 ContractId,
                 PaymentRequest(100m, "unauthorized"),
-                OtherEmployeeId));
+                OwnerId));
 
-        Assert.Equal(AuthorizationErrorCodes.ResourceNotFound, exception.Code);
+        Assert.Equal(AuthorizationErrorCodes.PermissionDenied, acceptance.Code);
+        Assert.Equal(AuthorizationErrorCodes.PermissionDenied, payment.Code);
         Assert.Empty(storage.SavedKeys);
+        Assert.Empty(context.TblContractAcceptanceEvidences);
         Assert.Empty(context.TblContractPaymentLedgers);
     }
 
@@ -440,7 +452,9 @@ public sealed class ContractCompletionServicePhase10Tests
         context.TblEmployees.AddRange(
             Employee(OwnerId, "Owner", EmployeeType.Sale),
             Employee(ManagerId, "Manager", EmployeeType.Manager),
-            Employee(OtherEmployeeId, "Other Owner", EmployeeType.Sale));
+            Employee(OtherEmployeeId, "Other Owner", EmployeeType.Sale),
+            Employee(TechnicalId, "Technical", EmployeeType.Technical),
+            Employee(AccountantId, "Accountant", EmployeeType.Accountant));
         context.TblCustomers.Add(new TblCustomer
         {
             CustomerId = CustomerId,

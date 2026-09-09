@@ -120,7 +120,7 @@ public sealed class SessionAuthorizeAttribute : Attribute, IAsyncAuthorizationFi
             context.Result = Error(
                 StatusCodes.Status403Forbidden,
                 AuthorizationErrorCodes.PermissionDenied,
-                "Employee role is not valid for RBAC v1.");
+                $"Employee role is not valid for {RbacPermissions.Version}.");
             return;
         }
 

@@ -26,19 +26,19 @@ public sealed class ContractCompletionController : ControllerBase
         Ok(ApiResponse<ContractCompletionReadinessResponse>.Ok(await _service.GetReadinessAsync(contractId, EmployeeId(), ct)));
 
     [HttpPost("acceptance-evidence")]
-    [SessionAuthorize(RbacPermissions.ContractManageOwn)]
+    [SessionAuthorize(RbacPermissions.ContractAcceptanceManage)]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadAcceptance(int contractId, [FromForm] UploadContractAcceptanceEvidenceRequest request, CancellationToken ct) =>
         Ok(ApiResponse<ContractAcceptanceEvidenceResponse>.Ok(await _service.UploadAcceptanceAsync(contractId, request, EmployeeId(), ct), "Đã lưu biên bản nghiệm thu."));
 
     [HttpPost("payments")]
-    [SessionAuthorize(RbacPermissions.ContractManageOwn)]
+    [SessionAuthorize(RbacPermissions.ContractPaymentManage)]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> AddPayment(int contractId, [FromForm] AddContractPaymentRequest request, CancellationToken ct) =>
         Ok(ApiResponse<ContractPaymentResponse>.Ok(await _service.AddPaymentAsync(contractId, request, EmployeeId(), ct), "Đã ghi nhận khoản thanh toán."));
 
     [HttpPost("payments/{paymentId:int}/void")]
-    [SessionAuthorize(RbacPermissions.ContractManageOwn)]
+    [SessionAuthorize(RbacPermissions.ContractPaymentManage)]
     public async Task<IActionResult> VoidPayment(int contractId, int paymentId, [FromBody] VoidContractPaymentRequest request, CancellationToken ct) =>
         Ok(ApiResponse<ContractPaymentResponse>.Ok(await _service.VoidPaymentAsync(contractId, paymentId, request, EmployeeId(), ct), "Đã hủy khoản thanh toán."));
 

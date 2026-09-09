@@ -166,6 +166,30 @@ public sealed class ContractAttachmentAuditTests
             int employeeId,
             CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
+
+        public Task EnsureCanManageSigningAsync(
+            int contractId,
+            int employeeId,
+            CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task EnsureCanManageAcceptanceAsync(
+            int contractId,
+            int employeeId,
+            CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task EnsureCanManagePaymentAsync(
+            int contractId,
+            int employeeId,
+            CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task EnsureCanCompleteAsync(
+            int contractId,
+            int employeeId,
+            CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 
     private sealed class FakeFileStorageService : IFileStorageService

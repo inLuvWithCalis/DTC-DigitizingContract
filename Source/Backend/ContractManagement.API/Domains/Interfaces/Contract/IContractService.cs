@@ -17,7 +17,8 @@ namespace ContractManagement.Domains.Interfaces.Contract
         Task<PagedResult<ContractListItemResponse>> GetListAsync(
             ContractFilterRequest filter,
             int employeeId,
-            bool canReadTenant = false);
+            bool canReadTenant = false,
+            bool canReadExecution = false);
 
         /// <summary>
         /// Lấy các hợp đồng gốc đủ điều kiện cho dropdown
@@ -87,7 +88,8 @@ namespace ContractManagement.Domains.Interfaces.Contract
         Task<ContractDetailResponse> GetDetailAsync(
             int contractId,
             int employeeId,
-            bool canReadTenant = false);
+            bool canReadTenant = false,
+            bool canReadExecution = false);
 
         /// <summary>
         /// Cập nhật Contract, Items và Terms khi hợp đồng còn là Draft.

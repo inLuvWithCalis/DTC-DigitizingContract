@@ -83,6 +83,10 @@ export default function ContractListPage() {
     user?.permissions,
     RBAC_PERMISSIONS.contractCreate,
   );
+  const canExecuteContracts = hasPermission(
+    user?.permissions,
+    RBAC_PERMISSIONS.contractExecutionRead,
+  );
 
   const [data, setData] = useState<ContractListItemResponse[]>([]);
   const [rowCount, setRowCount] = useState<number>(0);
@@ -222,6 +226,11 @@ export default function ContractListPage() {
         header: "Người phụ trách",
         cell: ({ row }) => {
           const isMine = row.original.responsibleEmployeeId === user?.employeeId;
+          const isExecutionStage = [
+            ContractStatus.PendingSignature,
+            ContractStatus.Signed,
+            ContractStatus.Completed,
+          ].includes(row.original.status);
           return (
             <div className="min-w-36">
               <p className="truncate text-sm font-medium">
@@ -229,7 +238,9 @@ export default function ContractListPage() {
               </p>
               {!isMine && (
                 <Badge variant="outline" className="mt-1 text-[10px] text-muted-foreground">
-                  Chỉ xem
+                  {canExecuteContracts && isExecutionStage
+                    ? "Thực hiện"
+                    : "Chỉ xem"}
                 </Badge>
               )}
             </div>
@@ -278,7 +289,7 @@ export default function ContractListPage() {
         },
       },
     ],
-    [loadingId, user?.employeeId],
+    [canExecuteContracts, loadingId, user?.employeeId],
   );
 
   const totalValue = useMemo(

@@ -53,14 +53,17 @@ public sealed class ContractCompletionService : IContractCompletionService
     {
         ArgumentNullException.ThrowIfNull(request);
         if (request.File is null || request.File.Length <= 0) throw Rule("AcceptanceFileRequired", "Vui lòng chọn biên bản nghiệm thu.");
-        await _authorization.EnsureCanWriteAsync(contractId, employeeId, cancellationToken);
+        await _authorization.EnsureCanManageAcceptanceAsync(
+            contractId,
+            employeeId,
+            cancellationToken);
         var stored = await SaveFileAsync(request.File, AcceptanceObjectType, contractId, cancellationToken);
         try
         {
             return await ExecuteInTransactionAsync(async () =>
             {
                 var (contract, version) = await LoadWritableStateAsync(contractId, request.CurrentVersionId,
-                    request.ContractRowVersion, request.VersionRowVersion, employeeId, cancellationToken);
+                    request.ContractRowVersion, request.VersionRowVersion, cancellationToken);
                 EnsureSigned(contract, version);
                 if (await _db.TblContractAcceptanceEvidences.AnyAsync(x => x.ContractId == contractId && x.VersionId == version.VersionId, cancellationToken))
                     throw Rule("AcceptanceEvidenceExists", "Version này đã có biên bản nghiệm thu.", StatusCodes.Status409Conflict);
@@ -99,7 +102,10 @@ public sealed class ContractCompletionService : IContractCompletionService
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        await _authorization.EnsureCanWriteAsync(contractId, employeeId, cancellationToken);
+        await _authorization.EnsureCanManagePaymentAsync(
+            contractId,
+            employeeId,
+            cancellationToken);
         if (request.Amount <= 0) throw Rule("PaymentAmountInvalid", "Số tiền thanh toán phải lớn hơn 0.");
         if (request.PaymentDate == default || request.PaymentDate.Date > DateTime.UtcNow.Date)
             throw Rule("PaymentDateInvalid", "Ngày thanh toán không hợp lệ hoặc nằm trong tương lai.");
@@ -113,7 +119,7 @@ public sealed class ContractCompletionService : IContractCompletionService
             return await ExecuteInTransactionAsync(async () =>
             {
                 var (contract, version) = await LoadWritableStateAsync(contractId, request.CurrentVersionId,
-                    request.ContractRowVersion, request.VersionRowVersion, employeeId, cancellationToken);
+                    request.ContractRowVersion, request.VersionRowVersion, cancellationToken);
                 EnsureSigned(contract, version);
                 if (!string.Equals(currency, version.CurrencyCode, StringComparison.OrdinalIgnoreCase))
                     throw Rule("PaymentCurrencyMismatch", "Loại tiền thanh toán phải trùng với loại tiền của hợp đồng.");
@@ -161,14 +167,17 @@ public sealed class ContractCompletionService : IContractCompletionService
         int paymentId, VoidContractPaymentRequest request, int employeeId,
         CancellationToken cancellationToken = default)
     {
-        await _authorization.EnsureCanWriteAsync(contractId, employeeId, cancellationToken);
+        await _authorization.EnsureCanManagePaymentAsync(
+            contractId,
+            employeeId,
+            cancellationToken);
         var reason = Required(request.Reason, 1000, "Lý do hủy khoản thanh toán");
         return await ExecuteInTransactionAsync(async () =>
         {
             var payment = await _db.TblContractPaymentLedgers.SingleOrDefaultAsync(x => x.ContractPaymentId == paymentId && x.ContractId == contractId, cancellationToken)
                 ?? throw new KeyNotFoundException("Không tìm thấy khoản thanh toán.");
             var (contract, version) = await LoadWritableStateAsync(contractId, payment.VersionId,
-                request.ContractRowVersion, request.VersionRowVersion, employeeId, cancellationToken);
+                request.ContractRowVersion, request.VersionRowVersion, cancellationToken);
             EnsureSigned(contract, version);
             Match(payment.RowVersion, Decode(request.PaymentRowVersion), "Khoản thanh toán");
             if (payment.Status != (byte)ContractPaymentStatus.Active)
@@ -192,8 +201,10 @@ public sealed class ContractCompletionService : IContractCompletionService
         CompleteContractRequest request, int employeeId,
         CancellationToken cancellationToken = default)
     {
-        if (!await _db.TblEmployees.AsNoTracking().AnyAsync(x => x.EmployeeId == employeeId && x.Status == 1 && x.EmployeeType == (byte)EmployeeType.Manager, cancellationToken))
-            throw new BusinessRuleException(StatusCodes.Status403Forbidden, "PermissionDenied", "Chỉ Manager được hoàn tất hợp đồng.");
+        await _authorization.EnsureCanCompleteAsync(
+            contractId,
+            employeeId,
+            cancellationToken);
         return await ExecuteInTransactionAsync(async () =>
         {
             var contract = await _db.TblContracts.SingleOrDefaultAsync(x => x.ContractId == contractId, cancellationToken)
@@ -245,10 +256,9 @@ public sealed class ContractCompletionService : IContractCompletionService
                 Message = x.Code switch { ContractCompletionBlockerCode.ContractMustBeSigned => "Hợp đồng chưa có bản ký hợp lệ.", ContractCompletionBlockerCode.AcceptanceEvidenceMissing => "Chưa tải biên bản nghiệm thu.", _ => "Hợp đồng chưa được thanh toán đủ." } }).ToList() };
     }
 
-    private async Task<(TblContract Contract, TblContractVersion Version)> LoadWritableStateAsync(int contractId, int versionId, string contractRv, string versionRv, int employeeId, CancellationToken ct)
+    private async Task<(TblContract Contract, TblContractVersion Version)> LoadWritableStateAsync(int contractId, int versionId, string contractRv, string versionRv, CancellationToken ct)
     {
         var contract = await _db.TblContracts.SingleOrDefaultAsync(x => x.ContractId == contractId, ct) ?? throw new KeyNotFoundException("Không tìm thấy hợp đồng.");
-        if (contract.EmployeeId != employeeId) throw new KeyNotFoundException("Không tìm thấy hợp đồng.");
         Match(contract.RowVersion, Decode(contractRv), "Hợp đồng");
         if (contract.CurrentVersionId != versionId) throw Rule("CompletionStateChanged", "Version hiện hành đã thay đổi.", StatusCodes.Status409Conflict);
         var version = await _db.TblContractVersions.SingleOrDefaultAsync(x => x.VersionId == versionId && x.ContractId == contractId, ct) ?? throw new KeyNotFoundException("Không tìm thấy version hợp đồng.");

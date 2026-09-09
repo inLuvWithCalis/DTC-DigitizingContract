@@ -163,7 +163,7 @@ public sealed class ContractSigningService : IContractSigningService
             throw new ArgumentException("ContractId và CurrentVersionId phải lớn hơn 0.");
         }
 
-        await _authorization.EnsureCanWriteAsync(
+        await _authorization.EnsureCanManageSigningAsync(
             contractId,
             employeeId,
             cancellationToken);
@@ -195,11 +195,6 @@ public sealed class ContractSigningService : IContractSigningService
                         candidate => candidate.ContractId == contractId,
                         cancellationToken)
                     ?? throw new KeyNotFoundException("Không tìm thấy hợp đồng.");
-                if (contract.EmployeeId != employeeId)
-                {
-                    throw new KeyNotFoundException("Không tìm thấy hợp đồng.");
-                }
-
                 EnsureRowVersionMatches(
                     contract.RowVersion,
                     expectedContractRowVersion,

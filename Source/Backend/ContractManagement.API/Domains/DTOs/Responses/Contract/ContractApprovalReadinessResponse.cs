@@ -4,12 +4,6 @@ public static class ContractApprovalReadinessCodes
 {
     public const string ContractNotNegotiating = "ContractNotNegotiating";
     public const string CurrentVersionLocked = "CurrentVersionLocked";
-    public const string CurrentVersionAlreadyShared = "CurrentVersionAlreadyShared";
-    public const string CurrentVersionNotShared = "CurrentVersionNotShared";
-    public const string ActiveCustomerAccessLinkRequired =
-        "ActiveCustomerAccessLinkRequired";
-    public const string OpenNegotiationCommentsExist =
-        "OpenNegotiationCommentsExist";
     public const string ContractCodeRequired = "ContractCodeRequired";
     public const string ContractNameRequired = "ContractNameRequired";
     public const string ContractItemRequired = "ContractItemRequired";

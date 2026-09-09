@@ -2,6 +2,7 @@ using System.Net;
 using System.Security.Cryptography;
 using ContractManagement.API.Common.Enums;
 using ContractManagement.API.Common.Exceptions;
+using ContractManagement.API.Common.Security;
 using ContractManagement.API.Domains.DTOs.Requests.Contract;
 using ContractManagement.Domains.Interfaces.File;
 using ContractManagement.Domains.Services.Contract;
@@ -20,6 +21,8 @@ public sealed class ContractSigningServicePhase9Tests
 {
     private const int TenantId = 901;
     private const int OwnerId = 902;
+    private const int TechnicalId = 906;
+    private const int ManagerId = 907;
     private const int CustomerId = 903;
     private const int ContractId = 904;
     private const int VersionId = 905;
@@ -36,7 +39,7 @@ public sealed class ContractSigningServicePhase9Tests
         var response = await service.UploadAsync(
             ContractId,
             CreateUploadRequest("signed.pdf", "application/pdf"),
-            OwnerId);
+            TechnicalId);
 
         var contract = await context.TblContracts.AsNoTracking().SingleAsync();
         var evidence = await context.TblContractSignedEvidences
@@ -55,6 +58,7 @@ public sealed class ContractSigningServicePhase9Tests
         Assert.Equal(ContractId, file.ObjectId);
         Assert.Equal("SignedEvidence", audit.SubjectType);
         Assert.Equal(evidence.SignedEvidenceId, audit.SubjectId);
+        Assert.Equal(TechnicalId, audit.ActorEmployeeId);
         Assert.Single(storage.SavedKeys);
         Assert.Empty(storage.DeletedKeys);
     }
@@ -84,7 +88,7 @@ public sealed class ContractSigningServicePhase9Tests
             ContractId,
             signedEvidenceId: 920,
             request,
-            OwnerId);
+            ManagerId);
 
         var evidence = await context.TblContractSignedEvidences
             .AsNoTracking()
@@ -134,11 +138,43 @@ public sealed class ContractSigningServicePhase9Tests
                 ContractId,
                 920,
                 request,
-                OwnerId));
+                TechnicalId));
 
         Assert.Equal(ContractSigningErrorCodes.SigningStateChanged, exception.Code);
         Assert.Empty(storage.SavedKeys);
         Assert.Single(context.TblContractSignedEvidences);
+    }
+
+    [Fact]
+    public async Task Get_TechnicalCanReadAnotherOwnersExecutionContract()
+    {
+        await using var context = CreateContext();
+        await SeedAsync(context, ContractStatus.PendingSignature);
+
+        var detail = await CreateService(context, new TrackingPrivateStorage())
+            .GetAsync(ContractId, TechnicalId);
+
+        Assert.Equal(ContractId, detail.ContractId);
+        Assert.Equal(ContractStatus.PendingSignature, detail.ContractStatus);
+    }
+
+    [Fact]
+    public async Task Upload_OwnerWithoutSigningPermissionIsForbiddenBeforeStorage()
+    {
+        await using var context = CreateContext();
+        await SeedAsync(context, ContractStatus.PendingSignature);
+        var storage = new TrackingPrivateStorage();
+
+        var exception = await Assert.ThrowsAsync<RbacOperationException>(() =>
+            CreateService(context, storage).UploadAsync(
+                ContractId,
+                CreateUploadRequest("signed.pdf", "application/pdf"),
+                OwnerId));
+
+        Assert.Equal(StatusCodes.Status403Forbidden, exception.StatusCode);
+        Assert.Equal(AuthorizationErrorCodes.PermissionDenied, exception.Code);
+        Assert.Empty(storage.SavedKeys);
+        Assert.Empty(context.TblContractSignedEvidences);
     }
 
     private static ContractSigningService CreateService(
@@ -184,14 +220,10 @@ public sealed class ContractSigningServicePhase9Tests
         ContractStatus status,
         bool includeActiveEvidence = false)
     {
-        context.TblEmployees.Add(new TblEmployee
-        {
-            EmployeeId = OwnerId,
-            EmployeeFullName = "Owner",
-            EmployeeType = (byte)EmployeeType.Sale,
-            Status = 1,
-            RowVersion = InitialRowVersion
-        });
+        context.TblEmployees.AddRange(
+            Employee(OwnerId, "Owner", EmployeeType.Sale),
+            Employee(TechnicalId, "Technical", EmployeeType.Technical),
+            Employee(ManagerId, "Manager", EmployeeType.Manager));
         context.TblCustomers.Add(new TblCustomer
         {
             CustomerId = CustomerId,
@@ -277,6 +309,18 @@ public sealed class ContractSigningServicePhase9Tests
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
     }
+
+    private static TblEmployee Employee(
+        int employeeId,
+        string fullName,
+        EmployeeType employeeType) => new()
+        {
+            EmployeeId = employeeId,
+            EmployeeFullName = fullName,
+            EmployeeType = (byte)employeeType,
+            Status = 1,
+            RowVersion = InitialRowVersion
+        };
 
     private static TblFileStorage Artifact(int fileId, string name, string type) =>
         new()

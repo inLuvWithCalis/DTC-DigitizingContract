@@ -7,8 +7,9 @@ using Microsoft.EntityFrameworkCore;
 namespace ContractManagement.Domains.Services.Contract;
 
 /// <summary>
-/// Contract scope is enforced in the tenant database. Managers can read every
-/// tenant contract, while every write still belongs to its responsible employee.
+/// Contract scope is enforced in the tenant database. Content writes still
+/// belong to the responsible employee, while execution-stage mutations use
+/// explicit signing, acceptance, payment, and completion permissions.
 /// </summary>
 public sealed class ContractResourceAuthorizationService
     : IContractResourceAuthorizationService
@@ -25,12 +26,28 @@ public sealed class ContractResourceAuthorizationService
         int employeeId,
         CancellationToken cancellationToken = default)
     {
-        var manager = await IsManagerAsync(employeeId, cancellationToken);
+        var permissions = await GetActiveEmployeePermissionsAsync(
+            employeeId,
+            cancellationToken);
+        var canReadTenant = permissions.Contains(
+            RbacPermissions.ContractReadTenant,
+            StringComparer.Ordinal);
+        var canReadExecution = permissions.Contains(
+            RbacPermissions.ContractExecutionRead,
+            StringComparer.Ordinal);
         var authorized = await _dbContext.TblContracts
             .AsNoTracking()
             .AnyAsync(contract =>
                 contract.ContractId == contractId
-                && (manager || contract.EmployeeId == employeeId),
+                && (canReadTenant
+                    || contract.EmployeeId == employeeId
+                    || (canReadExecution
+                        && (contract.Status ==
+                                (byte)ContractStatus.PendingSignature
+                            || contract.Status ==
+                                (byte)ContractStatus.Signed
+                            || contract.Status ==
+                                (byte)ContractStatus.Completed))),
                 cancellationToken);
 
         if (!authorized)
@@ -57,21 +74,100 @@ public sealed class ContractResourceAuthorizationService
         }
     }
 
-    private async Task<bool> IsManagerAsync(
+    public Task EnsureCanManageSigningAsync(
+        int contractId,
+        int employeeId,
+        CancellationToken cancellationToken = default) =>
+        EnsureHasExecutionPermissionAsync(
+            contractId,
+            employeeId,
+            RbacPermissions.ContractSigningManage,
+            cancellationToken);
+
+    public Task EnsureCanManageAcceptanceAsync(
+        int contractId,
+        int employeeId,
+        CancellationToken cancellationToken = default) =>
+        EnsureHasExecutionPermissionAsync(
+            contractId,
+            employeeId,
+            RbacPermissions.ContractAcceptanceManage,
+            cancellationToken);
+
+    public Task EnsureCanManagePaymentAsync(
+        int contractId,
+        int employeeId,
+        CancellationToken cancellationToken = default) =>
+        EnsureHasExecutionPermissionAsync(
+            contractId,
+            employeeId,
+            RbacPermissions.ContractPaymentManage,
+            cancellationToken);
+
+    public Task EnsureCanCompleteAsync(
+        int contractId,
+        int employeeId,
+        CancellationToken cancellationToken = default) =>
+        EnsureHasExecutionPermissionAsync(
+            contractId,
+            employeeId,
+            RbacPermissions.ContractComplete,
+            cancellationToken);
+
+    private async Task EnsureHasExecutionPermissionAsync(
+        int contractId,
+        int employeeId,
+        string requiredPermission,
+        CancellationToken cancellationToken)
+    {
+        var permissions = await GetActiveEmployeePermissionsAsync(
+            employeeId,
+            cancellationToken);
+        if (!permissions.Contains(requiredPermission, StringComparer.Ordinal))
+        {
+            throw PermissionDenied();
+        }
+
+        var contractExists = await _dbContext.TblContracts
+            .AsNoTracking()
+            .AnyAsync(contract => contract.ContractId == contractId,
+                cancellationToken);
+
+        if (!contractExists)
+        {
+            throw ResourceNotFound();
+        }
+    }
+
+    private async Task<IReadOnlyList<string>> GetActiveEmployeePermissionsAsync(
         int employeeId,
         CancellationToken cancellationToken)
     {
-        return await _dbContext.TblEmployees
+        var employeeType = await _dbContext.TblEmployees
             .AsNoTracking()
-            .AnyAsync(employee =>
+            .Where(employee =>
                 employee.EmployeeId == employeeId
-                && employee.Status == 1
-                && employee.EmployeeType == (byte)EmployeeType.Manager,
-                cancellationToken);
+                && employee.Status == 1)
+            .Select(employee => employee.EmployeeType)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (!EmployeePermissionCatalog.TryGetPermissions(
+                employeeType,
+                out var permissions))
+        {
+            return Array.Empty<string>();
+        }
+
+        return permissions;
     }
 
     private static RbacOperationException ResourceNotFound() => new(
         StatusCodes.Status404NotFound,
         AuthorizationErrorCodes.ResourceNotFound,
         "Resource was not found.");
+
+    private static RbacOperationException PermissionDenied() => new(
+        StatusCodes.Status403Forbidden,
+        AuthorizationErrorCodes.PermissionDenied,
+        "Employee does not have permission to perform this contract operation.");
 }

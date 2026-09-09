@@ -704,7 +704,7 @@ public class ContractServiceResponsibilityTransferTests
     }
 
     [Fact]
-    public async Task UpdateDraft_SharedCurrentVersion_ShouldRequireNewRound()
+    public async Task UpdateDraft_SharedCurrentVersion_ShouldAllowOwnerUpdate()
     {
         await using var context = CreateContext();
         await SeedContractAsync(context);
@@ -723,24 +723,27 @@ public class ContractServiceResponsibilityTransferTests
                 CreatedByEmployeeId = CurrentResponsibleEmployeeId,
                 CreatedDate = DateTime.UtcNow.AddDays(-2),
                 ActivatedAt = DateTime.UtcNow.AddDays(-2),
-                ExpiresAt = DateTime.UtcNow.AddDays(-1),
-                RevokedAt = DateTime.UtcNow.AddDays(-1),
-                RevokedByEmployeeId = CurrentResponsibleEmployeeId,
-                RevocationReason = "Expired test link",
+                ExpiresAt = DateTime.UtcNow.AddDays(1),
                 RowVersion = InitialRowVersion()
             });
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
 
-        var exception = await Assert.ThrowsAsync<BusinessRuleException>(() =>
-            CreateService(context).UpdateDraftAsync(
-                ContractId,
-                CreateUpdateRequest(),
-                CurrentResponsibleEmployeeId));
+        await CreateService(context).UpdateDraftAsync(
+            ContractId,
+            CreateUpdateRequest(),
+            CurrentResponsibleEmployeeId);
 
-        Assert.Equal(
-            ContractApprovalReadinessCodes.CurrentVersionAlreadyShared,
-            exception.Code);
+        var updatedContract = await context.TblContracts
+            .AsNoTracking()
+            .SingleAsync();
+        var link = await context.TblContractCustomerAccessLinks
+            .AsNoTracking()
+            .SingleAsync();
+        Assert.Equal("Hợp đồng đã cập nhật", updatedContract.ContractName);
+        Assert.Equal(45, updatedContract.CurrentCustomerAccessLinkId);
+        Assert.Equal(VersionId, link.VersionId);
+        Assert.Null(link.RevokedAt);
     }
 
     [Fact]

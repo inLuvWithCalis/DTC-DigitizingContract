@@ -76,12 +76,6 @@ public sealed class ContractSigningServicePhase9Tests
             ContractRowVersion = Encode(InitialRowVersion),
             VersionRowVersion = Encode(InitialRowVersion),
             EvidenceRowVersion = Encode(InitialRowVersion),
-            ProviderSignerName = "Provider Signer 2",
-            ProviderSignerTitle = "Director",
-            ProviderSigningDate = new DateTime(2026, 8, 20),
-            CustomerSignerName = "Customer Signer 2",
-            CustomerSignerTitle = "CEO",
-            CustomerSigningDate = new DateTime(2026, 8, 21),
             Reason = "Bản trước bị thiếu một trang."
         };
 
@@ -107,6 +101,12 @@ public sealed class ContractSigningServicePhase9Tests
         Assert.Equal("Bản trước bị thiếu một trang.", oldEvidence.SupersedeReason);
         Assert.Equal(oldEvidence.SignedEvidenceId, activeEvidence.SupersedesEvidenceId);
         Assert.Equal(activeEvidence.SignedEvidenceId, response.SignedEvidenceId);
+        Assert.Equal(oldEvidence.ProviderSignerName, activeEvidence.ProviderSignerName);
+        Assert.Equal(oldEvidence.ProviderSignerTitle, activeEvidence.ProviderSignerTitle);
+        Assert.Equal(oldEvidence.ProviderSigningDate, activeEvidence.ProviderSigningDate);
+        Assert.Equal(oldEvidence.CustomerSignerName, activeEvidence.CustomerSignerName);
+        Assert.Equal(oldEvidence.CustomerSignerTitle, activeEvidence.CustomerSignerTitle);
+        Assert.Equal(oldEvidence.CustomerSigningDate, activeEvidence.CustomerSigningDate);
         Assert.Equal(4, await context.TblFileStorages.CountAsync());
         Assert.Single(storage.SavedKeys);
         Assert.Empty(storage.DeletedKeys);
@@ -131,12 +131,6 @@ public sealed class ContractSigningServicePhase9Tests
             ContractRowVersion = Encode(InitialRowVersion),
             VersionRowVersion = Encode(InitialRowVersion),
             EvidenceRowVersion = Encode(InitialRowVersion),
-            ProviderSignerName = "Provider Signer",
-            ProviderSignerTitle = "Director",
-            ProviderSigningDate = new DateTime(2026, 8, 20),
-            CustomerSignerName = "Customer Signer",
-            CustomerSignerTitle = "CEO",
-            CustomerSigningDate = new DateTime(2026, 8, 21),
             Reason = "Replace"
         };
 

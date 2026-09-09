@@ -12,7 +12,6 @@ import {
   FileCheck2,
   FileText,
   RefreshCw,
-  RotateCcw,
   ShieldX,
   UserRoundCheck,
 } from "lucide-react";
@@ -445,9 +444,7 @@ export default function ContractApprovalsPage() {
           decision:
             decision === "approve"
               ? ApprovalRequestStatus.Approved
-              : decision === "return"
-                ? ApprovalRequestStatus.Returned
-                : ApprovalRequestStatus.Rejected,
+              : ApprovalRequestStatus.Returned,
           comment: comment || null,
           items: dialogRequests.map((request) => ({
             approvalRequestId: request.approvalRequestId,
@@ -479,13 +476,11 @@ export default function ContractApprovalsPage() {
             selected.approvalRequestId,
             payload,
           );
-        } else if (decision === "return") {
+        } else {
           await contractApprovalApi.returnForRevision(
             selected.approvalRequestId,
             payload,
           );
-        } else {
-          await contractApprovalApi.reject(selected.approvalRequestId, payload);
         }
         toast.success(
           `${APPROVAL_DECISION_CONFIG[decision].label} thành công.`,
@@ -527,8 +522,8 @@ export default function ContractApprovalsPage() {
                   Hợp đồng chờ duyệt
                 </h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Kiểm tra version và DOCX/PDF bất biến trước khi duyệt, trả lại
-                  hoặc từ chối hợp đồng.
+                  Kiểm tra version và DOCX/PDF bất biến trước khi duyệt hoặc yêu
+                  cầu chỉnh sửa hợp đồng.
                 </p>
               </div>
               <Button

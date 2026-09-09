@@ -12,7 +12,6 @@ namespace ContractManagement.Tests.Domains.Policies.Contract
         [Theory]
         [InlineData(ApprovalRequestStatus.Approved)]
         [InlineData(ApprovalRequestStatus.Returned)]
-        [InlineData(ApprovalRequestStatus.Rejected)]
         [InlineData(ApprovalRequestStatus.Withdrawn)]
         public void Pending_ShouldTransitionToValidResult(
             ApprovalRequestStatus targetStatus)
@@ -24,6 +23,16 @@ namespace ContractManagement.Tests.Domains.Policies.Contract
 
             // Assert
             Assert.True(result);
+        }
+
+        [Fact]
+        public void Pending_ShouldNotTransitionToRejected()
+        {
+            var result = ApprovalRequestPolicy.CanTransition(
+                ApprovalRequestStatus.Pending,
+                ApprovalRequestStatus.Rejected);
+
+            Assert.False(result);
         }
 
         [Theory]

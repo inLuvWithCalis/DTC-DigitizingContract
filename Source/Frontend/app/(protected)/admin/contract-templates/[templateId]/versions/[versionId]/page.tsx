@@ -15,6 +15,7 @@ import {
   ListChecks,
   Loader2,
   RefreshCw,
+  Scale,
   Send,
   ShieldAlert,
   Upload,
@@ -28,6 +29,7 @@ import {
   TemplateVersionStatusBadge,
 } from "@/components/contract-templates/contract-template-status";
 import { ContractTemplateTermsEditor } from "@/components/contract-templates/contract-template-terms-editor";
+import { ContractTemplateLegalBasesEditor } from "@/components/contract-templates/contract-template-legal-bases-editor";
 import {
   downloadBlob,
   getContractTemplateErrorMessage,
@@ -59,6 +61,7 @@ const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const TAB_VALUES = [
   "overview",
+  "legal-bases",
   "terms",
   "document",
   "placeholders",
@@ -483,6 +486,9 @@ export default function ContractTemplateVersionWorkspacePage() {
                     <TabsTrigger value="terms">
                       <ListChecks /> Điều khoản
                     </TabsTrigger>
+                    <TabsTrigger value="legal-bases">
+                      <Scale /> Căn cứ
+                    </TabsTrigger>
                     <TabsTrigger value="document">
                       <FileText /> Tài liệu DOCX
                     </TabsTrigger>
@@ -496,7 +502,7 @@ export default function ContractTemplateVersionWorkspacePage() {
                 </div>
 
                 <TabsContent value="overview" className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
                     <Card>
                       <CardHeader className="pb-2">
                         <CardTitle className="text-sm text-muted-foreground">
@@ -505,6 +511,16 @@ export default function ContractTemplateVersionWorkspacePage() {
                       </CardHeader>
                       <CardContent className="text-2xl font-bold">
                         {version.terms.length}
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm text-muted-foreground">
+                          Căn cứ hợp đồng
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="text-2xl font-bold">
+                        {version.legalBases?.length ?? 0}
                       </CardContent>
                     </Card>
                     <Card>
@@ -544,9 +560,9 @@ export default function ContractTemplateVersionWorkspacePage() {
                     <Info />
                     <AlertTitle>Quy trình đề xuất</AlertTitle>
                     <AlertDescription>
-                      Hoàn thiện điều khoản → chèn placeholder vào DOCX → upload
-                      và sửa lỗi validation → tạo preview → phát hành. Chỉ bản
-                      nháp được chỉnh sửa.
+                      Hoàn thiện căn cứ và điều khoản → chèn placeholder vào
+                      DOCX → upload và sửa lỗi validation → tạo preview → phát
+                      hành. Chỉ bản nháp được chỉnh sửa.
                     </AlertDescription>
                   </Alert>
                 </TabsContent>
@@ -554,6 +570,17 @@ export default function ContractTemplateVersionWorkspacePage() {
                 <TabsContent value="terms">
                   <ContractTemplateTermsEditor
                     key={`${version.templateVersionId}-${version.status}-${version.rowVersion}`}
+                    version={version}
+                    isBilingual={
+                      template.languageMode === ContractLanguageMode.Bilingual
+                    }
+                    onRefresh={() => fetchWorkspace(false)}
+                  />
+                </TabsContent>
+
+                <TabsContent value="legal-bases">
+                  <ContractTemplateLegalBasesEditor
+                    key={`${version.templateVersionId}-${version.status}-${version.rowVersion}-legal-bases`}
                     version={version}
                     isBilingual={
                       template.languageMode === ContractLanguageMode.Bilingual

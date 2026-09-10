@@ -18,6 +18,9 @@ public sealed record SoftwareSupplyContractSnapshot(
 {
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyDictionary<string, string>? PlaceholderValues { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ContractLegalBasisSnapshot>? LegalBases { get; init; }
 }
 
 public sealed record TenantLegalSnapshot(
@@ -103,6 +106,13 @@ public sealed record ContractTermLegalSnapshot(
     string? TermContent,
     string? TermContentEn,
     bool IsNegotiable,
+    int DisplayOrder);
+
+public sealed record ContractLegalBasisSnapshot(
+    int LegalBasisId,
+    string BasisCode,
+    string ContentVi,
+    string? ContentEn,
     int DisplayOrder);
 
 public static class SoftwareSupplyContractSnapshotFactory

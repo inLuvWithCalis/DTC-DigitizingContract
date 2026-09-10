@@ -193,6 +193,13 @@ public sealed class ContractDocumentPreviewService :
             .OrderBy(term => term.DisplayOrder)
             .ThenBy(term => term.TermId)
             .ToListAsync(cancellationToken);
+        var legalBases = await _dbContext.TblContractLegalBases
+            .AsNoTracking()
+            .Where(item => item.ContractId == contractId
+                && item.VersionId == versionId)
+            .OrderBy(item => item.DisplayOrder)
+            .ThenBy(item => item.LegalBasisId)
+            .ToListAsync(cancellationToken);
         var payments = await _dbContext.TblPaymentSchedules
             .AsNoTracking()
             .Where(schedule => schedule.ContractId == contractId)
@@ -207,6 +214,12 @@ public sealed class ContractDocumentPreviewService :
             version,
             items,
             terms);
+        snapshot = snapshot with
+        {
+            LegalBases = legalBases.Select(item => new ContractLegalBasisSnapshot(
+                item.LegalBasisId, item.BasisCode, item.ContentVi,
+                item.ContentEn, item.DisplayOrder)).ToArray()
+        };
         var renderData = CreateRenderData(snapshot, customer, payments);
         var fields = await _dbContext.TblContractTemplateFields.AsNoTracking()
             .Where(x => x.TemplateVersionId == templateVersionId).ToListAsync(cancellationToken);
@@ -458,7 +471,15 @@ public sealed class ContractDocumentPreviewService :
                 + $"{customerSnapshot.RepresentativeName}, "
                 + customerSnapshot.RepresentativeTitle),
             string.Empty,
-            currency);
+            currency)
+        {
+            LegalBases = (snapshot.LegalBases ?? [])
+                .OrderBy(item => item.DisplayOrder)
+                .ThenBy(item => item.LegalBasisId)
+                .Select((item, index) => new ContractTemplateRenderLegalBasis(
+                    index + 1, item.ContentVi, item.ContentEn))
+                .ToArray()
+        };
     }
 
     private static string BuildItemDescription(

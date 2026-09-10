@@ -183,6 +183,28 @@ export interface SoftwareSupplyPlaceholderCatalogResponse {
   items: SoftwareSupplyPlaceholderDefinition[];
 }
 
+export interface CreateContractTemplateLegalBasisRequest {
+  basisCode: string;
+  contentVi: string;
+  contentEn?: string | null;
+  displayOrder: number;
+  versionRowVersion: string;
+}
+
+export interface UpdateContractTemplateLegalBasisRequest
+  extends CreateContractTemplateLegalBasisRequest {
+  rowVersion: string;
+}
+
+export interface ReorderContractTemplateLegalBasesRequest {
+  versionRowVersion: string;
+  legalBases: Array<{
+    legalBasisId: number;
+    rowVersion: string;
+    displayOrder: number;
+  }>;
+}
+
 export interface ContractPlaceholderSourceField {
   sourceFieldKey: string;
   moduleKey: string;
@@ -299,6 +321,20 @@ export interface ContractTemplateTermResponse {
   rowVersion: string;
 }
 
+export interface ContractTemplateLegalBasisResponse {
+  templateLegalBasisId: number;
+  templateVersionId: number;
+  basisCode: string;
+  contentVi: string;
+  contentEn?: string | null;
+  displayOrder: number;
+  createdEmployeeId: number;
+  createdDate: string;
+  updatedEmployeeId?: number | null;
+  updatedDate?: string | null;
+  rowVersion: string;
+}
+
 export interface ContractTemplateVersionDetailResponse {
   templateVersionId: number;
   templateId: number;
@@ -319,6 +355,7 @@ export interface ContractTemplateVersionDetailResponse {
   updatedDate?: string | null;
   rowVersion: string;
   terms: ContractTemplateTermResponse[];
+  legalBases: ContractTemplateLegalBasisResponse[];
 }
 
 export interface ContractTemplatePreviewResponse {
@@ -497,5 +534,44 @@ export const contractTemplateApi = {
     axiosClient.delete<unknown, { versionId: number; termId: number }>(
       `${BASE_URL}/versions/${versionId}/terms/${termId}`,
       { data },
+    ),
+
+  addLegalBasis: (
+    versionId: number,
+    data: CreateContractTemplateLegalBasisRequest,
+  ) =>
+    axiosClient.post<unknown, ContractTemplateLegalBasisResponse>(
+      `${BASE_URL}/versions/${versionId}/legal-bases`,
+      data,
+    ),
+
+  updateLegalBasis: (
+    versionId: number,
+    legalBasisId: number,
+    data: UpdateContractTemplateLegalBasisRequest,
+  ) =>
+    axiosClient.put<unknown, ContractTemplateLegalBasisResponse>(
+      `${BASE_URL}/versions/${versionId}/legal-bases/${legalBasisId}`,
+      data,
+    ),
+
+  reorderLegalBases: (
+    versionId: number,
+    data: ReorderContractTemplateLegalBasesRequest,
+  ) =>
+    axiosClient.put<unknown, ContractTemplateVersionDetailResponse>(
+      `${BASE_URL}/versions/${versionId}/legal-bases/order`,
+      data,
+    ),
+
+  deleteLegalBasis: (
+    versionId: number,
+    legalBasisId: number,
+    rowVersion: string,
+    versionRowVersion: string,
+  ) =>
+    axiosClient.delete<unknown, { versionId: number; legalBasisId: number }>(
+      `${BASE_URL}/versions/${versionId}/legal-bases/${legalBasisId}`,
+      { data: { rowVersion, versionRowVersion } },
     ),
 };

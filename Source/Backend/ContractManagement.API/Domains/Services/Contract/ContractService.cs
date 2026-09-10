@@ -450,6 +450,13 @@ namespace ContractManagement.Domains.Services.Contract
                         .OrderBy(x => x.DisplayOrder)
                         .ThenBy(x => x.TemplateTermId)
                         .ToListAsync();
+                    var templateLegalBases = await _dbContext
+                        .TblContractTemplateLegalBases
+                        .AsNoTracking()
+                        .Where(x => x.TemplateVersionId == request.TemplateVersionId)
+                        .OrderBy(x => x.DisplayOrder)
+                        .ThenBy(x => x.TemplateLegalBasisId)
+                        .ToListAsync();
 
                     if (templateTerms.Count == 0)
                     {
@@ -685,8 +692,23 @@ namespace ContractManagement.Domains.Services.Contract
                                 })
                             .ToList();
 
+                    var contractLegalBases = templateLegalBases.Select(source =>
+                        new TblContractLegalBasis
+                        {
+                            ContractId = contract.ContractId,
+                            VersionId = contractVersion.VersionId,
+                            SourceTemplateLegalBasisId = source.TemplateLegalBasisId,
+                            BasisCode = source.BasisCode,
+                            ContentVi = source.ContentVi,
+                            ContentEn = source.ContentEn,
+                            DisplayOrder = source.DisplayOrder,
+                            CreatedEmployeeId = createdEmployeeId,
+                            CreatedDate = now
+                        }).ToList();
+
                     _dbContext.TblContractItems.AddRange(contractItems);
                     _dbContext.TblContractTerms.AddRange(contractTerms);
+                    _dbContext.TblContractLegalBases.AddRange(contractLegalBases);
 
                     /*
                      * Contract trỏ trực tiếp đến Version 1 vừa tạo.
@@ -2382,6 +2404,13 @@ namespace ContractManagement.Domains.Services.Contract
                             .OrderBy(x => x.DisplayOrder)
                             .ThenBy(x => x.TermId)
                             .ToListAsync();
+                        var sourceLegalBases = await _dbContext.TblContractLegalBases
+                            .AsNoTracking()
+                            .Where(x => x.ContractId == contract.ContractId
+                                && x.VersionId == sourceVersion.VersionId)
+                            .OrderBy(x => x.DisplayOrder)
+                            .ThenBy(x => x.LegalBasisId)
+                            .ToListAsync();
 
                         var sourceComments = await _dbContext
                             .TblContractNegotiationComments
@@ -2425,7 +2454,15 @@ namespace ContractManagement.Domains.Services.Contract
                                         contract,
                                         sourceVersion,
                                         sourceItems,
-                                        sourceTerms) with { PlaceholderValues = placeholderValues.Count == 0 ? null : placeholderValues });
+                                        sourceTerms) with
+                                    {
+                                        PlaceholderValues = placeholderValues.Count == 0 ? null : placeholderValues,
+                                        LegalBases = sourceLegalBases.Select(item =>
+                                            new ContractLegalBasisSnapshot(
+                                                item.LegalBasisId, item.BasisCode,
+                                                item.ContentVi, item.ContentEn,
+                                                item.DisplayOrder)).ToArray()
+                                    });
 
                             sourceVersion.SnapshotJson = snapshotJson;
                             sourceVersion.SnapshotHash =
@@ -2514,9 +2551,23 @@ namespace ContractManagement.Domains.Services.Contract
                                 CreatedDate = now
                             })
                             .ToList();
+                        var copiedLegalBases = sourceLegalBases.Select(source =>
+                            new TblContractLegalBasis
+                            {
+                                ContractId = contract.ContractId,
+                                VersionId = newVersion.VersionId,
+                                SourceTemplateLegalBasisId = source.SourceTemplateLegalBasisId,
+                                BasisCode = source.BasisCode,
+                                ContentVi = source.ContentVi,
+                                ContentEn = source.ContentEn,
+                                DisplayOrder = source.DisplayOrder,
+                                CreatedEmployeeId = employeeId,
+                                CreatedDate = now
+                            }).ToList();
 
                         _dbContext.TblContractItems.AddRange(copiedItems);
                         _dbContext.TblContractTerms.AddRange(copiedTerms);
+                        _dbContext.TblContractLegalBases.AddRange(copiedLegalBases);
                         await PlaceholderValues
                             .CaptureAsync(contract, newVersion, refresh: true);
 

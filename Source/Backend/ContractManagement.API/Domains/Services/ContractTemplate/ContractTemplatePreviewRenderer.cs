@@ -154,6 +154,7 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                 [
                     (OpenXmlElement)CreatePaymentTable(languageMode, renderData)
                 ],
+                "CONTRACT_LEGAL_BASES" => CreateLegalBasisElements(languageMode, renderData),
                 "CONTRACT_TERMS" => CreateTermElements(languageMode, renderData),
                 "SIGNATURE_PROVIDER" =>
                 [
@@ -219,6 +220,24 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
             if (languageMode == ContractLanguageMode.Bilingual)
             {
                 elements.AddRange(CreateTermContentElements(term.ContentEn));
+            }
+        }
+
+        return elements;
+    }
+
+    private static IEnumerable<OpenXmlElement> CreateLegalBasisElements(
+        ContractLanguageMode languageMode,
+        ContractTemplateRenderData renderData)
+    {
+        var elements = new List<OpenXmlElement>();
+        foreach (var basis in renderData.LegalBases)
+        {
+            elements.AddRange(CreateTermContentElements(basis.ContentVi));
+            if (languageMode == ContractLanguageMode.Bilingual
+                && !string.IsNullOrWhiteSpace(basis.ContentEn))
+            {
+                elements.AddRange(CreateTermContentElements(basis.ContentEn));
             }
         }
 
@@ -615,7 +634,12 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
         new ContractTemplateRenderSignature(
             SoftwareSupplyPreviewDatasetV1.CustomerSignature.PartyTitle,
             SoftwareSupplyPreviewDatasetV1.CustomerSignature.SignerName),
-        SoftwareSupplyPreviewDatasetV1.LegalDisclaimer);
+        SoftwareSupplyPreviewDatasetV1.LegalDisclaimer)
+        {
+            LegalBases = SoftwareSupplyPreviewDatasetV1.LegalBases.Select(basis =>
+                new ContractTemplateRenderLegalBasis(
+                    basis.No, basis.ContentVi, basis.ContentEn)).ToList()
+        };
 
     private static ContractTemplatePreviewException LayoutUnsupported(string key) =>
         new(

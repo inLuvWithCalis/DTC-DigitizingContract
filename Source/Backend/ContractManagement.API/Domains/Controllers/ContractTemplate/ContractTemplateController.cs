@@ -650,6 +650,90 @@ public sealed class ContractTemplateController : ControllerBase
         }
     }
 
+    [HttpPost("versions/{versionId:int}/legal-bases")]
+    public async Task<IActionResult> AddLegalBasis(
+        int versionId,
+        [FromBody] CreateContractTemplateLegalBasisRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetEmployeeId(out var employeeId, out var unauthorized))
+            return unauthorized!;
+        try
+        {
+            var result = await _service.AddLegalBasisAsync(versionId, request,
+                employeeId, cancellationToken);
+            return Ok(ApiResponse<ContractTemplateLegalBasisResponse>.Ok(result,
+                "Thêm căn cứ hợp đồng thành công."));
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            return Forbidden(exception);
+        }
+    }
+
+    [HttpPut("versions/{versionId:int}/legal-bases/order")]
+    public async Task<IActionResult> ReorderLegalBases(
+        int versionId,
+        [FromBody] ReorderContractTemplateLegalBasesRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetEmployeeId(out var employeeId, out var unauthorized))
+            return unauthorized!;
+        try
+        {
+            var result = await _service.ReorderLegalBasesAsync(versionId,
+                request, employeeId, cancellationToken);
+            return Ok(ApiResponse<ContractTemplateVersionDetailResponse>.Ok(result,
+                "Sắp xếp căn cứ hợp đồng thành công."));
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            return Forbidden(exception);
+        }
+    }
+
+    [HttpPut("versions/{versionId:int}/legal-bases/{legalBasisId:int}")]
+    public async Task<IActionResult> UpdateLegalBasis(
+        int versionId, int legalBasisId,
+        [FromBody] UpdateContractTemplateLegalBasisRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetEmployeeId(out var employeeId, out var unauthorized))
+            return unauthorized!;
+        try
+        {
+            var result = await _service.UpdateLegalBasisAsync(versionId,
+                legalBasisId, request, employeeId, cancellationToken);
+            return Ok(ApiResponse<ContractTemplateLegalBasisResponse>.Ok(result,
+                "Cập nhật căn cứ hợp đồng thành công."));
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            return Forbidden(exception);
+        }
+    }
+
+    [HttpDelete("versions/{versionId:int}/legal-bases/{legalBasisId:int}")]
+    public async Task<IActionResult> DeleteLegalBasis(
+        int versionId, int legalBasisId,
+        [FromBody] DeleteContractTemplateLegalBasisRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetEmployeeId(out var employeeId, out var unauthorized))
+            return unauthorized!;
+        try
+        {
+            await _service.DeleteLegalBasisAsync(versionId, legalBasisId,
+                request, employeeId, cancellationToken);
+            return Ok(ApiResponse<object>.Ok(new { versionId, legalBasisId },
+                "Xóa căn cứ hợp đồng thành công."));
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            return Forbidden(exception);
+        }
+    }
+
     private bool TryGetEmployeeId(
         out int employeeId,
         out IActionResult? unauthorized)

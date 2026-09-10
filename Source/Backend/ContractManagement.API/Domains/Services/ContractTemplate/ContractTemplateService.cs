@@ -568,6 +568,28 @@ public sealed class ContractTemplateService : IContractTemplateService
                 _dbContext.TblContractTemplateTerms.Add(copiedTerm);
             }
 
+            var sourceLegalBases = await _dbContext.TblContractTemplateLegalBases
+                .AsNoTracking()
+                .Where(item => item.TemplateVersionId == source.TemplateVersionId)
+                .OrderBy(item => item.DisplayOrder)
+                .ThenBy(item => item.TemplateLegalBasisId)
+                .ToListAsync(cancellationToken);
+            foreach (var sourceBasis in sourceLegalBases)
+            {
+                var copiedBasis = new TblContractTemplateLegalBasis
+                {
+                    TemplateVersionId = copy.TemplateVersionId,
+                    BasisCode = sourceBasis.BasisCode,
+                    ContentVi = sourceBasis.ContentVi,
+                    ContentEn = sourceBasis.ContentEn,
+                    DisplayOrder = sourceBasis.DisplayOrder,
+                    CreatedEmployeeId = employeeId,
+                    CreatedDate = now
+                };
+                SetSyntheticRowVersionIfNeeded(copiedBasis);
+                _dbContext.TblContractTemplateLegalBases.Add(copiedBasis);
+            }
+
             await _dbContext.SaveChangesAsync(cancellationToken);
             return await LoadVersionDetailAsync(copy.TemplateVersionId, cancellationToken);
         }, cancellationToken);
@@ -1501,6 +1523,182 @@ public sealed class ContractTemplateService : IContractTemplateService
         }, cancellationToken);
     }
 
+    public async Task<ContractTemplateLegalBasisResponse> AddLegalBasisAsync(
+        int versionId, CreateContractTemplateLegalBasisRequest request,
+        int employeeId, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        await EnsureAdminOfficerAsync(employeeId, cancellationToken);
+        var values = NormalizeLegalBasis(request.BasisCode, request.ContentVi,
+            request.ContentEn, request.DisplayOrder);
+        var expectedVersionRowVersion = DecodeRowVersion(
+            request.VersionRowVersion, nameof(request.VersionRowVersion));
+
+        return await ExecuteInTransactionAsync(async () =>
+        {
+            await EnsureAdminOfficerAsync(employeeId, cancellationToken);
+            var version = await GetVersionForMutationAsync(versionId, cancellationToken);
+            EnsureDraft(version);
+            EnsureRowVersionMatches(version.RowVersion, expectedVersionRowVersion,
+                "Template version");
+            SetOriginalRowVersion(version, expectedVersionRowVersion);
+            await EnsureLegalBasisCodeAndOrderAreAvailableAsync(versionId,
+                values.BasisCode, values.DisplayOrder, null, cancellationToken);
+
+            var now = DateTime.UtcNow;
+            var basis = new TblContractTemplateLegalBasis
+            {
+                TemplateVersionId = versionId,
+                BasisCode = values.BasisCode,
+                ContentVi = values.ContentVi,
+                ContentEn = values.ContentEn,
+                DisplayOrder = values.DisplayOrder,
+                CreatedEmployeeId = employeeId,
+                CreatedDate = now
+            };
+            SetSyntheticRowVersionIfNeeded(basis);
+            _dbContext.TblContractTemplateLegalBases.Add(basis);
+            TouchVersion(version, employeeId, now);
+            RotateVersionRowVersionIfNeeded(version);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return MapLegalBasis(basis);
+        }, cancellationToken);
+    }
+
+    public async Task<ContractTemplateLegalBasisResponse> UpdateLegalBasisAsync(
+        int versionId, int legalBasisId,
+        UpdateContractTemplateLegalBasisRequest request, int employeeId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        await EnsureAdminOfficerAsync(employeeId, cancellationToken);
+        var values = NormalizeLegalBasis(request.BasisCode, request.ContentVi,
+            request.ContentEn, request.DisplayOrder);
+        var expectedVersionRowVersion = DecodeRowVersion(
+            request.VersionRowVersion, nameof(request.VersionRowVersion));
+        var expectedRowVersion = DecodeRowVersion(request.RowVersion,
+            nameof(request.RowVersion));
+
+        return await ExecuteInTransactionAsync(async () =>
+        {
+            await EnsureAdminOfficerAsync(employeeId, cancellationToken);
+            var version = await GetVersionForMutationAsync(versionId, cancellationToken);
+            EnsureDraft(version);
+            EnsureRowVersionMatches(version.RowVersion, expectedVersionRowVersion,
+                "Template version");
+            SetOriginalRowVersion(version, expectedVersionRowVersion);
+            var basis = await _dbContext.TblContractTemplateLegalBases
+                .SingleOrDefaultAsync(item => item.TemplateLegalBasisId == legalBasisId
+                    && item.TemplateVersionId == versionId, cancellationToken)
+                ?? throw new KeyNotFoundException("Không tìm thấy căn cứ hợp đồng.");
+            EnsureRowVersionMatches(basis.RowVersion, expectedRowVersion,
+                "Căn cứ hợp đồng");
+            SetOriginalRowVersion(basis, expectedRowVersion);
+            await EnsureLegalBasisCodeAndOrderAreAvailableAsync(versionId,
+                values.BasisCode, values.DisplayOrder, legalBasisId, cancellationToken);
+
+            basis.BasisCode = values.BasisCode;
+            basis.ContentVi = values.ContentVi;
+            basis.ContentEn = values.ContentEn;
+            basis.DisplayOrder = values.DisplayOrder;
+            basis.UpdatedEmployeeId = employeeId;
+            basis.UpdatedDate = DateTime.UtcNow;
+            RotateLegalBasisRowVersionIfNeeded(basis);
+            TouchVersion(version, employeeId, basis.UpdatedDate.Value);
+            RotateVersionRowVersionIfNeeded(version);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return MapLegalBasis(basis);
+        }, cancellationToken);
+    }
+
+    public async Task DeleteLegalBasisAsync(
+        int versionId, int legalBasisId,
+        DeleteContractTemplateLegalBasisRequest request, int employeeId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        await EnsureAdminOfficerAsync(employeeId, cancellationToken);
+        var expectedVersionRowVersion = DecodeRowVersion(
+            request.VersionRowVersion, nameof(request.VersionRowVersion));
+        var expectedRowVersion = DecodeRowVersion(request.RowVersion,
+            nameof(request.RowVersion));
+
+        await ExecuteInTransactionAsync(async () =>
+        {
+            await EnsureAdminOfficerAsync(employeeId, cancellationToken);
+            var version = await GetVersionForMutationAsync(versionId, cancellationToken);
+            EnsureDraft(version);
+            EnsureRowVersionMatches(version.RowVersion, expectedVersionRowVersion,
+                "Template version");
+            SetOriginalRowVersion(version, expectedVersionRowVersion);
+            var basis = await _dbContext.TblContractTemplateLegalBases
+                .SingleOrDefaultAsync(item => item.TemplateLegalBasisId == legalBasisId
+                    && item.TemplateVersionId == versionId, cancellationToken)
+                ?? throw new KeyNotFoundException("Không tìm thấy căn cứ hợp đồng.");
+            EnsureRowVersionMatches(basis.RowVersion, expectedRowVersion,
+                "Căn cứ hợp đồng");
+            SetOriginalRowVersion(basis, expectedRowVersion);
+            _dbContext.TblContractTemplateLegalBases.Remove(basis);
+            TouchVersion(version, employeeId, DateTime.UtcNow);
+            RotateVersionRowVersionIfNeeded(version);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }, cancellationToken);
+    }
+
+    public async Task<ContractTemplateVersionDetailResponse> ReorderLegalBasesAsync(
+        int versionId, ReorderContractTemplateLegalBasesRequest request,
+        int employeeId, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        await EnsureAdminOfficerAsync(employeeId, cancellationToken);
+        var expectedVersionRowVersion = DecodeRowVersion(
+            request.VersionRowVersion, nameof(request.VersionRowVersion));
+        if (request.LegalBases is null
+            || request.LegalBases.Any(item => item.LegalBasisId <= 0 || item.DisplayOrder < 0)
+            || request.LegalBases.Select(item => item.LegalBasisId).Distinct().Count() != request.LegalBases.Count
+            || request.LegalBases.Select(item => item.DisplayOrder).Distinct().Count() != request.LegalBases.Count)
+        {
+            throw new ArgumentException(
+                "Danh sách căn cứ và DisplayOrder phải hợp lệ, duy nhất.");
+        }
+
+        return await ExecuteInTransactionAsync(async () =>
+        {
+            await EnsureAdminOfficerAsync(employeeId, cancellationToken);
+            var version = await GetVersionForMutationAsync(versionId, cancellationToken);
+            EnsureDraft(version);
+            EnsureRowVersionMatches(version.RowVersion, expectedVersionRowVersion,
+                "Template version");
+            SetOriginalRowVersion(version, expectedVersionRowVersion);
+            var bases = await _dbContext.TblContractTemplateLegalBases
+                .Where(item => item.TemplateVersionId == versionId)
+                .ToListAsync(cancellationToken);
+            if (!bases.Select(item => item.TemplateLegalBasisId).ToHashSet()
+                .SetEquals(request.LegalBases.Select(item => item.LegalBasisId)))
+            {
+                throw new ArgumentException(
+                    "Danh sách reorder phải chứa đúng toàn bộ căn cứ hiện có.");
+            }
+
+            var requestsById = request.LegalBases.ToDictionary(item => item.LegalBasisId);
+            foreach (var basis in bases)
+            {
+                var item = requestsById[basis.TemplateLegalBasisId];
+                var expectedRowVersion = DecodeRowVersion(item.RowVersion,
+                    nameof(item.RowVersion));
+                EnsureRowVersionMatches(basis.RowVersion, expectedRowVersion,
+                    "Căn cứ hợp đồng");
+                SetOriginalRowVersion(basis, expectedRowVersion);
+                basis.DisplayOrder = item.DisplayOrder;
+                RotateLegalBasisRowVersionIfNeeded(basis);
+            }
+            TouchVersion(version, employeeId, DateTime.UtcNow);
+            RotateVersionRowVersionIfNeeded(version);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return await LoadVersionDetailAsync(versionId, cancellationToken);
+        }, cancellationToken);
+    }
+
     private async Task EnsureAdminOfficerAsync(
         int employeeId,
         CancellationToken cancellationToken)
@@ -2342,10 +2540,33 @@ public sealed class ContractTemplateService : IContractTemplateService
             .OrderBy(term => term.DisplayOrder)
             .ThenBy(term => term.TemplateTermId)
             .ToListAsync(cancellationToken);
+        var legalBases = await _dbContext.TblContractTemplateLegalBases
+            .AsNoTracking()
+            .Where(item => item.TemplateVersionId == versionId)
+            .OrderBy(item => item.DisplayOrder)
+            .ThenBy(item => item.TemplateLegalBasisId)
+            .ToListAsync(cancellationToken);
 
         var response = MapVersionDetail(version, template);
         response.Terms = terms.Select(MapTerm).ToList();
+        response.LegalBases = legalBases.Select(MapLegalBasis).ToList();
         return response;
+    }
+
+    private async Task EnsureLegalBasisCodeAndOrderAreAvailableAsync(
+        int versionId, string basisCode, int displayOrder, int? excludedId,
+        CancellationToken cancellationToken)
+    {
+        var duplicate = await _dbContext.TblContractTemplateLegalBases.AnyAsync(
+            item => item.TemplateVersionId == versionId
+                && item.TemplateLegalBasisId != excludedId
+                && (item.BasisCode == basisCode || item.DisplayOrder == displayOrder),
+            cancellationToken);
+        if (duplicate)
+        {
+            throw new ArgumentException(
+                "BasisCode và DisplayOrder phải duy nhất trong template version.");
+        }
     }
 
     private async Task EnsureTermCodeAndDisplayOrderAreAvailableAsync(
@@ -2407,6 +2628,20 @@ public sealed class ContractTemplateService : IContractTemplateService
             NormalizeOptional(termContent),
             NormalizeOptional(termContentEn),
             displayOrder);
+    }
+
+    private static (string BasisCode, string ContentVi, string? ContentEn,
+        int DisplayOrder) NormalizeLegalBasis(string? basisCode,
+        string? contentVi, string? contentEn, int displayOrder)
+    {
+        if (displayOrder < 0)
+        {
+            throw new ArgumentException("DisplayOrder không được âm.");
+        }
+
+        return (NormalizeRequired(basisCode, 100, nameof(basisCode)),
+            NormalizeRequired(contentVi, int.MaxValue, nameof(contentVi)),
+            NormalizeOptional(contentEn), displayOrder);
     }
 
     private static void ValidateLanguageMode(ContractLanguageMode mode)
@@ -2542,6 +2777,13 @@ public sealed class ContractTemplateService : IContractTemplateService
             .Property(entity => entity.RowVersion)
             .OriginalValue = expectedRowVersion;
 
+    private void SetOriginalRowVersion(
+        TblContractTemplateLegalBasis basis,
+        byte[] expectedRowVersion) =>
+        _dbContext.Entry(basis)
+            .Property(entity => entity.RowVersion)
+            .OriginalValue = expectedRowVersion;
+
     private void SetSyntheticRowVersionIfNeeded(TblContractTemplate template)
     {
         if (IsInMemoryProvider() && template.RowVersion is not { Length: 8 })
@@ -2567,6 +2809,14 @@ public sealed class ContractTemplateService : IContractTemplateService
         }
     }
 
+    private void SetSyntheticRowVersionIfNeeded(TblContractTemplateLegalBasis basis)
+    {
+        if (IsInMemoryProvider() && basis.RowVersion is not { Length: 8 })
+        {
+            basis.RowVersion = NewSyntheticRowVersion();
+        }
+    }
+
     private void RotateTemplateRowVersionIfNeeded(TblContractTemplate template)
     {
         if (IsInMemoryProvider())
@@ -2589,6 +2839,14 @@ public sealed class ContractTemplateService : IContractTemplateService
         if (IsInMemoryProvider())
         {
             term.RowVersion = NewSyntheticRowVersion();
+        }
+    }
+
+    private void RotateLegalBasisRowVersionIfNeeded(TblContractTemplateLegalBasis basis)
+    {
+        if (IsInMemoryProvider())
+        {
+            basis.RowVersion = NewSyntheticRowVersion();
         }
     }
 
@@ -2785,6 +3043,22 @@ public sealed class ContractTemplateService : IContractTemplateService
             UpdatedEmployeeId = term.UpdatedEmployeeId,
             UpdatedDate = term.UpdatedDate,
             RowVersion = EncodeRowVersion(term.RowVersion)
+        };
+
+    private static ContractTemplateLegalBasisResponse MapLegalBasis(
+        TblContractTemplateLegalBasis basis) => new()
+        {
+            TemplateLegalBasisId = basis.TemplateLegalBasisId,
+            TemplateVersionId = basis.TemplateVersionId,
+            BasisCode = basis.BasisCode,
+            ContentVi = basis.ContentVi,
+            ContentEn = basis.ContentEn,
+            DisplayOrder = basis.DisplayOrder,
+            CreatedEmployeeId = basis.CreatedEmployeeId,
+            CreatedDate = basis.CreatedDate,
+            UpdatedEmployeeId = basis.UpdatedEmployeeId,
+            UpdatedDate = basis.UpdatedDate,
+            RowVersion = EncodeRowVersion(basis.RowVersion)
         };
 
     private static void TouchVersion(

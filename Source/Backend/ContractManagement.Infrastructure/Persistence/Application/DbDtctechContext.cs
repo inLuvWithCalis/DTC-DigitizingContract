@@ -69,6 +69,8 @@ public partial class DbDtctechContext : DbContext
 
     public virtual DbSet<TblContractTerm> TblContractTerms { get; set; }
 
+    public virtual DbSet<TblContractLegalBasis> TblContractLegalBases { get; set; }
+
     public virtual DbSet<TblContractVersion> TblContractVersions { get; set; }
 
     /*
@@ -88,6 +90,8 @@ public partial class DbDtctechContext : DbContext
     public virtual DbSet<TblContractTemplateField> TblContractTemplateFields { get; set; }
 
     public virtual DbSet<TblContractTemplateTerm> TblContractTemplateTerms { get; set; }
+
+    public virtual DbSet<TblContractTemplateLegalBasis> TblContractTemplateLegalBases { get; set; }
 
     public virtual DbSet<TblCustomer> TblCustomers { get; set; }
 
@@ -2514,6 +2518,7 @@ public partial class DbDtctechContext : DbContext
         });
 
         ConfigurePlaceholders(modelBuilder);
+        ConfigureLegalBases(modelBuilder);
         OnModelCreatingPartial(modelBuilder);
     }
 

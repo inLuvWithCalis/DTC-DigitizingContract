@@ -15,6 +15,8 @@ public sealed record ContractTemplateRenderData(
     string CurrencyCode = "VND")
 {
     public IReadOnlyList<SoftwareSupplyPlaceholderDefinition>? Definitions { get; init; }
+
+    public IReadOnlyList<ContractTemplateRenderLegalBasis> LegalBases { get; init; } = [];
 }
 
 public sealed record ContractTemplateRenderItem(
@@ -40,6 +42,11 @@ public sealed record ContractTemplateRenderTerm(
     string TitleEn,
     string ContentVi,
     string ContentEn);
+
+public sealed record ContractTemplateRenderLegalBasis(
+    int No,
+    string ContentVi,
+    string? ContentEn);
 
 public sealed record ContractTemplateRenderSignature(
     string PartyTitle,

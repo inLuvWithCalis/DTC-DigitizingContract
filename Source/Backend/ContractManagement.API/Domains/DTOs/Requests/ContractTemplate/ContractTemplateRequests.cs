@@ -176,3 +176,57 @@ public sealed class ReorderContractTemplateTermItem
     [Range(0, int.MaxValue)]
     public int DisplayOrder { get; set; }
 }
+
+public class CreateContractTemplateLegalBasisRequest
+{
+    [Required]
+    public string BasisCode { get; set; } = string.Empty;
+
+    [Required]
+    public string ContentVi { get; set; } = string.Empty;
+
+    public string? ContentEn { get; set; }
+
+    [Range(0, int.MaxValue)]
+    public int DisplayOrder { get; set; }
+
+    [Required]
+    public string VersionRowVersion { get; set; } = string.Empty;
+}
+
+public sealed class UpdateContractTemplateLegalBasisRequest
+    : CreateContractTemplateLegalBasisRequest
+{
+    [Required]
+    public string RowVersion { get; set; } = string.Empty;
+}
+
+public sealed class DeleteContractTemplateLegalBasisRequest
+{
+    [Required]
+    public string RowVersion { get; set; } = string.Empty;
+
+    [Required]
+    public string VersionRowVersion { get; set; } = string.Empty;
+}
+
+public sealed class ReorderContractTemplateLegalBasesRequest
+{
+    [Required]
+    public string VersionRowVersion { get; set; } = string.Empty;
+
+    [Required]
+    public List<ReorderContractTemplateLegalBasisItem> LegalBases { get; set; } = [];
+}
+
+public sealed class ReorderContractTemplateLegalBasisItem
+{
+    [Range(1, int.MaxValue)]
+    public int LegalBasisId { get; set; }
+
+    [Required]
+    public string RowVersion { get; set; } = string.Empty;
+
+    [Range(0, int.MaxValue)]
+    public int DisplayOrder { get; set; }
+}

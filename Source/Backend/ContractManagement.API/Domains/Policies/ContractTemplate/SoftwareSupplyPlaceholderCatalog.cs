@@ -49,7 +49,7 @@ public sealed record SoftwareSupplyPlaceholderDefinition(
 /// </summary>
 public static class SoftwareSupplyPlaceholderCatalog
 {
-    public const string Version = "V2";
+    public const string Version = "V3";
 
     private static readonly IReadOnlyList<SoftwareSupplyPlaceholderDefinition>
         Items =
@@ -72,6 +72,7 @@ public static class SoftwareSupplyPlaceholderCatalog
             new("PROVIDER_ADDRESS", "Địa chỉ bên cung cấp", false, TemplatePlaceholderDataKind.Scalar, TemplatePlaceholderMultiplicity.ZeroOrOne, "TenantLegalProfile.Address"),
             new("PROVIDER_REPRESENTATIVE_NAME", "Người đại diện pháp luật bên cung cấp", false, TemplatePlaceholderDataKind.Scalar, TemplatePlaceholderMultiplicity.ZeroOrOne, "TenantLegalProfile.RepresentativeName"),
             new("PROVIDER_REPRESENTATIVE_TITLE", "Chức danh người đại diện bên cung cấp", false, TemplatePlaceholderDataKind.Scalar, TemplatePlaceholderMultiplicity.ZeroOrOne, "TenantLegalProfile.RepresentativeTitle"),
+            new("CONTRACT_LEGAL_BASES", "Căn cứ hợp đồng", false, TemplatePlaceholderDataKind.DynamicBlock, TemplatePlaceholderMultiplicity.ZeroOrOne, "Contract.LegalBases"),
             new("CONTRACT_TERMS", "Các điều khoản hợp đồng", false, TemplatePlaceholderDataKind.DynamicBlock, TemplatePlaceholderMultiplicity.ZeroOrOne, "Contract.Terms"),
             new("CONTRACT_ITEM_TABLE", "Bảng sản phẩm/dịch vụ", false, TemplatePlaceholderDataKind.DynamicBlock, TemplatePlaceholderMultiplicity.ZeroOrOne, "Contract.Items"),
             new("SIGNATURE_PROVIDER", "Chữ ký bên cung cấp", false, TemplatePlaceholderDataKind.DynamicBlock, TemplatePlaceholderMultiplicity.ZeroOrOne, "Contract.ProviderSignature"),

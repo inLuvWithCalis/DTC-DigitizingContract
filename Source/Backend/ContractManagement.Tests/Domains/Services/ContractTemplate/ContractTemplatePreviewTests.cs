@@ -40,7 +40,8 @@ public sealed class ContractTemplatePreviewTests
 
         Assert.True(catalogKeys.SetEquals(
             SoftwareSupplyPreviewDatasetV1.CoveredPlaceholderKeys));
-        Assert.Equal("V2", SoftwareSupplyPreviewDatasetV1.Version);
+        Assert.Equal("V3", SoftwareSupplyPreviewDatasetV1.Version);
+        Assert.Equal(2, SoftwareSupplyPreviewDatasetV1.LegalBases.Count);
         Assert.Equal(2, SoftwareSupplyPreviewDatasetV1.Items.Count);
         Assert.Equal(2, SoftwareSupplyPreviewDatasetV1.Payments.Count);
         Assert.Equal(100m, SoftwareSupplyPreviewDatasetV1.Payments.Sum(item => item.Percent));
@@ -71,6 +72,7 @@ public sealed class ContractTemplatePreviewTests
         Assert.Contains("36.093.750 VND", text);
         Assert.Contains("Nguyễn Văn Mẫu", text);
         Assert.Contains("Điều 4.", text);
+        Assert.Contains(SoftwareSupplyPreviewDatasetV1.LegalBases[0].ContentVi, text);
         Assert.True(document.MainDocumentPart!.Document!.Body!
             .Elements<W.Table>().Count() >= 2);
     }
@@ -135,7 +137,16 @@ public sealed class ContractTemplatePreviewTests
                 1, "Phạm vi thật", "Actual scope", "Nội dung thật", "Actual content")],
             new ContractTemplateRenderSignature("ĐẠI DIỆN BÊN CUNG CẤP", "Nhân viên Thật"),
             new ContractTemplateRenderSignature("ĐẠI DIỆN BÊN KHÁCH HÀNG", "Khách hàng Thật"),
-            string.Empty);
+            string.Empty)
+        {
+            LegalBases =
+            [
+                new ContractTemplateRenderLegalBasis(
+                    1,
+                    "Căn cứ dữ liệu hợp đồng thật",
+                    "Based on actual contract data")
+            ]
+        };
 
         var rendered = new ContractTemplatePreviewRenderer().Render(
             CreateSourceDocument(),
@@ -150,6 +161,7 @@ public sealed class ContractTemplatePreviewTests
         Assert.Contains("Phần mềm thật", text);
         Assert.Contains("Nhân viên Thật", text);
         Assert.DoesNotContain("Trần Thị Mẫu", text);
+        Assert.Contains("Căn cứ dữ liệu hợp đồng thật", text);
         Assert.DoesNotContain("CUS-DEMO-2026", text);
     }
 

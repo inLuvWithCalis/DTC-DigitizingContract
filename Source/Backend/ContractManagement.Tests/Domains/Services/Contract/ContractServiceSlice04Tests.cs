@@ -129,6 +129,11 @@ public sealed class ContractServiceSlice04Tests
 
         Assert.Equal(result.Subtotal, version.Subtotal);
         Assert.Equal(result.TotalPayment, version.TotalAmount);
+        var legalBasis = await context.TblContractLegalBases
+            .AsNoTracking()
+            .SingleAsync();
+        Assert.Equal("CIVIL_CODE", legalBasis.BasisCode);
+        Assert.Equal(64, legalBasis.SourceTemplateLegalBasisId);
     }
 
     [Fact]
@@ -268,6 +273,9 @@ public sealed class ContractServiceSlice04Tests
             .AsNoTracking()
             .SingleAsync(x =>
                 x.VersionId == response.CurrentVersion.VersionId);
+        var copiedLegalBasis = await context.TblContractLegalBases
+            .AsNoTracking()
+            .SingleAsync(x => x.VersionId == response.CurrentVersion.VersionId);
         var contract = await context.TblContracts
             .AsNoTracking()
             .SingleAsync();
@@ -288,6 +296,8 @@ public sealed class ContractServiceSlice04Tests
         Assert.Equal("Snapshot product", copiedItem.ItemName);
         Assert.Equal(100m, copiedItem.LineTotal);
         Assert.Equal("GENERAL", copiedTerm.TermCode);
+        Assert.Equal("CIVIL_CODE", copiedLegalBasis.BasisCode);
+        Assert.Contains("\"legalBases\"", versions[0].SnapshotJson);
         Assert.Equal(100m, versions[1].TotalAmount);
     }
 
@@ -518,6 +528,18 @@ public sealed class ContractServiceSlice04Tests
                 CreatedDate = DateTime.UtcNow,
                 RowVersion = []
             });
+        context.TblContractTemplateLegalBases.Add(
+            new TblContractTemplateLegalBasis
+            {
+                TemplateLegalBasisId = 64,
+                TemplateVersionId = TemplateVersionId,
+                BasisCode = "CIVIL_CODE",
+                ContentVi = "Căn cứ Bộ luật Dân sự.",
+                DisplayOrder = 1,
+                CreatedEmployeeId = EmployeeId,
+                CreatedDate = DateTime.UtcNow,
+                RowVersion = []
+            });
 
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
@@ -690,6 +712,18 @@ public sealed class ContractServiceSlice04Tests
             TermCode = "GENERAL",
             TermTitle = "General",
             IsNegotiable = true,
+            DisplayOrder = 1,
+            CreatedEmployeeId = EmployeeId,
+            CreatedDate = DateTime.UtcNow,
+            RowVersion = rowVersion
+        });
+        context.TblContractLegalBases.Add(new TblContractLegalBasis
+        {
+            LegalBasisId = 104,
+            ContractId = contract.ContractId,
+            VersionId = version.VersionId,
+            BasisCode = "CIVIL_CODE",
+            ContentVi = "Căn cứ Bộ luật Dân sự.",
             DisplayOrder = 1,
             CreatedEmployeeId = EmployeeId,
             CreatedDate = DateTime.UtcNow,

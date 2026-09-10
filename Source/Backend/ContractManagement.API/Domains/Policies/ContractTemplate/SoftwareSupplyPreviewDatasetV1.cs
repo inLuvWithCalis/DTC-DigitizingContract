@@ -8,7 +8,7 @@ namespace ContractManagement.Domains.Policies.ContractTemplate;
 /// </summary>
 public static class SoftwareSupplyPreviewDatasetV1
 {
-    public const string Version = "V2";
+    public const string Version = "V3";
 
     public const string LegalDisclaimer =
         "DỮ LIỆU MẪU — KHÔNG CÓ GIÁ TRỊ PHÁP LÝ";
@@ -34,6 +34,7 @@ public static class SoftwareSupplyPreviewDatasetV1
         "PROVIDER_ADDRESS",
         "PROVIDER_REPRESENTATIVE_NAME",
         "PROVIDER_REPRESENTATIVE_TITLE",
+        "CONTRACT_LEGAL_BASES",
         "CONTRACT_TERMS",
         "CONTRACT_ITEM_TABLE",
         "SIGNATURE_PROVIDER",
@@ -161,6 +162,16 @@ public static class SoftwareSupplyPreviewDatasetV1
             "This DOCX preview is generated separately from a validated Draft template. The source template is not modified; changes to the source DOCX, catalog, dataset or language mode make an earlier preview non-current.")
     ];
 
+    public static IReadOnlyList<SoftwareSupplyPreviewLegalBasis> LegalBases { get; } =
+    [
+        new(1,
+            "Căn cứ Bộ luật Dân sự số 91/2015/QH13 ngày 24 tháng 11 năm 2015.",
+            "Pursuant to the Civil Code No. 91/2015/QH13 dated 24 November 2015."),
+        new(2,
+            "Căn cứ nhu cầu và khả năng của các Bên.",
+            "Based on the needs and capabilities of the Parties.")
+    ];
+
     public static SoftwareSupplyPreviewSignature ProviderSignature { get; } = new(
         "ĐẠI DIỆN BÊN CUNG CẤP",
         "Nguyễn Văn Mẫu — Giám đốc dự án (dữ liệu mẫu)");
@@ -201,6 +212,11 @@ public sealed record SoftwareSupplyPreviewTerm(
     int No,
     string TitleVi,
     string TitleEn,
+    string ContentVi,
+    string ContentEn);
+
+public sealed record SoftwareSupplyPreviewLegalBasis(
+    int No,
     string ContentVi,
     string ContentEn);
 

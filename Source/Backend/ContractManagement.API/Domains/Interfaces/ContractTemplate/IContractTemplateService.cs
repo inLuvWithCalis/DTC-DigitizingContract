@@ -113,4 +113,30 @@ public interface IContractTemplateService
         ReorderContractTemplateTermsRequest request,
         int employeeId,
         CancellationToken cancellationToken = default);
+
+    Task<ContractTemplateLegalBasisResponse> AddLegalBasisAsync(
+        int versionId,
+        CreateContractTemplateLegalBasisRequest request,
+        int employeeId,
+        CancellationToken cancellationToken = default);
+
+    Task<ContractTemplateLegalBasisResponse> UpdateLegalBasisAsync(
+        int versionId,
+        int legalBasisId,
+        UpdateContractTemplateLegalBasisRequest request,
+        int employeeId,
+        CancellationToken cancellationToken = default);
+
+    Task DeleteLegalBasisAsync(
+        int versionId,
+        int legalBasisId,
+        DeleteContractTemplateLegalBasisRequest request,
+        int employeeId,
+        CancellationToken cancellationToken = default);
+
+    Task<ContractTemplateVersionDetailResponse> ReorderLegalBasesAsync(
+        int versionId,
+        ReorderContractTemplateLegalBasesRequest request,
+        int employeeId,
+        CancellationToken cancellationToken = default);
 }

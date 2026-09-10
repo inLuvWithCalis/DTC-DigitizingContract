@@ -12,10 +12,10 @@ public class ContractTemplatePolicyTests
     {
         var catalog = SoftwareSupplyPlaceholderCatalog.All;
 
-        Assert.Equal("V2", SoftwareSupplyPlaceholderCatalog.Version);
-        Assert.Equal(36, catalog.Count);
+        Assert.Equal("V3", SoftwareSupplyPlaceholderCatalog.Version);
+        Assert.Equal(37, catalog.Count);
         Assert.DoesNotContain(catalog, item => item.IsRequired);
-        Assert.Equal(36, catalog.Count(item => !item.IsRequired));
+        Assert.Equal(37, catalog.Count(item => !item.IsRequired));
         Assert.All(catalog, item =>
             Assert.Equal(TemplatePlaceholderMultiplicity.ZeroOrOne, item.Multiplicity));
         Assert.Equal(
@@ -38,6 +38,7 @@ public class ContractTemplatePolicyTests
 
     [Theory]
     [InlineData("CONTRACT_TERMS", TemplatePlaceholderDataKind.DynamicBlock, false, TemplatePlaceholderMultiplicity.ZeroOrOne)]
+    [InlineData("CONTRACT_LEGAL_BASES", TemplatePlaceholderDataKind.DynamicBlock, false, TemplatePlaceholderMultiplicity.ZeroOrOne)]
     [InlineData("CONTRACT_ITEM_TABLE", TemplatePlaceholderDataKind.DynamicBlock, false, TemplatePlaceholderMultiplicity.ZeroOrOne)]
     [InlineData("SIGNATURE_PROVIDER", TemplatePlaceholderDataKind.DynamicBlock, false, TemplatePlaceholderMultiplicity.ZeroOrOne)]
     [InlineData("SIGNATURE_CUSTOMER", TemplatePlaceholderDataKind.DynamicBlock, false, TemplatePlaceholderMultiplicity.ZeroOrOne)]

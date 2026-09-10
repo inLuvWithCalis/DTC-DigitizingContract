@@ -152,6 +152,8 @@ public sealed class ContractTemplateVersionDetailResponse
     public string RowVersion { get; set; } = string.Empty;
 
     public List<ContractTemplateTermResponse> Terms { get; set; } = [];
+
+    public List<ContractTemplateLegalBasisResponse> LegalBases { get; set; } = [];
 }
 
 public sealed class ContractTemplatePreviewResponse
@@ -188,6 +190,31 @@ public sealed class ContractTemplateTermResponse
     public string? TermContentEn { get; set; }
 
     public bool IsNegotiable { get; set; }
+
+    public int DisplayOrder { get; set; }
+
+    public int CreatedEmployeeId { get; set; }
+
+    public DateTime CreatedDate { get; set; }
+
+    public int? UpdatedEmployeeId { get; set; }
+
+    public DateTime? UpdatedDate { get; set; }
+
+    public string RowVersion { get; set; } = string.Empty;
+}
+
+public sealed class ContractTemplateLegalBasisResponse
+{
+    public int TemplateLegalBasisId { get; set; }
+
+    public int TemplateVersionId { get; set; }
+
+    public string BasisCode { get; set; } = string.Empty;
+
+    public string ContentVi { get; set; } = string.Empty;
+
+    public string? ContentEn { get; set; }
 
     public int DisplayOrder { get; set; }
 

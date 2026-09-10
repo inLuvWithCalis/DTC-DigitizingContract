@@ -192,6 +192,7 @@ public sealed class ContractTemplateServiceTests
         Assert.Null(copy.DocumentFileId);
         Assert.Null(copy.DocumentHash);
         Assert.Equal("PAYMENT", Assert.Single(copy.Terms).TermCode);
+        Assert.Equal("CIVIL_CODE", Assert.Single(copy.LegalBases).BasisCode);
         Assert.NotEqual(source.TemplateVersionId, copy.TemplateVersionId);
 
         var exception = await Assert.ThrowsAsync<BusinessRuleException>(() =>
@@ -488,6 +489,78 @@ public sealed class ContractTemplateServiceTests
                 AdminOfficerId));
     }
 
+    [Fact]
+    public async Task DraftLegalBases_CanBeCreatedReorderedUpdatedAndDeleted()
+    {
+        await using var context = CreateContext();
+        await SeedEmployeesAsync(context);
+        var service = CreateService(context);
+        var created = await service.CreateAsync(CreateRequest("LEGAL-BASES"), AdminOfficerId);
+        var version = Assert.Single(created.Versions);
+
+        await service.AddLegalBasisAsync(version.TemplateVersionId,
+            new CreateContractTemplateLegalBasisRequest
+            {
+                BasisCode = "CIVIL_CODE",
+                ContentVi = "Căn cứ Bộ luật Dân sự.",
+                DisplayOrder = 1,
+                VersionRowVersion = version.RowVersion
+            }, AdminOfficerId);
+        var afterFirst = await service.GetVersionAsync(version.TemplateVersionId,
+            AdminOfficerId);
+        await service.AddLegalBasisAsync(version.TemplateVersionId,
+            new CreateContractTemplateLegalBasisRequest
+            {
+                BasisCode = "COMMERCIAL_LAW",
+                ContentVi = "Căn cứ Luật Thương mại.",
+                DisplayOrder = 2,
+                VersionRowVersion = afterFirst.RowVersion
+            }, AdminOfficerId);
+        var beforeReorder = await service.GetVersionAsync(version.TemplateVersionId,
+            AdminOfficerId);
+        var first = beforeReorder.LegalBases.Single(x => x.BasisCode == "CIVIL_CODE");
+        var second = beforeReorder.LegalBases.Single(x => x.BasisCode == "COMMERCIAL_LAW");
+
+        var reordered = await service.ReorderLegalBasesAsync(version.TemplateVersionId,
+            new ReorderContractTemplateLegalBasesRequest
+            {
+                VersionRowVersion = beforeReorder.RowVersion,
+                LegalBases =
+                [
+                    new() { LegalBasisId = second.TemplateLegalBasisId, RowVersion = second.RowVersion, DisplayOrder = 1 },
+                    new() { LegalBasisId = first.TemplateLegalBasisId, RowVersion = first.RowVersion, DisplayOrder = 2 }
+                ]
+            }, AdminOfficerId);
+        Assert.Equal("COMMERCIAL_LAW", reordered.LegalBases[0].BasisCode);
+
+        var civil = reordered.LegalBases.Single(x => x.BasisCode == "CIVIL_CODE");
+        var updated = await service.UpdateLegalBasisAsync(version.TemplateVersionId,
+            civil.TemplateLegalBasisId,
+            new UpdateContractTemplateLegalBasisRequest
+            {
+                BasisCode = civil.BasisCode,
+                ContentVi = "Căn cứ Bộ luật Dân sự số 91/2015/QH13.",
+                DisplayOrder = civil.DisplayOrder,
+                RowVersion = civil.RowVersion,
+                VersionRowVersion = reordered.RowVersion
+            }, AdminOfficerId);
+        Assert.Contains("91/2015/QH13", updated.ContentVi);
+
+        var beforeDelete = await service.GetVersionAsync(version.TemplateVersionId,
+            AdminOfficerId);
+        var commercial = beforeDelete.LegalBases.Single(x => x.BasisCode == "COMMERCIAL_LAW");
+        await service.DeleteLegalBasisAsync(version.TemplateVersionId,
+            commercial.TemplateLegalBasisId,
+            new DeleteContractTemplateLegalBasisRequest
+            {
+                RowVersion = commercial.RowVersion,
+                VersionRowVersion = beforeDelete.RowVersion
+            }, AdminOfficerId);
+        Assert.Equal("CIVIL_CODE",
+            Assert.Single((await service.GetVersionAsync(version.TemplateVersionId,
+                AdminOfficerId)).LegalBases).BasisCode);
+    }
+
     private static ContractTemplateService CreateService(
         DbDtctechContext context) => new(context);
 
@@ -591,6 +664,17 @@ public sealed class ContractTemplateServiceTests
             CreatedEmployeeId = AdminOfficerId,
             CreatedDate = now,
             RowVersion = [3, 3, 3, 3, 3, 3, 3, 3]
+        });
+        context.TblContractTemplateLegalBases.Add(new TblContractTemplateLegalBasis
+        {
+            TemplateLegalBasisId = 4,
+            TemplateVersionId = 2,
+            BasisCode = "CIVIL_CODE",
+            ContentVi = "Căn cứ Bộ luật Dân sự.",
+            DisplayOrder = 1,
+            CreatedEmployeeId = AdminOfficerId,
+            CreatedDate = now,
+            RowVersion = [4, 4, 4, 4, 4, 4, 4, 4]
         });
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();

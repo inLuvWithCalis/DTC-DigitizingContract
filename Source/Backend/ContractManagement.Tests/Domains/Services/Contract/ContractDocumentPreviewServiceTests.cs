@@ -117,6 +117,7 @@ public sealed class ContractDocumentPreviewServiceTests
         Assert.Contains("Ngân hàng Khách hàng", text);
         Assert.Contains("Phần mềm quản lý hợp đồng", text);
         Assert.Contains("Phạm vi cung cấp", text);
+        Assert.Contains("Căn cứ Luật Thương mại", text);
         Assert.Contains(
             document.MainDocumentPart.Document.Descendants<W.Paragraph>(),
             paragraph => paragraph.InnerText == "1.080");
@@ -163,6 +164,7 @@ public sealed class ContractDocumentPreviewServiceTests
         Assert.Equal(TemplateVersionId, result.TemplateVersionId);
         Assert.Contains("\"schemaVersion\":4", result.SnapshotJson);
         Assert.Contains("\"contractCode\":\"HD-8B-001\"", result.SnapshotJson);
+        Assert.Contains("\"basisCode\":\"COMMERCIAL_LAW\"", result.SnapshotJson);
         Assert.Equal("HD-8B-001-submitted.docx", result.DocxFileName);
         Assert.Equal("HD-8B-001-submitted.pdf", result.PdfFileName);
         Assert.Equal(result.DocxContent, pdfRenderer.InputDocx);
@@ -358,6 +360,19 @@ public sealed class ContractDocumentPreviewServiceTests
             TermContent = "Cung cấp phần mềm theo danh mục.",
             TermContentEn = "Supply software as listed.",
             IsNegotiable = true,
+            DisplayOrder = 1,
+            CreatedEmployeeId = OwnerId,
+            CreatedDate = DateTime.UtcNow,
+            RowVersion = [1]
+        });
+        context.TblContractLegalBases.Add(new TblContractLegalBasis
+        {
+            LegalBasisId = 8451,
+            ContractId = ContractId,
+            VersionId = VersionId,
+            BasisCode = "COMMERCIAL_LAW",
+            ContentVi = "Căn cứ Luật Thương mại.",
+            ContentEn = "Pursuant to the Commercial Law.",
             DisplayOrder = 1,
             CreatedEmployeeId = OwnerId,
             CreatedDate = DateTime.UtcNow,

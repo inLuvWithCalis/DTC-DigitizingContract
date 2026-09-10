@@ -3,11 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import type { JSONContent } from "@tiptap/core";
 import { TableKit } from "@tiptap/extension-table";
+import TextAlign from "@tiptap/extension-text-align";
 import { FontSize, TextStyle } from "@tiptap/extension-text-style";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import {
   Bold,
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
   ChevronDown,
   Italic,
   Maximize2,
@@ -33,6 +37,8 @@ import {
   parseContractRichText,
   serializeContractRichText,
   type ContractRichTextBlock,
+  type ContractRichTextAlignment,
+  type ContractRichTextParagraph,
   type ContractRichTextRun,
 } from "@/lib/contract-rich-text";
 import { cn } from "@/lib/utils";
@@ -69,7 +75,11 @@ const toTiptapContent = (value?: string | null): JSONContent => ({
   type: "doc",
   content: parseContractRichText(value).blocks.map((block) => {
     if (block.type === "paragraph") {
-      return { type: "paragraph", content: runsToTiptapContent(block.runs) };
+      return {
+        type: "paragraph",
+        attrs: { textAlign: block.alignment ?? "left" },
+        content: runsToTiptapContent(block.runs),
+      };
     }
 
     return {
@@ -78,9 +88,11 @@ const toTiptapContent = (value?: string | null): JSONContent => ({
         type: "tableRow",
         content: row.cells.map((cell) => ({
           type: "tableCell",
-          content: [
-            { type: "paragraph", content: runsToTiptapContent(cell.runs) },
-          ],
+          content: cell.paragraphs.map((paragraph) => ({
+            type: "paragraph",
+            attrs: { textAlign: paragraph.alignment ?? "left" },
+            content: runsToTiptapContent(paragraph.runs),
+          })),
         })),
       })),
     };
@@ -138,29 +150,26 @@ const tiptapInlineToRuns = (nodes?: JSONContent[]) => {
   return runs;
 };
 
-const cellToRuns = (cell: JSONContent) => {
-  const runs: ContractRichTextRun[] = [];
-  cell.content?.forEach((paragraph, index) => {
-    if (index > 0) appendRun(runs, "\n");
-    tiptapInlineToRuns(paragraph.content).forEach((run) =>
-      appendRun(
-        runs,
-        run.text,
-        run.bold,
-        run.italic,
-        run.underline,
-        run.fontSize,
-      ),
-    );
-  });
-  return runs;
+const paragraphAlignment = (
+  paragraph: JSONContent,
+): ContractRichTextAlignment | undefined => {
+  const value = paragraph.attrs?.textAlign;
+  return value === "center" || value === "right" ? value : undefined;
+};
+
+const tiptapParagraph = (paragraph: JSONContent): ContractRichTextParagraph => {
+  const alignment = paragraphAlignment(paragraph);
+  return {
+    runs: tiptapInlineToRuns(paragraph.content),
+    ...(alignment ? { alignment } : {}),
+  };
 };
 
 const fromTiptapContent = (document: JSONContent) => {
   const blocks: ContractRichTextBlock[] = [];
   document.content?.forEach((node) => {
     if (node.type === "paragraph") {
-      blocks.push({ type: "paragraph", runs: tiptapInlineToRuns(node.content) });
+      blocks.push({ type: "paragraph", ...tiptapParagraph(node) });
       return;
     }
     if (node.type !== "table") return;
@@ -172,7 +181,11 @@ const fromTiptapContent = (document: JSONContent) => {
             (cell) =>
               cell.type === "tableCell" || cell.type === "tableHeader",
           )
-          .map((cell) => ({ runs: cellToRuns(cell) })),
+          .map((cell) => ({
+            paragraphs: (cell.content ?? [])
+              .filter((paragraph) => paragraph.type === "paragraph")
+              .map(tiptapParagraph),
+          })),
       }));
     if (rows.length > 0) blocks.push({ type: "table", rows });
   });
@@ -207,6 +220,11 @@ export function ContractRichTextEditor({
       }),
       TextStyle,
       FontSize,
+      TextAlign.configure({
+        types: ["paragraph"],
+        alignments: ["left", "center", "right"],
+        defaultAlignment: "left",
+      }),
       TableKit.configure({
         table: {
           resizable: false,
@@ -313,6 +331,25 @@ export function ContractRichTextEditor({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+        {([
+          ["left", AlignLeft, "Căn trái"],
+          ["center", AlignCenter, "Căn giữa"],
+          ["right", AlignRight, "Căn phải"],
+        ] as const).map(([alignment, Icon, label]) => (
+          <Button
+            key={alignment}
+            type="button"
+            variant={editor.isActive({ textAlign: alignment }) ? "secondary" : "ghost"}
+            size="icon"
+            className="size-8"
+            title={label}
+            aria-label={label}
+            aria-pressed={editor.isActive({ textAlign: alignment })}
+            onClick={() => editor.chain().focus().setTextAlign(alignment).run()}
+          >
+            <Icon className="size-4" />
+          </Button>
+        ))}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button type="button" variant="ghost" size="sm" className="h-8 gap-1">

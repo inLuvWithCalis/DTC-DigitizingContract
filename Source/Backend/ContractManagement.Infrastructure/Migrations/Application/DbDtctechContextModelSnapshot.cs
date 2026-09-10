@@ -1664,6 +1664,9 @@ namespace ContractManagement.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<int?>("PaymentMilestoneId")
+                        .HasColumnType("int");
+
                     b.Property<string>("ReferenceCode")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -1701,6 +1704,8 @@ namespace ContractManagement.Migrations
                         .IsUnique()
                         .HasFilter("[EvidenceFileId] IS NOT NULL");
 
+                    b.HasIndex("PaymentMilestoneId");
+
                     b.HasIndex("VoidedByEmployeeId");
 
                     b.HasIndex("VersionId", "ReferenceCode")
@@ -1713,6 +1718,116 @@ namespace ContractManagement.Migrations
                             t.HasCheckConstraint("CK_tbl_ContractPaymentLedger_Status", "[Status] IN (1, 2)");
 
                             t.HasCheckConstraint("CK_tbl_ContractPaymentLedger_VoidMetadata", "([Status] = 1 AND [VoidReason] IS NULL AND [VoidedByEmployeeId] IS NULL AND [VoidedAt] IS NULL) OR ([Status] = 2 AND [VoidReason] IS NOT NULL AND [VoidedByEmployeeId] IS NOT NULL AND [VoidedAt] IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractPaymentMilestone", b =>
+                {
+                    b.Property<int>("PaymentMilestoneId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("PaymentMilestoneId"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("AnchorDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("ConditionEn")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("ConditionVi")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("ContractId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(sysutcdatetime())");
+
+                    b.Property<int>("CreatedEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<byte>("DayCountMode")
+                        .HasColumnType("tinyint");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<byte>("DueAnchor")
+                        .HasColumnType("tinyint");
+
+                    b.Property<DateTime?>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("DueOffsetDays")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MilestoneCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<decimal>("PaymentPercent")
+                        .HasColumnType("decimal(9,4)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int?>("SourceTemplatePaymentMilestoneId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TermId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TitleEn")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("TitleVi")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("VersionId")
+                        .HasColumnType("int");
+
+                    b.HasKey("PaymentMilestoneId");
+
+                    b.HasIndex("TermId");
+
+                    b.HasIndex("VersionId", "MilestoneCode")
+                        .IsUnique();
+
+                    b.HasIndex("ContractId", "VersionId", "DisplayOrder");
+
+                    b.ToTable("tbl_ContractPaymentMilestone", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_tbl_ContractPaymentMilestone_Amount", "[Amount] >= 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractPaymentMilestone_DayCount", "[DayCountMode] IN (1, 2)");
+
+                            t.HasCheckConstraint("CK_tbl_ContractPaymentMilestone_DueAnchor", "[DueAnchor] IN (1, 2, 3, 4, 5)");
+
+                            t.HasCheckConstraint("CK_tbl_ContractPaymentMilestone_DueOffset", "[DueOffsetDays] >= 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractPaymentMilestone_Percent", "[PaymentPercent] > 0 AND [PaymentPercent] <= 100");
                         });
                 });
 
@@ -2251,6 +2366,98 @@ namespace ContractManagement.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplatePaymentMilestone", b =>
+                {
+                    b.Property<int>("TemplatePaymentMilestoneId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("TemplatePaymentMilestoneId"));
+
+                    b.Property<string>("ConditionEn")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("ConditionVi")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(sysutcdatetime())");
+
+                    b.Property<int>("CreatedEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<byte>("DayCountMode")
+                        .HasColumnType("tinyint");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<byte>("DueAnchor")
+                        .HasColumnType("tinyint");
+
+                    b.Property<int>("DueOffsetDays")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MilestoneCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<decimal>("PaymentPercent")
+                        .HasColumnType("decimal(9,4)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("TemplateTermId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TemplateVersionId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TitleEn")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("TitleVi")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedEmployeeId")
+                        .HasColumnType("int");
+
+                    b.HasKey("TemplatePaymentMilestoneId");
+
+                    b.HasIndex("TemplateTermId", "DisplayOrder")
+                        .IsUnique();
+
+                    b.HasIndex("TemplateVersionId", "MilestoneCode")
+                        .IsUnique();
+
+                    b.ToTable("tbl_ContractTemplatePaymentMilestone", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_tbl_ContractTemplatePaymentMilestone_DayCount", "[DayCountMode] IN (1, 2)");
+
+                            t.HasCheckConstraint("CK_tbl_ContractTemplatePaymentMilestone_DueAnchor", "[DueAnchor] IN (1, 2, 3, 4, 5)");
+
+                            t.HasCheckConstraint("CK_tbl_ContractTemplatePaymentMilestone_DueOffset", "[DueOffsetDays] >= 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractTemplatePaymentMilestone_Percent", "[PaymentPercent] > 0 AND [PaymentPercent] <= 100");
+                        });
+                });
+
             modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplateTerm", b =>
                 {
                     b.Property<int>("TemplateTermId")
@@ -2298,6 +2505,11 @@ namespace ContractManagement.Migrations
                     b.Property<string>("TermContentEn")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<byte>("TermKind")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint")
+                        .HasDefaultValue((byte)0, "DF_tbl_ContractTemplateTerm_TermKind");
+
                     b.Property<string>("TermTitle")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -2330,6 +2542,8 @@ namespace ContractManagement.Migrations
                             t.HasCheckConstraint("CK_tbl_ContractTemplateTerm_TemplateVersionId", "[TemplateVersionId] > 0");
 
                             t.HasCheckConstraint("CK_tbl_ContractTemplateTerm_TermCode", "LEN(LTRIM(RTRIM([TermCode]))) > 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateTerm_TermKind", "[TermKind] IN (0, 1)");
                         });
                 });
 
@@ -2527,6 +2741,11 @@ namespace ContractManagement.Migrations
                     b.Property<string>("TermContentEn")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<byte>("TermKind")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint")
+                        .HasDefaultValue((byte)0, "DF_tbl_ContractTerm_TermKind");
+
                     b.Property<string>("TermTitle")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -2567,6 +2786,8 @@ namespace ContractManagement.Migrations
                             t.HasCheckConstraint("CK_tbl_ContractTerm_SourceTemplateTermId", "[SourceTemplateTermId] IS NULL OR [SourceTemplateTermId] > 0");
 
                             t.HasCheckConstraint("CK_tbl_ContractTerm_TermCode", "LEN(LTRIM(RTRIM([TermCode]))) > 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractTerm_TermKind", "[TermKind] IN (0, 1)");
 
                             t.HasCheckConstraint("CK_tbl_ContractTerm_VersionId", "[VersionId] > 0");
                         });
@@ -4038,6 +4259,11 @@ namespace ContractManagement.Migrations
                         .HasForeignKey("EvidenceFileId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractPaymentMilestone", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentMilestoneId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractVersion", null)
                         .WithMany()
                         .HasForeignKey("VersionId")
@@ -4048,6 +4274,27 @@ namespace ContractManagement.Migrations
                         .WithMany()
                         .HasForeignKey("VoidedByEmployeeId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractPaymentMilestone", b =>
+                {
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTerm", null)
+                        .WithMany()
+                        .HasForeignKey("TermId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractVersion", null)
+                        .WithMany()
+                        .HasForeignKey("VersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractSignedEvidence", b =>
@@ -4083,6 +4330,21 @@ namespace ContractManagement.Migrations
                     b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractVersion", null)
                         .WithMany()
                         .HasForeignKey("VersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplatePaymentMilestone", b =>
+                {
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplateTerm", null)
+                        .WithMany()
+                        .HasForeignKey("TemplateTermId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplateVersion", null)
+                        .WithMany()
+                        .HasForeignKey("TemplateVersionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

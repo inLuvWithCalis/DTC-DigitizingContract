@@ -22,10 +22,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/sonner";
+import { ContractTermKind } from "@/services/contract-template-api";
 
 export interface CreateContractTermDraft {
   clientId: string;
   sourceTemplateTermId?: number | null;
+  termKind: ContractTermKind;
   termCode: string;
   termTitle: string;
   termTitleEn?: string | null;
@@ -132,6 +134,7 @@ export function CreateContractTermsEditor({
       {
         clientId,
         sourceTemplateTermId: null,
+        termKind: ContractTermKind.General,
         termCode,
         termTitle: newTermTitle.trim(),
         termTitleEn: newTermTitleEn.trim() || null,
@@ -204,7 +207,11 @@ export function CreateContractTermsEditor({
             updateTerm(term.clientId, field, value)
           }
           onMove={(direction) => moveTerm(index, direction)}
-          onRemove={() => setDeleteTerm(term)}
+          onRemove={
+            term.termKind === ContractTermKind.Payment
+              ? undefined
+              : () => setDeleteTerm(term)
+          }
         />
       ))}
 

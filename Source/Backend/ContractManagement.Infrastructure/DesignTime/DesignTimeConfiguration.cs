@@ -34,7 +34,11 @@ internal static class DesignTimeConfiguration
                 Path.Combine(
                     currentDirectory,
                     "..",
-                    "ContractManagement"))
+                    "ContractManagement")),
+
+            // Tên project Web API hiện hành trong workspace.
+            Path.Combine(currentDirectory, "ContractManagement.API"),
+            Path.GetFullPath(Path.Combine(currentDirectory, "..", "ContractManagement.API"))
         };
 
         string? basePath =

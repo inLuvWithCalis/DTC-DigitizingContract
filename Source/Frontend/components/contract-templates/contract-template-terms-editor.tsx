@@ -13,6 +13,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { CodeInput } from "@/components/ui/custom/code-input";
 import { ConfirmDialog } from "@/components/ui/custom/confirm-dialog";
 import { ContractRichTextEditor } from "@/components/ui/custom/contract-rich-text-editor";
+import { ContractTemplatePaymentMilestonesEditor } from "./contract-template-payment-milestones-editor";
 import {
   Dialog,
   DialogContent,
@@ -24,7 +25,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   contractTemplateApi,
+  ContractTermKind,
   TemplateVersionStatus,
   type ContractTemplateTermResponse,
   type ContractTemplateVersionDetailResponse,
@@ -70,6 +79,7 @@ export function ContractTemplateTermsEditor({
   const [newTermTitleEn, setNewTermTitleEn] = useState("");
   const [newTermContent, setNewTermContent] = useState("");
   const [newTermContentEn, setNewTermContentEn] = useState("");
+  const [newTermKind, setNewTermKind] = useState(ContractTermKind.General);
 
   useEffect(() => {
     setTerms(
@@ -85,6 +95,9 @@ export function ContractTemplateTermsEditor({
   const existingCodes = useMemo(
     () => new Set(terms.map((term) => term.termCode.toLocaleUpperCase())),
     [terms],
+  );
+  const paymentTerm = terms.find(
+    (term) => term.termKind === ContractTermKind.Payment,
   );
 
   const updateTerm = (
@@ -150,6 +163,7 @@ export function ContractTemplateTermsEditor({
         term.templateTermId,
         {
           termCode: term.termCode.trim(),
+          termKind: term.termKind ?? ContractTermKind.General,
           termTitle: term.termTitle.trim(),
           termTitleEn: term.termTitleEn?.trim() || null,
           termContent: term.termContent?.trim() || null,
@@ -234,11 +248,16 @@ export function ContractTemplateTermsEditor({
     setNewTermTitleEn("");
     setNewTermContent("");
     setNewTermContentEn("");
+    setNewTermKind(ContractTermKind.General);
     setIsAddOpen(true);
   };
 
   const addTerm = async () => {
     if (!isDraft) return;
+    if (newTermKind === ContractTermKind.Payment && paymentTerm) {
+      toast.error("Mỗi mẫu hợp đồng chỉ có một điều khoản thanh toán.");
+      return;
+    }
     if (!newTermCode.trim() || !newTermTitle.trim()) {
       toast.error("Vui lòng nhập mã và tiêu đề điều khoản.");
       return;
@@ -250,6 +269,7 @@ export function ContractTemplateTermsEditor({
     try {
       setIsAdding(true);
       await contractTemplateApi.addTerm(version.templateVersionId, {
+        termKind: newTermKind,
         termCode: newTermCode.trim(),
         termTitle: newTermTitle.trim(),
         termTitleEn: newTermTitleEn.trim() || null,
@@ -341,9 +361,52 @@ export function ContractTemplateTermsEditor({
           onChange={(field, value) =>
             updateTerm(term.templateTermId, field, value)
           }
+          onKindChange={(value) => {
+            if (!isDraft) return;
+            if (
+              term.termKind === ContractTermKind.Payment &&
+              value !== ContractTermKind.Payment &&
+              term.paymentMilestones.length > 0
+            ) {
+              toast.error(
+                "Hãy xóa các đợt thanh toán trước khi đổi loại điều khoản.",
+              );
+              return;
+            }
+            if (
+              value === ContractTermKind.Payment &&
+              paymentTerm &&
+              paymentTerm.templateTermId !== term.templateTermId
+            ) {
+              toast.error("Mỗi mẫu hợp đồng chỉ có một điều khoản thanh toán.");
+              return;
+            }
+            setTerms((current) => current.map((item) =>
+              item.templateTermId === term.templateTermId
+                ? { ...item, termKind: value }
+                : item));
+            setDirtyIds((current) => new Set(current).add(term.templateTermId));
+          }}
           onMove={(direction) => moveTerm(index, direction)}
           onRemove={() => requestDeleteTerm(term)}
-        />
+        >
+          {term.termKind === ContractTermKind.Payment &&
+            !dirtyIds.has(term.templateTermId) && (
+              <ContractTemplatePaymentMilestonesEditor
+                version={version}
+                term={term}
+                isBilingual={isBilingual}
+                editable={isDraft}
+                onRefresh={onRefresh}
+              />
+            )}
+          {term.termKind === ContractTermKind.Payment &&
+            dirtyIds.has(term.templateTermId) && (
+              <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">
+                Lưu loại điều khoản trước khi cấu hình các đợt thanh toán.
+              </p>
+            )}
+        </ContractTermCard>
       ))}
 
       {terms.length === 0 && (
@@ -365,6 +428,30 @@ export function ContractTemplateTermsEditor({
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2 sm:grid-cols-2">
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="new-term-kind">Loại điều khoản</Label>
+              <Select
+                value={String(newTermKind)}
+                onValueChange={(value) =>
+                  setNewTermKind(Number(value) as ContractTermKind)
+                }
+              >
+                <SelectTrigger id="new-term-kind" className="h-9 w-full">
+                  <SelectValue placeholder="Chọn loại điều khoản" />
+                </SelectTrigger>
+                <SelectContent showSearch={false}>
+                  <SelectItem value={String(ContractTermKind.General)}>
+                    Điều khoản thường
+                  </SelectItem>
+                  <SelectItem
+                    value={String(ContractTermKind.Payment)}
+                    disabled={Boolean(paymentTerm)}
+                  >
+                    Điều khoản thanh toán
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="new-term-code">
                 Mã điều khoản <span className="text-destructive">*</span>

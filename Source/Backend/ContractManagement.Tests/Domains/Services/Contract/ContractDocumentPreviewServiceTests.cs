@@ -150,7 +150,7 @@ public sealed class ContractDocumentPreviewServiceTests
     }
 
     [Fact]
-    public async Task Submission_RendersDocxAndPdfFromTheSameSchemaV4Snapshot()
+    public async Task Submission_RendersDocxAndPdfFromTheSameSchemaV5Snapshot()
     {
         await using var context = CreateContext();
         var source = CreateSourceDocument();
@@ -160,9 +160,9 @@ public sealed class ContractDocumentPreviewServiceTests
 
         var result = await service.RenderAsync(ContractId, OwnerId);
 
-        Assert.Equal(4, result.SnapshotSchemaVersion);
+        Assert.Equal(5, result.SnapshotSchemaVersion);
         Assert.Equal(TemplateVersionId, result.TemplateVersionId);
-        Assert.Contains("\"schemaVersion\":4", result.SnapshotJson);
+        Assert.Contains("\"schemaVersion\":5", result.SnapshotJson);
         Assert.Contains("\"contractCode\":\"HD-8B-001\"", result.SnapshotJson);
         Assert.Contains("\"basisCode\":\"COMMERCIAL_LAW\"", result.SnapshotJson);
         Assert.Equal("HD-8B-001-submitted.docx", result.DocxFileName);

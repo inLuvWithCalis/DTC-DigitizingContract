@@ -1,7 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, FileCheck2, Loader2, WalletCards } from "lucide-react";
+import { format } from "date-fns";
+import {
+  CalendarClock,
+  CheckCircle2,
+  FileCheck2,
+  Loader2,
+  WalletCards,
+} from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +30,8 @@ import {
 import {
   contractCompletionApi,
   ContractCompletionDetailResponse,
+  ContractPaymentDayCountMode,
+  ContractPaymentDueAnchor,
   ContractPaymentStatus,
 } from "@/services/contract-completion-api";
 
@@ -49,6 +58,10 @@ export function ContractClosing({
   const [acceptanceFile, setAcceptanceFile] = useState<File>();
   const [paymentDate, setPaymentDate] = useState<Date>();
   const [amount, setAmount] = useState(0);
+  const [paymentMilestoneId, setPaymentMilestoneId] = useState<number>();
+  const [manualMilestoneId, setManualMilestoneId] = useState<number>();
+  const [manualAnchorDate, setManualAnchorDate] = useState<Date>();
+  const [manualAnchorReason, setManualAnchorReason] = useState("");
   const [method, setMethod] = useState("");
   const [reference, setReference] = useState("");
   const [paymentFile, setPaymentFile] = useState<File>();
@@ -102,6 +115,12 @@ export function ContractClosing({
     detail.readiness.remainingAmount === 0,
   ];
   const completed = checks.filter(Boolean).length;
+  const selectedPaymentMilestone = detail.paymentMilestones.find(
+    (item) => item.paymentMilestoneId === paymentMilestoneId,
+  );
+  const manualMilestone = detail.paymentMilestones.find(
+    (item) => item.paymentMilestoneId === manualMilestoneId,
+  );
 
   return (
     <div className="space-y-6">
@@ -255,8 +274,142 @@ export function ContractClosing({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
+          {detail.paymentMilestones?.length > 0 && (
+            <div className="grid gap-3 md:grid-cols-2">
+              {detail.paymentMilestones.map((milestone) => (
+                <div
+                  key={milestone.paymentMilestoneId}
+                  className="rounded-lg border p-3 text-sm"
+                >
+                  <div className="flex justify-between gap-2">
+                    <b>
+                      {milestone.titleVi} · {milestone.paymentPercent}%
+                    </b>
+                    <Badge
+                      variant={
+                        milestone.status === "Paid"
+                          ? "default"
+                          : milestone.status === "Overdue"
+                            ? "destructive"
+                            : "secondary"
+                      }
+                    >
+                      {milestone.status}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-muted-foreground">
+                    {formatCurrency(
+                      milestone.paidAmount,
+                      detail.readiness.currencyCode,
+                    )}{" "}
+                    /{` `}
+                    {formatCurrency(
+                      milestone.amount,
+                      detail.readiness.currencyCode,
+                    )}
+                  </p>
+                  <p className="text-muted-foreground">
+                    {milestone.dueDate
+                      ? `Hạn ${new Date(milestone.dueDate).toLocaleDateString("vi-VN")}`
+                      : "Chưa phát sinh mốc tính hạn"}
+                  </p>
+                  {milestone.conditionVi && (
+                    <p className="mt-1 text-muted-foreground">
+                      {milestone.conditionVi}
+                    </p>
+                  )}
+                  {milestone.dayCountMode ===
+                    ContractPaymentDayCountMode.BusinessDays && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Ngày làm việc hiện chỉ loại trừ thứ Bảy và Chủ nhật.
+                    </p>
+                  )}
+                  {paymentEditable &&
+                    milestone.dueAnchor === ContractPaymentDueAnchor.Manual && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-3"
+                        onClick={() => {
+                          setManualMilestoneId(milestone.paymentMilestoneId);
+                          setManualAnchorDate(
+                            milestone.anchorDate
+                              ? new Date(milestone.anchorDate)
+                              : undefined,
+                          );
+                          setManualAnchorReason("");
+                        }}
+                      >
+                        <CalendarClock className="mr-2 size-4" />
+                        {milestone.anchorDate
+                          ? "Đổi ngày kích hoạt"
+                          : "Đặt ngày kích hoạt"}
+                      </Button>
+                    )}
+                </div>
+              ))}
+            </div>
+          )}
+          {paymentEditable && manualMilestone && (
+            <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Ngày kích hoạt thủ công</Label>
+                <DateFilter
+                  date={manualAnchorDate}
+                  onChange={setManualAnchorDate}
+                  placeholder="Chọn ngày"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Lý do thiết lập</Label>
+                <Textarea
+                  value={manualAnchorReason}
+                  onChange={(event) => setManualAnchorReason(event.target.value)}
+                  maxLength={1000}
+                  placeholder="Ghi lại sự kiện hoặc chứng từ làm mốc tính hạn"
+                />
+              </div>
+              <div className="flex gap-2 md:col-span-2">
+                <Button
+                  type="button"
+                  disabled={!manualAnchorDate || !manualAnchorReason.trim() || busy}
+                  onClick={() =>
+                    manualAnchorDate &&
+                    mutate(
+                      () =>
+                        contractCompletionApi.setPaymentMilestoneManualAnchor(
+                          contract.contractId,
+                          detail.versionId,
+                          manualMilestone.paymentMilestoneId,
+                          {
+                            currentVersionId: detail.versionId,
+                            contractRowVersion: detail.contractRowVersion,
+                            versionRowVersion: detail.versionRowVersion,
+                            milestoneRowVersion: manualMilestone.rowVersion,
+                            anchorDate: format(manualAnchorDate, "yyyy-MM-dd"),
+                            reason: manualAnchorReason,
+                          },
+                        ),
+                      "Đã thiết lập ngày kích hoạt đợt thanh toán.",
+                    )
+                  }
+                >
+                  Lưu ngày kích hoạt
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setManualMilestoneId(undefined)}
+                >
+                  Hủy
+                </Button>
+              </div>
+            </div>
+          )}
           {paymentEditable && (
             <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-2">
+              {detail.paymentMilestones?.length > 0 && <div className="space-y-2 md:col-span-2"><Label>Đợt thanh toán <span className="text-destructive">*</span></Label><select className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={paymentMilestoneId ?? ""} onChange={(e) => { const id = Number(e.target.value); setPaymentMilestoneId(id || undefined); const selected = detail.paymentMilestones.find((item) => item.paymentMilestoneId === id); if (selected) setAmount(selected.remainingAmount); }}><option value="">Chọn đợt thanh toán</option>{detail.paymentMilestones.filter((item) => item.remainingAmount > 0).map((item) => <option key={item.paymentMilestoneId} value={item.paymentMilestoneId}>{item.titleVi} — còn {formatCurrency(item.remainingAmount, detail.readiness.currencyCode)}</option>)}</select></div>}
               <div className="space-y-2">
                 <Label>
                   Ngày thanh toán <span className="text-destructive">*</span>
@@ -275,7 +428,10 @@ export function ContractClosing({
                 <DecimalInput
                   value={amount}
                   onValueChange={setAmount}
-                  max={detail.readiness.remainingAmount}
+                  max={
+                    selectedPaymentMilestone?.remainingAmount ??
+                    detail.readiness.remainingAmount
+                  }
                 />
               </div>
               <div className="space-y-2">
@@ -309,6 +465,7 @@ export function ContractClosing({
                 className="md:col-span-2 md:justify-self-start"
                 disabled={
                   !paymentDate ||
+                  (detail.paymentMilestones?.length > 0 && !paymentMilestoneId) ||
                   amount <= 0 ||
                   !method.trim() ||
                   !reference.trim() ||
@@ -323,7 +480,8 @@ export function ContractClosing({
                         currentVersionId: detail.versionId,
                         contractRowVersion: detail.contractRowVersion,
                         versionRowVersion: detail.versionRowVersion,
-                        paymentDate: paymentDate.toISOString(),
+                        paymentMilestoneId,
+                        paymentDate: format(paymentDate, "yyyy-MM-dd"),
                         amount,
                         currencyCode: detail.readiness.currencyCode,
                         paymentMethod: method,

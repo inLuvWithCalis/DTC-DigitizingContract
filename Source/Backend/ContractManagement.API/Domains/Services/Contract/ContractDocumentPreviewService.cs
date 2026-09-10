@@ -14,7 +14,7 @@ using Microsoft.EntityFrameworkCore;
 namespace ContractManagement.Domains.Services.Contract;
 
 /// <summary>
-/// Renders SoftwareSupply DOCX/PDF from one schema-v4 snapshot. Preview results
+/// Renders SoftwareSupply DOCX/PDF from one schema-v5 snapshot. Preview results
 /// remain ephemeral; the submit pipeline persists the separate submission result
 /// only after both formats have been generated successfully.
 /// </summary>
@@ -206,6 +206,12 @@ public sealed class ContractDocumentPreviewService :
             .OrderBy(schedule => schedule.DueDate)
             .ThenBy(schedule => schedule.ScheduleId)
             .ToListAsync(cancellationToken);
+        var paymentMilestones = await _dbContext.TblContractPaymentMilestones
+            .AsNoTracking()
+            .Where(item => item.ContractId == contractId && item.VersionId == versionId)
+            .OrderBy(item => item.DisplayOrder)
+            .ThenBy(item => item.PaymentMilestoneId)
+            .ToListAsync(cancellationToken);
 
         var snapshot = SoftwareSupplyContractSnapshotFactory.Create(
             tenant,
@@ -213,7 +219,8 @@ public sealed class ContractDocumentPreviewService :
             contract,
             version,
             items,
-            terms);
+            terms,
+            paymentMilestones);
         snapshot = snapshot with
         {
             LegalBases = legalBases.Select(item => new ContractLegalBasisSnapshot(
@@ -428,16 +435,39 @@ public sealed class ContractDocumentPreviewService :
                 item.LineTotal))
             .ToArray();
 
+        var milestones = snapshot.PaymentMilestones ?? [];
         var terms = snapshot.Terms.Select((term, index) =>
             new ContractTemplateRenderTerm(
                 index + 1,
                 term.TermTitle,
                 Value(term.TermTitleEn),
                 Value(term.TermContent),
-                Value(term.TermContentEn)))
+                Value(term.TermContentEn))
+            {
+                Kind = (ContractTermKind)term.TermKind,
+                PaymentMilestones = milestones.Where(item => item.TermId == term.TermId)
+                    .OrderBy(item => item.DisplayOrder)
+                    .Select((item, milestoneIndex) => new ContractTemplateRenderPaymentMilestone(
+                        milestoneIndex + 1, item.TitleVi, item.TitleEn,
+                        item.PaymentPercent, item.Amount,
+                        (PaymentDueAnchor)item.DueAnchor, item.DueOffsetDays,
+                        (PaymentDayCountMode)item.DayCountMode,
+                        item.ConditionVi, item.ConditionEn, item.DueDate)).ToArray()
+            })
             .ToArray();
 
-        var payments = paymentSchedules.Select((payment, index) =>
+        var structuredPayments = terms.SelectMany(term => term.PaymentMilestones)
+            .Select(item => new ContractTemplateRenderPayment(
+                item.No,
+                BuildMilestoneDescription(item,
+                    (ContractLanguageMode)contract.LanguageMode),
+                $"{item.PaymentPercent:0.####}%", item.Amount,
+                BuildMilestoneDueCondition(item,
+                    (ContractLanguageMode)contract.LanguageMode)))
+            .ToArray();
+        var payments = structuredPayments.Length > 0
+            ? structuredPayments
+            : paymentSchedules.Select((payment, index) =>
         {
             var amount = Convert.ToDecimal(payment.Amount);
             var percent = version.TotalAmount > 0
@@ -499,6 +529,73 @@ public sealed class ContractDocumentPreviewService :
             ? item.ItemNameEn
             : $"{item.ItemNameEn} — {item.ItemDescriptionEn}";
         return $"{vietnamese} / {english}";
+    }
+
+    private static string BuildMilestoneDescription(
+        ContractTemplateRenderPaymentMilestone item,
+        ContractLanguageMode languageMode)
+    {
+        if (languageMode != ContractLanguageMode.Bilingual
+            || string.IsNullOrWhiteSpace(item.TitleEn))
+            return item.TitleVi;
+        return $"{item.TitleVi} / {item.TitleEn.Trim()}";
+    }
+
+    private static string BuildMilestoneDueCondition(
+        ContractTemplateRenderPaymentMilestone item,
+        ContractLanguageMode languageMode)
+    {
+        var vietnamese = item.DueDate.HasValue
+            ? $"Hạn thanh toán {item.DueDate:dd/MM/yyyy}"
+            : BuildMilestoneDueRule(item, english: false);
+        if (languageMode != ContractLanguageMode.Bilingual)
+            return vietnamese;
+
+        var english = item.DueDate.HasValue
+            ? $"Due date {item.DueDate:dd/MM/yyyy}"
+            : BuildMilestoneDueRule(item, english: true);
+        return $"{vietnamese} / {english}";
+    }
+
+    private static string BuildMilestoneDueRule(
+        ContractTemplateRenderPaymentMilestone item,
+        bool english)
+    {
+        var anchor = english
+            ? item.DueAnchor switch
+            {
+                PaymentDueAnchor.ContractSigned => "the contract signing date",
+                PaymentDueAnchor.ContractEffectiveDate => "the effective date",
+                PaymentDueAnchor.AcceptanceCompleted => "acceptance completion",
+                PaymentDueAnchor.PreviousMilestonePaid =>
+                    "full payment of the previous installment",
+                _ => "the manually confirmed milestone"
+            }
+            : item.DueAnchor switch
+            {
+                PaymentDueAnchor.ContractSigned => "ngày ký hợp đồng",
+                PaymentDueAnchor.ContractEffectiveDate =>
+                    "ngày hợp đồng có hiệu lực",
+                PaymentDueAnchor.AcceptanceCompleted =>
+                    "ngày hoàn tất nghiệm thu",
+                PaymentDueAnchor.PreviousMilestonePaid =>
+                    "ngày thanh toán đủ đợt trước",
+                _ => "mốc được xác nhận thủ công"
+            };
+        var condition = english ? item.ConditionEn : item.ConditionVi;
+        var dayLabel = english
+            ? item.DayCountMode == PaymentDayCountMode.BusinessDays
+                ? "business days"
+                : "days"
+            : item.DayCountMode == PaymentDayCountMode.BusinessDays
+                ? "ngày làm việc"
+                : "ngày";
+        var rule = english
+            ? $"Within {item.DueOffsetDays} {dayLabel} from {anchor}"
+            : $"Trong vòng {item.DueOffsetDays} {dayLabel} kể từ {anchor}";
+        return string.IsNullOrWhiteSpace(condition)
+            ? rule
+            : $"{rule}; {condition.Trim()}";
     }
 
     private static string FormatDate(DateTime value) =>

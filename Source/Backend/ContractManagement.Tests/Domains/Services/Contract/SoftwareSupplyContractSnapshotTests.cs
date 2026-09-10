@@ -86,7 +86,7 @@ public sealed class SoftwareSupplyContractSnapshotTests
             terms);
         var json = SoftwareSupplyContractSnapshotFactory.Serialize(snapshot);
 
-        Assert.Equal(4, snapshot.SchemaVersion);
+        Assert.Equal(5, snapshot.SchemaVersion);
         Assert.Equal(contract.CreatedDate, snapshot.Contract.CreatedDate);
         Assert.Equal("DTC", snapshot.Tenant.LegalEntityName);
         Assert.Equal("Trần B", snapshot.Customer.RepresentativeName);
@@ -101,5 +101,18 @@ public sealed class SoftwareSupplyContractSnapshotTests
         Assert.Single(snapshot.Items);
         Assert.Single(snapshot.Terms);
         Assert.Contains("\"totalAmount\":1100000", json);
+    }
+
+    [Fact]
+    public void Deserialize_AcceptsSchemaV4WithoutPaymentMilestones()
+    {
+        var json = """
+            {"schemaVersion":4,"tenant":{"legalEntityName":"DTC","taxCode":"01","address":"HN","representativeName":"A","representativeTitle":"GD","phoneNumber":null,"faxNumber":null,"bankAccountNumber":null,"bankName":null},"customer":{"customerId":2,"legalName":"ABC","taxCode":null,"address":"DN","representativeName":"B","representativeTitle":"GD","phoneNumber":null,"faxNumber":null,"bankAccountNumber":null,"bankName":null},"contract":{"contractId":3,"contractCode":"HD","contractName":"Hợp đồng","contractNameEn":null,"contractType":1,"templateVersionId":null,"createdDate":"2026-09-10T00:00:00Z","signDate":null,"effectiveDate":null,"expireDate":null,"currencyCode":"VND","languageMode":1,"subtotal":1,"totalDiscount":0,"totalVat":0,"totalAmount":1},"version":{"versionId":4,"versionNo":1,"sourceVersionId":null,"templateVersionId":null,"currencyCode":"VND","subtotal":1,"totalDiscount":0,"totalVat":0,"totalAmount":1},"items":[],"terms":[]}
+            """;
+
+        var snapshot = SoftwareSupplyContractSnapshotFactory.Deserialize(json);
+
+        Assert.Equal(4, snapshot.SchemaVersion);
+        Assert.Null(snapshot.PaymentMilestones);
     }
 }

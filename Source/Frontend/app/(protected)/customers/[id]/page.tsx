@@ -464,7 +464,7 @@ function CustomerDetailPageContent() {
               <CardContent className="p-5 space-y-4">
                 <div className="grid gap-2">
                   <Label className="text-xs font-semibold uppercase text-muted-foreground">
-                    Tên khách hàng / Người liên hệ *
+                    Tên khách hàng *
                   </Label>
                   <Input
                     readOnly={!isEditingProfile}

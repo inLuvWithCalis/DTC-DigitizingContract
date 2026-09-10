@@ -23,6 +23,7 @@ import {
   ContractLanguageMode,
   ContractNegotiationCommentResponse,
   ContractStatus,
+  ContractTermKind,
   ContractTermDetailResponse,
 } from "@/services/contract-api";
 
@@ -101,6 +102,7 @@ export function ContractTerms({
         termTitleEn: null,
         termContent: "",
         termContentEn: null,
+        termKind: ContractTermKind.General,
         isNegotiable: true,
         displayOrder: newDisplayOrder,
         rowVersion: "",
@@ -268,7 +270,11 @@ export function ContractTerms({
                   handleTermChange(term.termId, field, value)
                 }
                 onMove={(direction) => handleMoveTerm(term.termId, direction)}
-                onRemove={() => handleRemoveTerm(term.termId)}
+                onRemove={
+                  term.termKind === ContractTermKind.Payment
+                    ? undefined
+                    : () => handleRemoveTerm(term.termId)
+                }
               >
                 {term.isNegotiable &&
                   term.termId > 0 &&

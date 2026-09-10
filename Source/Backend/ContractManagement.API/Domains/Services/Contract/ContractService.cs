@@ -47,6 +47,8 @@ namespace ContractManagement.Domains.Services.Contract
             _submissionArtifactRenderer;
         private readonly IPrivateFileStorage? _privateFileStorage;
         private IContractPlaceholderValueService? _placeholderValueService;
+        private IContractPaymentDueDateService _paymentDueDates =
+            new ContractPaymentDueDateService();
         private IContractPlaceholderValueService PlaceholderValues => _placeholderValueService ??=
             new ContractPlaceholderValueService(_dbContext, new ContractPlaceholderSourceRegistry());
 
@@ -77,7 +79,8 @@ namespace ContractManagement.Domains.Services.Contract
             CustomerAccessCryptography customerAccessCryptography,
             IContractSubmissionArtifactRenderer submissionArtifactRenderer,
             IPrivateFileStorage privateFileStorage,
-            IContractPlaceholderValueService? placeholderValueService = null)
+            IContractPlaceholderValueService? placeholderValueService = null,
+            IContractPaymentDueDateService? paymentDueDates = null)
             : this(
                 dbContext,
                 contractAuditWriter,
@@ -85,6 +88,7 @@ namespace ContractManagement.Domains.Services.Contract
                 customerAccessCryptography)
         {
             _placeholderValueService = placeholderValueService;
+            _paymentDueDates = paymentDueDates ?? _paymentDueDates;
             _submissionArtifactRenderer = submissionArtifactRenderer;
             _privateFileStorage = privateFileStorage;
         }
@@ -457,6 +461,29 @@ namespace ContractManagement.Domains.Services.Contract
                         .OrderBy(x => x.DisplayOrder)
                         .ThenBy(x => x.TemplateLegalBasisId)
                         .ToListAsync();
+                    var templatePaymentMilestones = await _dbContext
+                        .TblContractTemplatePaymentMilestones
+                        .AsNoTracking()
+                        .Where(x => x.TemplateVersionId == request.TemplateVersionId)
+                        .OrderBy(x => x.DisplayOrder)
+                        .ThenBy(x => x.TemplatePaymentMilestoneId)
+                        .ToListAsync();
+
+                    var templatePaymentTerms = templateTerms
+                        .Where(term => term.TermKind == (byte)ContractTermKind.Payment)
+                        .ToList();
+                    if (templatePaymentTerms.Count > 1
+                        || templatePaymentMilestones.Any(milestone =>
+                            templatePaymentTerms.All(term =>
+                                term.TemplateTermId != milestone.TemplateTermId))
+                        || templatePaymentTerms.Count == 1
+                        && (templatePaymentMilestones.Count == 0
+                            || templatePaymentMilestones.Sum(milestone =>
+                                milestone.PaymentPercent) != 100m))
+                    {
+                        throw new InvalidOperationException(
+                            "Kế hoạch thanh toán của template không hợp lệ.");
+                    }
 
                     if (templateTerms.Count == 0)
                     {
@@ -659,6 +686,7 @@ namespace ContractManagement.Domains.Services.Contract
                                 TermTitleEn = templateTerm.TermTitleEn,
                                 TermContent = templateTerm.TermContent,
                                 TermContentEn = templateTerm.TermContentEn,
+                                TermKind = templateTerm.TermKind,
                                 IsNegotiable = templateTerm.IsNegotiable,
                                 DisplayOrder = templateTerm.DisplayOrder,
                                 CreatedEmployeeId = createdEmployeeId,
@@ -683,6 +711,9 @@ namespace ContractManagement.Domains.Services.Contract
                                         requestTerm.TermContent),
                                     TermContentEn = NormalizeOptional(
                                         requestTerm.TermContentEn),
+                                    TermKind = requestTerm.SourceTemplateTermId is { } sourceId
+                                        ? templateTerms.Single(item => item.TemplateTermId == sourceId).TermKind
+                                        : (byte)ContractTermKind.General,
                                     IsNegotiable = requestTerm.IsNegotiable,
                                     DisplayOrder = requestTerm.DisplayOrder > 0
                                         ? requestTerm.DisplayOrder
@@ -709,6 +740,52 @@ namespace ContractManagement.Domains.Services.Contract
                     _dbContext.TblContractItems.AddRange(contractItems);
                     _dbContext.TblContractTerms.AddRange(contractTerms);
                     _dbContext.TblContractLegalBases.AddRange(contractLegalBases);
+                    await _dbContext.SaveChangesAsync();
+
+                    var contractTermsBySource = contractTerms
+                        .Where(item => item.SourceTemplateTermId.HasValue)
+                        .ToDictionary(item => item.SourceTemplateTermId!.Value);
+                    var contractPaymentMilestones = new List<TblContractPaymentMilestone>();
+                    decimal allocated = 0m;
+                    for (var index = 0; index < templatePaymentMilestones.Count; index++)
+                    {
+                        var source = templatePaymentMilestones[index];
+                        if (!contractTermsBySource.TryGetValue(source.TemplateTermId, out var targetTerm))
+                            continue;
+                        var amount = index == templatePaymentMilestones.Count - 1
+                            ? totals.TotalPayment - allocated
+                            : RoundMoney(totals.TotalPayment * source.PaymentPercent / 100m,
+                                currencyCode);
+                        allocated += amount;
+                        var anchorDate = source.DueAnchor == (byte)PaymentDueAnchor.ContractEffectiveDate
+                            ? request.EffectiveDate?.Date : null;
+                        contractPaymentMilestones.Add(new TblContractPaymentMilestone
+                        {
+                            ContractId = contract.ContractId,
+                            VersionId = contractVersion.VersionId,
+                            TermId = targetTerm.TermId,
+                            SourceTemplatePaymentMilestoneId = source.TemplatePaymentMilestoneId,
+                            MilestoneCode = source.MilestoneCode,
+                            TitleVi = source.TitleVi,
+                            TitleEn = source.TitleEn,
+                            PaymentPercent = source.PaymentPercent,
+                            DueAnchor = source.DueAnchor,
+                            DueOffsetDays = source.DueOffsetDays,
+                            DayCountMode = source.DayCountMode,
+                            ConditionVi = source.ConditionVi,
+                            ConditionEn = source.ConditionEn,
+                            DisplayOrder = source.DisplayOrder,
+                            Amount = amount,
+                            AnchorDate = anchorDate,
+                            DueDate = anchorDate.HasValue
+                                ? _paymentDueDates.Calculate(anchorDate.Value, source.DueOffsetDays,
+                                    (PaymentDayCountMode)source.DayCountMode)
+                                : null,
+                            CreatedEmployeeId = createdEmployeeId,
+                            CreatedDate = now
+                        });
+                    }
+                    _dbContext.TblContractPaymentMilestones.AddRange(contractPaymentMilestones);
 
                     /*
                      * Contract trỏ trực tiếp đến Version 1 vừa tạo.
@@ -1503,6 +1580,7 @@ namespace ContractManagement.Domains.Services.Contract
                             TermTitleEn = term.TermTitleEn,
                             TermContent = term.TermContent,
                             TermContentEn = term.TermContentEn,
+                            TermKind = (ContractTermKind)term.TermKind,
                             IsNegotiable = term.IsNegotiable,
                             DisplayOrder = term.DisplayOrder,
                             RowVersion = EncodeRowVersion(term.RowVersion)
@@ -1679,6 +1757,13 @@ namespace ContractManagement.Domains.Services.Contract
                             .Where(x =>
                                 x.ContractId == contract.ContractId
                                 && x.VersionId == version.VersionId)
+                            .ToListAsync();
+                        var existingPaymentMilestones = await _dbContext
+                            .TblContractPaymentMilestones
+                            .Where(x => x.ContractId == contract.ContractId
+                                && x.VersionId == version.VersionId)
+                            .OrderBy(x => x.DisplayOrder)
+                            .ThenBy(x => x.PaymentMilestoneId)
                             .ToListAsync();
 
                         var previousAuditValues = ContractAuditValues.Create(
@@ -1968,6 +2053,13 @@ namespace ContractManagement.Domains.Services.Contract
                             .Where(x => !requestedTermIds.Contains(x.TermId))
                             .ToList();
 
+                        if (removedTerms.Any(term => existingPaymentMilestones
+                                .Any(milestone => milestone.TermId == term.TermId)))
+                        {
+                            throw new InvalidOperationException(
+                                "Không thể xóa điều khoản thanh toán đã có kế hoạch theo đợt.");
+                        }
+
                         removedTermAudits.AddRange(
                             removedTerms.Select(term =>
                                 BuildTermAuditEntry(
@@ -1997,6 +2089,28 @@ namespace ContractManagement.Domains.Services.Contract
                             version,
                             currencyCode,
                             totals);
+                        decimal allocatedMilestoneAmount = 0m;
+                        for (var index = 0; index < existingPaymentMilestones.Count; index++)
+                        {
+                            var milestone = existingPaymentMilestones[index];
+                            milestone.Amount = index == existingPaymentMilestones.Count - 1
+                                ? totals.TotalPayment - allocatedMilestoneAmount
+                                : RoundMoney(totals.TotalPayment * milestone.PaymentPercent / 100m,
+                                    currencyCode);
+                            allocatedMilestoneAmount += milestone.Amount;
+                            if (milestone.DueAnchor ==
+                                (byte)PaymentDueAnchor.ContractEffectiveDate)
+                            {
+                                milestone.AnchorDate = request.EffectiveDate?.Date;
+                                milestone.DueDate = milestone.AnchorDate.HasValue
+                                    ? _paymentDueDates.Calculate(milestone.AnchorDate.Value,
+                                        milestone.DueOffsetDays,
+                                        (PaymentDayCountMode)milestone.DayCountMode)
+                                    : null;
+                            }
+                            milestone.UpdatedEmployeeId = employeeId;
+                            milestone.UpdatedDate = now;
+                        }
                         contract.UpdatedEmployeeId = employeeId;
                         contract.UpdateDate = now;
 
@@ -2411,6 +2525,19 @@ namespace ContractManagement.Domains.Services.Contract
                             .OrderBy(x => x.DisplayOrder)
                             .ThenBy(x => x.LegalBasisId)
                             .ToListAsync();
+                        var sourcePaymentMilestones = await _dbContext.TblContractPaymentMilestones
+                            .AsNoTracking()
+                            .Where(x => x.ContractId == contract.ContractId
+                                && x.VersionId == sourceVersion.VersionId)
+                            .OrderBy(x => x.DisplayOrder)
+                            .ThenBy(x => x.PaymentMilestoneId)
+                            .ToListAsync();
+                        if (await _dbContext.TblContractPaymentLedgers.AsNoTracking()
+                            .AnyAsync(x => x.ContractId == contract.ContractId
+                                && x.VersionId == sourceVersion.VersionId
+                                && x.Status == (byte)ContractPaymentStatus.Active))
+                            throw new InvalidOperationException(
+                                "Không thể tạo vòng đàm phán mới khi version hiện tại đã có khoản thu đang hiệu lực.");
 
                         var sourceComments = await _dbContext
                             .TblContractNegotiationComments
@@ -2454,7 +2581,8 @@ namespace ContractManagement.Domains.Services.Contract
                                         contract,
                                         sourceVersion,
                                         sourceItems,
-                                        sourceTerms) with
+                                        sourceTerms,
+                                        sourcePaymentMilestones) with
                                     {
                                         PlaceholderValues = placeholderValues.Count == 0 ? null : placeholderValues,
                                         LegalBases = sourceLegalBases.Select(item =>
@@ -2545,6 +2673,7 @@ namespace ContractManagement.Domains.Services.Contract
                                 TermTitleEn = source.TermTitleEn,
                                 TermContent = source.TermContent,
                                 TermContentEn = source.TermContentEn,
+                                TermKind = source.TermKind,
                                 IsNegotiable = source.IsNegotiable,
                                 DisplayOrder = source.DisplayOrder,
                                 CreatedEmployeeId = employeeId,
@@ -2586,6 +2715,45 @@ namespace ContractManagement.Domains.Services.Contract
                             .ToDictionary(
                                 pair => pair.SourceTermId,
                                 pair => pair.NewTermId);
+
+                        var copiedPaymentMilestones = sourcePaymentMilestones.Select(source =>
+                        {
+                            var anchorDate = source.DueAnchor ==
+                                (byte)PaymentDueAnchor.ContractEffectiveDate
+                                    ? contract.EffectiveDate?.Date
+                                    : null;
+                            return new TblContractPaymentMilestone
+                            {
+                                ContractId = contract.ContractId,
+                                VersionId = newVersion.VersionId,
+                                TermId = copiedTermIdsBySourceTermId[source.TermId],
+                                SourceTemplatePaymentMilestoneId = source.SourceTemplatePaymentMilestoneId,
+                                MilestoneCode = source.MilestoneCode,
+                                TitleVi = source.TitleVi,
+                                TitleEn = source.TitleEn,
+                                PaymentPercent = source.PaymentPercent,
+                                DueAnchor = source.DueAnchor,
+                                DueOffsetDays = source.DueOffsetDays,
+                                DayCountMode = source.DayCountMode,
+                                ConditionVi = source.ConditionVi,
+                                ConditionEn = source.ConditionEn,
+                                DisplayOrder = source.DisplayOrder,
+                                Amount = source.Amount,
+                                // Evidence and manual events belong to one immutable
+                                // contract version. A negotiation version starts with
+                                // fresh event state; only the contract-level effective
+                                // date can be derived immediately again.
+                                AnchorDate = anchorDate,
+                                DueDate = anchorDate.HasValue
+                                    ? _paymentDueDates.Calculate(anchorDate.Value,
+                                        source.DueOffsetDays,
+                                        (PaymentDayCountMode)source.DayCountMode)
+                                    : null,
+                                CreatedEmployeeId = employeeId,
+                                CreatedDate = now
+                            };
+                        }).ToList();
+                        _dbContext.TblContractPaymentMilestones.AddRange(copiedPaymentMilestones);
 
                         var carryForwardResult =
                             await CarryForwardOpenCommentThreadsAsync(
@@ -3760,6 +3928,7 @@ namespace ContractManagement.Domains.Services.Contract
                 TermTitleEn = term.TermTitleEn,
                 TermContent = term.TermContent,
                 TermContentEn = term.TermContentEn,
+                TermKind = (ContractTermKind)term.TermKind,
                 IsNegotiable = term.IsNegotiable,
                 DisplayOrder = term.DisplayOrder,
                 RowVersion = EncodeRowVersion(term.RowVersion)
@@ -4336,7 +4505,7 @@ namespace ContractManagement.Domains.Services.Contract
                             SoftwareSupplyContractSnapshotFactory.CurrentSchemaVersion)
                         {
                             throw new InvalidOperationException(
-                                "Renderer không trả snapshot SoftwareSupply schema v4.");
+                                $"Renderer không trả snapshot SoftwareSupply schema v{SoftwareSupplyContractSnapshotFactory.CurrentSchemaVersion}.");
                         }
 
                         if (version.TemplateVersionId.HasValue
@@ -4659,6 +4828,15 @@ namespace ContractManagement.Domains.Services.Contract
 
             var templateById = templateTerms.ToDictionary(
                 term => term.TemplateTermId);
+            var missingPaymentTerm = templateTerms
+                .Where(term => term.TermKind == (byte)ContractTermKind.Payment)
+                .FirstOrDefault(term => request.Terms.All(requestTerm =>
+                    requestTerm.SourceTemplateTermId != term.TemplateTermId));
+            if (missingPaymentTerm is not null)
+            {
+                throw new ArgumentException(
+                    $"Điều khoản thanh toán '{missingPaymentTerm.TermCode}' phải được giữ trong hợp đồng.");
+            }
             foreach (var term in request.Terms)
             {
                 if (string.IsNullOrWhiteSpace(term.TermCode)
@@ -4684,6 +4862,18 @@ namespace ContractManagement.Domains.Services.Contract
                         throw new ArgumentException(
                             $"Không được thay đổi mã của điều khoản nguồn {sourceId}.");
                     }
+
+                    if (term.TermKind.HasValue
+                        && term.TermKind.Value != (ContractTermKind)source.TermKind)
+                    {
+                        throw new ArgumentException(
+                            $"Không được thay đổi loại của điều khoản nguồn {sourceId}.");
+                    }
+                }
+                else if (term.TermKind is ContractTermKind.Payment)
+                {
+                    throw new ArgumentException(
+                        "Điều khoản thanh toán phải bắt nguồn từ template để có cấu hình các đợt.");
                 }
 
                 if (request.LanguageMode == ContractLanguageMode.Bilingual)

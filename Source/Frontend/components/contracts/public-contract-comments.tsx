@@ -1,7 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle2, Loader2, MessageSquareText, Reply, Send, X } from "lucide-react";
+import {
+  CheckCircle2,
+  Loader2,
+  MessageSquareText,
+  Reply,
+  Send,
+  X,
+} from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 
 import {
@@ -27,7 +34,9 @@ const getStatus = (error: any) => error?.response?.status as number | undefined;
 
 const getErrorMessage = (error: any, fallback: string) => {
   const data = error?.response?.data;
-  return data?.message || data?.title || (typeof data === "string" ? data : fallback);
+  return (
+    data?.message || data?.title || (typeof data === "string" ? data : fallback)
+  );
 };
 
 const getAuthor = (comment: CustomerPublicNegotiationCommentResponse) =>
@@ -170,7 +179,10 @@ export function PublicContractComments({
   );
 
   const childrenByParent = useMemo(() => {
-    const result = new Map<number, CustomerPublicNegotiationCommentResponse[]>();
+    const result = new Map<
+      number,
+      CustomerPublicNegotiationCommentResponse[]
+    >();
     scopedComments.forEach((comment) => {
       if (!comment.parentCommentId) return;
       const children = result.get(comment.parentCommentId) ?? [];
@@ -252,11 +264,7 @@ export function PublicContractComments({
           />
           <div className="flex justify-end">
             <Button onClick={handleSubmit} disabled={isSubmitting} size="sm">
-              {isSubmitting ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                <Send />
-              )}
+              {isSubmitting ? <Loader2 className="animate-spin" /> : <Send />}
               Gửi
             </Button>
           </div>
@@ -305,8 +313,7 @@ export function PublicContractDiscussionModal({
   triggerClassName?: string;
 }) {
   const scopedComments = useMemo(
-    () =>
-      comments.filter((comment) => (comment.termId ?? null) === termId),
+    () => comments.filter((comment) => (comment.termId ?? null) === termId),
     [comments, termId],
   );
   const modalComments = useMemo(

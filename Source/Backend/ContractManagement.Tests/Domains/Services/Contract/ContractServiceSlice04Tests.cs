@@ -186,6 +186,66 @@ public sealed class ContractServiceSlice04Tests
     }
 
     [Fact]
+    public async Task Create_ShouldSnapshotPaymentMilestones_AndBalanceLastAmount()
+    {
+        await using var context = CreateContext();
+        await SeedCreateDependenciesAsync(context);
+        var templateTerm = await context.TblContractTemplateTerms.SingleAsync();
+        templateTerm.TermKind = (byte)ContractTermKind.Payment;
+        context.TblContractTemplatePaymentMilestones.AddRange(
+            new TblContractTemplatePaymentMilestone
+            {
+                TemplateVersionId = TemplateVersionId,
+                TemplateTermId = templateTerm.TemplateTermId,
+                MilestoneCode = "M1",
+                TitleVi = "Đợt 1",
+                PaymentPercent = 33.3333m,
+                DueAnchor = (byte)PaymentDueAnchor.ContractEffectiveDate,
+                DueOffsetDays = 2,
+                DayCountMode = (byte)PaymentDayCountMode.CalendarDays,
+                DisplayOrder = 1,
+                CreatedEmployeeId = EmployeeId,
+                CreatedDate = DateTime.UtcNow,
+                RowVersion = InitialRowVersion()
+            },
+            new TblContractTemplatePaymentMilestone
+            {
+                TemplateVersionId = TemplateVersionId,
+                TemplateTermId = templateTerm.TemplateTermId,
+                MilestoneCode = "M2",
+                TitleVi = "Đợt 2",
+                PaymentPercent = 66.6667m,
+                DueAnchor = (byte)PaymentDueAnchor.PreviousMilestonePaid,
+                DueOffsetDays = 5,
+                DayCountMode = (byte)PaymentDayCountMode.BusinessDays,
+                DisplayOrder = 2,
+                CreatedEmployeeId = EmployeeId,
+                CreatedDate = DateTime.UtcNow,
+                RowVersion = InitialRowVersion()
+            });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var effectiveDate = new DateTime(2026, 9, 10);
+        var request = CreateRequest("VND",
+            [CreateItem(ContractItemType.Product, 1m, 101m,
+                sourceProductId: ProductId)]);
+        request.EffectiveDate = effectiveDate;
+
+        await CreateService(context).CreateAsync(request, EmployeeId);
+
+        var term = await context.TblContractTerms.AsNoTracking().SingleAsync();
+        var milestones = await context.TblContractPaymentMilestones.AsNoTracking()
+            .OrderBy(item => item.DisplayOrder).ToListAsync();
+        Assert.Equal((byte)ContractTermKind.Payment, term.TermKind);
+        Assert.Equal([34m, 67m], milestones.Select(item => item.Amount));
+        Assert.Equal(101m, milestones.Sum(item => item.Amount));
+        Assert.All(milestones, item => Assert.Equal(term.TermId, item.TermId));
+        Assert.Equal(effectiveDate, milestones[0].AnchorDate);
+        Assert.Equal(effectiveDate.AddDays(2), milestones[0].DueDate);
+        Assert.Null(milestones[1].DueDate);
+    }
+
+    [Fact]
     public async Task Create_ShouldRejectTermFromAnotherTemplate()
     {
         await using var context = CreateContext();
@@ -245,6 +305,28 @@ public sealed class ContractServiceSlice04Tests
         var sourceVersionId =
             await SeedNegotiatingContractAsync(context);
 
+        var sourceTerm = await context.TblContractTerms.SingleAsync();
+        sourceTerm.TermKind = (byte)ContractTermKind.Payment;
+        context.TblContractPaymentMilestones.Add(new TblContractPaymentMilestone
+        {
+            ContractId = 100,
+            VersionId = sourceVersionId,
+            TermId = sourceTerm.TermId,
+            MilestoneCode = "M1",
+            TitleVi = "Đợt nghiệm thu",
+            PaymentPercent = 100m,
+            DueAnchor = (byte)PaymentDueAnchor.AcceptanceCompleted,
+            DueOffsetDays = 3,
+            DayCountMode = (byte)PaymentDayCountMode.CalendarDays,
+            DisplayOrder = 1,
+            Amount = 100m,
+            AnchorDate = new DateTime(2026, 9, 1),
+            DueDate = new DateTime(2026, 9, 4),
+            CreatedEmployeeId = EmployeeId,
+            CreatedDate = DateTime.UtcNow,
+            RowVersion = InitialRowVersion()
+        });
+
         context.TblProducts.Add(new TblProduct
         {
             ProductId = ProductId,
@@ -276,6 +358,9 @@ public sealed class ContractServiceSlice04Tests
         var copiedLegalBasis = await context.TblContractLegalBases
             .AsNoTracking()
             .SingleAsync(x => x.VersionId == response.CurrentVersion.VersionId);
+        var copiedMilestone = await context.TblContractPaymentMilestones
+            .AsNoTracking()
+            .SingleAsync(x => x.VersionId == response.CurrentVersion.VersionId);
         var contract = await context.TblContracts
             .AsNoTracking()
             .SingleAsync();
@@ -285,7 +370,7 @@ public sealed class ContractServiceSlice04Tests
         Assert.False(string.IsNullOrWhiteSpace(
             versions[0].SnapshotHash));
         Assert.Contains(
-            "\"schemaVersion\":4",
+            "\"schemaVersion\":5",
             versions[0].SnapshotJson);
         Assert.False(versions[1].IsLocked);
         Assert.Equal(versions[0].VersionId,
@@ -297,6 +382,8 @@ public sealed class ContractServiceSlice04Tests
         Assert.Equal(100m, copiedItem.LineTotal);
         Assert.Equal("GENERAL", copiedTerm.TermCode);
         Assert.Equal("CIVIL_CODE", copiedLegalBasis.BasisCode);
+        Assert.Null(copiedMilestone.AnchorDate);
+        Assert.Null(copiedMilestone.DueDate);
         Assert.Contains("\"legalBases\"", versions[0].SnapshotJson);
         Assert.Equal(100m, versions[1].TotalAmount);
     }

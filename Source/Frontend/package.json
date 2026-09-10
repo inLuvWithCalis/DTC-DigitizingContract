@@ -40,6 +40,7 @@
     "@radix-ui/react-tooltip": "1.1.6",
     "@tanstack/react-table": "^8.21.3",
     "@tiptap/extension-table": "^3.31.3",
+    "@tiptap/extension-text-align": "^3.31.3",
     "@tiptap/extension-text-style": "^3.31.3",
     "@tiptap/pm": "^3.31.3",
     "@tiptap/react": "^3.31.3",

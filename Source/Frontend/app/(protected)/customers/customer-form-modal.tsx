@@ -164,17 +164,13 @@ export function CustomerFormModal({
           customerPhone: customerPhone.trim() || null,
           customerFaxNumber: customerFaxNumber.trim() || null,
           customerTaxCode: customerTaxCode.trim() || null,
-          customerRepresentativeName:
-            customerRepresentativeName.trim() || null,
+          customerRepresentativeName: customerRepresentativeName.trim() || null,
           customerRepresentativeTitle:
             customerRepresentativeTitle.trim() || null,
           customerContactPersonName: customerContactPersonName.trim() || null,
-          customerContactPersonPhone:
-            customerContactPersonPhone.trim() || null,
-          customerContactPersonTitle:
-            customerContactPersonTitle.trim() || null,
-          customerBankAccountNumber:
-            customerBankAccountNumber.trim() || null,
+          customerContactPersonPhone: customerContactPersonPhone.trim() || null,
+          customerContactPersonTitle: customerContactPersonTitle.trim() || null,
+          customerBankAccountNumber: customerBankAccountNumber.trim() || null,
           customerBankName: customerBankName.trim() || null,
           customerAddress: customerAddress.trim() || null,
           customerCity: customerCity.trim() || null,
@@ -194,17 +190,13 @@ export function CustomerFormModal({
           customerPhone: customerPhone.trim() || null,
           customerFaxNumber: customerFaxNumber.trim() || null,
           customerTaxCode: customerTaxCode.trim() || null,
-          customerRepresentativeName:
-            customerRepresentativeName.trim() || null,
+          customerRepresentativeName: customerRepresentativeName.trim() || null,
           customerRepresentativeTitle:
             customerRepresentativeTitle.trim() || null,
           customerContactPersonName: customerContactPersonName.trim() || null,
-          customerContactPersonPhone:
-            customerContactPersonPhone.trim() || null,
-          customerContactPersonTitle:
-            customerContactPersonTitle.trim() || null,
-          customerBankAccountNumber:
-            customerBankAccountNumber.trim() || null,
+          customerContactPersonPhone: customerContactPersonPhone.trim() || null,
+          customerContactPersonTitle: customerContactPersonTitle.trim() || null,
+          customerBankAccountNumber: customerBankAccountNumber.trim() || null,
           customerBankName: customerBankName.trim() || null,
           customerAddress: customerAddress.trim() || null,
           customerCity: customerCity.trim() || null,
@@ -257,7 +249,7 @@ export function CustomerFormModal({
         <div className="grid gap-4 overflow-y-auto px-6 py-5 [&_label]:text-xs [&_label]:font-semibold [&_label]:uppercase [&_label]:text-muted-foreground [&_input]:h-9 [&_input:disabled]:cursor-default [&_input:disabled]:border-transparent [&_input:disabled]:bg-muted/40 [&_input:disabled]:font-medium [&_input:disabled]:text-foreground [&_input:disabled]:opacity-100 [&_input:disabled]:shadow-none [&_textarea:disabled]:cursor-default [&_textarea:disabled]:border-transparent [&_textarea:disabled]:bg-muted/40 [&_textarea:disabled]:font-medium [&_textarea:disabled]:text-foreground [&_textarea:disabled]:opacity-100 [&_textarea:disabled]:shadow-none">
           <div className="grid gap-2">
             <Label htmlFor="customerFullName">
-              Tên khách hàng / Người liên hệ{" "}
+              Tên khách hàng{" "}
               {!viewOnly && <span className="text-destructive">*</span>}
             </Label>
             <Input
@@ -349,7 +341,8 @@ export function CustomerFormModal({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="grid gap-2">
               <Label htmlFor="customerMobile">
-                Số di động {!viewOnly && <span className="text-destructive">*</span>}
+                Số di động{" "}
+                {!viewOnly && <span className="text-destructive">*</span>}
               </Label>
               <div className="relative">
                 <Phone className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
@@ -365,7 +358,9 @@ export function CustomerFormModal({
                 />
               </div>
               {errors.customerMobile && (
-                <p className="text-xs text-destructive">{errors.customerMobile}</p>
+                <p className="text-xs text-destructive">
+                  {errors.customerMobile}
+                </p>
               )}
             </div>
             <div className="grid gap-2">
@@ -455,7 +450,9 @@ export function CustomerFormModal({
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="customerContactPersonPhone">Số điện thoại</Label>
+                <Label htmlFor="customerContactPersonPhone">
+                  Số điện thoại
+                </Label>
                 <div className="relative">
                   <Phone className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
                   <Input

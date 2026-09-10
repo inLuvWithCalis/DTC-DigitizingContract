@@ -24,6 +24,11 @@ export enum ContractLanguageMode {
   Bilingual = 2,
 }
 
+export enum ContractTermKind {
+  General = 0,
+  Payment = 1,
+}
+
 export const getContractLanguageModeLabel = (mode?: ContractLanguageMode) => {
   switch (mode) {
     case ContractLanguageMode.Vietnamese:
@@ -219,6 +224,7 @@ export interface CreateContractRequest {
 
 export interface CreateContractTermRequest {
   sourceTemplateTermId?: number | null;
+  termKind?: ContractTermKind;
   termCode: string;
   termTitle: string;
   termTitleEn?: string | null;
@@ -344,6 +350,7 @@ export interface ContractTermDetailResponse {
   termTitleEn?: string | null;
   termContent?: string | null;
   termContentEn?: string | null;
+  termKind: ContractTermKind;
   isNegotiable: boolean;
   displayOrder: number;
   rowVersion: string;

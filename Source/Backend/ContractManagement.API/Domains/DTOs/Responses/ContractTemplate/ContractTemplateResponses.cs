@@ -52,6 +52,8 @@ public sealed class AvailableContractTemplateTermResponse
     public string? TermContentEn { get; set; }
     public bool IsNegotiable { get; set; }
     public int DisplayOrder { get; set; }
+    public ContractTermKind TermKind { get; set; }
+    public IReadOnlyList<ContractTemplatePaymentMilestoneResponse> PaymentMilestones { get; set; } = [];
 }
 
 public class ContractTemplateResponse
@@ -193,6 +195,10 @@ public sealed class ContractTemplateTermResponse
 
     public int DisplayOrder { get; set; }
 
+    public ContractTermKind TermKind { get; set; }
+
+    public List<ContractTemplatePaymentMilestoneResponse> PaymentMilestones { get; set; } = [];
+
     public int CreatedEmployeeId { get; set; }
 
     public DateTime CreatedDate { get; set; }
@@ -201,6 +207,24 @@ public sealed class ContractTemplateTermResponse
 
     public DateTime? UpdatedDate { get; set; }
 
+    public string RowVersion { get; set; } = string.Empty;
+}
+
+public sealed class ContractTemplatePaymentMilestoneResponse
+{
+    public int TemplatePaymentMilestoneId { get; set; }
+    public int TemplateVersionId { get; set; }
+    public int TemplateTermId { get; set; }
+    public string MilestoneCode { get; set; } = string.Empty;
+    public string TitleVi { get; set; } = string.Empty;
+    public string? TitleEn { get; set; }
+    public decimal PaymentPercent { get; set; }
+    public PaymentDueAnchor DueAnchor { get; set; }
+    public int DueOffsetDays { get; set; }
+    public PaymentDayCountMode DayCountMode { get; set; }
+    public string? ConditionVi { get; set; }
+    public string? ConditionEn { get; set; }
+    public int DisplayOrder { get; set; }
     public string RowVersion { get; set; } = string.Empty;
 }
 

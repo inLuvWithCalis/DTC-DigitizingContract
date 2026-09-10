@@ -21,6 +21,9 @@ public sealed record SoftwareSupplyContractSnapshot(
 
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<ContractLegalBasisSnapshot>? LegalBases { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ContractPaymentMilestoneSnapshot>? PaymentMilestones { get; init; }
 }
 
 public sealed record TenantLegalSnapshot(
@@ -106,7 +109,28 @@ public sealed record ContractTermLegalSnapshot(
     string? TermContent,
     string? TermContentEn,
     bool IsNegotiable,
-    int DisplayOrder);
+    int DisplayOrder)
+{
+    public byte TermKind { get; init; }
+}
+
+public sealed record ContractPaymentMilestoneSnapshot(
+    int PaymentMilestoneId,
+    int TermId,
+    int? SourceTemplatePaymentMilestoneId,
+    string MilestoneCode,
+    string TitleVi,
+    string? TitleEn,
+    decimal PaymentPercent,
+    byte DueAnchor,
+    int DueOffsetDays,
+    byte DayCountMode,
+    string? ConditionVi,
+    string? ConditionEn,
+    int DisplayOrder,
+    decimal Amount,
+    DateTime? AnchorDate,
+    DateTime? DueDate);
 
 public sealed record ContractLegalBasisSnapshot(
     int LegalBasisId,
@@ -117,7 +141,7 @@ public sealed record ContractLegalBasisSnapshot(
 
 public static class SoftwareSupplyContractSnapshotFactory
 {
-    public const int CurrentSchemaVersion = 4;
+    public const int CurrentSchemaVersion = 5;
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
@@ -131,7 +155,8 @@ public static class SoftwareSupplyContractSnapshotFactory
         TblContract contract,
         TblContractVersion version,
         IEnumerable<TblContractItem> items,
-        IEnumerable<TblContractTerm> terms)
+        IEnumerable<TblContractTerm> terms,
+        IEnumerable<TblContractPaymentMilestone>? paymentMilestones = null)
     {
         ArgumentNullException.ThrowIfNull(tenant);
         ArgumentNullException.ThrowIfNull(customer);
@@ -235,14 +260,41 @@ public static class SoftwareSupplyContractSnapshotFactory
                     x.TermContent,
                     x.TermContentEn,
                     x.IsNegotiable,
-                    x.DisplayOrder))
-                .ToArray());
+                    x.DisplayOrder)
+                {
+                    TermKind = x.TermKind
+                })
+                .ToArray())
+        {
+            PaymentMilestones = paymentMilestones?.OrderBy(x => x.DisplayOrder)
+                .ThenBy(x => x.PaymentMilestoneId)
+                .Select(x => new ContractPaymentMilestoneSnapshot(
+                    x.PaymentMilestoneId, x.TermId,
+                    x.SourceTemplatePaymentMilestoneId, x.MilestoneCode,
+                    x.TitleVi, x.TitleEn, x.PaymentPercent, x.DueAnchor,
+                    x.DueOffsetDays, x.DayCountMode, x.ConditionVi,
+                    x.ConditionEn, x.DisplayOrder, x.Amount,
+                    x.AnchorDate, x.DueDate)).ToArray()
+        };
     }
 
     public static string Serialize(SoftwareSupplyContractSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         return JsonSerializer.Serialize(snapshot, SerializerOptions);
+    }
+
+    public static SoftwareSupplyContractSnapshot Deserialize(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            throw new ArgumentException("Snapshot JSON không được để trống.", nameof(json));
+        var snapshot = JsonSerializer.Deserialize<SoftwareSupplyContractSnapshot>(
+            json, SerializerOptions)
+            ?? throw new JsonException("Snapshot JSON không hợp lệ.");
+        if (snapshot.SchemaVersion is < 4 or > CurrentSchemaVersion)
+            throw new JsonException(
+                $"Snapshot schema {snapshot.SchemaVersion} không được hỗ trợ.");
+        return snapshot;
     }
 
     private static string FirstRequired(

@@ -14,6 +14,8 @@ public sealed record ContractTemplateDocumentValidationResult(
     long FileSizeBytes,
     byte[]? DocumentBytes)
 {
+    public IReadOnlyList<SoftwareSupplyPlaceholderDefinition>? Definitions { get; init; }
+    public string? CatalogRevision { get; init; }
     public static ContractTemplateDocumentValidationResult RejectTechnical(
         string failureCode,
         string fileExtension,

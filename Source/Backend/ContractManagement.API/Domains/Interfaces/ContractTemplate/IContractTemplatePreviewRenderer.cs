@@ -7,6 +7,12 @@ public interface IContractTemplatePreviewRenderer
 {
     byte[] Render(byte[] sourceDocumentBytes, ContractLanguageMode languageMode);
 
+    byte[] RenderSample(byte[] sourceDocumentBytes, ContractLanguageMode languageMode,
+        IReadOnlyList<SoftwareSupplyPlaceholderDefinition> definitions,
+        IReadOnlyDictionary<string, string> customSamples) =>
+        customSamples.Count == 0 ? Render(sourceDocumentBytes, languageMode)
+            : throw new NotSupportedException("Renderer chưa hỗ trợ placeholder tùy chỉnh.");
+
     byte[] Render(
         byte[] sourceDocumentBytes,
         ContractLanguageMode languageMode,

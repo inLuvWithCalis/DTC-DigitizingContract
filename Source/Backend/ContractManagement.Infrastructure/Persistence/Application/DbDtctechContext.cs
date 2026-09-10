@@ -2513,6 +2513,7 @@ public partial class DbDtctechContext : DbContext
             entity.Property(e => e.ServiceTypeName).HasMaxLength(200);
         });
 
+        ConfigurePlaceholders(modelBuilder);
         OnModelCreatingPartial(modelBuilder);
     }
 

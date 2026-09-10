@@ -12,6 +12,12 @@ public partial class TblContractTemplateField
 {
     public int TemplateFieldId { get; set; }
 
+    public string? SourceFieldKey { get; set; }
+    public byte DataKind { get; set; } = 1;
+    public byte Multiplicity { get; set; } = 2;
+    public bool IsSystem { get; set; } = true;
+    public byte[]? DefinitionRowVersion { get; set; }
+
     /// <summary>
     /// Template version chứa placeholder này.
     /// Đây là logical reference, không tạo foreign key vật lý.

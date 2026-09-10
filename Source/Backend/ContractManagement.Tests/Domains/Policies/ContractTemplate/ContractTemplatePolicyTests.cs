@@ -13,9 +13,11 @@ public class ContractTemplatePolicyTests
         var catalog = SoftwareSupplyPlaceholderCatalog.All;
 
         Assert.Equal("V2", SoftwareSupplyPlaceholderCatalog.Version);
-        Assert.Equal(37, catalog.Count);
-        Assert.Equal(23, catalog.Count(item => item.IsRequired));
-        Assert.Equal(14, catalog.Count(item => !item.IsRequired));
+        Assert.Equal(36, catalog.Count);
+        Assert.DoesNotContain(catalog, item => item.IsRequired);
+        Assert.Equal(36, catalog.Count(item => !item.IsRequired));
+        Assert.All(catalog, item =>
+            Assert.Equal(TemplatePlaceholderMultiplicity.ZeroOrOne, item.Multiplicity));
         Assert.Equal(
             catalog.Count,
             catalog.Select(item => item.Key).Distinct(StringComparer.Ordinal).Count());
@@ -25,12 +27,9 @@ public class ContractTemplatePolicyTests
             Assert.False(string.IsNullOrWhiteSpace(item.DataSource));
         });
         Assert.Equal(
-            "Customer.CustomerRepresentativeName",
+            "Customer.CustomerFullName",
             SoftwareSupplyPlaceholderCatalog.Find("CUSTOMER_NAME")?.DataSource);
-        Assert.Equal(
-            "Customer.CustomerRepresentativeTitle",
-            SoftwareSupplyPlaceholderCatalog.Find(
-                "CUSTOMER_REPRESENTATIVE_TITLE")?.DataSource);
+        Assert.Null(SoftwareSupplyPlaceholderCatalog.Find("CUSTOMER_REPRESENTATIVE_TITLE"));
         Assert.Equal(
             "TenantLegalProfile.LegalEntityName",
             SoftwareSupplyPlaceholderCatalog.Find(
@@ -38,10 +37,10 @@ public class ContractTemplatePolicyTests
     }
 
     [Theory]
-    [InlineData("CONTRACT_TERMS", TemplatePlaceholderDataKind.DynamicBlock, true, TemplatePlaceholderMultiplicity.ExactlyOne)]
-    [InlineData("CONTRACT_ITEM_TABLE", TemplatePlaceholderDataKind.DynamicBlock, true, TemplatePlaceholderMultiplicity.ExactlyOne)]
-    [InlineData("SIGNATURE_PROVIDER", TemplatePlaceholderDataKind.DynamicBlock, true, TemplatePlaceholderMultiplicity.ExactlyOne)]
-    [InlineData("SIGNATURE_CUSTOMER", TemplatePlaceholderDataKind.DynamicBlock, true, TemplatePlaceholderMultiplicity.ExactlyOne)]
+    [InlineData("CONTRACT_TERMS", TemplatePlaceholderDataKind.DynamicBlock, false, TemplatePlaceholderMultiplicity.ZeroOrOne)]
+    [InlineData("CONTRACT_ITEM_TABLE", TemplatePlaceholderDataKind.DynamicBlock, false, TemplatePlaceholderMultiplicity.ZeroOrOne)]
+    [InlineData("SIGNATURE_PROVIDER", TemplatePlaceholderDataKind.DynamicBlock, false, TemplatePlaceholderMultiplicity.ZeroOrOne)]
+    [InlineData("SIGNATURE_CUSTOMER", TemplatePlaceholderDataKind.DynamicBlock, false, TemplatePlaceholderMultiplicity.ZeroOrOne)]
     [InlineData("PAYMENT_SCHEDULE_TABLE", TemplatePlaceholderDataKind.DynamicBlock, false, TemplatePlaceholderMultiplicity.ZeroOrOne)]
     public void SoftwareSupplyPlaceholderCatalog_SpecialPlaceholdersHaveFixedMultiplicity(
         string key,

@@ -7,6 +7,7 @@ namespace ContractManagement.API.Domains.DTOs.Responses.ContractTemplate;
 
 public sealed class SoftwareSupplyPlaceholderCatalogResponse
 {
+    public bool CustomEnabled { get; set; }
     public string CatalogVersion { get; set; } = SoftwareSupplyPlaceholderCatalog.Version;
 
     public IReadOnlyList<SoftwareSupplyPlaceholderDefinition> Items { get; set; } = [];

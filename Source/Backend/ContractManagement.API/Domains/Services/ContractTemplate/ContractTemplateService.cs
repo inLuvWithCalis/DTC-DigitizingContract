@@ -38,6 +38,8 @@ public sealed class ContractTemplateService : IContractTemplateService
     private static long _syntheticRowVersionSeed = 10_000;
 
     private readonly DbDtctechContext _dbContext;
+    private readonly IContractPlaceholderCatalog _placeholderCatalog;
+    private readonly IContractPlaceholderSourceRegistry _sourceRegistry;
     private readonly IFileStorageService? _fileStorageService;
     private readonly IContractTemplateDocumentValidator _documentValidator;
     private readonly IContractTemplateAuditWriter? _templateAuditWriter;
@@ -52,12 +54,16 @@ public sealed class ContractTemplateService : IContractTemplateService
         IContractTemplateAuditWriter? templateAuditWriter = null,
         IContractTemplatePreviewRenderer? previewRenderer = null,
         IContractTemplatePdfRenderer? pdfRenderer = null,
-        ILogger<ContractTemplateService>? logger = null)
+        ILogger<ContractTemplateService>? logger = null,
+        IContractPlaceholderCatalog? placeholderCatalog = null,
+        IContractPlaceholderSourceRegistry? sourceRegistry = null)
     {
         _dbContext = dbContext;
+        _sourceRegistry = sourceRegistry ?? new ContractPlaceholderSourceRegistry();
+        _placeholderCatalog = placeholderCatalog ?? new ContractPlaceholderCatalog(dbContext, _sourceRegistry);
         _fileStorageService = fileStorageService;
         _documentValidator = documentValidator
-            ?? new ContractTemplateDocumentValidator();
+            ?? new ContractTemplateDocumentValidator(_placeholderCatalog);
         _templateAuditWriter = templateAuditWriter;
         _previewRenderer = previewRenderer
             ?? new ContractTemplatePreviewRenderer();
@@ -233,10 +239,12 @@ public sealed class ContractTemplateService : IContractTemplateService
         CancellationToken cancellationToken = default)
     {
         await EnsureAdminOfficerAsync(employeeId, cancellationToken);
+        var items = await _placeholderCatalog.GetAsync(true, cancellationToken);
         return new SoftwareSupplyPlaceholderCatalogResponse
         {
-            CatalogVersion = SoftwareSupplyPlaceholderCatalog.Version,
-            Items = SoftwareSupplyPlaceholderCatalog.All
+            CatalogVersion = ContractPlaceholderCatalog.Fingerprint(items),
+            CustomEnabled = _placeholderCatalog is ContractPlaceholderCatalog { CustomEnabled: true },
+            Items = items
         };
     }
 
@@ -679,13 +687,14 @@ public sealed class ContractTemplateService : IContractTemplateService
 
                 await ReplaceFieldSnapshotAsync(
                     versionId,
-                    validation.RecognizedPlaceholderKeys,
+                    validation,
                     employeeId,
                     cancellationToken);
 
                 var now = DateTime.UtcNow;
                 version.DocumentFileId = uploadedArtifact.FileId;
                 version.DocumentHash = documentHash;
+                version.PlaceholderBindingHash = ContractPlaceholderCatalog.Fingerprint(validation.Definitions ?? []);
                 version.ValidationStatus = validation.IsCatalogValid
                     ? (byte)TemplateValidationStatus.Valid
                     : (byte)TemplateValidationStatus.Invalid;
@@ -773,7 +782,7 @@ public sealed class ContractTemplateService : IContractTemplateService
             EnsurePreviewEligible(preflightVersion);
             fingerprint = CreatePreviewSourceHash(
                 preflightVersion.DocumentHash!,
-                (ContractLanguageMode)preflightTemplate.LanguageMode);
+                (ContractLanguageMode)preflightTemplate.LanguageMode, preflightVersion.PlaceholderBindingHash);
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -821,9 +830,19 @@ public sealed class ContractTemplateService : IContractTemplateService
         byte[] previewBytes;
         try
         {
-            previewBytes = _previewRenderer.Render(
+            var fields = await _dbContext.TblContractTemplateFields.AsNoTracking()
+                .Where(x => x.TemplateVersionId == versionId).ToListAsync(cancellationToken);
+            var definitions = fields.Select(ContractPlaceholderCatalog.FromSnapshot).ToArray();
+            var samples = definitions.Where(x => !x.IsSystem).ToDictionary(x => x.Key, x =>
+            {
+                var source = _sourceRegistry.GetRequired(x.SourceFieldKey!);
+                return x.FormatString is null ? source.SampleValue : source.FormattedSamples[x.FormatString];
+            }, StringComparer.Ordinal);
+            previewBytes = _previewRenderer.RenderSample(
                 sourceBytes,
-                (ContractLanguageMode)preflightTemplate.LanguageMode);
+                (ContractLanguageMode)preflightTemplate.LanguageMode,
+                definitions.Length == 0 ? ContractPlaceholderCatalog.SystemDefinitions : definitions,
+                samples);
         }
         catch (ContractTemplatePreviewException exception)
         {
@@ -855,7 +874,7 @@ public sealed class ContractTemplateService : IContractTemplateService
                 EnsurePreviewEligible(version);
                 var currentFingerprint = CreatePreviewSourceHash(
                     version.DocumentHash!,
-                    (ContractLanguageMode)template.LanguageMode);
+                    (ContractLanguageMode)template.LanguageMode, version.PlaceholderBindingHash);
                 if (!string.Equals(fingerprint, currentFingerprint,
                         StringComparison.Ordinal))
                 {
@@ -952,7 +971,7 @@ public sealed class ContractTemplateService : IContractTemplateService
         EnsurePreviewDownloadEligible(version);
         var fingerprint = CreatePreviewSourceHash(
             version.DocumentHash!,
-            (ContractLanguageMode)template.LanguageMode);
+            (ContractLanguageMode)template.LanguageMode, version.PlaceholderBindingHash);
 
         if (version.PreviewFileId is not > 0)
         {
@@ -1023,7 +1042,7 @@ public sealed class ContractTemplateService : IContractTemplateService
                 "Template version");
             EnsurePublishEligible(preflightVersion);
             fingerprint = CreatePreviewSourceHash(preflightVersion.DocumentHash!,
-                (ContractLanguageMode)preflightTemplate.LanguageMode);
+                (ContractLanguageMode)preflightTemplate.LanguageMode, preflightVersion.PlaceholderBindingHash);
             previewDocx = await DownloadCurrentPreviewBytesAsync(preflightVersion,
                 fingerprint, cancellationToken);
         }
@@ -1061,7 +1080,7 @@ public sealed class ContractTemplateService : IContractTemplateService
                     "Template version");
                 EnsurePublishEligible(version);
                 var currentFingerprint = CreatePreviewSourceHash(version.DocumentHash!,
-                    (ContractLanguageMode)template.LanguageMode);
+                    (ContractLanguageMode)template.LanguageMode, version.PlaceholderBindingHash);
                 if (!string.Equals(fingerprint, currentFingerprint,
                         StringComparison.Ordinal))
                 {
@@ -1588,12 +1607,16 @@ public sealed class ContractTemplateService : IContractTemplateService
 
     private async Task ReplaceFieldSnapshotAsync(
         int versionId,
-        IReadOnlyCollection<string> recognizedPlaceholderKeys,
+        ContractTemplateDocumentValidationResult validation,
         int employeeId,
         CancellationToken cancellationToken)
     {
-        var recognized = new HashSet<string>(recognizedPlaceholderKeys,
+        var recognized = new HashSet<string>(validation.RecognizedPlaceholderKeys,
             StringComparer.Ordinal);
+        var currentCatalog = await _placeholderCatalog.GetAsync(cancellationToken: cancellationToken);
+        if (validation.CatalogRevision is not null && validation.CatalogRevision != ContractPlaceholderCatalog.Fingerprint(currentCatalog))
+            throw new DbUpdateConcurrencyException("Catalog placeholder đã thay đổi trong khi upload. Hãy thử lại.");
+        var definitions = validation.Definitions ?? currentCatalog.Where(x => recognized.Contains(x.Key)).ToArray();
 
         if (IsInMemoryProvider())
         {
@@ -1615,7 +1638,7 @@ public sealed class ContractTemplateService : IContractTemplateService
 
         var now = DateTime.UtcNow;
         var displayOrder = 0;
-        foreach (var definition in SoftwareSupplyPlaceholderCatalog.GetAll())
+        foreach (var definition in definitions)
         {
             if (!recognized.Contains(definition.Key))
             {
@@ -1628,6 +1651,13 @@ public sealed class ContractTemplateService : IContractTemplateService
                 PlaceholderKey = definition.Key,
                 FieldLabel = definition.Label,
                 DataSource = definition.DataSource,
+                SourceFieldKey = definition.SourceFieldKey,
+                DataKind = (byte)definition.DataKind,
+                Multiplicity = (byte)definition.Multiplicity,
+                IsSystem = definition.IsSystem,
+                DefinitionRowVersion = definition.RowVersion is null ? null : Convert.FromBase64String(definition.RowVersion),
+                DefaultValue = definition.DefaultValue,
+                FormatString = definition.FormatString,
                 IsRequired = definition.IsRequired,
                 DisplayOrder = displayOrder++,
                 CreatedEmployeeId = employeeId,
@@ -2163,13 +2193,15 @@ public sealed class ContractTemplateService : IContractTemplateService
 
     private static string CreatePreviewSourceHash(
         string documentHash,
-        ContractLanguageMode languageMode)
+        ContractLanguageMode languageMode,
+        string? bindingHash = null)
     {
         var source = string.Join('|',
             documentHash.Trim().ToLowerInvariant(),
-            SoftwareSupplyPlaceholderCatalog.Version,
+            // Versions published before binding snapshots retain their original preview fingerprint.
+            bindingHash ?? "V2",
             SoftwareSupplyPreviewDatasetV1.Version,
-            ContractTemplatePreviewRenderer.FormatVersion,
+            bindingHash is null ? "V3" : ContractTemplatePreviewRenderer.FormatVersion,
             ((byte)languageMode).ToString(System.Globalization.CultureInfo.InvariantCulture));
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source)))
             .ToLowerInvariant();

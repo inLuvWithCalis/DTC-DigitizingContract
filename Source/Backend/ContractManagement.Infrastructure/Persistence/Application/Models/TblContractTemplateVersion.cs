@@ -8,6 +8,7 @@
 /// </summary>
 public partial class TblContractTemplateVersion
 {
+    public string? PlaceholderBindingHash { get; set; }
     public int TemplateVersionId { get; set; }
 
     public int TemplateId { get; set; }

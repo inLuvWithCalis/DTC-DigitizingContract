@@ -14,17 +14,21 @@ namespace ContractManagement.Domains.Services.ContractTemplate;
 /// </summary>
 public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRenderer
 {
-    public const string FormatVersion = "V3";
+    public const string FormatVersion = "V4";
 
     private const string GeneratedContentFont = "Times New Roman";
     private const string GeneratedContentFontSize = "24";
 
-    private static readonly IReadOnlyList<string> DynamicKeys =
-        SoftwareSupplyPlaceholderCatalog.GetAll()
-            .Where(definition =>
-                definition.DataKind == TemplatePlaceholderDataKind.DynamicBlock)
-            .Select(definition => definition.Key)
-            .ToList();
+    public byte[] RenderSample(byte[] sourceDocumentBytes, ContractLanguageMode languageMode,
+        IReadOnlyList<SoftwareSupplyPlaceholderDefinition> definitions, IReadOnlyDictionary<string, string> customSamples)
+    {
+        var data = CreateSampleRenderData(languageMode);
+        var values = new Dictionary<string, string>(data.ScalarValues, StringComparer.Ordinal);
+        if (definitions.Any(x => x.IsSystem && x.Key == "CUSTOMER_REPRESENTATIVE_TITLE"))
+            values["CUSTOMER_REPRESENTATIVE_TITLE"] = "Tổng giám đốc";
+        foreach (var pair in customSamples) values[pair.Key] = pair.Value;
+        return Render(sourceDocumentBytes, languageMode, data with { ScalarValues = values, Definitions = definitions });
+    }
 
     public byte[] Render(byte[] sourceDocumentBytes, ContractLanguageMode languageMode)
         => Render(sourceDocumentBytes, languageMode, CreateSampleRenderData(languageMode));
@@ -60,7 +64,8 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                     "DOCX nguồn không có body để preview.");
             }
 
-            var dynamicParagraphs = LocateDynamicParagraphs(mainPart);
+            var definitions = renderData.Definitions ?? ContractPlaceholderCatalog.SystemDefinitions;
+            var dynamicParagraphs = LocateDynamicParagraphs(mainPart, definitions);
             ReplaceDynamicBlocks(dynamicParagraphs, languageMode, renderData);
 
             foreach (var root in GetTextRoots(mainPart))
@@ -68,7 +73,7 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                 ReplaceScalarTokens(root, renderData.ScalarValues);
             }
 
-            EnsureNoCatalogTokensRemain(mainPart);
+            EnsureNoCatalogTokensRemain(mainPart, definitions);
             mainPart.Document.Save();
         }
 
@@ -76,11 +81,12 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
     }
 
     private static IReadOnlyDictionary<string, W.Paragraph> LocateDynamicParagraphs(
-        MainDocumentPart mainPart)
+        MainDocumentPart mainPart, IReadOnlyList<SoftwareSupplyPlaceholderDefinition> definitions)
     {
+        var dynamicKeys = definitions.Where(x => x.DataKind == TemplatePlaceholderDataKind.DynamicBlock).Select(x => x.Key).ToArray();
         var found = new Dictionary<string, List<W.Paragraph>>(
             StringComparer.Ordinal);
-        foreach (var key in DynamicKeys)
+        foreach (var key in dynamicKeys)
         {
             found[key] = [];
         }
@@ -90,7 +96,7 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
             foreach (var paragraph in root.Descendants<W.Paragraph>().ToList())
             {
                 var paragraphText = GetParagraphText(paragraph);
-                foreach (var key in DynamicKeys)
+                foreach (var key in dynamicKeys)
                 {
                     var token = Token(key);
                     if (!paragraphText.Contains(token, StringComparison.Ordinal))
@@ -110,7 +116,7 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
         }
 
         var result = new Dictionary<string, W.Paragraph>(StringComparer.Ordinal);
-        foreach (var definition in SoftwareSupplyPlaceholderCatalog.GetAll()
+        foreach (var definition in definitions
                      .Where(item =>
                          item.DataKind == TemplatePlaceholderDataKind.DynamicBlock))
         {
@@ -457,12 +463,10 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
             }
 
             var before = string.Concat(textElements.Select(text => text.Text));
-            var after = before;
-            foreach (var (key, value) in values)
-            {
-                after = after.Replace(Token(key), value,
-                    StringComparison.Ordinal);
-            }
+            // Match only original tokens once; values are literal text, never another substitution pass.
+            var after = System.Text.RegularExpressions.Regex.Replace(before,
+                @"\{\{([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*)\}\}",
+                match => values.TryGetValue(match.Groups[1].Value, out var value) ? value : match.Value);
 
             if (string.Equals(before, after, StringComparison.Ordinal))
             {
@@ -480,15 +484,15 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
         }
     }
 
-    private static void EnsureNoCatalogTokensRemain(MainDocumentPart mainPart)
+    private static void EnsureNoCatalogTokensRemain(MainDocumentPart mainPart, IReadOnlyList<SoftwareSupplyPlaceholderDefinition> definitions)
     {
         var text = string.Concat(GetTextRoots(mainPart)
             .SelectMany(root => root.Descendants<W.Text>())
             .Select(value => value.Text));
-        var remaining = SoftwareSupplyPlaceholderCatalog.GetAll()
+        var remaining = definitions
             .Select(definition => Token(definition.Key))
             .FirstOrDefault(token => text.Contains(token, StringComparison.Ordinal));
-        if (remaining is not null)
+        if (remaining is not null || System.Text.RegularExpressions.Regex.IsMatch(text, @"\{\{[^{}]*\}\}"))
         {
             throw new ContractTemplatePreviewException(
                 "PreviewRenderIncomplete",

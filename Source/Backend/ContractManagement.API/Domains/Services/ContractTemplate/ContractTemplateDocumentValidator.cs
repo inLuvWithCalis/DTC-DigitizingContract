@@ -17,6 +17,9 @@ namespace ContractManagement.Domains.Services.ContractTemplate;
 public sealed class ContractTemplateDocumentValidator
     : IContractTemplateDocumentValidator
 {
+    private readonly IContractPlaceholderCatalog? _catalog;
+
+    public ContractTemplateDocumentValidator(IContractPlaceholderCatalog? catalog = null) => _catalog = catalog;
     public const long MaxDocumentSizeBytes = 10 * 1024 * 1024;
 
     private const long MaxUncompressedPackageBytes = 100 * 1024 * 1024;
@@ -25,6 +28,9 @@ public sealed class ContractTemplateDocumentValidator
 
     private static readonly Regex ValidTokenRegex = new(
         "^\\{\\{[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*\\}\\}$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex DisplayableInvalidTokenRegex = new(
+        "^\\{\\{[A-Za-z0-9_]{1,100}\\}\\}$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     public async Task<ContractTemplateDocumentValidationResult> ValidateAsync(
@@ -116,7 +122,10 @@ public sealed class ContractTemplateDocumentValidator
             // do not execute code. Invalid/missing placeholders still produce a
             // catalog-invalid version that cannot be published.
 
-            return ValidatePlaceholders(roots, extension, documentBytes);
+            var catalog = _catalog is null ? ContractPlaceholderCatalog.SystemDefinitions
+                : await _catalog.GetAsync(includeInactive: true, cancellationToken: cancellationToken);
+            return ValidatePlaceholders(roots, extension, documentBytes, catalog.Where(x => x.IsActive).ToArray(),
+                catalog.Where(x => !x.IsActive).Select(x => x.Key).ToHashSet(StringComparer.Ordinal));
         }
         catch (OperationCanceledException)
         {
@@ -136,15 +145,15 @@ public sealed class ContractTemplateDocumentValidator
     private static ContractTemplateDocumentValidationResult ValidatePlaceholders(
         IReadOnlyCollection<OpenXmlElement> roots,
         string extension,
-        byte[] documentBytes)
+        byte[] documentBytes,
+        IReadOnlyList<SoftwareSupplyPlaceholderDefinition> catalog,
+        IReadOnlySet<string> inactiveKeys)
     {
-        var catalog = SoftwareSupplyPlaceholderCatalog.GetAll();
         var catalogByKey = catalog.ToDictionary(
             item => item.Key,
             StringComparer.Ordinal);
         var occurrences = new Dictionary<string, int>(StringComparer.Ordinal);
         var messages = new List<string>();
-        var hasUnknownToken = false;
 
         foreach (var root in roots)
         {
@@ -158,18 +167,14 @@ public sealed class ContractTemplateDocumentValidator
                 {
                     if (!catalogByKey.ContainsKey(token))
                     {
-                        hasUnknownToken = true;
+                        if (inactiveKeys.Contains(token)) messages.Add($"InactivePlaceholder:{token}");
+                        else messages.Add($"UnknownPlaceholder:{token}");
                         continue;
                     }
 
                     occurrences[token] = occurrences.GetValueOrDefault(token) + 1;
                 }
             }
-        }
-
-        if (hasUnknownToken)
-        {
-            messages.Add("UnknownPlaceholder");
         }
 
         foreach (var definition in catalog)
@@ -213,7 +218,11 @@ public sealed class ContractTemplateDocumentValidator
             ValidationMessage: message,
             FileExtension: extension,
             FileSizeBytes: documentBytes.LongLength,
-            DocumentBytes: documentBytes);
+            DocumentBytes: documentBytes)
+        {
+            Definitions = catalog.Where(x => occurrences.ContainsKey(x.Key)).ToArray(),
+            CatalogRevision = ContractPlaceholderCatalog.Fingerprint(catalog)
+        };
     }
 
     private static IEnumerable<string> ParseTokens(
@@ -237,7 +246,9 @@ public sealed class ContractTemplateDocumentValidator
                 var token = paragraphText[index..(closingIndex + 2)];
                 if (!ValidTokenRegex.IsMatch(token))
                 {
-                    messages.Add("InvalidPlaceholderSyntax");
+                    messages.Add(DisplayableInvalidTokenRegex.IsMatch(token)
+                        ? $"InvalidPlaceholderSyntax:{token[2..^2]}"
+                        : "InvalidPlaceholderSyntax");
                 }
                 else
                 {

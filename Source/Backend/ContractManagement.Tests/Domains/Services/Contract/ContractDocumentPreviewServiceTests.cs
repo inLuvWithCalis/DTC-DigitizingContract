@@ -20,6 +20,52 @@ namespace ContractManagement.Tests.Domains.Services.Contract;
 
 public sealed class ContractDocumentPreviewServiceTests
 {
+    [Fact]
+    public async Task CustomScalar_RendersFromFrozenValues_AndIsIncludedInSubmissionHashPayload()
+    {
+        await using var context = CreateContext();
+        using var stream = new MemoryStream();
+        stream.Write(CreateSourceDocument());
+        stream.Position = 0;
+        using (var doc = WordprocessingDocument.Open(stream, true))
+        {
+            doc.MainDocumentPart!.Document!.Body!.Append(new W.Paragraph(new W.Run(new W.Text("{{CUSTOM_CONTACT}}"))));
+            doc.MainDocumentPart!.Document!.Save();
+        }
+        var source = stream.ToArray();
+        await SeedAsync(context, source);
+        var customer = await context.TblCustomers.SingleAsync();
+        customer.CustomerContactPersonName = "Frozen contact";
+        context.TblContractTemplateFields.AddRange(ContractPlaceholderCatalog.SystemDefinitions.Select(x => new TblContractTemplateField
+        {
+            TemplateVersionId = TemplateVersionId, PlaceholderKey = x.Key, FieldLabel = x.Label, DataSource = x.DataSource,
+            SourceFieldKey = x.SourceFieldKey, IsSystem = true, IsRequired = x.IsRequired,
+            DataKind = (byte)x.DataKind, Multiplicity = (byte)x.Multiplicity
+        }));
+        context.TblContractTemplateFields.Add(new()
+        {
+            TemplateVersionId = TemplateVersionId, PlaceholderKey = "CUSTOM_CONTACT", FieldLabel = "Contact",
+            SourceFieldKey = "customer.contact-name", DataSource = "Khách hàng / Người liên hệ", IsSystem = false,
+            DataKind = 1, Multiplicity = 2
+        });
+        await context.SaveChangesAsync();
+        var service = CreateService(context, source);
+        var rendered = await service.GenerateDocxAsync(ContractId, OwnerId);
+        using (var doc = WordprocessingDocument.Open(new MemoryStream(rendered.Content), false))
+            Assert.Contains("Frozen contact", doc.MainDocumentPart!.Document!.InnerText);
+        await context.SaveChangesAsync();
+        customer.CustomerContactPersonName = "Changed later";
+        (await context.TblContracts.SingleAsync()).Status = (byte)ContractStatus.Negotiating;
+        await context.SaveChangesAsync();
+        var submission = await service.RenderAsync(ContractId, OwnerId);
+        Assert.Contains("Frozen contact", submission.SnapshotJson);
+        Assert.DoesNotContain("Changed later", submission.SnapshotJson);
+        Assert.Contains("placeholderValues", submission.SnapshotJson);
+        using var submitted = WordprocessingDocument.Open(new MemoryStream(submission.DocxContent), false);
+        Assert.Contains("Frozen contact", submitted.MainDocumentPart!.Document!.InnerText);
+        Assert.DoesNotContain("{{", submitted.MainDocumentPart!.Document!.InnerText);
+    }
+
     private const int ContractId = 8101;
     private const int OwnerId = 8102;
     private const int OtherEmployeeId = 8103;
@@ -60,13 +106,15 @@ public sealed class ContractDocumentPreviewServiceTests
         Assert.Contains("098765432109", text);
         Assert.Contains("Ngân hàng DTC", text);
         Assert.Contains("CÔNG TY KHÁCH HÀNG", text);
+        Assert.Contains("Nguyễn Người liên hệ", text);
+        Assert.Contains(document.MainDocumentPart.Document.Descendants<W.Paragraph>(),
+            paragraph => paragraph.InnerText == "Nguyễn Người liên hệ");
         Assert.Contains("Trần Customer", text);
         Assert.Contains("Giám đốc", text);
         Assert.Contains("02473000003", text);
         Assert.Contains("02473000004", text);
         Assert.Contains("012345678901", text);
         Assert.Contains("Ngân hàng Khách hàng", text);
-        Assert.DoesNotContain("Nguyễn Người liên hệ", text);
         Assert.Contains("Phần mềm quản lý hợp đồng", text);
         Assert.Contains("Phạm vi cung cấp", text);
         Assert.Contains(

@@ -24,6 +24,41 @@ namespace ContractManagement.Tests.Domains.Services.ContractTemplate;
 
 public sealed class ContractTemplateDocumentUploadServiceTests
 {
+    [Fact]
+    public async Task CustomMapping_IsSnapshottedOnUpload_AndReboundOnlyOnReupload()
+    {
+        await using var context = CreateContext();
+        await SeedDraftAsync(context);
+        var registry = new ContractPlaceholderSourceRegistry();
+        var catalog = new ContractPlaceholderCatalog(context, registry,
+            Microsoft.Extensions.Options.Options.Create(new CustomContractPlaceholderOptions { Enabled = true }));
+        var manager = new ContractPlaceholderDefinitionService(context, catalog, registry);
+        var request = new SaveContractPlaceholderRequest
+        {
+            PlaceholderKey = "CONTACT_NAME_CUSTOM", FieldLabel = "Contact", SourceFieldKey = "customer.contact-name", DefaultValue = "Fallback"
+        };
+        var created = await manager.SaveAsync(null, request, AdminOfficerId, default);
+        var bytes = CreateDocument(RequiredTokens().Append("{{CONTACT_NAME_CUSTOM}}"));
+        var service = CreateService(context, new TestFileStorage(context), catalog: catalog);
+        await service.UploadDocumentAsync(VersionId, Request(bytes, await GetVersionRowVersionAsync(context)), AdminOfficerId);
+        var field = await context.TblContractTemplateFields.AsNoTracking().SingleAsync(x => x.PlaceholderKey == created.Key);
+        var hash = (await context.TblContractTemplateVersions.AsNoTracking().SingleAsync()).PlaceholderBindingHash;
+        Assert.False(field.IsSystem); Assert.Equal("customer.contact-name", field.SourceFieldKey);
+        Assert.Equal("Fallback", field.DefaultValue); Assert.NotNull(hash);
+        Assert.Equal(Convert.FromBase64String(created.RowVersion!), field.DefinitionRowVersion);
+
+        request.RowVersion = created.RowVersion; request.SourceFieldKey = "customer.phone";
+        var updated = await manager.SaveAsync(created.Id, request, AdminOfficerId, default);
+        Assert.Equal("customer.contact-name", (await context.TblContractTemplateFields.AsNoTracking().SingleAsync(x => x.PlaceholderKey == created.Key)).SourceFieldKey);
+        Assert.Equal(hash, (await context.TblContractTemplateVersions.AsNoTracking().SingleAsync()).PlaceholderBindingHash);
+
+        await service.UploadDocumentAsync(VersionId, Request(bytes, await GetVersionRowVersionAsync(context)), AdminOfficerId);
+        Assert.Equal("customer.phone", (await context.TblContractTemplateFields.AsNoTracking().SingleAsync(x => x.PlaceholderKey == created.Key)).SourceFieldKey);
+        Assert.NotEqual(hash, (await context.TblContractTemplateVersions.AsNoTracking().SingleAsync()).PlaceholderBindingHash);
+        await manager.SetActiveAsync(created.Id!.Value, false, updated.RowVersion!, AdminOfficerId, default);
+        Assert.Equal("customer.phone", (await context.TblContractTemplateFields.AsNoTracking().SingleAsync(x => x.PlaceholderKey == created.Key)).SourceFieldKey);
+    }
+
     private const int TenantId = 909;
     private const int AdminOfficerId = 901;
     private const int ManagerId = 902;
@@ -71,7 +106,7 @@ public sealed class ContractTemplateDocumentUploadServiceTests
     }
 
     [Fact]
-    public async Task CatalogInvalidDocx_ReplacesArtifactAndLocksPublish()
+    public async Task CatalogInvalidDuplicateDocx_ReplacesArtifactAndLocksPublish()
     {
         await using var context = CreateContext();
         await SeedDraftAsync(context);
@@ -84,7 +119,8 @@ public sealed class ContractTemplateDocumentUploadServiceTests
                 await GetVersionRowVersionAsync(context)),
             AdminOfficerId);
         var invalidTokens = RequiredTokens()
-            .Where(token => token != "{{CONTRACT_CODE}}");
+            .Append("{{CONTRACT_CODE}}")
+            .Append("{{CONTRACT_CODE}}");
         var invalid = await service.UploadDocumentAsync(
             VersionId,
             Request(CreateDocument(invalidTokens), first.RowVersion),
@@ -92,10 +128,10 @@ public sealed class ContractTemplateDocumentUploadServiceTests
 
         Assert.Equal(TemplateValidationStatus.Invalid, invalid.ValidationStatus);
         Assert.Equal(2, invalid.DocumentFileId);
-        Assert.Contains("MissingRequiredPlaceholder:CONTRACT_CODE",
+        Assert.Contains("MultiplicityViolation:CONTRACT_CODE",
             invalid.ValidationMessage);
         Assert.Contains(1, storage.DeletedFileIds);
-        Assert.DoesNotContain("CONTRACT_CODE", await context.TblContractTemplateFields
+        Assert.Contains("CONTRACT_CODE", await context.TblContractTemplateFields
             .Where(field => field.TemplateVersionId == VersionId)
             .Select(field => field.PlaceholderKey)
             .ToListAsync());
@@ -251,7 +287,8 @@ public sealed class ContractTemplateDocumentUploadServiceTests
         DbDtctechContext context,
         TestFileStorage storage,
         Func<IContractTemplateAuditWriter, IContractTemplateAuditWriter>?
-            writerDecorator = null)
+            writerDecorator = null,
+        IContractPlaceholderCatalog? catalog = null)
     {
         var tenant = new CurrentTenant();
         tenant.Set(new ResolvedTenant(
@@ -277,8 +314,8 @@ public sealed class ContractTemplateDocumentUploadServiceTests
         return new ContractTemplateService(
             context,
             storage,
-            new ContractTemplateDocumentValidator(),
-            writer);
+            new ContractTemplateDocumentValidator(catalog),
+            writer, placeholderCatalog: catalog);
     }
 
     private static DbDtctechContext CreateContext()

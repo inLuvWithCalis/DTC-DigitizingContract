@@ -14,7 +14,15 @@ import { CodeInput } from "@/components/ui/custom/code-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2 } from "lucide-react";
+import {
+  Building2,
+  Globe,
+  Loader2,
+  Mail,
+  MapPin,
+  Phone,
+  UserSquare2,
+} from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import {
   customerApi,
@@ -71,6 +79,9 @@ export function CustomerFormModal({
 
   useEffect(() => {
     if (isOpen) {
+      // The dialog keeps its form mounted, so each open intentionally starts
+      // a fresh draft from the selected customer instead of stale local input.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setErrors({});
       if (item) {
         setCustomerCode(item.customerCode || "");
@@ -206,10 +217,13 @@ export function CustomerFormModal({
       }
       onSuccess(createdCustomer);
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const apiError = error as {
+        response?: { data?: { message?: string } };
+      };
       const message =
-        error?.response?.data?.message ||
-        error?.message ||
+        apiError.response?.data?.message ||
+        (error instanceof Error ? error.message : null) ||
         (isEditMode
           ? "Không thể cập nhật thông tin khách hàng"
           : "Không thể thêm khách hàng mới");
@@ -221,9 +235,10 @@ export function CustomerFormModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
+      <DialogContent className="flex max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
+        <DialogHeader className="border-b border-border/50 px-6 py-5">
+          <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+            <UserSquare2 className="size-5 text-primary" />
             {viewOnly
               ? "Chi tiết khách hàng"
               : isEditMode
@@ -239,10 +254,47 @@ export function CustomerFormModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 py-2">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid gap-4 overflow-y-auto px-6 py-5 [&_label]:text-xs [&_label]:font-semibold [&_label]:uppercase [&_label]:text-muted-foreground [&_input]:h-9 [&_input:disabled]:cursor-default [&_input:disabled]:border-transparent [&_input:disabled]:bg-muted/40 [&_input:disabled]:font-medium [&_input:disabled]:text-foreground [&_input:disabled]:opacity-100 [&_input:disabled]:shadow-none [&_textarea:disabled]:cursor-default [&_textarea:disabled]:border-transparent [&_textarea:disabled]:bg-muted/40 [&_textarea:disabled]:font-medium [&_textarea:disabled]:text-foreground [&_textarea:disabled]:opacity-100 [&_textarea:disabled]:shadow-none">
+          <div className="grid gap-2">
+            <Label htmlFor="customerFullName">
+              Tên khách hàng / Người liên hệ{" "}
+              {!viewOnly && <span className="text-destructive">*</span>}
+            </Label>
+            <Input
+              id="customerFullName"
+              placeholder="Nhập họ tên khách hàng..."
+              value={customerFullName}
+              onChange={(e) => setCustomerFullName(e.target.value)}
+              disabled={viewOnly}
+              aria-invalid={!!errors.customerFullName}
+              maxLength={100}
+            />
+            {errors.customerFullName && (
+              <p className="text-xs text-destructive">
+                {errors.customerFullName}
+              </p>
+            )}
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="customerCompany">Tên công ty / Tổ chức</Label>
+            <div className="relative">
+              <Building2 className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+              <Input
+                id="customerCompany"
+                className="pl-9"
+                placeholder="Nhập tên doanh nghiệp..."
+                value={customerCompany}
+                onChange={(e) => setCustomerCompany(e.target.value)}
+                disabled={viewOnly}
+                maxLength={1000}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
-              <Label htmlFor="customerCode">Mã khách hàng</Label>
+              <Label htmlFor="customerCode">Mã KH</Label>
               <CodeInput
                 id="customerCode"
                 placeholder="CUST-001 (Tùy chọn)"
@@ -265,191 +317,7 @@ export function CustomerFormModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="customerFullName">
-                Tên khách hàng / Người liên hệ{" "}
-                {!viewOnly && <span className="text-destructive">*</span>}
-              </Label>
-              <Input
-                id="customerFullName"
-                placeholder="Nhập họ tên khách hàng..."
-                value={customerFullName}
-                onChange={(e) => setCustomerFullName(e.target.value)}
-                disabled={viewOnly}
-                aria-invalid={!!errors.customerFullName}
-                maxLength={100}
-              />
-              {errors.customerFullName && (
-                <p className="text-xs text-destructive">
-                  {errors.customerFullName}
-                </p>
-              )}
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="customerCompany">Tên công ty / Tổ chức</Label>
-              <Input
-                id="customerCompany"
-                placeholder="Nhập tên doanh nghiệp..."
-                value={customerCompany}
-                onChange={(e) => setCustomerCompany(e.target.value)}
-                disabled={viewOnly}
-                maxLength={1000}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="customerEmail">
-                Email {!viewOnly && <span className="text-destructive">*</span>}
-              </Label>
-              <Input
-                id="customerEmail"
-                type="email"
-                placeholder="email@company.com"
-                value={customerEmail}
-                onChange={(e) => setCustomerEmail(e.target.value)}
-                disabled={viewOnly}
-                aria-invalid={!!errors.customerEmail}
-                maxLength={50}
-              />
-              {errors.customerEmail && (
-                <p className="text-xs text-destructive">
-                  {errors.customerEmail}
-                </p>
-              )}
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="customerMobile">
-                Số di động{" "}
-                {!viewOnly && <span className="text-destructive">*</span>}
-              </Label>
-              <Input
-                id="customerMobile"
-                placeholder="0912345678"
-                value={customerMobile}
-                onChange={(e) => setCustomerMobile(e.target.value)}
-                disabled={viewOnly}
-                aria-invalid={!!errors.customerMobile}
-                maxLength={15}
-              />
-              {errors.customerMobile && (
-                <p className="text-xs text-destructive">
-                  {errors.customerMobile}
-                </p>
-              )}
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="customerPhone">Điện thoại cố định</Label>
-              <Input
-                id="customerPhone"
-                placeholder="0243123456"
-                value={customerPhone}
-                onChange={(e) => setCustomerPhone(e.target.value)}
-                disabled={viewOnly}
-                maxLength={15}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="customerFaxNumber">Fax</Label>
-              <Input
-                id="customerFaxNumber"
-                placeholder="0243123457"
-                value={customerFaxNumber}
-                onChange={(event) => setCustomerFaxNumber(event.target.value)}
-                disabled={viewOnly}
-                maxLength={15}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="customerRepresentativeName">
-                Người đại diện pháp luật
-              </Label>
-              <Input
-                id="customerRepresentativeName"
-                placeholder="Họ và tên người đại diện"
-                value={customerRepresentativeName}
-                onChange={(event) =>
-                  setCustomerRepresentativeName(event.target.value)
-                }
-                disabled={viewOnly}
-                maxLength={200}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="customerRepresentativeTitle">
-                Chức danh người đại diện
-              </Label>
-              <Input
-                id="customerRepresentativeTitle"
-                placeholder="Ví dụ: Tổng giám đốc"
-                value={customerRepresentativeTitle}
-                onChange={(event) =>
-                  setCustomerRepresentativeTitle(event.target.value)
-                }
-                disabled={viewOnly}
-                maxLength={200}
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-3 rounded-lg border bg-muted/20 p-4">
-            <div>
-              <p className="text-sm font-medium">Người làm việc trực tiếp</p>
-              <p className="text-xs text-muted-foreground">
-                Đầu mối phối hợp công việc, không thay thế người đại diện pháp
-                luật.
-              </p>
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <Label htmlFor="customerContactPersonName">Họ và tên</Label>
-                <Input
-                  id="customerContactPersonName"
-                  placeholder="Họ và tên người liên hệ"
-                  value={customerContactPersonName}
-                  onChange={(event) =>
-                    setCustomerContactPersonName(event.target.value)
-                  }
-                  disabled={viewOnly}
-                  maxLength={200}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="customerContactPersonTitle">Chức danh</Label>
-                <Input
-                  id="customerContactPersonTitle"
-                  placeholder="Ví dụ: Trưởng phòng mua hàng"
-                  value={customerContactPersonTitle}
-                  onChange={(event) =>
-                    setCustomerContactPersonTitle(event.target.value)
-                  }
-                  disabled={viewOnly}
-                  maxLength={200}
-                />
-              </div>
-            </div>
-            <div className="grid gap-2 sm:w-1/2 sm:pr-2">
-              <Label htmlFor="customerContactPersonPhone">Số điện thoại</Label>
-              <Input
-                id="customerContactPersonPhone"
-                type="tel"
-                placeholder="0912345678"
-                value={customerContactPersonPhone}
-                onChange={(event) =>
-                  setCustomerContactPersonPhone(event.target.value)
-                }
-                disabled={viewOnly}
-                maxLength={20}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="customerBankAccountNumber">
                 Số tài khoản ngân hàng
@@ -478,19 +346,189 @@ export function CustomerFormModal({
             </div>
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="customerAddress">Địa chỉ</Label>
-            <Input
-              id="customerAddress"
-              placeholder="Số nhà, đường phố, quận/huyện..."
-              value={customerAddress}
-              onChange={(e) => setCustomerAddress(e.target.value)}
-              disabled={viewOnly}
-              maxLength={2000}
-            />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="grid gap-2">
+              <Label htmlFor="customerMobile">
+                Số di động {!viewOnly && <span className="text-destructive">*</span>}
+              </Label>
+              <div className="relative">
+                <Phone className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+                <Input
+                  id="customerMobile"
+                  className="pl-9"
+                  placeholder="0912345678"
+                  value={customerMobile}
+                  onChange={(e) => setCustomerMobile(e.target.value)}
+                  disabled={viewOnly}
+                  aria-invalid={!!errors.customerMobile}
+                  maxLength={15}
+                />
+              </div>
+              {errors.customerMobile && (
+                <p className="text-xs text-destructive">{errors.customerMobile}</p>
+              )}
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="customerPhone">SĐT cố định</Label>
+              <Input
+                id="customerPhone"
+                placeholder="0243123456"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+                disabled={viewOnly}
+                maxLength={15}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="customerFaxNumber">Fax</Label>
+              <Input
+                id="customerFaxNumber"
+                placeholder="0243123457"
+                value={customerFaxNumber}
+                onChange={(event) => setCustomerFaxNumber(event.target.value)}
+                disabled={viewOnly}
+                maxLength={15}
+              />
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor="customerEmail">
+              Email {!viewOnly && <span className="text-destructive">*</span>}
+            </Label>
+            <div className="relative">
+              <Mail className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+              <Input
+                id="customerEmail"
+                type="email"
+                className="pl-9"
+                placeholder="email@company.com"
+                value={customerEmail}
+                onChange={(e) => setCustomerEmail(e.target.value)}
+                disabled={viewOnly}
+                aria-invalid={!!errors.customerEmail}
+                maxLength={50}
+              />
+            </div>
+            {errors.customerEmail && (
+              <p className="text-xs text-destructive">{errors.customerEmail}</p>
+            )}
+          </div>
+
+          <div className="grid gap-3 rounded-lg border bg-muted/20 p-4">
+            <div>
+              <p className="text-sm font-semibold">
+                Người liên lạc / làm việc trực tiếp
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Đầu mối phối hợp công việc, không thay thế người đại diện pháp
+                luật.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="grid gap-2 sm:col-span-2">
+                <Label htmlFor="customerContactPersonName">Họ và tên</Label>
+                <Input
+                  id="customerContactPersonName"
+                  placeholder="Họ và tên người liên hệ"
+                  value={customerContactPersonName}
+                  onChange={(event) =>
+                    setCustomerContactPersonName(event.target.value)
+                  }
+                  disabled={viewOnly}
+                  maxLength={200}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="customerContactPersonTitle">Chức danh</Label>
+                <Input
+                  id="customerContactPersonTitle"
+                  placeholder="Ví dụ: Trưởng phòng mua hàng"
+                  value={customerContactPersonTitle}
+                  onChange={(event) =>
+                    setCustomerContactPersonTitle(event.target.value)
+                  }
+                  disabled={viewOnly}
+                  maxLength={200}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="customerContactPersonPhone">Số điện thoại</Label>
+                <div className="relative">
+                  <Phone className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+                  <Input
+                    id="customerContactPersonPhone"
+                    type="tel"
+                    className="pl-9"
+                    placeholder="0912345678"
+                    value={customerContactPersonPhone}
+                    onChange={(event) =>
+                      setCustomerContactPersonPhone(event.target.value)
+                    }
+                    disabled={viewOnly}
+                    maxLength={20}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-3 rounded-lg border bg-muted/20 p-4">
+            <div>
+              <p className="text-sm font-semibold">Người đại diện pháp luật</p>
+              <p className="text-xs text-muted-foreground">
+                Đầu mối ký kết hợp đồng với công ty.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="customerRepresentativeName">Họ và tên</Label>
+                <Input
+                  id="customerRepresentativeName"
+                  placeholder="Họ và tên người đại diện"
+                  value={customerRepresentativeName}
+                  onChange={(event) =>
+                    setCustomerRepresentativeName(event.target.value)
+                  }
+                  disabled={viewOnly}
+                  maxLength={200}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="customerRepresentativeTitle">Chức danh</Label>
+                <Input
+                  id="customerRepresentativeTitle"
+                  placeholder="Ví dụ: Giám đốc"
+                  value={customerRepresentativeTitle}
+                  onChange={(event) =>
+                    setCustomerRepresentativeTitle(event.target.value)
+                  }
+                  disabled={viewOnly}
+                  maxLength={200}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="customerAddress">Địa chỉ</Label>
+            <div className="relative">
+              <MapPin className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+              <Input
+                id="customerAddress"
+                className="pl-9"
+                placeholder="Số nhà, đường phố, quận/huyện..."
+                value={customerAddress}
+                onChange={(e) => setCustomerAddress(e.target.value)}
+                disabled={viewOnly}
+                maxLength={2000}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="customerCity">Tỉnh / Thành phố</Label>
               <Input
@@ -513,10 +551,15 @@ export function CustomerFormModal({
                 maxLength={200}
               />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="customerWebsite">Website</Label>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="customerWebsite">Website</Label>
+            <div className="relative">
+              <Globe className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
               <Input
                 id="customerWebsite"
+                className="pl-9"
                 placeholder="https://company.com"
                 value={customerWebsite}
                 onChange={(e) => setCustomerWebsite(e.target.value)}
@@ -530,6 +573,7 @@ export function CustomerFormModal({
             <Label htmlFor="customerNotes">Ghi chú thêm</Label>
             <Textarea
               id="customerNotes"
+              className="resize-none"
               placeholder="Ghi chú nội bộ về khách hàng..."
               value={customerNotes}
               onChange={(e) => setCustomerNotes(e.target.value)}
@@ -540,7 +584,7 @@ export function CustomerFormModal({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="border-t border-border/50 bg-muted/20 px-6 py-4">
           {viewOnly ? (
             <Button variant="outline" onClick={onClose}>
               Đóng

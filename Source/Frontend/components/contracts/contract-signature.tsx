@@ -526,7 +526,6 @@ export function ContractSignature({
                     type="tel"
                     autoComplete="tel"
                     placeholder="Ví dụ: 0901234567"
-                    maxLength={11}
                     value={manualPhoneNumber}
                     onChange={(event) =>
                       setManualPhoneNumber(event.target.value)

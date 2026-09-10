@@ -160,6 +160,15 @@ export interface ReorderContractTemplateTermsRequest {
 }
 
 export interface SoftwareSupplyPlaceholderDefinition {
+  id?: number | null;
+  isSystem: boolean;
+  isActive: boolean;
+  sourceFieldKey?: string | null;
+  moduleKey?: string | null;
+  valueType?: number | null;
+  defaultValue?: string | null;
+  formatString?: string | null;
+  rowVersion?: string | null;
   key: string;
   label: string;
   isRequired: boolean;
@@ -169,8 +178,38 @@ export interface SoftwareSupplyPlaceholderDefinition {
 }
 
 export interface SoftwareSupplyPlaceholderCatalogResponse {
+  customEnabled: boolean;
   catalogVersion: string;
   items: SoftwareSupplyPlaceholderDefinition[];
+}
+
+export interface ContractPlaceholderSourceField {
+  sourceFieldKey: string;
+  moduleKey: string;
+  moduleLabel: string;
+  fieldLabel: string;
+  valueType: number;
+  isNullable: boolean;
+  allowedFormats: string[];
+  sampleValue: string;
+  formattedSamples: Record<string, string>;
+}
+
+export interface SaveContractPlaceholderRequest {
+  placeholderKey: string;
+  fieldLabel: string;
+  sourceFieldKey: string;
+  defaultValue: string | null;
+  formatString: string | null;
+  rowVersion?: string | null;
+}
+
+export interface ContractPlaceholderUsage {
+  templateId: number;
+  templateVersionId: number;
+  templateCode: string;
+  versionNo: number;
+  status: TemplateVersionStatus;
 }
 
 export interface ContractTemplateResponse {
@@ -321,6 +360,20 @@ export const contractTemplateApi = {
     axiosClient.get<unknown, SoftwareSupplyPlaceholderCatalogResponse>(
       `${BASE_URL}/placeholder-catalog`,
     ),
+  getPlaceholderSourceFields: () =>
+    axiosClient.get<unknown, ContractPlaceholderSourceField[]>(`${BASE_URL}/placeholder-source-fields`),
+  createPlaceholder: (data: SaveContractPlaceholderRequest) =>
+    axiosClient.post<unknown, SoftwareSupplyPlaceholderDefinition>(`${BASE_URL}/placeholders`, data),
+  updatePlaceholder: (id: number, data: SaveContractPlaceholderRequest) =>
+    axiosClient.put<unknown, SoftwareSupplyPlaceholderDefinition>(`${BASE_URL}/placeholders/${id}`, data),
+  setPlaceholderActive: (id: number, isActive: boolean, rowVersion: string) =>
+    axiosClient.post<unknown, SoftwareSupplyPlaceholderDefinition>(`${BASE_URL}/placeholders/${id}/${isActive ? "activate" : "deactivate"}`, { rowVersion }),
+  getPlaceholderUsage: (id: number) =>
+    axiosClient.get<unknown, ContractPlaceholderUsage[]>(`${BASE_URL}/placeholders/${id}/usage`),
+  deletePlaceholder: (id: number, rowVersion: string) =>
+    axiosClient.delete<unknown, boolean>(`${BASE_URL}/placeholders/${id}`, {
+      data: { rowVersion },
+    }),
 
   getList: (params: ContractTemplateFilterRequest) =>
     axiosClient.get<unknown, PagedResult<ContractTemplateResponse>>(BASE_URL, {

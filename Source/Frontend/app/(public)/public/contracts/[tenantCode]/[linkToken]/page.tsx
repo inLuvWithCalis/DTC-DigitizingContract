@@ -349,7 +349,6 @@ export default function PublicContractPage() {
                   <Label htmlFor="customer-phone">Số điện thoại</Label>
                   <Input
                     id="customer-phone"
-                    maxLength={11}
                     type="tel"
                     inputMode="tel"
                     autoComplete="tel"

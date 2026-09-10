@@ -31,10 +31,9 @@ public sealed class ContractTemplateDocumentValidatorTests
     }
 
     [Fact]
-    public async Task MissingAndDuplicatedCatalogTokens_MarkDocumentInvalid()
+    public async Task MissingOptionalToken_IsAllowed_ButDuplicatedTokenIsInvalid()
     {
         var tokens = RequiredTokens()
-            .Where(token => token != "{{CONTRACT_CODE}}")
             .Append("{{CONTRACT_NAME_EN}}")
             .Append("{{CONTRACT_NAME_EN}}");
 
@@ -43,8 +42,7 @@ public sealed class ContractTemplateDocumentValidatorTests
 
         Assert.True(result.IsTechnicallyAccepted);
         Assert.False(result.IsCatalogValid);
-        Assert.Contains("MissingRequiredPlaceholder:CONTRACT_CODE",
-            result.ValidationMessage);
+        Assert.DoesNotContain("MissingRequiredPlaceholder", result.ValidationMessage);
         Assert.Contains("MultiplicityViolation:CONTRACT_NAME_EN",
             result.ValidationMessage);
     }
@@ -62,15 +60,18 @@ public sealed class ContractTemplateDocumentValidatorTests
 
         Assert.True(result.IsTechnicallyAccepted);
         Assert.False(result.IsCatalogValid);
-        Assert.Contains("UnknownPlaceholder", result.ValidationMessage);
+        Assert.Contains("UnknownPlaceholder:NOT_IN_CATALOG", result.ValidationMessage);
+        Assert.Contains("InvalidPlaceholderSyntax:contract_code", result.ValidationMessage);
         Assert.Contains("InvalidPlaceholderSyntax", result.ValidationMessage);
-        Assert.DoesNotContain("NOT_IN_CATALOG", result.ValidationMessage);
     }
 
     [Fact]
     public async Task SplitRunHeaderFooterAndTableTokens_AreAllRecognized()
     {
-        var required = RequiredTokens().ToList();
+        var required = new[]
+        {
+            "{{CONTRACT_CODE}}", "{{CONTRACT_NAME}}", "{{CONTRACT_DATE}}"
+        };
         var result = await _validator.ValidateAsync(CreateFile(
             CreateDocument(
                 required.Skip(3),

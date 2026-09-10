@@ -1632,6 +1632,109 @@ namespace ContractManagement.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractPlaceholderAudit", b =>
+                {
+                    b.Property<long>("PlaceholderAuditId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("PlaceholderAuditId"));
+
+                    b.Property<string>("ActionType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<int>("ActorEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("NewValuesJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PlaceholderKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("PreviousValuesJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("PlaceholderAuditId");
+
+                    b.HasIndex("PlaceholderKey", "OccurredAt");
+
+                    b.ToTable("tbl_ContractPlaceholderAudit", (string)null);
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractPlaceholderDefinition", b =>
+                {
+                    b.Property<int>("PlaceholderDefinitionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("PlaceholderDefinitionId"));
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DefaultValue")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("FieldLabel")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("FormatString")
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("PlaceholderKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SourceFieldKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedEmployeeId")
+                        .HasColumnType("int");
+
+                    b.HasKey("PlaceholderDefinitionId");
+
+                    b.HasIndex("PlaceholderKey")
+                        .IsUnique();
+
+                    b.ToTable("tbl_ContractPlaceholderDefinition", (string)null);
+                });
+
             modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractSignedEvidence", b =>
                 {
                     b.Property<int>("SignedEvidenceId")
@@ -1902,6 +2005,9 @@ namespace ContractManagement.Migrations
                     b.Property<int>("CreatedEmployeeId")
                         .HasColumnType("int");
 
+                    b.Property<byte>("DataKind")
+                        .HasColumnType("tinyint");
+
                     b.Property<string>("DataSource")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -1911,6 +2017,10 @@ namespace ContractManagement.Migrations
                     b.Property<string>("DefaultValue")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
+
+                    b.Property<byte[]>("DefinitionRowVersion")
+                        .HasMaxLength(8)
+                        .HasColumnType("varbinary(8)");
 
                     b.Property<int>("DisplayOrder")
                         .ValueGeneratedOnAdd()
@@ -1932,6 +2042,12 @@ namespace ContractManagement.Migrations
                         .HasColumnType("bit")
                         .HasDefaultValue(false, "DF_tbl_ContractTemplateField_IsRequired");
 
+                    b.Property<bool>("IsSystem")
+                        .HasColumnType("bit");
+
+                    b.Property<byte>("Multiplicity")
+                        .HasColumnType("tinyint");
+
                     b.Property<string>("PlaceholderKey")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -1943,6 +2059,11 @@ namespace ContractManagement.Migrations
                         .IsRequired()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
+
+                    b.Property<string>("SourceFieldKey")
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(200)");
 
                     b.Property<int>("TemplateVersionId")
                         .HasColumnType("int");
@@ -2085,6 +2206,11 @@ namespace ContractManagement.Migrations
                         .IsUnicode(false)
                         .HasColumnType("char(64)")
                         .IsFixedLength();
+
+                    b.Property<string>("PlaceholderBindingHash")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
 
                     b.Property<int?>("PreviewFileId")
                         .HasColumnType("int");
@@ -2411,6 +2537,55 @@ namespace ContractManagement.Migrations
 
                             t.HasCheckConstraint("CK_tbl_ContractVersion_VersionNo", "[VersionNo] > 0");
                         });
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractVersionPlaceholderValue", b =>
+                {
+                    b.Property<long>("ContractVersionPlaceholderValueId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ContractVersionPlaceholderValueId"));
+
+                    b.Property<DateTime>("CapturedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ContractId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PlaceholderKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("RawValue")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RenderedValue")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SourceFieldKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<int>("TemplateVersionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("VersionId")
+                        .HasColumnType("int");
+
+                    b.HasKey("ContractVersionPlaceholderValueId");
+
+                    b.HasIndex("ContractId", "VersionId");
+
+                    b.HasIndex("VersionId", "PlaceholderKey")
+                        .IsUnique();
+
+                    b.ToTable("tbl_ContractVersionPlaceholderValue", (string)null);
                 });
 
             modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblCustomer", b =>

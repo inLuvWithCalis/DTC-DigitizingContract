@@ -14,7 +14,11 @@ public sealed record SoftwareSupplyContractSnapshot(
     ContractLegalSnapshot Contract,
     ContractVersionLegalSnapshot Version,
     IReadOnlyList<ContractItemLegalSnapshot> Items,
-    IReadOnlyList<ContractTermLegalSnapshot> Terms);
+    IReadOnlyList<ContractTermLegalSnapshot> Terms)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyDictionary<string, string>? PlaceholderValues { get; init; }
+}
 
 public sealed record TenantLegalSnapshot(
     string LegalEntityName,

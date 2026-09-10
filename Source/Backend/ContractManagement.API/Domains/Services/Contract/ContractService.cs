@@ -7,8 +7,10 @@ using ContractManagement.API.Domains.Models.Contract;
 using ContractManagement.API.Domains.Policies.Contract;
 using ContractManagement.Common.Enums;
 using ContractManagement.Domains.Interfaces.Contract;
+using ContractManagement.Domains.Interfaces.ContractTemplate;
 using ContractManagement.Domains.Interfaces.File;
 using ContractManagement.Domains.Policies.ContractTemplate;
+using ContractManagement.Domains.Services.ContractTemplate;
 using ContractManagement.Domains.Services.File;
 using ContractManagement.Infrastructure.Persistence.Application;
 using ContractManagement.Infrastructure.Persistence.Application.Models;
@@ -44,6 +46,9 @@ namespace ContractManagement.Domains.Services.Contract
         private readonly IContractSubmissionArtifactRenderer?
             _submissionArtifactRenderer;
         private readonly IPrivateFileStorage? _privateFileStorage;
+        private IContractPlaceholderValueService? _placeholderValueService;
+        private IContractPlaceholderValueService PlaceholderValues => _placeholderValueService ??=
+            new ContractPlaceholderValueService(_dbContext, new ContractPlaceholderSourceRegistry());
 
         public ContractService(
             DbDtctechContext dbContext,
@@ -71,13 +76,15 @@ namespace ContractManagement.Domains.Services.Contract
             ICurrentTenant currentTenant,
             CustomerAccessCryptography customerAccessCryptography,
             IContractSubmissionArtifactRenderer submissionArtifactRenderer,
-            IPrivateFileStorage privateFileStorage)
+            IPrivateFileStorage privateFileStorage,
+            IContractPlaceholderValueService? placeholderValueService = null)
             : this(
                 dbContext,
                 contractAuditWriter,
                 currentTenant,
                 customerAccessCryptography)
         {
+            _placeholderValueService = placeholderValueService;
             _submissionArtifactRenderer = submissionArtifactRenderer;
             _privateFileStorage = privateFileStorage;
         }
@@ -777,6 +784,10 @@ namespace ContractManagement.Domains.Services.Contract
 
                     await _dbContext.SaveChangesAsync();
 
+                    await PlaceholderValues
+                        .CaptureAsync(contract, contractVersion, refresh: true);
+                    await _dbContext.SaveChangesAsync();
+
                     // Chỉ commit khi toàn bộ Contract, Version, Item và Term thành công.
                     await transaction.CommitAsync();
 
@@ -987,6 +998,14 @@ namespace ContractManagement.Domains.Services.Contract
                             request.NewResponsibleEmployeeId;
                         contract.UpdatedEmployeeId = actorEmployeeId;
                         contract.UpdateDate = occurredAt;
+
+                        if (contract.CurrentVersionId is { } currentVersionId)
+                        {
+                            var currentVersion = await _dbContext.TblContractVersions.SingleAsync(x => x.VersionId == currentVersionId);
+                            if (!currentVersion.IsLocked)
+                                await PlaceholderValues
+                                    .CaptureAsync(contract, currentVersion, refresh: true);
+                        }
 
                         _contractAuditWriter.StageEmployeeAudits(
                         [
@@ -2008,6 +2027,8 @@ namespace ContractManagement.Domains.Services.Contract
                                 ("UpdatedTerms", BuildAuditSummary(updatedTermAudits))))
                         ]);
 
+                        await PlaceholderValues
+                            .CaptureAsync(contract, version, refresh: true);
                         await _dbContext.SaveChangesAsync();
                         await transaction.CommitAsync();
                     }
@@ -2394,6 +2415,8 @@ namespace ContractManagement.Domains.Services.Contract
                                 .SingleOrDefaultAsync()
                                 ?? throw new InvalidOperationException(
                                     "Hồ sơ pháp lý doanh nghiệp chưa được cấu hình.");
+                            var placeholderValues = await PlaceholderValues
+                                .CaptureAsync(contract, sourceVersion);
                             var snapshotJson =
                                 SoftwareSupplyContractSnapshotFactory.Serialize(
                                     SoftwareSupplyContractSnapshotFactory.Create(
@@ -2402,7 +2425,7 @@ namespace ContractManagement.Domains.Services.Contract
                                         contract,
                                         sourceVersion,
                                         sourceItems,
-                                        sourceTerms));
+                                        sourceTerms) with { PlaceholderValues = placeholderValues.Count == 0 ? null : placeholderValues });
 
                             sourceVersion.SnapshotJson = snapshotJson;
                             sourceVersion.SnapshotHash =
@@ -2494,6 +2517,8 @@ namespace ContractManagement.Domains.Services.Contract
 
                         _dbContext.TblContractItems.AddRange(copiedItems);
                         _dbContext.TblContractTerms.AddRange(copiedTerms);
+                        await PlaceholderValues
+                            .CaptureAsync(contract, newVersion, refresh: true);
 
                         // TermId của comment phải trỏ sang term thuộc version mới.
                         // Lưu item/term trước để nhận identity trong cùng transaction.

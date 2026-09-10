@@ -24,7 +24,6 @@ public static class SoftwareSupplyPreviewDatasetV1
         "CONTRACT_CURRENCY",
         "CUSTOMER_CODE",
         "CUSTOMER_NAME",
-        "CUSTOMER_REPRESENTATIVE_TITLE",
         "CUSTOMER_COMPANY",
         "CUSTOMER_TAX_CODE",
         "CUSTOMER_ADDRESS",
@@ -74,8 +73,7 @@ public static class SoftwareSupplyPreviewDatasetV1
             ["EXPIRE_DATE"] = "Ngày 31 tháng 08 năm 2027",
             ["CONTRACT_CURRENCY"] = "VND",
             ["CUSTOMER_CODE"] = "CUS-DEMO-2026",
-            ["CUSTOMER_NAME"] = "Trần Thị Mẫu",
-            ["CUSTOMER_REPRESENTATIVE_TITLE"] = "Tổng giám đốc",
+            ["CUSTOMER_NAME"] = "Nguyễn Khách Hàng Mẫu",
             ["CUSTOMER_COMPANY"] =
                 "CÔNG TY CỔ PHẦN GIẢ LẬP GIẢI PHÁP DOANH NGHIỆP MINH AN",
             ["CUSTOMER_TAX_CODE"] = "0312345678",

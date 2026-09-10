@@ -24,11 +24,11 @@ public sealed class ContractTemplateController : ControllerBase
     }
 
     /// <summary>
-    /// GET /api/contract-templates/placeholder-catalog - đọc Catalog V1 cố định của SoftwareSupply.
+    /// GET /api/contract-templates/placeholder-catalog - catalog hệ thống và placeholder tùy chỉnh của tenant.
     /// </summary>
     /// <remarks>
     /// Luồng: xác thực session và AdminOfficer active, sau đó trả danh sách placeholder hệ thống.
-    /// Catalog chỉ đọc; tenant không được tự thêm key, đổi DataSource, requiredness hoặc multiplicity.
+    /// CustomEnabled cho biết tenant được tạo/sửa placeholder scalar qua các endpoint quản lý.
     /// Mục đích: làm nguồn sự thật để Slice 09 nhận diện và validate placeholder trong DOCX.
     /// </remarks>
     [HttpGet("placeholder-catalog")]

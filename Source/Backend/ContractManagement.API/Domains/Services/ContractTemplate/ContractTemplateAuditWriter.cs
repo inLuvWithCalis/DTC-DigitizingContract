@@ -161,7 +161,7 @@ public sealed class ContractTemplateAuditWriter : IContractTemplateAuditWriter
         "DocumentSizeBytes" => value is long size && size >= 0,
         "ValidationStatus" => value is "Valid" or "Invalid" or "Unchanged",
         "RecognizedPlaceholderCount" => value is int count && count >= 0
-            && count <= SoftwareSupplyPlaceholderCatalog.GetAll().Count,
+            && count <= 10_000,
         "PreviewFileId" => value is null || value is int previewFileId
             && previewFileId > 0,
         "PreviewSizeBytes" => value is long previewSize && previewSize >= 0,

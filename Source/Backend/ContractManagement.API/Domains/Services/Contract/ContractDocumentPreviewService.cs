@@ -6,6 +6,7 @@ using ContractManagement.Domains.Interfaces.Contract;
 using ContractManagement.Domains.Interfaces.ContractTemplate;
 using ContractManagement.Domains.Interfaces.File;
 using ContractManagement.Domains.Policies.ContractTemplate;
+using ContractManagement.Domains.Services.ContractTemplate;
 using ContractManagement.Infrastructure.Persistence.Application;
 using ContractManagement.Infrastructure.Persistence.Application.Models;
 using Microsoft.EntityFrameworkCore;
@@ -31,19 +32,22 @@ public sealed class ContractDocumentPreviewService :
     private readonly IFileStorageService _fileStorageService;
     private readonly IContractTemplatePreviewRenderer _documentRenderer;
     private readonly IContractTemplatePdfRenderer _pdfRenderer;
+    private readonly IContractPlaceholderValueService _placeholderValues;
 
     public ContractDocumentPreviewService(
         DbDtctechContext dbContext,
         IContractResourceAuthorizationService authorization,
         IFileStorageService fileStorageService,
         IContractTemplatePreviewRenderer documentRenderer,
-        IContractTemplatePdfRenderer pdfRenderer)
+        IContractTemplatePdfRenderer pdfRenderer,
+        IContractPlaceholderValueService? placeholderValues = null)
     {
         _dbContext = dbContext;
         _authorization = authorization;
         _fileStorageService = fileStorageService;
         _documentRenderer = documentRenderer;
         _pdfRenderer = pdfRenderer;
+        _placeholderValues = placeholderValues ?? new ContractPlaceholderValueService(dbContext, new ContractPlaceholderSourceRegistry());
     }
 
     public async Task<ContractDocumentPreviewResult> GenerateDocxAsync(
@@ -204,6 +208,24 @@ public sealed class ContractDocumentPreviewService :
             items,
             terms);
         var renderData = CreateRenderData(snapshot, customer, payments);
+        var fields = await _dbContext.TblContractTemplateFields.AsNoTracking()
+            .Where(x => x.TemplateVersionId == templateVersionId).ToListAsync(cancellationToken);
+        var definitions = fields.Select(ContractPlaceholderCatalog.FromSnapshot).ToArray();
+        var custom = await _placeholderValues
+            .CaptureAsync(contract, version, cancellationToken: cancellationToken);
+        var scalars = new Dictionary<string, string>(renderData.ScalarValues, StringComparer.Ordinal);
+        if (definitions.Any(x => x.IsSystem && x.Key == "CUSTOMER_REPRESENTATIVE_TITLE"))
+            scalars["CUSTOMER_REPRESENTATIVE_TITLE"] = snapshot.Customer.RepresentativeTitle;
+        // A former system key may be deliberately reintroduced as a custom
+        // definition. The immutable template binding decides its semantics.
+        foreach (var pair in custom) scalars[pair.Key] = pair.Value;
+        renderData = renderData with
+        {
+            ScalarValues = scalars,
+            Definitions = definitions.Length == 0 ? ContractPlaceholderCatalog.SystemDefinitions : definitions
+        };
+        // Included in the canonical submitted JSON/hash alongside the generated artifact.
+        snapshot = snapshot with { PlaceholderValues = scalars };
         var source = await ReadTemplateSourceAsync(
             template.Version,
             cancellationToken);
@@ -346,9 +368,7 @@ public sealed class ContractDocumentPreviewService :
             ["CONTRACT_TOTAL_AMOUNT_IN_WORDS"] =
                 VietnameseMoneyTextFormatter.Format(version.TotalAmount, currency),
             ["CUSTOMER_CODE"] = Required(customer.CustomerCode, "Mã khách hàng"),
-            ["CUSTOMER_NAME"] = customerSnapshot.RepresentativeName,
-            ["CUSTOMER_REPRESENTATIVE_TITLE"] =
-                customerSnapshot.RepresentativeTitle,
+            ["CUSTOMER_NAME"] = Required(customer.CustomerFullName, "Tên khách hàng"),
             ["CUSTOMER_COMPANY"] = Required(
                 customer.CustomerCompany ?? customerSnapshot.LegalName,
                 "Công ty khách hàng"),

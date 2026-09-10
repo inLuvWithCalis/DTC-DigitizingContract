@@ -357,9 +357,20 @@ builder.Services.AddScoped<
     IContractAuditQueryService,
     ContractAuditQueryService>();
 
-builder.Services.AddScoped<
-    IContractTemplateDocumentValidator,
-    ContractTemplateDocumentValidator>();
+builder.Services.Configure<ContractManagement.Domains.Policies.ContractTemplate.CustomContractPlaceholderOptions>(
+    builder.Configuration.GetSection("CustomContractPlaceholders"));
+builder.Services.AddSingleton<IContractPlaceholderSourceRegistry, ContractPlaceholderSourceRegistry>();
+builder.Services.AddSingleton<IContractPlaceholderSourceProvider, ContractPlaceholderSourceProvider>();
+builder.Services.AddSingleton<IContractPlaceholderSourceProvider, ContractVersionPlaceholderSourceProvider>();
+builder.Services.AddSingleton<IContractPlaceholderSourceProvider, CustomerPlaceholderSourceProvider>();
+builder.Services.AddSingleton<IContractPlaceholderSourceProvider, TenantLegalProfilePlaceholderSourceProvider>();
+builder.Services.AddSingleton<IContractPlaceholderSourceProvider, ContractOwnerPlaceholderSourceProvider>();
+builder.Services.AddSingleton<IContractPlaceholderSourceProvider, DepartmentPlaceholderSourceProvider>();
+builder.Services.AddScoped<ContractPlaceholderCatalog>();
+builder.Services.AddScoped<IContractPlaceholderCatalog>(sp => sp.GetRequiredService<ContractPlaceholderCatalog>());
+builder.Services.AddScoped<ContractPlaceholderDefinitionService>();
+builder.Services.AddScoped<IContractPlaceholderValueService, ContractPlaceholderValueService>();
+builder.Services.AddScoped<IContractTemplateDocumentValidator, ContractTemplateDocumentValidator>();
 
 builder.Services.AddScoped<
     IContractTemplateAuditWriter,
@@ -409,6 +420,7 @@ builder.Services.AddAutoMapper(config =>
 #endregion
 
 var app = builder.Build();
+_ = app.Services.GetRequiredService<IContractPlaceholderSourceRegistry>();
 
 // Khởi tạo sớm để fail-fast khi đường dẫn, quyền ghi hoặc dung lượng private
 // storage không đạt yêu cầu, thay vì đợi tới request upload đầu tiên.

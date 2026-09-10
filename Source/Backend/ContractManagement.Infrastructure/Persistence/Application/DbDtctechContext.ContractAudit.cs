@@ -313,6 +313,8 @@ public partial class DbDtctechContext
 
     private void AssignSyntheticRowVersionsForInMemory()
     {
+        if (ChangeTracker.Entries<TblContractPlaceholderAudit>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Placeholder audit chỉ được thêm mới.");
         if (Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory")
         {
             return;
@@ -335,6 +337,11 @@ public partial class DbDtctechContext
         {
             entry.Entity.RowVersion = BitConverter.GetBytes(
                 Interlocked.Increment(ref _syntheticRowVersionSeed));
+        }
+        foreach (var entry in ChangeTracker.Entries<TblContractPlaceholderDefinition>()
+                     .Where(x => x.State == EntityState.Modified))
+        {
+            entry.Entity.RowVersion = BitConverter.GetBytes(Interlocked.Increment(ref _syntheticRowVersionSeed));
         }
     }
 

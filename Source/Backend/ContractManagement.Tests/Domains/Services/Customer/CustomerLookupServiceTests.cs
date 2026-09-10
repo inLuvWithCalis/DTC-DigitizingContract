@@ -21,6 +21,9 @@ public sealed class CustomerLookupServiceTests
                 CustomerCompany = "Acme Corp",
                 CustomerEmail = "private@example.test",
                 CustomerMobile = "0900000000",
+                CustomerContactPersonName = "Trần Thị Liên Hệ",
+                CustomerContactPersonPhone = "0901234567",
+                CustomerContactPersonTitle = "Chuyên viên mua hàng",
                 Status = 1
             },
             new TblCustomer
@@ -40,6 +43,9 @@ public sealed class CustomerLookupServiceTests
         Assert.Equal("ACME-01", customer.CustomerCode);
         Assert.Equal("Alice", customer.CustomerFullName);
         Assert.Equal("Acme Corp", customer.CustomerCompany);
+        Assert.Equal("Trần Thị Liên Hệ", customer.CustomerContactPersonName);
+        Assert.Equal("0901234567", customer.CustomerContactPersonPhone);
+        Assert.Equal("Chuyên viên mua hàng", customer.CustomerContactPersonTitle);
         Assert.Equal((byte)1, customer.Status);
     }
 

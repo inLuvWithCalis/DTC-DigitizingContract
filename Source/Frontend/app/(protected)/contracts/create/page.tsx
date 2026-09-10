@@ -1206,6 +1206,21 @@ export default function CreateContractPage() {
                         </Button>
                       )}
                     </div>
+                    {selectedCustomer &&
+                      (selectedCustomer.customerContactPersonName ||
+                        selectedCustomer.customerContactPersonPhone) && (
+                        <p className="text-xs text-muted-foreground">
+                          Người liên hệ:{" "}
+                          <span className="font-medium text-foreground">
+                            {selectedCustomer.customerContactPersonName ||
+                              "Chưa có"}
+                          </span>
+                          {selectedCustomer.customerContactPersonTitle &&
+                            ` (${selectedCustomer.customerContactPersonTitle})`}
+                          {selectedCustomer.customerContactPersonPhone &&
+                            ` · SĐT: ${selectedCustomer.customerContactPersonPhone}`}
+                        </p>
+                      )}
                   </div>
 
                   <div className="space-y-2">
@@ -2094,7 +2109,7 @@ export default function CreateContractPage() {
                           {selectedCustomer?.customerCompany || "Chưa chọn"}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          {selectedCustomer?.customerFullName}
+                          Tên khách hàng: {selectedCustomer?.customerFullName}
                         </p>
                         <p className="text-sm text-muted-foreground">
                           Mã KH: {selectedCustomer?.customerCode || "Chưa có"}
@@ -2106,6 +2121,21 @@ export default function CreateContractPage() {
                           Điện thoại:{" "}
                           {selectedCustomer?.customerMobile ||
                             selectedCustomer?.customerPhone ||
+                            "Chưa có"}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Người liên hệ:{" "}
+                          {selectedCustomer?.customerContactPersonName ||
+                            "Chưa có"}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Chức danh liên hệ:{" "}
+                          {selectedCustomer?.customerContactPersonTitle ||
+                            "Chưa có"}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Điện thoại liên hệ:{" "}
+                          {selectedCustomer?.customerContactPersonPhone ||
                             "Chưa có"}
                         </p>
                       </div>
@@ -2339,6 +2369,9 @@ export default function CreateContractPage() {
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {selectedCustomer?.customerCode || "Chọn khách ở bước 1"}
+                      {selectedCustomer?.customerContactPersonName
+                        ? ` · LH: ${selectedCustomer.customerContactPersonName}`
+                        : ""}
                     </p>
                   </div>
                 </div>

@@ -14,7 +14,7 @@ namespace ContractManagement.Domains.Services.ContractTemplate;
 /// </summary>
 public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRenderer
 {
-    public const string FormatVersion = "V6";
+    public const string FormatVersion = "V7";
 
     private const string GeneratedContentFont = "Times New Roman";
     private const string GeneratedContentFontSize = "24";
@@ -33,28 +33,13 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
         var terms = authoringData is not null
             ? authoringData.Terms
             : data.Terms;
-        var structuredPayments = terms.SelectMany(term => term.PaymentMilestones).ToList();
-        var payments = structuredPayments.Count > 0
-            ? structuredPayments.Select(item => new ContractTemplateRenderPayment(
-                item.No,
-                languageMode == ContractLanguageMode.Bilingual
-                    && !string.IsNullOrWhiteSpace(item.TitleEn)
-                        ? $"{item.TitleVi} / {item.TitleEn}"
-                        : item.TitleVi,
-                $"{item.PaymentPercent:0.####}%",
-                item.Amount,
-                languageMode == ContractLanguageMode.Bilingual
-                    ? $"{BuildDueCondition(item, ContractLanguageMode.Vietnamese)} / "
-                        + BuildDueCondition(item, ContractLanguageMode.Bilingual)
-                    : BuildDueCondition(item, ContractLanguageMode.Vietnamese))).ToList()
-            : data.Payments;
         return Render(sourceDocumentBytes, languageMode, data with
         {
             ScalarValues = values,
             Definitions = definitions,
             LegalBases = authoringData?.LegalBases ?? data.LegalBases,
             Terms = terms,
-            Payments = payments
+            Payments = []
         });
     }
 
@@ -178,10 +163,9 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                 [
                     (OpenXmlElement)CreateItemTable(languageMode, renderData)
                 ],
-                "PAYMENT_SCHEDULE_TABLE" =>
-                [
-                    (OpenXmlElement)CreatePaymentTable(languageMode, renderData)
-                ],
+                "PAYMENT_SCHEDULE_TABLE" => renderData.Payments.Count > 0
+                    ? [(OpenXmlElement)CreatePaymentTable(languageMode, renderData)]
+                    : [new W.Paragraph()],
                 "CONTRACT_LEGAL_BASES" => CreateLegalBasisElements(languageMode, renderData),
                 "CONTRACT_TERMS" => CreateTermElements(languageMode, renderData),
                 "SIGNATURE_PROVIDER" =>
@@ -245,21 +229,9 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                 : $"Điều {term.No}. {term.TitleVi}";
             elements.Add(CreateParagraph(title, bold: true));
             elements.AddRange(CreateTermContentElements(term.ContentVi));
-            if (term.Kind == ContractTermKind.Payment)
-            {
-                foreach (var milestone in term.PaymentMilestones)
-                    elements.Add(CreateParagraph(BuildMilestoneNarrative(
-                        milestone, ContractLanguageMode.Vietnamese)));
-            }
             if (languageMode == ContractLanguageMode.Bilingual)
             {
                 elements.AddRange(CreateTermContentElements(term.ContentEn));
-                if (term.Kind == ContractTermKind.Payment)
-                {
-                    foreach (var milestone in term.PaymentMilestones)
-                        elements.Add(CreateParagraph(BuildMilestoneNarrative(
-                            milestone, ContractLanguageMode.Bilingual)));
-                }
             }
         }
 
@@ -868,46 +840,4 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
     private static string FormatQuantity(decimal value) =>
         value == decimal.Truncate(value) ? value.ToString("0") : value.ToString("0.##");
 
-    private static string BuildMilestoneNarrative(
-        ContractTemplateRenderPaymentMilestone item,
-        ContractLanguageMode languageMode)
-    {
-        if (languageMode == ContractLanguageMode.Bilingual)
-        {
-            var title = string.IsNullOrWhiteSpace(item.TitleEn) ? item.TitleVi : item.TitleEn;
-            var days = item.DayCountMode == PaymentDayCountMode.BusinessDays
-                ? "business days" : "days";
-            var condition = BuildDueCondition(item, languageMode);
-            return $"{title}: Pay {item.PaymentPercent:0.####}% of the contract value within {item.DueOffsetDays} {days} from {condition}.";
-        }
-
-        var dayLabel = item.DayCountMode == PaymentDayCountMode.BusinessDays
-            ? "ngày làm việc" : "ngày";
-        return $"{item.TitleVi}: Thanh toán {item.PaymentPercent:0.####}% giá trị hợp đồng trong vòng {item.DueOffsetDays} {dayLabel} kể từ {BuildDueCondition(item, languageMode)}.";
-    }
-
-    private static string BuildDueCondition(ContractTemplateRenderPaymentMilestone item,
-        ContractLanguageMode languageMode)
-    {
-        var anchor = languageMode == ContractLanguageMode.Bilingual
-            ? item.DueAnchor switch
-            {
-                PaymentDueAnchor.ContractSigned => "the contract signing date",
-                PaymentDueAnchor.ContractEffectiveDate => "the effective date",
-                PaymentDueAnchor.AcceptanceCompleted => "acceptance completion",
-                PaymentDueAnchor.PreviousMilestonePaid => "full payment of the previous installment",
-                _ => "the manually confirmed milestone"
-            }
-            : item.DueAnchor switch
-            {
-                PaymentDueAnchor.ContractSigned => "ngày ký hợp đồng",
-                PaymentDueAnchor.ContractEffectiveDate => "ngày hợp đồng có hiệu lực",
-                PaymentDueAnchor.AcceptanceCompleted => "ngày hoàn tất nghiệm thu",
-                PaymentDueAnchor.PreviousMilestonePaid => "ngày thanh toán đủ đợt trước",
-                _ => "mốc được xác nhận thủ công"
-            };
-        var condition = languageMode == ContractLanguageMode.Bilingual
-            ? item.ConditionEn : item.ConditionVi;
-        return string.IsNullOrWhiteSpace(condition) ? anchor : $"{anchor}; {condition.Trim()}";
-    }
 }

@@ -167,6 +167,42 @@ public sealed class ContractTemplatePreviewTests
     }
 
     [Fact]
+    public void Renderer_DoesNotGeneratePaymentContentFromStructuredMilestones()
+    {
+        var scalarValues = SoftwareSupplyPlaceholderCatalog.GetAll()
+            .Where(item => item.DataKind == TemplatePlaceholderDataKind.Scalar)
+            .ToDictionary(item => item.Key, _ => string.Empty, StringComparer.Ordinal);
+        var paymentTerm = new ContractTemplateRenderTerm(
+            1, "Thanh toán", "Payment", "Bảng do người dùng tự nhập",
+            "User-authored table")
+        {
+            Kind = ContractTermKind.Payment,
+            PaymentMilestones =
+            [
+                new ContractTemplateRenderPaymentMilestone(
+                    1, "Đợt không được tự sinh", null, 100m, 1_000m,
+                    PaymentDueAnchor.ContractSigned, 5,
+                    PaymentDayCountMode.CalendarDays, null, null)
+            ]
+        };
+        var data = new ContractTemplateRenderData(
+            scalarValues, [], [], [paymentTerm],
+            new ContractTemplateRenderSignature("Bên A", "A"),
+            new ContractTemplateRenderSignature("Bên B", "B"), string.Empty);
+
+        var rendered = new ContractTemplatePreviewRenderer().Render(
+            CreateSourceDocument(), ContractLanguageMode.Vietnamese, data);
+
+        using var stream = new MemoryStream(rendered);
+        using var document = WordprocessingDocument.Open(stream, false);
+        var text = ReadAllText(document.MainDocumentPart!);
+        Assert.Contains("Bảng do người dùng tự nhập", text);
+        Assert.DoesNotContain("Đợt không được tự sinh", text);
+        Assert.DoesNotContain(SoftwareSupplyPreviewDatasetV1.Payments[0].Description,
+            text);
+    }
+
+    [Fact]
     public void Renderer_WithRichTermContent_PreservesFormattingAlignmentAndTableParagraphs()
     {
         var scalarValues = SoftwareSupplyPlaceholderCatalog.GetAll()

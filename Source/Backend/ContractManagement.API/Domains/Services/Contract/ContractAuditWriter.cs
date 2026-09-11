@@ -60,6 +60,8 @@ public sealed class ContractAuditWriter : IContractAuditWriter
             [ContractAuditActionTypes.PaymentVoided] = PaymentFields(),
             [ContractAuditActionTypes.PaymentMilestoneAnchored] =
                 Fields("PaymentMilestoneId", "CurrentVersionId", "AnchorDate", "DueDate"),
+            [ContractAuditActionTypes.PaymentMilestoneStatusChanged] =
+                Fields("PaymentMilestoneId", "CurrentVersionId", "PaymentStatus", "PaidAt", "PaidByEmployeeId"),
             [ContractAuditActionTypes.ContractCompleted] =
                 Fields("Status", "CurrentVersionId", "TotalAmount", "PaidAmount"),
             [ContractAuditActionTypes.ContractAttachmentUploaded] =

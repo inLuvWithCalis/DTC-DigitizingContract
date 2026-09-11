@@ -91,15 +91,6 @@ const fromRow = (row: ContractTemplatePaymentMilestoneResponse): Draft => ({
   displayOrder: row.displayOrder,
 });
 
-const anchorLabel = (anchor: PaymentDueAnchor) =>
-  ({
-    [PaymentDueAnchor.ContractSigned]: "ngày ký hợp đồng",
-    [PaymentDueAnchor.ContractEffectiveDate]: "ngày hợp đồng có hiệu lực",
-    [PaymentDueAnchor.AcceptanceCompleted]: "ngày hoàn tất nghiệm thu",
-    [PaymentDueAnchor.PreviousMilestonePaid]: "ngày thanh toán đủ đợt trước",
-    [PaymentDueAnchor.Manual]: "mốc được xác nhận thủ công",
-  })[anchor];
-
 function Fields({
   value,
   onChange,
@@ -166,8 +157,8 @@ function Fields({
             <SelectItem value={String(PaymentDueAnchor.PreviousMilestonePaid)}>
               Thanh toán đủ đợt trước
             </SelectItem>
-            <SelectItem value={String(PaymentDueAnchor.Manual)}>
-              Xác nhận thủ công
+            <SelectItem value={String(PaymentDueAnchor.ManualDate)}>
+              Lịch thủ công (Tự điền ngày)
             </SelectItem>
           </SelectContent>
         </Select>
@@ -230,14 +221,11 @@ function Fields({
         </>
       )}
       <p className="rounded-md bg-muted/60 p-2 text-sm md:col-span-2">
-        <strong>Câu sinh tự động:</strong> {value.titleVi}: Thanh toán{" "}
-        {value.paymentPercent || 0}% giá trị hợp đồng trong vòng{" "}
-        {value.dueOffsetDays}{" "}
-        {value.dayCountMode === PaymentDayCountMode.BusinessDays
-          ? "ngày làm việc"
-          : "ngày"}{" "}
-        kể từ {anchorLabel(value.dueAnchor)}
-        {value.conditionVi ? `; ${value.conditionVi}` : ""}.
+        Dữ liệu này chỉ dùng để theo dõi thanh toán và không tự thay đổi nội
+        dung điều khoản.
+        {value.dueAnchor === PaymentDueAnchor.ManualDate && (
+          <> Ngày bắt đầu tính hạn sẽ được nhập riêng khi tạo hợp đồng.</>
+        )}
       </p>
     </div>
   );
@@ -391,7 +379,7 @@ export function ContractTemplatePaymentMilestonesEditor({
     <div className="space-y-3 rounded-xl border bg-muted/20 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="font-medium">Kế hoạch thanh toán</p>
+          <p className="font-medium">Theo dõi các đợt thanh toán</p>
           <p className="text-sm text-muted-foreground">
             Tổng tỷ lệ:{" "}
             <strong

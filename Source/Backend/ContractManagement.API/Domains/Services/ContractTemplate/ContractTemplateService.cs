@@ -3118,8 +3118,6 @@ public sealed class ContractTemplateService : IContractTemplateService
         if (request.DueOffsetDays < 0 || request.DisplayOrder < 0)
             throw new ArgumentException("Số ngày và thứ tự không được âm.");
         var conditionVi = NormalizeOptional(request.ConditionVi, 2000);
-        if (request.DueAnchor == PaymentDueAnchor.Manual && conditionVi is null)
-            throw new ArgumentException("Mốc thủ công phải có mô tả điều kiện.");
         return (NormalizeRequired(request.MilestoneCode, 100, nameof(request.MilestoneCode)).ToUpperInvariant(),
             NormalizeRequired(request.TitleVi, 500, nameof(request.TitleVi)),
             NormalizeOptional(request.TitleEn, 500), request.PaymentPercent,

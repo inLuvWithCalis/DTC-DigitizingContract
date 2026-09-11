@@ -78,6 +78,8 @@ namespace ContractManagement.API.Domains.DTOs.Requests.Contract
         /// </summary>
         public List<CreateContractTermRequest>? Terms { get; set; }
 
+        public List<ContractPaymentMilestoneDateRequest> PaymentMilestoneDates { get; set; } = [];
+
         /// <summary>
         /// Kiểm tra những business rule liên quan giữa nhiều field.
         /// Các kiểm tra cần database sẽ được thực hiện trong ContractService.
@@ -160,6 +162,15 @@ namespace ContractManagement.API.Domains.DTOs.Requests.Contract
                         }
                     }
                 }
+            }
+
+            if (PaymentMilestoneDates
+                .GroupBy(x => x.SourceTemplatePaymentMilestoneId)
+                .Any(group => group.Count() > 1))
+            {
+                yield return new ValidationResult(
+                    "Mỗi đợt thanh toán chỉ được nhập một ngày bắt đầu tính hạn.",
+                    new[] { nameof(PaymentMilestoneDates) });
             }
 
             // Hợp đồng cung cấp phần mềm là hợp đồng gốc.

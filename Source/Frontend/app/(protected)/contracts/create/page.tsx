@@ -224,17 +224,23 @@ const getPaymentAnchorLabel = (anchor: PaymentDueAnchor) => {
       return "ngày hoàn tất nghiệm thu";
     case PaymentDueAnchor.PreviousMilestonePaid:
       return "ngày thanh toán đủ đợt trước";
+    case PaymentDueAnchor.ManualDate:
+      return "Lịch thủ công (Tự điền ngày)";
     default:
-      return "mốc được thiết lập thủ công";
+      return "mốc chưa xác định";
   }
 };
 
 function PaymentPlanReview({
   milestones,
   currencyCode,
+  manualDates,
+  onManualDateChange,
 }: {
   milestones: Array<ContractTemplatePaymentMilestoneResponse & { amount: number }>;
   currencyCode: string;
+  manualDates: Record<number, string>;
+  onManualDateChange: (milestoneId: number, date: string) => void;
 }) {
   if (milestones.length === 0) return null;
   return (
@@ -242,7 +248,7 @@ function PaymentPlanReview({
       <div className="flex items-start gap-3">
         <WalletCards className="mt-0.5 size-5 text-primary" />
         <div>
-          <p className="font-semibold">Kế hoạch thanh toán theo điều khoản</p>
+          <p className="font-semibold">Theo dõi các đợt thanh toán</p>
           <p className="text-sm text-muted-foreground">
             Số tiền được tính lại theo tổng giá trị hiện tại. Muốn đổi cấu trúc
             các đợt, hãy tạo version template mới.
@@ -275,6 +281,24 @@ function PaymentPlanReview({
               <p className="mt-1 text-xs text-muted-foreground">
                 Ngày làm việc hiện chỉ loại trừ thứ Bảy và Chủ nhật.
               </p>
+            )}
+            {milestone.dueAnchor === PaymentDueAnchor.ManualDate && (
+              <div className="mt-3 space-y-1.5">
+                <Label htmlFor={`manual-payment-date-${milestone.templatePaymentMilestoneId}`}>
+                  Ngày bắt đầu tính hạn
+                </Label>
+                <Input
+                  id={`manual-payment-date-${milestone.templatePaymentMilestoneId}`}
+                  type="date"
+                  value={manualDates[milestone.templatePaymentMilestoneId] ?? ""}
+                  onChange={(event) =>
+                    onManualDateChange(
+                      milestone.templatePaymentMilestoneId,
+                      event.target.value,
+                    )
+                  }
+                />
+              </div>
             )}
           </div>
         ))}
@@ -329,6 +353,9 @@ export default function CreateContractPage() {
   const [paymentMilestones, setPaymentMilestones] = useState<
     ContractTemplatePaymentMilestoneResponse[]
   >([]);
+  const [manualPaymentDates, setManualPaymentDates] = useState<
+    Record<number, string>
+  >({});
   const [isLoadingTemplateDetail, setIsLoadingTemplateDetail] = useState(false);
   const [templateDetailError, setTemplateDetailError] = useState<string | null>(
     null,
@@ -532,6 +559,7 @@ export default function CreateContractPage() {
     if (!templateVersionId) {
       setContractTerms([]);
       setPaymentMilestones([]);
+      setManualPaymentDates({});
       setTemplateDetailError(null);
       return;
     }
@@ -541,6 +569,7 @@ export default function CreateContractPage() {
     setTemplateDetailError(null);
     setContractTerms([]);
     setPaymentMilestones([]);
+    setManualPaymentDates({});
     contractTemplateApi
       .getAvailableByVersionId(Number(templateVersionId))
       .then((detail) => {
@@ -561,11 +590,17 @@ export default function CreateContractPage() {
                 displayOrder: index + 1,
               })),
           );
-          setPaymentMilestones(
-            detail.terms
+          const milestones = detail.terms
               .filter((term) => term.termKind === ContractTermKind.Payment)
               .flatMap((term) => term.paymentMilestones)
-              .sort((a, b) => a.displayOrder - b.displayOrder),
+              .sort((a, b) => a.displayOrder - b.displayOrder);
+          setPaymentMilestones(milestones);
+          setManualPaymentDates(
+            Object.fromEntries(
+              milestones
+                .filter((item) => item.dueAnchor === PaymentDueAnchor.ManualDate)
+                .map((item) => [item.templatePaymentMilestoneId, ""]),
+            ),
           );
         }
       })
@@ -574,6 +609,7 @@ export default function CreateContractPage() {
           console.error("Failed to load template terms:", error);
           setContractTerms([]);
           setPaymentMilestones([]);
+          setManualPaymentDates({});
           setTemplateDetailError("Không thể tải điều khoản của template.");
         }
       })
@@ -830,6 +866,9 @@ export default function CreateContractPage() {
           : calculated[index],
     }));
   }, [currencyCode, paymentMilestones, totalValue]);
+  const manualPaymentDatesValid = paymentMilestones
+    .filter((item) => item.dueAnchor === PaymentDueAnchor.ManualDate)
+    .every((item) => !!manualPaymentDates[item.templatePaymentMilestoneId]);
 
   const progressValue = ((currentStep + 1) / steps.length) * 100;
 
@@ -855,7 +894,11 @@ export default function CreateContractPage() {
           selectedCatalogItems.every((item) => item.itemNameEn.trim()))
       );
     if (stepIdx === 2)
-      return hasValidContractDateRange && !contractTermsValidationError;
+      return (
+        hasValidContractDateRange &&
+        !contractTermsValidationError &&
+        manualPaymentDatesValid
+      );
     return false;
   };
 
@@ -877,6 +920,7 @@ export default function CreateContractPage() {
     effectiveDate,
     expiredDate,
     contractTermsValidationError,
+    manualPaymentDatesValid,
   ]);
 
   const handleContractTypeChange = (value: string) => {
@@ -1021,6 +1065,11 @@ export default function CreateContractPage() {
       setCurrentStep(2);
       return;
     }
+    if (!manualPaymentDatesValid) {
+      toast.error("Vui lòng nhập ngày bắt đầu tính hạn cho các đợt dùng Lịch thủ công.");
+      setCurrentStep(2);
+      return;
+    }
     setIsSubmitting(true);
     try {
       const itemsPayload: CreateContractItemRequest[] =
@@ -1077,6 +1126,12 @@ export default function CreateContractPage() {
           isNegotiable: term.isNegotiable,
           displayOrder: index + 1,
         })),
+        paymentMilestoneDates: paymentMilestones
+          .filter((item) => item.dueAnchor === PaymentDueAnchor.ManualDate)
+          .map((item) => ({
+            sourceTemplatePaymentMilestoneId: item.templatePaymentMilestoneId,
+            anchorDate: manualPaymentDates[item.templatePaymentMilestoneId],
+          })),
       };
 
       const response = await contractApi.create(payload);
@@ -2165,6 +2220,13 @@ export default function CreateContractPage() {
                       <PaymentPlanReview
                         milestones={paymentPlan}
                         currencyCode={currencyCode}
+                        manualDates={manualPaymentDates}
+                        onManualDateChange={(id, date) =>
+                          setManualPaymentDates((current) => ({
+                            ...current,
+                            [id]: date,
+                          }))
+                        }
                       />
                       {contractTermsValidationError &&
                         contractTerms.length > 0 && (
@@ -2310,6 +2372,13 @@ export default function CreateContractPage() {
                     <PaymentPlanReview
                       milestones={paymentPlan}
                       currencyCode={currencyCode}
+                      manualDates={manualPaymentDates}
+                      onManualDateChange={(id, date) =>
+                        setManualPaymentDates((current) => ({
+                          ...current,
+                          [id]: date,
+                        }))
+                      }
                     />
 
                     {paymentPlan.length > 0 && (

@@ -215,7 +215,7 @@ public sealed class ContractServiceSlice04Tests
                 MilestoneCode = "M2",
                 TitleVi = "Đợt 2",
                 PaymentPercent = 66.6667m,
-                DueAnchor = (byte)PaymentDueAnchor.PreviousMilestonePaid,
+                DueAnchor = (byte)PaymentDueAnchor.ManualDate,
                 DueOffsetDays = 5,
                 DayCountMode = (byte)PaymentDayCountMode.BusinessDays,
                 DisplayOrder = 2,
@@ -230,6 +230,18 @@ public sealed class ContractServiceSlice04Tests
             [CreateItem(ContractItemType.Product, 1m, 101m,
                 sourceProductId: ProductId)]);
         request.EffectiveDate = effectiveDate;
+        var manualMilestoneId = await context.TblContractTemplatePaymentMilestones
+            .Where(item => item.MilestoneCode == "M2")
+            .Select(item => item.TemplatePaymentMilestoneId)
+            .SingleAsync();
+        request.PaymentMilestoneDates =
+        [
+            new ContractPaymentMilestoneDateRequest
+            {
+                SourceTemplatePaymentMilestoneId = manualMilestoneId,
+                AnchorDate = new DateTime(2026, 9, 4)
+            }
+        ];
 
         await CreateService(context).CreateAsync(request, EmployeeId);
 
@@ -242,7 +254,8 @@ public sealed class ContractServiceSlice04Tests
         Assert.All(milestones, item => Assert.Equal(term.TermId, item.TermId));
         Assert.Equal(effectiveDate, milestones[0].AnchorDate);
         Assert.Equal(effectiveDate.AddDays(2), milestones[0].DueDate);
-        Assert.Null(milestones[1].DueDate);
+        Assert.Equal(new DateTime(2026, 9, 4), milestones[1].AnchorDate);
+        Assert.Equal(new DateTime(2026, 9, 11), milestones[1].DueDate);
     }
 
     [Fact]
@@ -370,7 +383,7 @@ public sealed class ContractServiceSlice04Tests
         Assert.False(string.IsNullOrWhiteSpace(
             versions[0].SnapshotHash));
         Assert.Contains(
-            "\"schemaVersion\":5",
+            "\"schemaVersion\":6",
             versions[0].SnapshotJson);
         Assert.False(versions[1].IsLocked);
         Assert.Equal(versions[0].VersionId,
@@ -384,8 +397,52 @@ public sealed class ContractServiceSlice04Tests
         Assert.Equal("CIVIL_CODE", copiedLegalBasis.BasisCode);
         Assert.Null(copiedMilestone.AnchorDate);
         Assert.Null(copiedMilestone.DueDate);
+        Assert.Equal((byte)ContractPaymentMilestoneStatus.Unpaid,
+            copiedMilestone.PaymentStatus);
+        Assert.Null(copiedMilestone.PaidAt);
+        Assert.Null(copiedMilestone.PaidByEmployeeId);
         Assert.Contains("\"legalBases\"", versions[0].SnapshotJson);
         Assert.Equal(100m, versions[1].TotalAmount);
+    }
+
+    [Fact]
+    public async Task NegotiationRound_WithPaidStructuredMilestone_IsRejected()
+    {
+        await using var context = CreateContext();
+        var sourceVersionId = await SeedNegotiatingContractAsync(context);
+        var sourceTerm = await context.TblContractTerms.SingleAsync();
+        sourceTerm.TermKind = (byte)ContractTermKind.Payment;
+        context.TblContractPaymentMilestones.Add(new TblContractPaymentMilestone
+        {
+            ContractId = 100,
+            VersionId = sourceVersionId,
+            TermId = sourceTerm.TermId,
+            MilestoneCode = "M1",
+            TitleVi = "Đợt đã nộp",
+            PaymentPercent = 100m,
+            DueAnchor = (byte)PaymentDueAnchor.ContractEffectiveDate,
+            DueOffsetDays = 0,
+            DayCountMode = (byte)PaymentDayCountMode.CalendarDays,
+            DisplayOrder = 1,
+            Amount = 100m,
+            PaymentStatus = (byte)ContractPaymentMilestoneStatus.Paid,
+            PaidAt = DateTime.UtcNow,
+            PaidByEmployeeId = EmployeeId,
+            CreatedEmployeeId = EmployeeId,
+            CreatedDate = DateTime.UtcNow,
+            RowVersion = InitialRowVersion()
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CreateService(context).CreateNegotiationRoundAsync(
+                100,
+                CreateRoundRequest(sourceVersionId),
+                EmployeeId));
+
+        Assert.Contains("đã ghi nhận thanh toán", exception.Message);
+        Assert.Single(await context.TblContractVersions.AsNoTracking().ToListAsync());
     }
 
     [Fact]

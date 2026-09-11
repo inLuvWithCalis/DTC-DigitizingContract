@@ -125,8 +125,6 @@ public partial class DbDtctechContext : DbContext
 
     public virtual DbSet<TblPayment> TblPayments { get; set; }
 
-    public virtual DbSet<TblPaymentSchedule> TblPaymentSchedules { get; set; }
-
     public virtual DbSet<TblProduct> TblProducts { get; set; }
 
     public virtual DbSet<TblQuotation> TblQuotations { get; set; }
@@ -2478,20 +2476,6 @@ public partial class DbDtctechContext : DbContext
             entity.Property(e => e.ReferenceNo)
                 .HasMaxLength(100)
                 .IsUnicode(false);
-        });
-
-        modelBuilder.Entity<TblPaymentSchedule>(entity =>
-        {
-            entity.HasKey(e => e.ScheduleId).HasName("PK__tbl_Paym__9C8A5B49EE0F0668");
-
-            entity.ToTable("tbl_PaymentSchedule");
-
-            entity.Property(e => e.DueDate).HasColumnType("datetime");
-            entity.Property(e => e.Note).HasMaxLength(500);
-            entity.Property(e => e.PaymentStatus)
-                .HasMaxLength(30)
-                .IsUnicode(false)
-                .HasDefaultValue("Pending");
         });
 
         modelBuilder.Entity<TblProduct>(entity =>

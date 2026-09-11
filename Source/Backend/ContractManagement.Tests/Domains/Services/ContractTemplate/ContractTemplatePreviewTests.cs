@@ -41,13 +41,9 @@ public sealed class ContractTemplatePreviewTests
 
         Assert.True(catalogKeys.SetEquals(
             SoftwareSupplyPreviewDatasetV1.CoveredPlaceholderKeys));
-        Assert.Equal("V3", SoftwareSupplyPreviewDatasetV1.Version);
+        Assert.Equal("V4", SoftwareSupplyPreviewDatasetV1.Version);
         Assert.Equal(2, SoftwareSupplyPreviewDatasetV1.LegalBases.Count);
         Assert.Equal(2, SoftwareSupplyPreviewDatasetV1.Items.Count);
-        Assert.Equal(2, SoftwareSupplyPreviewDatasetV1.Payments.Count);
-        Assert.Equal(100m, SoftwareSupplyPreviewDatasetV1.Payments.Sum(item => item.Percent));
-        Assert.Equal(SoftwareSupplyPreviewDatasetV1.Items.Sum(item => item.TotalAmount),
-            SoftwareSupplyPreviewDatasetV1.Payments.Sum(item => item.Amount));
         Assert.Equal(
             "72.187.500",
             SoftwareSupplyPreviewDatasetV1.GetScalarValues(ContractLanguageMode.Vietnamese)[
@@ -70,12 +66,12 @@ public sealed class ContractTemplatePreviewTests
         var text = ReadAllText(document.MainDocumentPart!);
         Assert.DoesNotContain("{{", text);
         Assert.Contains(SoftwareSupplyPreviewDatasetV1.LegalDisclaimer, text);
-        Assert.Contains("36.093.750 VND", text);
+        Assert.Contains("39.187.500 VND", text);
         Assert.Contains("Nguyễn Văn Mẫu", text);
         Assert.Contains("Điều 4.", text);
         Assert.Contains(SoftwareSupplyPreviewDatasetV1.LegalBases[0].ContentVi, text);
         Assert.True(document.MainDocumentPart!.Document!.Body!
-            .Elements<W.Table>().Count() >= 2);
+            .Elements<W.Table>().Count() >= 1);
     }
 
     [Fact]
@@ -133,7 +129,6 @@ public sealed class ContractTemplatePreviewTests
             [new ContractTemplateRenderItem(
                 1, "Sản phẩm", "Phần mềm thật", 2, 1_000_000m,
                 "10%", "8%", 1_944_000m)],
-            [],
             [new ContractTemplateRenderTerm(
                 1, "Phạm vi thật", "Actual scope", "Nội dung thật", "Actual content")],
             new ContractTemplateRenderSignature("ĐẠI DIỆN BÊN CUNG CẤP", "Nhân viên Thật"),
@@ -186,7 +181,7 @@ public sealed class ContractTemplatePreviewTests
             ]
         };
         var data = new ContractTemplateRenderData(
-            scalarValues, [], [], [paymentTerm],
+            scalarValues, [], [paymentTerm],
             new ContractTemplateRenderSignature("Bên A", "A"),
             new ContractTemplateRenderSignature("Bên B", "B"), string.Empty);
 
@@ -198,8 +193,36 @@ public sealed class ContractTemplatePreviewTests
         var text = ReadAllText(document.MainDocumentPart!);
         Assert.Contains("Bảng do người dùng tự nhập", text);
         Assert.DoesNotContain("Đợt không được tự sinh", text);
-        Assert.DoesNotContain(SoftwareSupplyPreviewDatasetV1.Payments[0].Description,
-            text);
+        Assert.DoesNotContain("LỊCH THANH TOÁN", text);
+    }
+
+    [Fact]
+    public void Renderer_RemovesLegacyPaymentScheduleHeadingAndToken()
+    {
+        var legacyDefinition = new SoftwareSupplyPlaceholderDefinition(
+            "PAYMENT_SCHEDULE_TABLE",
+            "Bảng lịch thanh toán",
+            false,
+            TemplatePlaceholderDataKind.DynamicBlock,
+            TemplatePlaceholderMultiplicity.ZeroOrOne,
+            "Contract.PaymentSchedules")
+        {
+            SourceFieldKey = "system.PAYMENT_SCHEDULE_TABLE"
+        };
+        var definitions = ContractPlaceholderCatalog.SystemDefinitions
+            .Append(legacyDefinition)
+            .ToArray();
+        var rendered = new ContractTemplatePreviewRenderer().RenderSample(
+            CreateSourceDocument(includeLegacyPaymentScheduleSection: true),
+            ContractLanguageMode.Vietnamese,
+            definitions,
+            new Dictionary<string, string>(StringComparer.Ordinal));
+
+        using var document = WordprocessingDocument.Open(
+            new MemoryStream(rendered), false);
+        var text = ReadAllText(document.MainDocumentPart!);
+        Assert.DoesNotContain("LỊCH THANH TOÁN", text);
+        Assert.DoesNotContain("PAYMENT_SCHEDULE_TABLE", text);
     }
 
     [Fact]
@@ -212,7 +235,6 @@ public sealed class ContractTemplatePreviewTests
             """{"blocks":[{"type":"paragraph","alignment":"center","runs":[{"text":"Nội dung đậm","bold":true,"italic":true,"underline":true,"fontSize":18}]},{"type":"table","rows":[{"cells":[{"paragraphs":[{"alignment":"right","runs":[{"text":"Cột một"}]}]},{"paragraphs":[{"alignment":"left","runs":[{"text":"Cột hai","bold":true}]},{"alignment":"center","runs":[{"text":"Dòng hai"}]}]}]}]}]}""";
         var renderData = new ContractTemplateRenderData(
             scalarValues,
-            [],
             [],
             [new ContractTemplateRenderTerm(
                 1, "Điều khoản rich text", string.Empty, richContent, string.Empty)],
@@ -262,7 +284,7 @@ public sealed class ContractTemplatePreviewTests
         var legacyContent = ContractTermRichText.LegacyPrefix +
             """{"blocks":[{"type":"paragraph","runs":[{"text":"Đoạn v1"}]},{"type":"table","rows":[{"cells":[{"runs":[{"text":"Ô v1"}]}]}]}]}""";
         var renderData = new ContractTemplateRenderData(
-            scalarValues, [], [],
+            scalarValues, [],
             [new ContractTemplateRenderTerm(1, "V1", string.Empty, legacyContent, string.Empty)],
             new ContractTemplateRenderSignature(string.Empty, string.Empty),
             new ContractTemplateRenderSignature(string.Empty, string.Empty),
@@ -312,7 +334,7 @@ public sealed class ContractTemplatePreviewTests
         var richContent = ContractTermRichText.Prefix +
             """{"blocks":[{"type":"table","rows":[{"cells":[{"colspan":2,"rowspan":2,"colwidth":[120,180],"verticalAlign":"center","paragraphs":[{"runs":[{"text":"A"}]}]},{"colwidth":[100],"verticalAlign":"bottom","paragraphs":[{"runs":[{"text":"B"}]}]}]},{"cells":[{"colwidth":[100],"paragraphs":[{"runs":[{"text":"C"}]}]}]},{"cells":[{"colwidth":[120],"paragraphs":[{"runs":[{"text":"D"}]}]},{"colspan":2,"colwidth":[180,100],"verticalAlign":"top","paragraphs":[{"runs":[{"text":"E"}]}]}]}]}]}""";
         var renderData = new ContractTemplateRenderData(
-            scalarValues, [], [],
+            scalarValues, [],
             [new ContractTemplateRenderTerm(1, "Bảng gộp", string.Empty, richContent, string.Empty)],
             new ContractTemplateRenderSignature(string.Empty, string.Empty),
             new ContractTemplateRenderSignature(string.Empty, string.Empty),
@@ -388,7 +410,6 @@ public sealed class ContractTemplatePreviewTests
             .ToDictionary(item => item.Key, _ => string.Empty, StringComparer.Ordinal);
         var renderData = new ContractTemplateRenderData(
             scalarValues,
-            [],
             [],
             [new ContractTemplateRenderTerm(
                 1,
@@ -1034,7 +1055,8 @@ public sealed class ContractTemplatePreviewTests
         bool includeHeaderFooterAndNotes = false,
         bool dynamicTermsInHeader = false,
         bool dynamicTermsMixedWithText = false,
-        string? additionalBodyText = null)
+        string? additionalBodyText = null,
+        bool includeLegacyPaymentScheduleSection = false)
     {
         using var stream = new MemoryStream();
         using (var document = WordprocessingDocument.Create(
@@ -1069,6 +1091,14 @@ public sealed class ContractTemplatePreviewTests
                             new W.Run(new W.Text("CODE}}")))
                         : new W.Paragraph(new W.Run(new W.Text(token))));
                 }
+            }
+
+            if (includeLegacyPaymentScheduleSection)
+            {
+                body.Append(new W.Paragraph(new W.Run(
+                    new W.Text("LỊCH THANH TOÁN"))));
+                body.Append(new W.Paragraph(new W.Run(
+                    new W.Text("{{PAYMENT_SCHEDULE_TABLE}}"))));
             }
 
             if (!string.IsNullOrWhiteSpace(additionalBodyText))

@@ -67,6 +67,7 @@ public sealed class CustomContractPlaceholderTests
     [InlineData("BAD__KEY", "PlaceholderKeyInvalid")]
     [InlineData("BAD KEY", "PlaceholderKeyInvalid")]
     [InlineData("CUSTOMER_NAME", "SystemPlaceholderImmutable")]
+    [InlineData("PAYMENT_SCHEDULE_TABLE", "PlaceholderKeyRetired")]
     public async Task Create_RejectsInvalidOrReservedKeys(string key, string error)
     {
         await using var db = Context(); await SeedActor(db);

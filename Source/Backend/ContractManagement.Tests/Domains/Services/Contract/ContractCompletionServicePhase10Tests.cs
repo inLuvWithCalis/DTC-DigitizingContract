@@ -471,6 +471,7 @@ public sealed class ContractCompletionServicePhase10Tests
 
         Assert.Equal(ContractStatus.Completed, response.ContractStatus);
         Assert.False(response.Readiness.Ready);
+        Assert.Empty(response.Readiness.Blockers);
         Assert.Equal(
             (byte)ContractStatus.Completed,
             (await context.TblContracts.AsNoTracking().SingleAsync()).Status);

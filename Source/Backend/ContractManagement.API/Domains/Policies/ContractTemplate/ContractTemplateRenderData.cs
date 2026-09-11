@@ -9,7 +9,6 @@ namespace ContractManagement.Domains.Policies.ContractTemplate;
 public sealed record ContractTemplateRenderData(
     IReadOnlyDictionary<string, string> ScalarValues,
     IReadOnlyList<ContractTemplateRenderItem> Items,
-    IReadOnlyList<ContractTemplateRenderPayment> Payments,
     IReadOnlyList<ContractTemplateRenderTerm> Terms,
     ContractTemplateRenderSignature ProviderSignature,
     ContractTemplateRenderSignature CustomerSignature,
@@ -30,13 +29,6 @@ public sealed record ContractTemplateRenderItem(
     string Discount,
     string Vat,
     decimal TotalAmount);
-
-public sealed record ContractTemplateRenderPayment(
-    int No,
-    string Description,
-    string Percent,
-    decimal Amount,
-    string DueCondition);
 
 public sealed record ContractTemplateRenderTerm(
     int No,

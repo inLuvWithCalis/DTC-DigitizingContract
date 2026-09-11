@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { JSONContent } from "@tiptap/core";
+import { isProseMirrorCellSelection, type JSONContent } from "@tiptap/core";
 import { TableCell, TableHeader, TableKit } from "@tiptap/extension-table";
 import TextAlign from "@tiptap/extension-text-align";
 import { FontSize, TextStyle } from "@tiptap/extension-text-style";
-import { EditorContent, useEditor } from "@tiptap/react";
+import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import {
   Bold,
@@ -13,6 +13,7 @@ import {
   AlignLeft,
   AlignRight,
   ChevronDown,
+  Combine,
   Italic,
   Maximize2,
   Minimize2,
@@ -332,11 +333,28 @@ export function ContractRichTextEditor({
     });
   }, [editor, value]);
 
+  const tableState = useEditorState({
+    editor,
+    selector: ({ editor: currentEditor }) => {
+      if (!currentEditor) {
+        return { inTable: false, selectedCellCount: 0, canMerge: false };
+      }
+      const selection = currentEditor.state.selection;
+      return {
+        inTable: currentEditor.isActive("table"),
+        selectedCellCount: isProseMirrorCellSelection(selection)
+          ? selection.ranges.length
+          : 0,
+        canMerge: currentEditor.can().chain().mergeCells().run(),
+      };
+    },
+  }) ?? { inTable: false, selectedCellCount: 0, canMerge: false };
+
   if (!editor) {
     return <div className="h-64 animate-pulse rounded-md border bg-muted/30" />;
   }
 
-  const inTable = editor.isActive("table");
+  const { inTable, selectedCellCount, canMerge } = tableState;
 
   const editorSurface = (
     <div
@@ -446,18 +464,30 @@ export function ContractRichTextEditor({
           </DropdownMenuContent>
         </DropdownMenu>
         {inTable && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                className="h-8 gap-1"
-              >
-                Sửa bảng <ChevronDown className="size-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
+          <>
+            <Button
+              type="button"
+              variant={canMerge ? "secondary" : "ghost"}
+              size="sm"
+              className="h-8 gap-1"
+              title="Chọn từ hai ô liền nhau để gộp"
+              disabled={!canMerge}
+              onClick={() => editor.chain().focus().mergeCells().run()}
+            >
+              <Combine className="size-4" /> Gộp ô
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="h-8 gap-1"
+                >
+                  Sửa bảng <ChevronDown className="size-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
               <DropdownMenuLabel>Hàng và cột</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -493,7 +523,7 @@ export function ContractRichTextEditor({
               <DropdownMenuSeparator />
               <DropdownMenuLabel>Ô</DropdownMenuLabel>
               <DropdownMenuItem
-                disabled={!editor.can().chain().focus().mergeCells().run()}
+                disabled={!canMerge}
                 onSelect={() => editor.chain().focus().mergeCells().run()}
               >
                 Gộp các ô đã chọn
@@ -531,8 +561,9 @@ export function ContractRichTextEditor({
               >
                 Xóa bảng
               </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
         )}
         <div className="ml-auto flex items-center gap-1">
           <Button
@@ -574,6 +605,21 @@ export function ContractRichTextEditor({
           </Button>
         </div>
       </div>
+
+      {inTable && (
+        <div className="shrink-0 border-b bg-primary/5 px-3 py-1.5 text-xs text-muted-foreground">
+          {selectedCellCount > 1 ? (
+            <span className="font-medium text-primary">
+              Đã chọn {selectedCellCount} ô. Bấm “Gộp ô” để gộp vùng đang chọn.
+            </span>
+          ) : (
+            <span>
+              Để gộp ô: đặt con trỏ ở ô đầu, giữ Shift rồi bấm ô cuối
+              (hoặc kéo chuột qua các ô).
+            </span>
+          )}
+        </div>
+      )}
 
       <div className={cn("relative", isFullscreen && "min-h-0 flex-1")}>
         {editor.isEmpty && (

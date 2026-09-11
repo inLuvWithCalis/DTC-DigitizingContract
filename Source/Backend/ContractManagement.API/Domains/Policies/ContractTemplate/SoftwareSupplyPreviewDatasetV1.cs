@@ -8,7 +8,7 @@ namespace ContractManagement.Domains.Policies.ContractTemplate;
 /// </summary>
 public static class SoftwareSupplyPreviewDatasetV1
 {
-    public const string Version = "V3";
+    public const string Version = "V4";
 
     public const string LegalDisclaimer =
         "DỮ LIỆU MẪU — KHÔNG CÓ GIÁ TRỊ PHÁP LÝ";
@@ -51,8 +51,7 @@ public static class SoftwareSupplyPreviewDatasetV1
         "CUSTOMER_CITY",
         "CUSTOMER_COUNTRY",
         "CONTRACT_TOTAL_AMOUNT",
-        "CONTRACT_TOTAL_AMOUNT_IN_WORDS",
-        "PAYMENT_SCHEDULE_TABLE"
+        "CONTRACT_TOTAL_AMOUNT_IN_WORDS"
     };
 
     public static IReadOnlySet<string> CoveredPlaceholderKeys => Keys;
@@ -126,14 +125,6 @@ public static class SoftwareSupplyPreviewDatasetV1
             10m)
     ];
 
-    public static IReadOnlyList<SoftwareSupplyPreviewPayment> Payments { get; } =
-    [
-        new(1, "Đợt 1 — sau khi ký hợp đồng mẫu", 50m, 36_093_750m,
-            "Trong vòng 05 ngày làm việc kể từ ngày ký."),
-        new(2, "Đợt 2 — sau nghiệm thu mẫu", 50m, 36_093_750m,
-            "Trong vòng 05 ngày làm việc kể từ ngày nghiệm thu.")
-    ];
-
     public static IReadOnlyList<SoftwareSupplyPreviewTerm> Terms { get; } =
     [
         new(
@@ -200,13 +191,6 @@ public sealed record SoftwareSupplyPreviewLineItem(
 
     public decimal TotalAmount => NetAmount + VatAmount;
 }
-
-public sealed record SoftwareSupplyPreviewPayment(
-    int No,
-    string Description,
-    decimal Percent,
-    decimal Amount,
-    string DueCondition);
 
 public sealed record SoftwareSupplyPreviewTerm(
     int No,

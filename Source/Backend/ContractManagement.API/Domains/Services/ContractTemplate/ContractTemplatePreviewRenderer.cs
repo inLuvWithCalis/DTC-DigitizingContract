@@ -14,7 +14,7 @@ namespace ContractManagement.Domains.Services.ContractTemplate;
 /// </summary>
 public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRenderer
 {
-    public const string FormatVersion = "V7";
+    public const string FormatVersion = "V8";
 
     private const string GeneratedContentFont = "Times New Roman";
     private const string GeneratedContentFontSize = "24";
@@ -38,8 +38,7 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
             ScalarValues = values,
             Definitions = definitions,
             LegalBases = authoringData?.LegalBases ?? data.LegalBases,
-            Terms = terms,
-            Payments = []
+            Terms = terms
         });
     }
 
@@ -60,8 +59,11 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                 "Không có bytes DOCX nguồn để tạo preview.");
         }
 
+        var sanitizedSourceDocumentBytes =
+            ContractTemplateObsoleteContentSanitizer.Sanitize(sourceDocumentBytes);
         using var output = new MemoryStream();
-        output.Write(sourceDocumentBytes, 0, sourceDocumentBytes.Length);
+        output.Write(sanitizedSourceDocumentBytes, 0,
+            sanitizedSourceDocumentBytes.Length);
         output.Position = 0;
 
         using (var document = WordprocessingDocument.Open(output, true))
@@ -163,9 +165,6 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                 [
                     (OpenXmlElement)CreateItemTable(languageMode, renderData)
                 ],
-                "PAYMENT_SCHEDULE_TABLE" => renderData.Payments.Count > 0
-                    ? [(OpenXmlElement)CreatePaymentTable(languageMode, renderData)]
-                    : [new W.Paragraph()],
                 "CONTRACT_LEGAL_BASES" => CreateLegalBasisElements(languageMode, renderData),
                 "CONTRACT_TERMS" => CreateTermElements(languageMode, renderData),
                 "SIGNATURE_PROVIDER" =>
@@ -583,33 +582,6 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
         return CreateTable(rows, headerRow: true);
     }
 
-    private static W.Table CreatePaymentTable(
-        ContractLanguageMode languageMode,
-        ContractTemplateRenderData renderData)
-    {
-        var headers = languageMode == ContractLanguageMode.Bilingual
-            ? new[] { "Đợt / No.", "Nội dung / Description", "Tỷ lệ / Percent", "Số tiền / Amount", "Điều kiện / Due condition" }
-            : new[] { "Đợt", "Nội dung", "Tỷ lệ", "Số tiền", "Điều kiện thanh toán" };
-        var rows = new List<IEnumerable<string>>
-        {
-            headers
-        };
-        rows.AddRange(renderData.Payments.Select(payment =>
-            (IEnumerable<string>)
-            [
-                payment.No.ToString(),
-                payment.Description,
-                payment.Percent,
-                FormatMoney(payment.Amount, renderData.CurrencyCode),
-                payment.DueCondition
-            ]));
-        if (renderData.Payments.Count == 0)
-        {
-            rows.Add([string.Empty, "Chưa có dữ liệu lịch thanh toán", string.Empty, string.Empty, string.Empty]);
-        }
-        return CreateTable(rows, headerRow: true);
-    }
-
     private static W.Table CreateTable(
         IEnumerable<IEnumerable<string>> rows,
         bool headerRow)
@@ -796,13 +768,6 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                 $"{item.DiscountPercent:0}%",
                 $"{item.VatPercent:0}%",
                 item.TotalAmount)).ToList(),
-        SoftwareSupplyPreviewDatasetV1.Payments.Select(payment =>
-            new ContractTemplateRenderPayment(
-                payment.No,
-                payment.Description,
-                $"{payment.Percent:0}%",
-                payment.Amount,
-                payment.DueCondition)).ToList(),
         SoftwareSupplyPreviewDatasetV1.Terms.Select(term =>
             new ContractTemplateRenderTerm(
                 term.No,

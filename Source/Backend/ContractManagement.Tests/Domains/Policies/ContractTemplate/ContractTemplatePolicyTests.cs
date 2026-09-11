@@ -8,14 +8,14 @@ public class ContractTemplatePolicyTests
     private static string ValidSha256Hash => new('a', 64);
 
     [Fact]
-    public void SoftwareSupplyPlaceholderCatalog_V1_HasExpectedShape()
+    public void SoftwareSupplyPlaceholderCatalog_V4_HasExpectedShape()
     {
         var catalog = SoftwareSupplyPlaceholderCatalog.All;
 
-        Assert.Equal("V3", SoftwareSupplyPlaceholderCatalog.Version);
-        Assert.Equal(37, catalog.Count);
+        Assert.Equal("V4", SoftwareSupplyPlaceholderCatalog.Version);
+        Assert.Equal(36, catalog.Count);
         Assert.DoesNotContain(catalog, item => item.IsRequired);
-        Assert.Equal(37, catalog.Count(item => !item.IsRequired));
+        Assert.Equal(36, catalog.Count(item => !item.IsRequired));
         Assert.All(catalog, item =>
             Assert.Equal(TemplatePlaceholderMultiplicity.ZeroOrOne, item.Multiplicity));
         Assert.Equal(
@@ -42,7 +42,6 @@ public class ContractTemplatePolicyTests
     [InlineData("CONTRACT_ITEM_TABLE", TemplatePlaceholderDataKind.DynamicBlock, false, TemplatePlaceholderMultiplicity.ZeroOrOne)]
     [InlineData("SIGNATURE_PROVIDER", TemplatePlaceholderDataKind.DynamicBlock, false, TemplatePlaceholderMultiplicity.ZeroOrOne)]
     [InlineData("SIGNATURE_CUSTOMER", TemplatePlaceholderDataKind.DynamicBlock, false, TemplatePlaceholderMultiplicity.ZeroOrOne)]
-    [InlineData("PAYMENT_SCHEDULE_TABLE", TemplatePlaceholderDataKind.DynamicBlock, false, TemplatePlaceholderMultiplicity.ZeroOrOne)]
     public void SoftwareSupplyPlaceholderCatalog_SpecialPlaceholdersHaveFixedMultiplicity(
         string key,
         TemplatePlaceholderDataKind expectedKind,

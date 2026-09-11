@@ -2775,7 +2775,7 @@ public sealed class ContractTemplateService : IContractTemplateService
         var canonical = string.Join("\n", new[] { "LEGAL", basisCanonical, "TERMS", paymentCanonical });
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)))
             .ToLowerInvariant();
-        var sampleTotal = SoftwareSupplyPreviewDatasetV1.Payments.Sum(item => item.Amount);
+        var sampleTotal = SoftwareSupplyPreviewDatasetV1.Items.Sum(item => item.TotalAmount);
         return new TemplatePreviewInput(
             new ContractTemplateAuthoringPreviewData
             {

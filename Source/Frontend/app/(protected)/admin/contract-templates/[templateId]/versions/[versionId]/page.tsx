@@ -50,6 +50,7 @@ import { formatDateTime } from "@/lib/format-date-time";
 import { ContractLanguageMode } from "@/services/contract-api";
 import {
   contractTemplateApi,
+  ContractTermKind,
   TemplateValidationStatus,
   TemplateVersionStatus,
   type ContractTemplateDetailResponse,
@@ -369,8 +370,28 @@ export default function ContractTemplateVersionWorkspacePage() {
     version?.validationStatus === TemplateValidationStatus.Valid;
   const hasPreview = Boolean(version?.previewFileId);
   const hasTerms = Boolean(version?.terms.length);
+  const paymentTerms =
+    version?.terms.filter((term) => term.termKind === ContractTermKind.Payment) ??
+    [];
+  const paymentPercentTotal =
+    Math.round(
+      paymentTerms
+        .flatMap((term) => term.paymentMilestones)
+        .reduce((sum, milestone) => sum + milestone.paymentPercent, 0) *
+        10_000,
+    ) / 10_000;
+  const hasValidPaymentMilestones =
+    paymentTerms.length === 0 ||
+    (paymentTerms.length === 1 &&
+      paymentTerms[0].paymentMilestones.length > 0 &&
+      paymentPercentTotal === 100);
   const canGeneratePreview = Boolean(isDraft && hasDocument && isDocumentValid);
-  const canPublish = Boolean(canGeneratePreview && hasPreview && hasTerms);
+  const canPublish = Boolean(
+    canGeneratePreview &&
+      hasPreview &&
+      hasTerms &&
+      hasValidPaymentMilestones,
+  );
   const templateHasDraft = Boolean(
     template?.versions.some(
       (candidate) => candidate.status === TemplateVersionStatus.Draft,
@@ -797,6 +818,11 @@ export default function ContractTemplateVersionWorkspacePage() {
                         </RequirementRow>
                         <RequirementRow met={hasPreview}>
                           Đã tạo preview hiện hành
+                        </RequirementRow>
+                        <RequirementRow met={hasValidPaymentMilestones}>
+                          {paymentTerms.length === 0
+                            ? "Không có điều khoản thanh toán"
+                            : `Tổng tỷ lệ các đợt thanh toán đúng 100% (hiện tại ${paymentPercentTotal}%)`}
                         </RequirementRow>
                       </ul>
                       {version.status === TemplateVersionStatus.Draft && (

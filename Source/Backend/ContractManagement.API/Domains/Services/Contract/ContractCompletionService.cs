@@ -440,10 +440,13 @@ public sealed class ContractCompletionService : IContractCompletionService
         var paidForEvaluation = allStructuredMilestonesPaid ? paid : 0m;
         var evaluation = ContractCompletionPolicy.Evaluate((ContractStatus)contract.Status,
             signed, acceptance, version.TotalAmount, paidForEvaluation);
+        var visibleBlockers = evaluation.Blockers.Where(blocker =>
+            contract.Status != (byte)ContractStatus.Completed
+            || blocker.Code != ContractCompletionBlockerCode.ContractMustBeSigned);
         return new ContractCompletionReadinessResponse { Signed = signed && contract.Status is (byte)ContractStatus.Signed or (byte)ContractStatus.Completed,
             AcceptanceEvidenceAvailable = acceptance, TotalAmount = version.TotalAmount, PaidAmount = paid,
             RemainingAmount = version.TotalAmount - paid, CurrencyCode = version.CurrencyCode, Ready = evaluation.CanComplete,
-            Blockers = evaluation.Blockers.Select(x => new ContractCompletionBlockerResponse { Code = x.Code switch {
+            Blockers = visibleBlockers.Select(x => new ContractCompletionBlockerResponse { Code = x.Code switch {
                 ContractCompletionBlockerCode.ContractMustBeSigned => "NOT_SIGNED", ContractCompletionBlockerCode.AcceptanceEvidenceMissing => "ACCEPTANCE_MISSING", _ => "PAYMENT_NOT_FULLY_PAID" },
                 Message = x.Code switch { ContractCompletionBlockerCode.ContractMustBeSigned => "Hợp đồng chưa có bản ký hợp lệ.", ContractCompletionBlockerCode.AcceptanceEvidenceMissing => "Chưa tải biên bản nghiệm thu.", _ => "Hợp đồng chưa được thanh toán đủ." } }).ToList() };
     }

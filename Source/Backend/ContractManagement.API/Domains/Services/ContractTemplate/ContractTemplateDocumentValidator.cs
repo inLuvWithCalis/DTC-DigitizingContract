@@ -96,8 +96,12 @@ public sealed class ContractTemplateDocumentValidator
                     "MacroNotAllowed", extension, documentBytes.LongLength);
             }
 
-            stream.Position = 0;
-            using var document = WordprocessingDocument.Open(stream, false);
+            var sanitizedDocumentBytes =
+                ContractTemplateObsoleteContentSanitizer.Sanitize(documentBytes);
+            using var sanitizedStream = new MemoryStream(
+                sanitizedDocumentBytes, writable: false);
+            using var document = WordprocessingDocument.Open(
+                sanitizedStream, false);
             var mainPart = document.MainDocumentPart;
             if (mainPart?.Document is null)
             {
@@ -124,7 +128,7 @@ public sealed class ContractTemplateDocumentValidator
 
             var catalog = _catalog is null ? ContractPlaceholderCatalog.SystemDefinitions
                 : await _catalog.GetAsync(includeInactive: true, cancellationToken: cancellationToken);
-            return ValidatePlaceholders(roots, extension, documentBytes, catalog.Where(x => x.IsActive).ToArray(),
+            return ValidatePlaceholders(roots, extension, sanitizedDocumentBytes, catalog.Where(x => x.IsActive).ToArray(),
                 catalog.Where(x => !x.IsActive).Select(x => x.Key).ToHashSet(StringComparer.Ordinal));
         }
         catch (OperationCanceledException)

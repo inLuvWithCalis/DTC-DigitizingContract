@@ -200,12 +200,6 @@ public sealed class ContractDocumentPreviewService :
             .OrderBy(item => item.DisplayOrder)
             .ThenBy(item => item.LegalBasisId)
             .ToListAsync(cancellationToken);
-        var payments = await _dbContext.TblPaymentSchedules
-            .AsNoTracking()
-            .Where(schedule => schedule.ContractId == contractId)
-            .OrderBy(schedule => schedule.DueDate)
-            .ThenBy(schedule => schedule.ScheduleId)
-            .ToListAsync(cancellationToken);
         var paymentMilestones = await _dbContext.TblContractPaymentMilestones
             .AsNoTracking()
             .Where(item => item.ContractId == contractId && item.VersionId == versionId)
@@ -227,7 +221,7 @@ public sealed class ContractDocumentPreviewService :
                 item.LegalBasisId, item.BasisCode, item.ContentVi,
                 item.ContentEn, item.DisplayOrder)).ToArray()
         };
-        var renderData = CreateRenderData(snapshot, customer, payments);
+        var renderData = CreateRenderData(snapshot, customer);
         var fields = await _dbContext.TblContractTemplateFields.AsNoTracking()
             .Where(x => x.TemplateVersionId == templateVersionId).ToListAsync(cancellationToken);
         var definitions = fields.Select(ContractPlaceholderCatalog.FromSnapshot).ToArray();
@@ -362,8 +356,7 @@ public sealed class ContractDocumentPreviewService :
 
     private static ContractTemplateRenderData CreateRenderData(
         SoftwareSupplyContractSnapshot snapshot,
-        TblCustomer customer,
-        IReadOnlyList<TblPaymentSchedule> paymentSchedules)
+        TblCustomer customer)
     {
         var contract = snapshot.Contract;
         var version = snapshot.Version;
@@ -456,27 +449,9 @@ public sealed class ContractDocumentPreviewService :
             })
             .ToArray();
 
-        var payments = paymentSchedules.Select((payment, index) =>
-        {
-            var amount = Convert.ToDecimal(payment.Amount);
-            var percent = version.TotalAmount > 0
-                ? amount / version.TotalAmount * 100m
-                : 0m;
-            var dueCondition = string.IsNullOrWhiteSpace(payment.Note)
-                ? $"Hạn thanh toán {payment.DueDate:dd/MM/yyyy}"
-                : $"Hạn {payment.DueDate:dd/MM/yyyy} — {payment.Note.Trim()}";
-            return new ContractTemplateRenderPayment(
-                index + 1,
-                $"Đợt {index + 1}",
-                $"{percent:0.##}%",
-                amount,
-                dueCondition);
-        }).ToArray();
-
         return new ContractTemplateRenderData(
             scalarValues,
             items,
-            payments,
             terms,
             new ContractTemplateRenderSignature(
                 "ĐẠI DIỆN BÊN CUNG CẤP",

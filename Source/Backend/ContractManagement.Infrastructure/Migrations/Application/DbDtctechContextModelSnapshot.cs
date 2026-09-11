@@ -3757,44 +3757,6 @@ namespace ContractManagement.Migrations
                     b.ToTable("tbl_Payment", (string)null);
                 });
 
-            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblPaymentSchedule", b =>
-                {
-                    b.Property<int>("ScheduleId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ScheduleId"));
-
-                    b.Property<double>("Amount")
-                        .HasColumnType("float");
-
-                    b.Property<int>("ContractId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("DueDate")
-                        .HasColumnType("datetime");
-
-                    b.Property<string>("Note")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<double>("PaidAmount")
-                        .HasColumnType("float");
-
-                    b.Property<string>("PaymentStatus")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(30)
-                        .IsUnicode(false)
-                        .HasColumnType("varchar(30)")
-                        .HasDefaultValue("Pending");
-
-                    b.HasKey("ScheduleId")
-                        .HasName("PK__tbl_Paym__9C8A5B49EE0F0668");
-
-                    b.ToTable("tbl_PaymentSchedule", (string)null);
-                });
-
             modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblProduct", b =>
                 {
                     b.Property<int>("ProductId")

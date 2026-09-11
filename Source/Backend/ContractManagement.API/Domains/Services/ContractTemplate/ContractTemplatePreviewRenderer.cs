@@ -14,10 +14,11 @@ namespace ContractManagement.Domains.Services.ContractTemplate;
 /// </summary>
 public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRenderer
 {
-    public const string FormatVersion = "V5";
+    public const string FormatVersion = "V6";
 
     private const string GeneratedContentFont = "Times New Roman";
     private const string GeneratedContentFontSize = "24";
+    private const int RichTableWidthDxa = 9_000;
 
     public byte[] RenderSample(byte[] sourceDocumentBytes, ContractLanguageMode languageMode,
         IReadOnlyList<SoftwareSupplyPlaceholderDefinition> definitions,
@@ -363,24 +364,75 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
     private static W.Table CreateRichTable(
         IEnumerable<ContractTermRichTextRow> rows)
     {
-        var table = new W.Table(CreateGeneratedTableProperties());
-        foreach (var sourceRow in rows)
+        var layout = CreateRichTableLayout(rows.ToList());
+        var tableProperties = CreateGeneratedTableProperties();
+        tableProperties.Append(new W.TableLayout
+        {
+            Type = W.TableLayoutValues.Fixed
+        });
+        var table = new W.Table(tableProperties);
+        var tableGrid = new W.TableGrid();
+        foreach (var width in layout.ColumnWidths)
+        {
+            tableGrid.Append(new W.GridColumn { Width = width.ToString() });
+        }
+        table.Append(tableGrid);
+
+        foreach (var sourceRow in layout.Rows)
         {
             var row = new W.TableRow();
-            foreach (var cell in sourceRow.Cells)
+            foreach (var layoutCell in sourceRow)
             {
-                var tableCell = new W.TableCell(
-                    new W.TableCellProperties(
-                        new W.TableCellWidth
-                        {
-                            Type = W.TableWidthUnitValues.Auto,
-                            Width = "0"
-                        }));
-                var paragraphs = cell.Paragraphs.Count > 0
-                    ? cell.Paragraphs.Select(paragraph =>
+                var properties = new W.TableCellProperties(
+                    new W.TableCellWidth
+                    {
+                        Type = W.TableWidthUnitValues.Dxa,
+                        Width = layout.ColumnWidths
+                            .Skip(layoutCell.StartColumn)
+                            .Take(layoutCell.Colspan)
+                            .Sum()
+                            .ToString()
+                    });
+                if (layoutCell.Colspan > 1)
+                {
+                    properties.Append(new W.GridSpan { Val = layoutCell.Colspan });
+                }
+                if (layoutCell.IsVerticalContinuation)
+                {
+                    properties.Append(new W.VerticalMerge
+                    {
+                        Val = W.MergedCellValues.Continue
+                    });
+                }
+                else if ((layoutCell.Cell.Rowspan ?? 1) > 1)
+                {
+                    properties.Append(new W.VerticalMerge
+                    {
+                        Val = W.MergedCellValues.Restart
+                    });
+                }
+                if (ToTableVerticalAlignment(layoutCell.Cell.VerticalAlign) is { } verticalAlignment)
+                {
+                    properties.Append(new W.TableCellVerticalAlignment
+                    {
+                        Val = verticalAlignment
+                    });
+                }
+
+                var tableCell = new W.TableCell(properties);
+                if (layoutCell.IsVerticalContinuation)
+                {
+                    tableCell.Append(new W.Paragraph());
+                }
+                else
+                {
+                    var cell = layoutCell.Cell;
+                    var paragraphs = cell.Paragraphs.Count > 0
+                        ? cell.Paragraphs.Select(paragraph =>
                         CreateRichParagraph(paragraph.Runs, paragraph.Alignment))
-                    : [CreateRichParagraph(cell.Runs)];
-                tableCell.Append(paragraphs);
+                        : [CreateRichParagraph(cell.Runs)];
+                    tableCell.Append(paragraphs);
+                }
                 row.Append(tableCell);
             }
 
@@ -389,6 +441,105 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
 
         return table;
     }
+
+    private static RichTableLayout CreateRichTableLayout(
+        IReadOnlyList<ContractTermRichTextRow> rows)
+    {
+        var columnCount = rows[0].Cells.Sum(cell => cell.Colspan ?? 1);
+        var widthWeights = new int?[columnCount];
+        var activeSpans = new List<ActiveRichTableSpan>();
+        var layoutRows = new List<IReadOnlyList<RichTableLayoutCell>>(rows.Count);
+
+        foreach (var sourceRow in rows)
+        {
+            var occupied = new bool[columnCount];
+            var layoutCells = new List<RichTableLayoutCell>();
+            var nextActiveSpans = new List<ActiveRichTableSpan>();
+            foreach (var span in activeSpans)
+            {
+                for (var column = span.StartColumn;
+                     column < span.StartColumn + span.Colspan;
+                     column++)
+                {
+                    occupied[column] = true;
+                }
+                layoutCells.Add(new RichTableLayoutCell(
+                    span.Cell,
+                    span.StartColumn,
+                    span.Colspan,
+                    true));
+                if (span.RemainingRows > 1)
+                {
+                    nextActiveSpans.Add(span with
+                    {
+                        RemainingRows = span.RemainingRows - 1
+                    });
+                }
+            }
+
+            var cursor = 0;
+            foreach (var cell in sourceRow.Cells)
+            {
+                while (occupied[cursor]) cursor++;
+                var colspan = cell.Colspan ?? 1;
+                layoutCells.Add(new RichTableLayoutCell(cell, cursor, colspan, false));
+                for (var column = cursor; column < cursor + colspan; column++)
+                {
+                    occupied[column] = true;
+                    if (cell.Colwidth is { } colwidth && widthWeights[column] is null)
+                    {
+                        widthWeights[column] = colwidth[column - cursor];
+                    }
+                }
+                if ((cell.Rowspan ?? 1) > 1)
+                {
+                    nextActiveSpans.Add(new ActiveRichTableSpan(
+                        cell,
+                        cursor,
+                        colspan,
+                        cell.Rowspan!.Value - 1));
+                }
+                cursor += colspan;
+            }
+
+            layoutRows.Add(layoutCells.OrderBy(cell => cell.StartColumn).ToList());
+            activeSpans = nextActiveSpans;
+        }
+
+        var weights = widthWeights.Select(width => width ?? 100).ToArray();
+        var totalWeight = weights.Sum();
+        var columnWidths = weights
+            .Select(weight => Math.Max(1, RichTableWidthDxa * weight / totalWeight))
+            .ToArray();
+        columnWidths[^1] += RichTableWidthDxa - columnWidths.Sum();
+
+        return new RichTableLayout(layoutRows, columnWidths);
+    }
+
+    private static W.TableVerticalAlignmentValues? ToTableVerticalAlignment(
+        string? alignment) => alignment switch
+        {
+            "top" => W.TableVerticalAlignmentValues.Top,
+            "center" => W.TableVerticalAlignmentValues.Center,
+            "bottom" => W.TableVerticalAlignmentValues.Bottom,
+            _ => null
+        };
+
+    private sealed record RichTableLayout(
+        IReadOnlyList<IReadOnlyList<RichTableLayoutCell>> Rows,
+        IReadOnlyList<int> ColumnWidths);
+
+    private sealed record RichTableLayoutCell(
+        ContractTermRichTextCell Cell,
+        int StartColumn,
+        int Colspan,
+        bool IsVerticalContinuation);
+
+    private sealed record ActiveRichTableSpan(
+        ContractTermRichTextCell Cell,
+        int StartColumn,
+        int Colspan,
+        int RemainingRows);
 
     private static W.JustificationValues? ToJustification(string? alignment) =>
         alignment switch
@@ -646,12 +797,12 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
             },
             new W.Bold { Val = bold },
             new W.Italic { Val = italic },
+            new W.FontSize { Val = fontSize ?? GeneratedContentFontSize },
+            new W.FontSizeComplexScript { Val = fontSize ?? GeneratedContentFontSize },
             new W.Underline
             {
                 Val = underline ? W.UnderlineValues.Single : W.UnderlineValues.None
-            },
-            new W.FontSize { Val = fontSize ?? GeneratedContentFontSize },
-            new W.FontSizeComplexScript { Val = fontSize ?? GeneratedContentFontSize });
+            });
 
     private static W.Text Text(string value) => new(value)
     {

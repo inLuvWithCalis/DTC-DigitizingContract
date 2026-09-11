@@ -76,7 +76,15 @@ export function ContractRichTextContent({
                     {row.cells.map((cell, cellIndex) => (
                       <td
                         key={cellIndex}
+                        colSpan={cell.colspan}
+                        rowSpan={cell.rowspan}
                         className="min-w-24 border border-border px-2 py-1.5 align-top"
+                        style={{
+                          verticalAlign: cell.verticalAlign ?? "top",
+                          width: cell.colwidth?.length
+                            ? `${cell.colwidth.reduce((sum, width) => sum + width, 0)}px`
+                            : undefined,
+                        }}
                       >
                         {cell.paragraphs.map((paragraph, paragraphIndex) => (
                           <p

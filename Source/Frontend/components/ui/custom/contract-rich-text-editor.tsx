@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { JSONContent } from "@tiptap/core";
-import { TableKit } from "@tiptap/extension-table";
+import { TableCell, TableHeader, TableKit } from "@tiptap/extension-table";
 import TextAlign from "@tiptap/extension-text-align";
 import { FontSize, TextStyle } from "@tiptap/extension-text-style";
 import { EditorContent, useEditor } from "@tiptap/react";
@@ -40,6 +40,7 @@ import {
   type ContractRichTextAlignment,
   type ContractRichTextParagraph,
   type ContractRichTextRun,
+  type ContractRichTextVerticalAlignment,
 } from "@/lib/contract-rich-text";
 import { cn } from "@/lib/utils";
 
@@ -51,6 +52,40 @@ interface ContractRichTextEditorProps {
   ariaLabel?: string;
   className?: string;
 }
+
+const verticalAlignAttribute = {
+  default: null,
+  parseHTML: (element: HTMLElement) => {
+    const value = element.style.verticalAlign;
+    return value === "top" || value === "center" || value === "bottom"
+      ? value
+      : null;
+  },
+  renderHTML: (attributes: Record<string, unknown>) => {
+    const value = attributes.verticalAlign;
+    return value === "top" || value === "center" || value === "bottom"
+      ? { style: `vertical-align:${value}` }
+      : {};
+  },
+};
+
+const ContractTableCell = TableCell.extend({
+  addAttributes() {
+    return {
+      ...(this.parent?.() ?? {}),
+      verticalAlign: verticalAlignAttribute,
+    };
+  },
+});
+
+const ContractTableHeader = TableHeader.extend({
+  addAttributes() {
+    return {
+      ...(this.parent?.() ?? {}),
+      verticalAlign: verticalAlignAttribute,
+    };
+  },
+});
 
 const runsToTiptapContent = (runs: ContractRichTextRun[]): JSONContent[] => {
   const content: JSONContent[] = [];
@@ -88,6 +123,12 @@ const toTiptapContent = (value?: string | null): JSONContent => ({
         type: "tableRow",
         content: row.cells.map((cell) => ({
           type: "tableCell",
+          attrs: {
+            colspan: cell.colspan ?? 1,
+            rowspan: cell.rowspan ?? 1,
+            colwidth: cell.colwidth ?? null,
+            verticalAlign: cell.verticalAlign ?? null,
+          },
           content: cell.paragraphs.map((paragraph) => ({
             type: "paragraph",
             attrs: { textAlign: paragraph.alignment ?? "left" },
@@ -165,6 +206,13 @@ const tiptapParagraph = (paragraph: JSONContent): ContractRichTextParagraph => {
   };
 };
 
+const cellVerticalAlignment = (
+  value: unknown,
+): ContractRichTextVerticalAlignment | undefined =>
+  value === "top" || value === "center" || value === "bottom"
+    ? value
+    : undefined;
+
 const fromTiptapContent = (document: JSONContent) => {
   const blocks: ContractRichTextBlock[] = [];
   document.content?.forEach((node) => {
@@ -181,11 +229,28 @@ const fromTiptapContent = (document: JSONContent) => {
             (cell) =>
               cell.type === "tableCell" || cell.type === "tableHeader",
           )
-          .map((cell) => ({
-            paragraphs: (cell.content ?? [])
-              .filter((paragraph) => paragraph.type === "paragraph")
-              .map(tiptapParagraph),
-          })),
+          .map((cell) => {
+            const colspan = Number(cell.attrs?.colspan);
+            const rowspan = Number(cell.attrs?.rowspan);
+            const colwidth = Array.isArray(cell.attrs?.colwidth)
+              ? cell.attrs.colwidth.filter(
+                  (width): width is number =>
+                    typeof width === "number" && Number.isFinite(width),
+                )
+              : undefined;
+            const verticalAlign = cellVerticalAlignment(
+              cell.attrs?.verticalAlign,
+            );
+            return {
+              paragraphs: (cell.content ?? [])
+                .filter((paragraph) => paragraph.type === "paragraph")
+                .map(tiptapParagraph),
+              ...(Number.isInteger(colspan) && colspan > 1 ? { colspan } : {}),
+              ...(Number.isInteger(rowspan) && rowspan > 1 ? { rowspan } : {}),
+              ...(colwidth && colwidth.length > 0 ? { colwidth } : {}),
+              ...(verticalAlign ? { verticalAlign } : {}),
+            };
+          }),
       }));
     if (rows.length > 0) blocks.push({ type: "table", rows });
   });
@@ -227,10 +292,15 @@ export function ContractRichTextEditor({
       }),
       TableKit.configure({
         table: {
-          resizable: false,
+          resizable: true,
+          cellMinWidth: 50,
           HTMLAttributes: { class: "contract-rich-text-table" },
         },
+        tableCell: false,
+        tableHeader: false,
       }),
+      ContractTableCell,
+      ContractTableHeader,
     ],
     content: toTiptapContent(value),
     editorProps: {
@@ -388,10 +458,22 @@ export function ContractRichTextEditor({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
+              <DropdownMenuLabel>Hàng và cột</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => editor.chain().focus().addRowBefore().run()}
+              >
+                Thêm hàng phía trên
+              </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() => editor.chain().focus().addRowAfter().run()}
               >
                 Thêm hàng phía dưới
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => editor.chain().focus().addColumnBefore().run()}
+              >
+                Thêm cột bên trái
               </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() => editor.chain().focus().addColumnAfter().run()}
@@ -408,6 +490,40 @@ export function ContractRichTextEditor({
               >
                 Xóa cột hiện tại
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Ô</DropdownMenuLabel>
+              <DropdownMenuItem
+                disabled={!editor.can().chain().focus().mergeCells().run()}
+                onSelect={() => editor.chain().focus().mergeCells().run()}
+              >
+                Gộp các ô đã chọn
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={!editor.can().chain().focus().splitCell().run()}
+                onSelect={() => editor.chain().focus().splitCell().run()}
+              >
+                Tách ô
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Căn dọc nội dung ô</DropdownMenuLabel>
+              {(["top", "center", "bottom"] as const).map((alignment) => (
+                <DropdownMenuItem
+                  key={alignment}
+                  onSelect={() =>
+                    editor
+                      .chain()
+                      .focus()
+                      .setCellAttribute("verticalAlign", alignment)
+                      .run()
+                  }
+                >
+                  {alignment === "top"
+                    ? "Căn trên"
+                    : alignment === "center"
+                      ? "Căn giữa"
+                      : "Căn dưới"}
+                </DropdownMenuItem>
+              ))}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"

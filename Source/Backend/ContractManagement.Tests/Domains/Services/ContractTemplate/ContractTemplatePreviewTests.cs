@@ -15,6 +15,7 @@ using ContractManagement.Infrastructure.Persistence.Application;
 using ContractManagement.Infrastructure.Persistence.Application.Models;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Validation;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -241,6 +242,106 @@ public sealed class ContractTemplatePreviewTests
             .Descendants<W.Paragraph>().Single(item => item.InnerText == "Ô v1");
         Assert.Null(paragraph.ParagraphProperties?.Justification);
         Assert.Null(cellParagraph.ParagraphProperties?.Justification);
+    }
+
+    [Fact]
+    public void RichTextParser_WithVersion2_RemainsReadableAndIgnoresV3CellLayout()
+    {
+        var content = ContractTermRichText.Version2Prefix +
+            """{"blocks":[{"type":"table","rows":[{"cells":[{"colspan":2,"rowspan":2,"colwidth":[120,180],"verticalAlign":"center","paragraphs":[{"runs":[{"text":"Ô v2"}]}]}]}]}]}""";
+
+        Assert.True(ContractTermRichText.TryParse(content, out var document));
+        var cell = Assert.Single(Assert.Single(document.Blocks).Rows[0].Cells);
+        Assert.Null(cell.Colspan);
+        Assert.Null(cell.Rowspan);
+        Assert.Null(cell.Colwidth);
+        Assert.Null(cell.VerticalAlign);
+    }
+
+    [Fact]
+    public void RichTextParser_WithV3RowFullyCoveredByRowspan_AcceptsDocument()
+    {
+        var content = ContractTermRichText.Prefix +
+            """{"blocks":[{"type":"table","rows":[{"cells":[{"colspan":2,"rowspan":2,"paragraphs":[{"runs":[{"text":"Phủ hai hàng"}]}]}]},{"cells":[]}]}]}""";
+
+        Assert.True(ContractTermRichText.TryParse(content, out _));
+    }
+
+    [Fact]
+    public void Renderer_WithMergedRichTable_PreservesGridSpansWidthsAndVerticalAlignment()
+    {
+        var scalarValues = SoftwareSupplyPlaceholderCatalog.GetAll()
+            .Where(item => item.DataKind == TemplatePlaceholderDataKind.Scalar)
+            .ToDictionary(item => item.Key, _ => string.Empty, StringComparer.Ordinal);
+        var richContent = ContractTermRichText.Prefix +
+            """{"blocks":[{"type":"table","rows":[{"cells":[{"colspan":2,"rowspan":2,"colwidth":[120,180],"verticalAlign":"center","paragraphs":[{"runs":[{"text":"A"}]}]},{"colwidth":[100],"verticalAlign":"bottom","paragraphs":[{"runs":[{"text":"B"}]}]}]},{"cells":[{"colwidth":[100],"paragraphs":[{"runs":[{"text":"C"}]}]}]},{"cells":[{"colwidth":[120],"paragraphs":[{"runs":[{"text":"D"}]}]},{"colspan":2,"colwidth":[180,100],"verticalAlign":"top","paragraphs":[{"runs":[{"text":"E"}]}]}]}]}]}""";
+        var renderData = new ContractTemplateRenderData(
+            scalarValues, [], [],
+            [new ContractTemplateRenderTerm(1, "Bảng gộp", string.Empty, richContent, string.Empty)],
+            new ContractTemplateRenderSignature(string.Empty, string.Empty),
+            new ContractTemplateRenderSignature(string.Empty, string.Empty),
+            string.Empty);
+
+        var rendered = new ContractTemplatePreviewRenderer().Render(
+            CreateSourceDocument(), ContractLanguageMode.Vietnamese, renderData);
+
+        using var document = WordprocessingDocument.Open(new MemoryStream(rendered), false);
+        var table = document.MainDocumentPart!.Document!.Descendants<W.Table>()
+            .Single(item => item.InnerText.Contains("A", StringComparison.Ordinal)
+                            && item.InnerText.Contains("E", StringComparison.Ordinal));
+        var gridWidths = table.GetFirstChild<W.TableGrid>()!.Elements<W.GridColumn>()
+            .Select(column => int.Parse(column.Width!.Value!))
+            .ToArray();
+        Assert.Equal([2_700, 4_050, 2_250], gridWidths);
+
+        var rows = table.Elements<W.TableRow>().ToList();
+        Assert.Equal(3, rows.Count);
+        Assert.Equal([2, 2, 2], rows.Select(row => row.Elements<W.TableCell>().Count()));
+
+        var mergedCell = rows[0].Elements<W.TableCell>().First();
+        Assert.Equal(2, mergedCell.TableCellProperties!.GridSpan!.Val!.Value);
+        Assert.Equal(W.MergedCellValues.Restart,
+            mergedCell.TableCellProperties.VerticalMerge!.Val!.Value);
+        Assert.Equal(W.TableVerticalAlignmentValues.Center,
+            mergedCell.TableCellProperties.TableCellVerticalAlignment!.Val!.Value);
+
+        var continuationCell = rows[1].Elements<W.TableCell>().First();
+        Assert.Equal(2, continuationCell.TableCellProperties!.GridSpan!.Val!.Value);
+        Assert.Equal(W.MergedCellValues.Continue,
+            continuationCell.TableCellProperties.VerticalMerge!.Val!.Value);
+        Assert.Equal(string.Empty, continuationCell.InnerText);
+
+        var bottomCell = rows[0].Elements<W.TableCell>().Last();
+        Assert.Equal(W.TableVerticalAlignmentValues.Bottom,
+            bottomCell.TableCellProperties!.TableCellVerticalAlignment!.Val!.Value);
+        Assert.Equal(2,
+            rows[2].Elements<W.TableCell>().Last().TableCellProperties!.GridSpan!.Val!.Value);
+
+        using var validationStream = new MemoryStream();
+        using var validationDocument = WordprocessingDocument.Create(
+            validationStream, WordprocessingDocumentType.Document);
+        var validationMainPart = validationDocument.AddMainDocumentPart();
+        validationMainPart.Document = new W.Document(
+            new W.Body(table.CloneNode(true)));
+        var validationErrors = new OpenXmlValidator()
+            .Validate(validationDocument)
+            .ToList();
+        Assert.True(validationErrors.Count == 0, string.Join(
+            Environment.NewLine,
+            validationErrors.Select(error =>
+                $"{error.Description} Path={error.Path?.XPath} Node={error.Node?.OuterXml}")));
+    }
+
+    [Theory]
+    [InlineData("{\"blocks\":[{\"type\":\"table\",\"rows\":[{\"cells\":[{\"colspan\":2,\"paragraphs\":[{\"runs\":[]}]}]},{\"cells\":[{\"paragraphs\":[{\"runs\":[]}]}]}]}]}")]
+    [InlineData("{\"blocks\":[{\"type\":\"table\",\"rows\":[{\"cells\":[{\"rowspan\":3,\"paragraphs\":[{\"runs\":[]}]}]},{\"cells\":[]}]}]}")]
+    [InlineData("{\"blocks\":[{\"type\":\"table\",\"rows\":[{\"cells\":[{\"colspan\":2,\"colwidth\":[100],\"paragraphs\":[{\"runs\":[]}]}]}]}]}")]
+    [InlineData("{\"blocks\":[{\"type\":\"table\",\"rows\":[{\"cells\":[{\"verticalAlign\":\"middle\",\"paragraphs\":[{\"runs\":[]}]}]}]}]}")]
+    public void RichTextParser_WithInvalidV3TableGrid_RejectsDocument(string payload)
+    {
+        Assert.False(ContractTermRichText.TryParse(
+            ContractTermRichText.Prefix + payload,
+            out _));
     }
 
     [Fact]

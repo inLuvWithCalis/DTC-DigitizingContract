@@ -12,6 +12,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ContractTermComments } from "./contract-term-comments";
 import {
   ContractTermCard,
@@ -26,6 +28,7 @@ import {
   ContractTermKind,
   ContractTermDetailResponse,
 } from "@/services/contract-api";
+import { ContractPaymentDueAnchor } from "@/services/contract-completion-api";
 
 export function ContractTerms({
   contract,
@@ -44,6 +47,8 @@ export function ContractTerms({
 }) {
   const isEditable = canEdit;
   const terms = contract.currentVersion?.terms || [];
+  const manualPaymentMilestones = (contract.currentVersion?.paymentMilestones ?? [])
+    .filter((item) => item.dueAnchor === ContractPaymentDueAnchor.ManualDate);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
@@ -74,6 +79,24 @@ export function ContractTerms({
       return {
         ...prev,
         currentVersion: { ...prev.currentVersion, terms: updatedTerms },
+      };
+    });
+  };
+
+  const handleManualPaymentDateChange = (milestoneId: number, value: string) => {
+    onDraftChange?.();
+    setContract((prev) => {
+      if (!prev?.currentVersion) return prev;
+      return {
+        ...prev,
+        currentVersion: {
+          ...prev.currentVersion,
+          paymentMilestones: prev.currentVersion.paymentMilestones.map((item) =>
+            item.paymentMilestoneId === milestoneId
+              ? { ...item, anchorDate: value || null, dueDate: null }
+              : item,
+          ),
+        },
       };
     });
   };
@@ -324,6 +347,38 @@ export function ContractTerms({
           )}
         </CardContent>
       </Card>
+
+      {manualPaymentMilestones.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Mốc ngày thanh toán thủ công</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            {manualPaymentMilestones.map((milestone) => (
+              <div key={milestone.paymentMilestoneId} className="space-y-1.5">
+                <Label htmlFor={`contract-payment-date-${milestone.paymentMilestoneId}`}>
+                  {milestone.titleVi} — Ngày bắt đầu tính hạn
+                </Label>
+                <Input
+                  id={`contract-payment-date-${milestone.paymentMilestoneId}`}
+                  type="date"
+                  value={milestone.anchorDate?.slice(0, 10) ?? ""}
+                  disabled={!isEditable}
+                  onChange={(event) =>
+                    handleManualPaymentDateChange(
+                      milestone.paymentMilestoneId,
+                      event.target.value,
+                    )
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  Hệ thống cộng thêm {milestone.dueOffsetDays} ngày để tính hạn.
+                </p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

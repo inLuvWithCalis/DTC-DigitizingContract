@@ -130,7 +130,10 @@ public sealed record ContractPaymentMilestoneSnapshot(
     int DisplayOrder,
     decimal Amount,
     DateTime? AnchorDate,
-    DateTime? DueDate);
+    DateTime? DueDate,
+    byte PaymentStatus,
+    DateTime? PaidAt,
+    int? PaidByEmployeeId);
 
 public sealed record ContractLegalBasisSnapshot(
     int LegalBasisId,
@@ -141,7 +144,7 @@ public sealed record ContractLegalBasisSnapshot(
 
 public static class SoftwareSupplyContractSnapshotFactory
 {
-    public const int CurrentSchemaVersion = 5;
+    public const int CurrentSchemaVersion = 6;
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
@@ -274,7 +277,8 @@ public static class SoftwareSupplyContractSnapshotFactory
                     x.TitleVi, x.TitleEn, x.PaymentPercent, x.DueAnchor,
                     x.DueOffsetDays, x.DayCountMode, x.ConditionVi,
                     x.ConditionEn, x.DisplayOrder, x.Amount,
-                    x.AnchorDate, x.DueDate)).ToArray()
+                    x.AnchorDate, x.DueDate, x.PaymentStatus,
+                    x.PaidAt, x.PaidByEmployeeId)).ToArray()
         };
     }
 

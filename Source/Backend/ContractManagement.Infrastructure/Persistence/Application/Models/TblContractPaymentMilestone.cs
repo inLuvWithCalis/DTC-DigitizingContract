@@ -20,6 +20,9 @@ public sealed class TblContractPaymentMilestone
     public decimal Amount { get; set; }
     public DateTime? AnchorDate { get; set; }
     public DateTime? DueDate { get; set; }
+    public byte PaymentStatus { get; set; }
+    public DateTime? PaidAt { get; set; }
+    public int? PaidByEmployeeId { get; set; }
     public int CreatedEmployeeId { get; set; }
     public DateTime CreatedDate { get; set; }
     public int? UpdatedEmployeeId { get; set; }

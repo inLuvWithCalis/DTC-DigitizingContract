@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { format } from "date-fns";
 import {
-  CalendarClock,
+  AlertTriangle,
   CheckCircle2,
   FileCheck2,
   Loader2,
+  RotateCcw,
   WalletCards,
 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
@@ -31,7 +32,8 @@ import {
   contractCompletionApi,
   ContractCompletionDetailResponse,
   ContractPaymentDayCountMode,
-  ContractPaymentDueAnchor,
+  ContractPaymentMilestoneResponse,
+  ContractPaymentMilestoneStatus,
   ContractPaymentStatus,
 } from "@/services/contract-completion-api";
 
@@ -58,20 +60,19 @@ export function ContractClosing({
   const [acceptanceFile, setAcceptanceFile] = useState<File>();
   const [paymentDate, setPaymentDate] = useState<Date>();
   const [amount, setAmount] = useState(0);
-  const [paymentMilestoneId, setPaymentMilestoneId] = useState<number>();
-  const [manualMilestoneId, setManualMilestoneId] = useState<number>();
-  const [manualAnchorDate, setManualAnchorDate] = useState<Date>();
-  const [manualAnchorReason, setManualAnchorReason] = useState("");
   const [method, setMethod] = useState("");
   const [reference, setReference] = useState("");
   const [paymentFile, setPaymentFile] = useState<File>();
   const [voidingId, setVoidingId] = useState<number>();
   const [voidReason, setVoidReason] = useState("");
+  const [updatingMilestoneId, setUpdatingMilestoneId] = useState<number>();
+  const [confirmUnpaidMilestoneId, setConfirmUnpaidMilestoneId] =
+    useState<number>();
   const [confirmComplete, setConfirmComplete] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (showSpinner = true) => {
     try {
-      setLoading(true);
+      if (showSpinner) setLoading(true);
       setDetail(await contractCompletionApi.get(contract.contractId));
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Không thể tải hồ sơ hoàn tất."));
@@ -88,12 +89,49 @@ export function ContractClosing({
       setBusy(true);
       await action();
       toast.success(success);
-      await load();
+      await load(false);
       await onContractRefetch();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Thao tác không thành công."));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const updateMilestoneStatus = async (
+    milestone: ContractPaymentMilestoneResponse,
+    status: ContractPaymentMilestoneStatus,
+  ) => {
+    if (!detail) return false;
+    try {
+      setUpdatingMilestoneId(milestone.paymentMilestoneId);
+      await contractCompletionApi.setPaymentMilestoneStatus(
+        contract.contractId,
+        detail.versionId,
+        milestone.paymentMilestoneId,
+        {
+          currentVersionId: detail.versionId,
+          contractRowVersion: detail.contractRowVersion,
+          versionRowVersion: detail.versionRowVersion,
+          milestoneRowVersion: milestone.rowVersion,
+          status,
+        },
+      );
+      toast.success(
+        status === ContractPaymentMilestoneStatus.Paid
+          ? `Đã đánh dấu ${milestone.titleVi} là đã nộp.`
+          : `Đã chuyển ${milestone.titleVi} về chưa nộp.`,
+      );
+      await load(false);
+      await onContractRefetch();
+      return true;
+    } catch (error) {
+      toast.error(
+        getApiErrorMessage(error, "Không thể cập nhật trạng thái thanh toán."),
+      );
+      return false;
+    } finally {
+      setUpdatingMilestoneId(undefined);
     }
   };
 
@@ -109,18 +147,16 @@ export function ContractClosing({
     canManageAcceptance && contract.status === ContractStatus.Signed;
   const paymentEditable =
     canManagePayment && contract.status === ContractStatus.Signed;
+  const hasStructuredPayment = detail.paymentMilestones.length > 0;
+  const confirmUnpaidMilestone = detail.paymentMilestones.find(
+    (item) => item.paymentMilestoneId === confirmUnpaidMilestoneId,
+  );
   const checks = [
     detail.readiness.signed,
     detail.readiness.acceptanceEvidenceAvailable,
     detail.readiness.remainingAmount === 0,
   ];
   const completed = checks.filter(Boolean).length;
-  const selectedPaymentMilestone = detail.paymentMilestones.find(
-    (item) => item.paymentMilestoneId === paymentMilestoneId,
-  );
-  const manualMilestone = detail.paymentMilestones.find(
-    (item) => item.paymentMilestoneId === manualMilestoneId,
-  );
 
   return (
     <div className="space-y-6">
@@ -274,287 +310,275 @@ export function ContractClosing({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
-          {detail.paymentMilestones?.length > 0 && (
+          {hasStructuredPayment ? (
             <div className="grid gap-3 md:grid-cols-2">
-              {detail.paymentMilestones.map((milestone) => (
-                <div
-                  key={milestone.paymentMilestoneId}
-                  className="rounded-lg border p-3 text-sm"
-                >
-                  <div className="flex justify-between gap-2">
-                    <b>
-                      {milestone.titleVi} · {milestone.paymentPercent}%
-                    </b>
-                    <Badge
-                      variant={
-                        milestone.status === "Paid"
-                          ? "default"
-                          : milestone.status === "Overdue"
-                            ? "destructive"
-                            : "secondary"
-                      }
-                    >
-                      {milestone.status}
-                    </Badge>
-                  </div>
-                  <p className="mt-1 text-muted-foreground">
-                    {formatCurrency(
-                      milestone.paidAmount,
-                      detail.readiness.currencyCode,
-                    )}{" "}
-                    /{` `}
-                    {formatCurrency(
-                      milestone.amount,
-                      detail.readiness.currencyCode,
-                    )}
-                  </p>
-                  <p className="text-muted-foreground">
-                    {milestone.dueDate
-                      ? `Hạn ${new Date(milestone.dueDate).toLocaleDateString("vi-VN")}`
-                      : "Chưa phát sinh mốc tính hạn"}
-                  </p>
-                  {milestone.conditionVi && (
-                    <p className="mt-1 text-muted-foreground">
-                      {milestone.conditionVi}
-                    </p>
-                  )}
-                  {milestone.dayCountMode ===
-                    ContractPaymentDayCountMode.BusinessDays && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Ngày làm việc hiện chỉ loại trừ thứ Bảy và Chủ nhật.
-                    </p>
-                  )}
-                  {paymentEditable &&
-                    milestone.dueAnchor === ContractPaymentDueAnchor.Manual && (
+              {detail.paymentMilestones.map((milestone) => {
+                const isPaid =
+                  milestone.paymentStatus ===
+                  ContractPaymentMilestoneStatus.Paid;
+                const isUpdating =
+                  updatingMilestoneId === milestone.paymentMilestoneId;
+                return (
+                  <div
+                    key={milestone.paymentMilestoneId}
+                    className="flex flex-col rounded-lg border p-4 text-sm"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <b>
+                          {milestone.titleVi} · {milestone.paymentPercent}%
+                        </b>
+                        {milestone.titleEn && (
+                          <p className="text-muted-foreground">
+                            {milestone.titleEn}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Badge variant={isPaid ? "default" : "secondary"}>
+                          {isPaid ? "Đã nộp" : "Chưa nộp"}
+                        </Badge>
+                        {milestone.isOverdue && (
+                          <Badge variant="destructive">
+                            <AlertTriangle className="mr-1 size-3" />
+                            Quá hạn
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 space-y-1 text-muted-foreground">
+                      <p>
+                        Số tiền dự kiến: {" "}
+                        <span className="font-medium text-foreground">
+                          {formatCurrency(
+                            milestone.amount,
+                            detail.readiness.currencyCode,
+                          )}
+                        </span>
+                      </p>
+                      <p>
+                        {milestone.dueDate
+                          ? `Hạn ${new Date(milestone.dueDate).toLocaleDateString("vi-VN")}`
+                          : "Chưa phát sinh mốc tính hạn"}
+                      </p>
+                      {milestone.conditionVi && <p>{milestone.conditionVi}</p>}
+                      {milestone.dayCountMode ===
+                        ContractPaymentDayCountMode.BusinessDays && (
+                        <p className="text-xs">
+                          Ngày làm việc hiện chỉ loại trừ thứ Bảy và Chủ nhật.
+                        </p>
+                      )}
+                      {isPaid && milestone.paidAt && (
+                        <p className="text-xs">
+                          Cập nhật lúc {" "}
+                          {new Date(milestone.paidAt).toLocaleString("vi-VN")}
+                        </p>
+                      )}
+                    </div>
+
+                    {paymentEditable && (
                       <Button
                         type="button"
-                        variant="outline"
                         size="sm"
-                        className="mt-3"
+                        variant={isPaid ? "outline" : "default"}
+                        className="mt-4 self-start"
+                        disabled={Boolean(updatingMilestoneId) || busy}
                         onClick={() => {
-                          setManualMilestoneId(milestone.paymentMilestoneId);
-                          setManualAnchorDate(
-                            milestone.anchorDate
-                              ? new Date(milestone.anchorDate)
-                              : undefined,
+                          if (isPaid) {
+                            setConfirmUnpaidMilestoneId(
+                              milestone.paymentMilestoneId,
+                            );
+                            return;
+                          }
+                          void updateMilestoneStatus(
+                            milestone,
+                            ContractPaymentMilestoneStatus.Paid,
                           );
-                          setManualAnchorReason("");
                         }}
                       >
-                        <CalendarClock className="mr-2 size-4" />
-                        {milestone.anchorDate
-                          ? "Đổi ngày kích hoạt"
-                          : "Đặt ngày kích hoạt"}
+                        {isUpdating ? (
+                          <Loader2 className="mr-2 size-4 animate-spin" />
+                        ) : isPaid ? (
+                          <RotateCcw className="mr-2 size-4" />
+                        ) : (
+                          <CheckCircle2 className="mr-2 size-4" />
+                        )}
+                        {isPaid ? "Chuyển về chưa nộp" : "Đánh dấu đã nộp"}
                       </Button>
                     )}
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
-          )}
-          {paymentEditable && manualMilestone && (
-            <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Ngày kích hoạt thủ công</Label>
-                <DateFilter
-                  date={manualAnchorDate}
-                  onChange={setManualAnchorDate}
-                  placeholder="Chọn ngày"
-                />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label>Lý do thiết lập</Label>
-                <Textarea
-                  value={manualAnchorReason}
-                  onChange={(event) => setManualAnchorReason(event.target.value)}
-                  maxLength={1000}
-                  placeholder="Ghi lại sự kiện hoặc chứng từ làm mốc tính hạn"
-                />
-              </div>
-              <div className="flex gap-2 md:col-span-2">
-                <Button
-                  type="button"
-                  disabled={!manualAnchorDate || !manualAnchorReason.trim() || busy}
-                  onClick={() =>
-                    manualAnchorDate &&
-                    mutate(
-                      () =>
-                        contractCompletionApi.setPaymentMilestoneManualAnchor(
-                          contract.contractId,
-                          detail.versionId,
-                          manualMilestone.paymentMilestoneId,
-                          {
+          ) : (
+            <>
+              {paymentEditable && (
+                <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>
+                      Ngày thanh toán <span className="text-destructive">*</span>
+                    </Label>
+                    <DateFilter
+                      date={paymentDate}
+                      onChange={setPaymentDate}
+                      placeholder="Chọn ngày"
+                      className="flex-1"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>
+                      Số tiền <span className="text-destructive">*</span>
+                    </Label>
+                    <DecimalInput
+                      value={amount}
+                      onValueChange={setAmount}
+                      max={detail.readiness.remainingAmount}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>
+                      Phương thức <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      value={method}
+                      onChange={(e) => setMethod(e.target.value)}
+                      placeholder="Chuyển khoản"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>
+                      Mã tham chiếu <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      value={reference}
+                      onChange={(e) => setReference(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>Chứng từ (không bắt buộc)</Label>
+                    <Input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={(e) => setPaymentFile(e.target.files?.[0])}
+                    />
+                  </div>
+                  <Button
+                    className="md:col-span-2 md:justify-self-start"
+                    disabled={
+                      !paymentDate ||
+                      amount <= 0 ||
+                      !method.trim() ||
+                      !reference.trim() ||
+                      busy
+                    }
+                    onClick={() =>
+                      paymentDate &&
+                      mutate(
+                        () =>
+                          contractCompletionApi.addPayment(contract.contractId, {
+                            evidenceFile: paymentFile,
                             currentVersionId: detail.versionId,
                             contractRowVersion: detail.contractRowVersion,
                             versionRowVersion: detail.versionRowVersion,
-                            milestoneRowVersion: manualMilestone.rowVersion,
-                            anchorDate: format(manualAnchorDate, "yyyy-MM-dd"),
-                            reason: manualAnchorReason,
-                          },
-                        ),
-                      "Đã thiết lập ngày kích hoạt đợt thanh toán.",
-                    )
-                  }
-                >
-                  Lưu ngày kích hoạt
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setManualMilestoneId(undefined)}
-                >
-                  Hủy
-                </Button>
-              </div>
-            </div>
-          )}
-          {paymentEditable && (
-            <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-2">
-              {detail.paymentMilestones?.length > 0 && <div className="space-y-2 md:col-span-2"><Label>Đợt thanh toán <span className="text-destructive">*</span></Label><select className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={paymentMilestoneId ?? ""} onChange={(e) => { const id = Number(e.target.value); setPaymentMilestoneId(id || undefined); const selected = detail.paymentMilestones.find((item) => item.paymentMilestoneId === id); if (selected) setAmount(selected.remainingAmount); }}><option value="">Chọn đợt thanh toán</option>{detail.paymentMilestones.filter((item) => item.remainingAmount > 0).map((item) => <option key={item.paymentMilestoneId} value={item.paymentMilestoneId}>{item.titleVi} — còn {formatCurrency(item.remainingAmount, detail.readiness.currencyCode)}</option>)}</select></div>}
-              <div className="space-y-2">
-                <Label>
-                  Ngày thanh toán <span className="text-destructive">*</span>
-                </Label>
-                <DateFilter
-                  date={paymentDate}
-                  onChange={setPaymentDate}
-                  placeholder="Chọn ngày"
-                  className="flex-1"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>
-                  Số tiền <span className="text-destructive">*</span>
-                </Label>
-                <DecimalInput
-                  value={amount}
-                  onValueChange={setAmount}
-                  max={
-                    selectedPaymentMilestone?.remainingAmount ??
-                    detail.readiness.remainingAmount
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>
-                  Phương thức <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  value={method}
-                  onChange={(e) => setMethod(e.target.value)}
-                  placeholder="Chuyển khoản"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>
-                  Mã tham chiếu <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  value={reference}
-                  onChange={(e) => setReference(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label>Chứng từ (không bắt buộc)</Label>
-                <Input
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={(e) => setPaymentFile(e.target.files?.[0])}
-                />
-              </div>
-              <Button
-                className="md:col-span-2 md:justify-self-start"
-                disabled={
-                  !paymentDate ||
-                  (detail.paymentMilestones?.length > 0 && !paymentMilestoneId) ||
-                  amount <= 0 ||
-                  !method.trim() ||
-                  !reference.trim() ||
-                  busy
-                }
-                onClick={() =>
-                  paymentDate &&
-                  mutate(
-                    () =>
-                      contractCompletionApi.addPayment(contract.contractId, {
-                        evidenceFile: paymentFile,
-                        currentVersionId: detail.versionId,
-                        contractRowVersion: detail.contractRowVersion,
-                        versionRowVersion: detail.versionRowVersion,
-                        paymentMilestoneId,
-                        paymentDate: format(paymentDate, "yyyy-MM-dd"),
-                        amount,
-                        currencyCode: detail.readiness.currencyCode,
-                        paymentMethod: method,
-                        referenceCode: reference,
-                      }),
-                    "Đã ghi nhận khoản thanh toán.",
-                  )
-                }
-              >
-                Thêm khoản thanh toán
-              </Button>
-            </div>
-          )}
-          <div className="space-y-3">
-            {detail.payments.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Chưa có khoản thanh toán.
-              </p>
-            ) : (
-              detail.payments.map((payment) => (
-                <div
-                  key={payment.contractPaymentId}
-                  className="rounded-lg border p-4"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <b>
-                        {formatCurrency(payment.amount, payment.currencyCode)}
-                      </b>
-                      <p className="text-sm text-muted-foreground">
-                        {new Date(payment.paymentDate).toLocaleDateString(
-                          "vi-VN",
-                        )}{" "}
-                        · {payment.paymentMethod} · {payment.referenceCode}
-                      </p>
-                    </div>
-                    <Badge
-                      variant={
-                        payment.status === ContractPaymentStatus.Active
-                          ? "default"
-                          : "destructive"
-                      }
-                    >
-                      {payment.status === ContractPaymentStatus.Active
-                        ? "Hiệu lực"
-                        : "Đã hủy"}
-                    </Badge>
-                  </div>
-                  {payment.status === ContractPaymentStatus.Active &&
-                    paymentEditable && (
-                      <Button
-                        className="mt-3"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setVoidingId(payment.contractPaymentId)}
-                      >
-                        Hủy khoản này
-                      </Button>
-                    )}
-                  {payment.voidReason && (
-                    <p className="mt-2 text-sm text-destructive">
-                      Lý do: {payment.voidReason}
-                    </p>
-                  )}
+                            paymentDate: format(paymentDate, "yyyy-MM-dd"),
+                            amount,
+                            currencyCode: detail.readiness.currencyCode,
+                            paymentMethod: method,
+                            referenceCode: reference,
+                          }),
+                        "Đã ghi nhận khoản thanh toán.",
+                      )
+                    }
+                  >
+                    Thêm khoản thanh toán
+                  </Button>
                 </div>
-              ))
-            )}
-          </div>
+              )}
+              <div className="space-y-3">
+                {detail.payments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Chưa có khoản thanh toán.
+                  </p>
+                ) : (
+                  detail.payments.map((payment) => (
+                    <div
+                      key={payment.contractPaymentId}
+                      className="rounded-lg border p-4"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <b>
+                            {formatCurrency(payment.amount, payment.currencyCode)}
+                          </b>
+                          <p className="text-sm text-muted-foreground">
+                            {new Date(payment.paymentDate).toLocaleDateString(
+                              "vi-VN",
+                            )}{" "}
+                            · {payment.paymentMethod} · {payment.referenceCode}
+                          </p>
+                        </div>
+                        <Badge
+                          variant={
+                            payment.status === ContractPaymentStatus.Active
+                              ? "default"
+                              : "destructive"
+                          }
+                        >
+                          {payment.status === ContractPaymentStatus.Active
+                            ? "Hiệu lực"
+                            : "Đã hủy"}
+                        </Badge>
+                      </div>
+                      {payment.status === ContractPaymentStatus.Active &&
+                        paymentEditable && (
+                          <Button
+                            className="mt-3"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setVoidingId(payment.contractPaymentId)}
+                          >
+                            Hủy khoản này
+                          </Button>
+                        )}
+                      {payment.voidReason && (
+                        <p className="mt-2 text-sm text-destructive">
+                          Lý do: {payment.voidReason}
+                        </p>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
       <ConfirmDialog
-        isOpen={Boolean(voidingId)}
+        isOpen={Boolean(confirmUnpaidMilestone)}
+        onClose={() => setConfirmUnpaidMilestoneId(undefined)}
+        onConfirm={() => {
+          if (!confirmUnpaidMilestone) return;
+          void updateMilestoneStatus(
+            confirmUnpaidMilestone,
+            ContractPaymentMilestoneStatus.Unpaid,
+          ).then((succeeded) => {
+            if (succeeded) setConfirmUnpaidMilestoneId(undefined);
+          });
+        }}
+        title="Chuyển về chưa nộp?"
+        description={
+          confirmUnpaidMilestone
+            ? `${confirmUnpaidMilestone.titleVi} sẽ được chuyển về trạng thái chưa nộp. Thời điểm và người cập nhật trạng thái đã nộp sẽ được xóa.`
+            : ""
+        }
+        confirmText="Chuyển về chưa nộp"
+        variant="destructive"
+        isLoading={Boolean(updatingMilestoneId)}
+      />
+      <ConfirmDialog
+        isOpen={!hasStructuredPayment && Boolean(voidingId)}
         onClose={() => {
           setVoidingId(undefined);
           setVoidReason("");

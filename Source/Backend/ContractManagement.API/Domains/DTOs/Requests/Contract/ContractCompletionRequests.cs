@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using ContractManagement.API.Common.Enums;
 
 namespace ContractManagement.API.Domains.DTOs.Requests.Contract;
 
@@ -17,24 +18,19 @@ public sealed class AddContractPaymentRequest
     public string ContractRowVersion { get; set; } = string.Empty;
     public string VersionRowVersion { get; set; } = string.Empty;
     public DateTime PaymentDate { get; set; }
-    public int? PaymentMilestoneId { get; set; }
     public decimal Amount { get; set; }
     public string CurrencyCode { get; set; } = string.Empty;
     public string PaymentMethod { get; set; } = string.Empty;
     public string ReferenceCode { get; set; } = string.Empty;
 }
 
-public sealed class SetContractPaymentMilestoneManualAnchorRequest
+public sealed class SetContractPaymentMilestoneStatusRequest
 {
     public int CurrentVersionId { get; set; }
     public string ContractRowVersion { get; set; } = string.Empty;
     public string VersionRowVersion { get; set; } = string.Empty;
     public string MilestoneRowVersion { get; set; } = string.Empty;
-    public DateTime AnchorDate { get; set; }
-
-    [Required]
-    [MaxLength(1000)]
-    public string Reason { get; set; } = string.Empty;
+    public ContractPaymentMilestoneStatus Status { get; set; }
 }
 
 public sealed class VoidContractPaymentRequest

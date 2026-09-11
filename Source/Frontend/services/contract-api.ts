@@ -1,4 +1,5 @@
 import axiosClient from "@/lib/axios-interceptor";
+import type { ContractPaymentMilestoneResponse } from "@/services/contract-completion-api";
 
 export enum ContractType {
   SoftwareSupply = 1,
@@ -220,6 +221,12 @@ export interface CreateContractRequest {
   languageMode: ContractLanguageMode;
   items: CreateContractItemRequest[];
   terms?: CreateContractTermRequest[] | null;
+  paymentMilestoneDates: ContractPaymentMilestoneDateRequest[];
+}
+
+export interface ContractPaymentMilestoneDateRequest {
+  sourceTemplatePaymentMilestoneId: number;
+  anchorDate: string;
 }
 
 export interface CreateContractTermRequest {
@@ -258,6 +265,7 @@ export interface UpdateContractDraftRequest {
   currencyCode: string;
   items: UpdateContractItemRequest[];
   terms: UpdateContractTermRequest[];
+  paymentMilestoneDates: ContractPaymentMilestoneDateRequest[];
 }
 
 export interface StartContractNegotiationRequest {
@@ -435,6 +443,7 @@ export interface ContractVersionDetailResponse {
   rowVersion: string;
   items: ContractItemDetailResponse[];
   terms: ContractTermDetailResponse[];
+  paymentMilestones: ContractPaymentMilestoneResponse[];
   comments: ContractNegotiationCommentResponse[];
 }
 

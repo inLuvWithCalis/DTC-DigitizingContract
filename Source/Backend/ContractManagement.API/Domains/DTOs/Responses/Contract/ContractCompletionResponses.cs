@@ -48,6 +48,7 @@ public sealed class ContractPaymentResponse
 public sealed class ContractPaymentMilestoneResponse
 {
     public int PaymentMilestoneId { get; set; }
+    public int? SourceTemplatePaymentMilestoneId { get; set; }
     public int VersionId { get; set; }
     public string MilestoneCode { get; set; } = string.Empty;
     public string TitleVi { get; set; } = string.Empty;
@@ -64,7 +65,10 @@ public sealed class ContractPaymentMilestoneResponse
     public int DisplayOrder { get; set; }
     public DateTime? AnchorDate { get; set; }
     public DateTime? DueDate { get; set; }
-    public string Status { get; set; } = string.Empty;
+    public ContractPaymentMilestoneStatus PaymentStatus { get; set; }
+    public bool IsOverdue { get; set; }
+    public DateTime? PaidAt { get; set; }
+    public int? PaidByEmployeeId { get; set; }
     public string RowVersion { get; set; } = string.Empty;
 }
 

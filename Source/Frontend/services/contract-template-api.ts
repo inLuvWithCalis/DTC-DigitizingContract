@@ -35,7 +35,7 @@ export enum PaymentDueAnchor {
   ContractEffectiveDate = 2,
   AcceptanceCompleted = 3,
   PreviousMilestonePaid = 4,
-  Manual = 5,
+  ManualDate = 5,
 }
 
 export enum PaymentDayCountMode {

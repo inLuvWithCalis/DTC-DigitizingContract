@@ -14,10 +14,11 @@ namespace ContractManagement.Domains.Services.ContractTemplate;
 /// </summary>
 public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRenderer
 {
-    public const string FormatVersion = "V5";
+    public const string FormatVersion = "V7";
 
     private const string GeneratedContentFont = "Times New Roman";
     private const string GeneratedContentFontSize = "24";
+    private const int RichTableWidthDxa = 9_000;
 
     public byte[] RenderSample(byte[] sourceDocumentBytes, ContractLanguageMode languageMode,
         IReadOnlyList<SoftwareSupplyPlaceholderDefinition> definitions,
@@ -32,28 +33,13 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
         var terms = authoringData is not null
             ? authoringData.Terms
             : data.Terms;
-        var structuredPayments = terms.SelectMany(term => term.PaymentMilestones).ToList();
-        var payments = structuredPayments.Count > 0
-            ? structuredPayments.Select(item => new ContractTemplateRenderPayment(
-                item.No,
-                languageMode == ContractLanguageMode.Bilingual
-                    && !string.IsNullOrWhiteSpace(item.TitleEn)
-                        ? $"{item.TitleVi} / {item.TitleEn}"
-                        : item.TitleVi,
-                $"{item.PaymentPercent:0.####}%",
-                item.Amount,
-                languageMode == ContractLanguageMode.Bilingual
-                    ? $"{BuildDueCondition(item, ContractLanguageMode.Vietnamese)} / "
-                        + BuildDueCondition(item, ContractLanguageMode.Bilingual)
-                    : BuildDueCondition(item, ContractLanguageMode.Vietnamese))).ToList()
-            : data.Payments;
         return Render(sourceDocumentBytes, languageMode, data with
         {
             ScalarValues = values,
             Definitions = definitions,
             LegalBases = authoringData?.LegalBases ?? data.LegalBases,
             Terms = terms,
-            Payments = payments
+            Payments = []
         });
     }
 
@@ -177,10 +163,9 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                 [
                     (OpenXmlElement)CreateItemTable(languageMode, renderData)
                 ],
-                "PAYMENT_SCHEDULE_TABLE" =>
-                [
-                    (OpenXmlElement)CreatePaymentTable(languageMode, renderData)
-                ],
+                "PAYMENT_SCHEDULE_TABLE" => renderData.Payments.Count > 0
+                    ? [(OpenXmlElement)CreatePaymentTable(languageMode, renderData)]
+                    : [new W.Paragraph()],
                 "CONTRACT_LEGAL_BASES" => CreateLegalBasisElements(languageMode, renderData),
                 "CONTRACT_TERMS" => CreateTermElements(languageMode, renderData),
                 "SIGNATURE_PROVIDER" =>
@@ -244,21 +229,9 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                 : $"Điều {term.No}. {term.TitleVi}";
             elements.Add(CreateParagraph(title, bold: true));
             elements.AddRange(CreateTermContentElements(term.ContentVi));
-            if (term.Kind == ContractTermKind.Payment)
-            {
-                foreach (var milestone in term.PaymentMilestones)
-                    elements.Add(CreateParagraph(BuildMilestoneNarrative(
-                        milestone, ContractLanguageMode.Vietnamese)));
-            }
             if (languageMode == ContractLanguageMode.Bilingual)
             {
                 elements.AddRange(CreateTermContentElements(term.ContentEn));
-                if (term.Kind == ContractTermKind.Payment)
-                {
-                    foreach (var milestone in term.PaymentMilestones)
-                        elements.Add(CreateParagraph(BuildMilestoneNarrative(
-                            milestone, ContractLanguageMode.Bilingual)));
-                }
             }
         }
 
@@ -363,24 +336,75 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
     private static W.Table CreateRichTable(
         IEnumerable<ContractTermRichTextRow> rows)
     {
-        var table = new W.Table(CreateGeneratedTableProperties());
-        foreach (var sourceRow in rows)
+        var layout = CreateRichTableLayout(rows.ToList());
+        var tableProperties = CreateGeneratedTableProperties();
+        tableProperties.Append(new W.TableLayout
+        {
+            Type = W.TableLayoutValues.Fixed
+        });
+        var table = new W.Table(tableProperties);
+        var tableGrid = new W.TableGrid();
+        foreach (var width in layout.ColumnWidths)
+        {
+            tableGrid.Append(new W.GridColumn { Width = width.ToString() });
+        }
+        table.Append(tableGrid);
+
+        foreach (var sourceRow in layout.Rows)
         {
             var row = new W.TableRow();
-            foreach (var cell in sourceRow.Cells)
+            foreach (var layoutCell in sourceRow)
             {
-                var tableCell = new W.TableCell(
-                    new W.TableCellProperties(
-                        new W.TableCellWidth
-                        {
-                            Type = W.TableWidthUnitValues.Auto,
-                            Width = "0"
-                        }));
-                var paragraphs = cell.Paragraphs.Count > 0
-                    ? cell.Paragraphs.Select(paragraph =>
+                var properties = new W.TableCellProperties(
+                    new W.TableCellWidth
+                    {
+                        Type = W.TableWidthUnitValues.Dxa,
+                        Width = layout.ColumnWidths
+                            .Skip(layoutCell.StartColumn)
+                            .Take(layoutCell.Colspan)
+                            .Sum()
+                            .ToString()
+                    });
+                if (layoutCell.Colspan > 1)
+                {
+                    properties.Append(new W.GridSpan { Val = layoutCell.Colspan });
+                }
+                if (layoutCell.IsVerticalContinuation)
+                {
+                    properties.Append(new W.VerticalMerge
+                    {
+                        Val = W.MergedCellValues.Continue
+                    });
+                }
+                else if ((layoutCell.Cell.Rowspan ?? 1) > 1)
+                {
+                    properties.Append(new W.VerticalMerge
+                    {
+                        Val = W.MergedCellValues.Restart
+                    });
+                }
+                if (ToTableVerticalAlignment(layoutCell.Cell.VerticalAlign) is { } verticalAlignment)
+                {
+                    properties.Append(new W.TableCellVerticalAlignment
+                    {
+                        Val = verticalAlignment
+                    });
+                }
+
+                var tableCell = new W.TableCell(properties);
+                if (layoutCell.IsVerticalContinuation)
+                {
+                    tableCell.Append(new W.Paragraph());
+                }
+                else
+                {
+                    var cell = layoutCell.Cell;
+                    var paragraphs = cell.Paragraphs.Count > 0
+                        ? cell.Paragraphs.Select(paragraph =>
                         CreateRichParagraph(paragraph.Runs, paragraph.Alignment))
-                    : [CreateRichParagraph(cell.Runs)];
-                tableCell.Append(paragraphs);
+                        : [CreateRichParagraph(cell.Runs)];
+                    tableCell.Append(paragraphs);
+                }
                 row.Append(tableCell);
             }
 
@@ -389,6 +413,105 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
 
         return table;
     }
+
+    private static RichTableLayout CreateRichTableLayout(
+        IReadOnlyList<ContractTermRichTextRow> rows)
+    {
+        var columnCount = rows[0].Cells.Sum(cell => cell.Colspan ?? 1);
+        var widthWeights = new int?[columnCount];
+        var activeSpans = new List<ActiveRichTableSpan>();
+        var layoutRows = new List<IReadOnlyList<RichTableLayoutCell>>(rows.Count);
+
+        foreach (var sourceRow in rows)
+        {
+            var occupied = new bool[columnCount];
+            var layoutCells = new List<RichTableLayoutCell>();
+            var nextActiveSpans = new List<ActiveRichTableSpan>();
+            foreach (var span in activeSpans)
+            {
+                for (var column = span.StartColumn;
+                     column < span.StartColumn + span.Colspan;
+                     column++)
+                {
+                    occupied[column] = true;
+                }
+                layoutCells.Add(new RichTableLayoutCell(
+                    span.Cell,
+                    span.StartColumn,
+                    span.Colspan,
+                    true));
+                if (span.RemainingRows > 1)
+                {
+                    nextActiveSpans.Add(span with
+                    {
+                        RemainingRows = span.RemainingRows - 1
+                    });
+                }
+            }
+
+            var cursor = 0;
+            foreach (var cell in sourceRow.Cells)
+            {
+                while (occupied[cursor]) cursor++;
+                var colspan = cell.Colspan ?? 1;
+                layoutCells.Add(new RichTableLayoutCell(cell, cursor, colspan, false));
+                for (var column = cursor; column < cursor + colspan; column++)
+                {
+                    occupied[column] = true;
+                    if (cell.Colwidth is { } colwidth && widthWeights[column] is null)
+                    {
+                        widthWeights[column] = colwidth[column - cursor];
+                    }
+                }
+                if ((cell.Rowspan ?? 1) > 1)
+                {
+                    nextActiveSpans.Add(new ActiveRichTableSpan(
+                        cell,
+                        cursor,
+                        colspan,
+                        cell.Rowspan!.Value - 1));
+                }
+                cursor += colspan;
+            }
+
+            layoutRows.Add(layoutCells.OrderBy(cell => cell.StartColumn).ToList());
+            activeSpans = nextActiveSpans;
+        }
+
+        var weights = widthWeights.Select(width => width ?? 100).ToArray();
+        var totalWeight = weights.Sum();
+        var columnWidths = weights
+            .Select(weight => Math.Max(1, RichTableWidthDxa * weight / totalWeight))
+            .ToArray();
+        columnWidths[^1] += RichTableWidthDxa - columnWidths.Sum();
+
+        return new RichTableLayout(layoutRows, columnWidths);
+    }
+
+    private static W.TableVerticalAlignmentValues? ToTableVerticalAlignment(
+        string? alignment) => alignment switch
+        {
+            "top" => W.TableVerticalAlignmentValues.Top,
+            "center" => W.TableVerticalAlignmentValues.Center,
+            "bottom" => W.TableVerticalAlignmentValues.Bottom,
+            _ => null
+        };
+
+    private sealed record RichTableLayout(
+        IReadOnlyList<IReadOnlyList<RichTableLayoutCell>> Rows,
+        IReadOnlyList<int> ColumnWidths);
+
+    private sealed record RichTableLayoutCell(
+        ContractTermRichTextCell Cell,
+        int StartColumn,
+        int Colspan,
+        bool IsVerticalContinuation);
+
+    private sealed record ActiveRichTableSpan(
+        ContractTermRichTextCell Cell,
+        int StartColumn,
+        int Colspan,
+        int RemainingRows);
 
     private static W.JustificationValues? ToJustification(string? alignment) =>
         alignment switch
@@ -646,12 +769,12 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
             },
             new W.Bold { Val = bold },
             new W.Italic { Val = italic },
+            new W.FontSize { Val = fontSize ?? GeneratedContentFontSize },
+            new W.FontSizeComplexScript { Val = fontSize ?? GeneratedContentFontSize },
             new W.Underline
             {
                 Val = underline ? W.UnderlineValues.Single : W.UnderlineValues.None
-            },
-            new W.FontSize { Val = fontSize ?? GeneratedContentFontSize },
-            new W.FontSizeComplexScript { Val = fontSize ?? GeneratedContentFontSize });
+            });
 
     private static W.Text Text(string value) => new(value)
     {
@@ -717,46 +840,4 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
     private static string FormatQuantity(decimal value) =>
         value == decimal.Truncate(value) ? value.ToString("0") : value.ToString("0.##");
 
-    private static string BuildMilestoneNarrative(
-        ContractTemplateRenderPaymentMilestone item,
-        ContractLanguageMode languageMode)
-    {
-        if (languageMode == ContractLanguageMode.Bilingual)
-        {
-            var title = string.IsNullOrWhiteSpace(item.TitleEn) ? item.TitleVi : item.TitleEn;
-            var days = item.DayCountMode == PaymentDayCountMode.BusinessDays
-                ? "business days" : "days";
-            var condition = BuildDueCondition(item, languageMode);
-            return $"{title}: Pay {item.PaymentPercent:0.####}% of the contract value within {item.DueOffsetDays} {days} from {condition}.";
-        }
-
-        var dayLabel = item.DayCountMode == PaymentDayCountMode.BusinessDays
-            ? "ngày làm việc" : "ngày";
-        return $"{item.TitleVi}: Thanh toán {item.PaymentPercent:0.####}% giá trị hợp đồng trong vòng {item.DueOffsetDays} {dayLabel} kể từ {BuildDueCondition(item, languageMode)}.";
-    }
-
-    private static string BuildDueCondition(ContractTemplateRenderPaymentMilestone item,
-        ContractLanguageMode languageMode)
-    {
-        var anchor = languageMode == ContractLanguageMode.Bilingual
-            ? item.DueAnchor switch
-            {
-                PaymentDueAnchor.ContractSigned => "the contract signing date",
-                PaymentDueAnchor.ContractEffectiveDate => "the effective date",
-                PaymentDueAnchor.AcceptanceCompleted => "acceptance completion",
-                PaymentDueAnchor.PreviousMilestonePaid => "full payment of the previous installment",
-                _ => "the manually confirmed milestone"
-            }
-            : item.DueAnchor switch
-            {
-                PaymentDueAnchor.ContractSigned => "ngày ký hợp đồng",
-                PaymentDueAnchor.ContractEffectiveDate => "ngày hợp đồng có hiệu lực",
-                PaymentDueAnchor.AcceptanceCompleted => "ngày hoàn tất nghiệm thu",
-                PaymentDueAnchor.PreviousMilestonePaid => "ngày thanh toán đủ đợt trước",
-                _ => "mốc được xác nhận thủ công"
-            };
-        var condition = languageMode == ContractLanguageMode.Bilingual
-            ? item.ConditionEn : item.ConditionVi;
-        return string.IsNullOrWhiteSpace(condition) ? anchor : $"{anchor}; {condition.Trim()}";
-    }
 }

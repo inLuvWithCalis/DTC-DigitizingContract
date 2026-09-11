@@ -18,9 +18,9 @@ public interface IContractCompletionService
     Task<ContractPaymentResponse> AddPaymentAsync(
         int contractId, AddContractPaymentRequest request,
         int employeeId, CancellationToken cancellationToken = default);
-    Task<ContractPaymentMilestoneResponse> SetPaymentMilestoneManualAnchorAsync(
+    Task<ContractPaymentMilestoneResponse> SetPaymentMilestoneStatusAsync(
         int contractId, int versionId, int milestoneId,
-        SetContractPaymentMilestoneManualAnchorRequest request,
+        SetContractPaymentMilestoneStatusRequest request,
         int employeeId, CancellationToken cancellationToken = default);
     Task<ContractPaymentResponse> VoidPaymentAsync(
         int contractId, int paymentId, VoidContractPaymentRequest request,

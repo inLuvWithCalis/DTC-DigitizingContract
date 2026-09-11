@@ -72,6 +72,7 @@ import { TransferResponsibilityModal } from "@/components/contracts/transfer-res
 import { ContractApprovalPanel } from "@/components/contracts/contract-approval-panel";
 import { ContractSigningPanel } from "@/components/contracts/contract-signing-panel";
 import { ContractSubmittedArtifactActions } from "@/components/contracts/contract-submitted-artifact-actions";
+import { ContractPaymentDueAnchor } from "@/services/contract-completion-api";
 
 const CONTRACT_TABS = [
   "overview",
@@ -351,6 +352,13 @@ export default function ContractDetailPage() {
       }
     }
 
+    const manualPaymentMilestones = contract.currentVersion.paymentMilestones
+      .filter((item) => item.dueAnchor === ContractPaymentDueAnchor.ManualDate);
+    if (manualPaymentMilestones.some((item) => !item.anchorDate)) {
+      toast.error("Vui lòng nhập ngày bắt đầu tính hạn cho các đợt dùng Lịch thủ công.");
+      return;
+    }
+
     setIsUpdating(true);
     try {
       // Map payload chuẩn hóa theo UpdateContractDraftRequest
@@ -400,6 +408,11 @@ export default function ContractDetailPage() {
           termContentEn: term.termContentEn,
           isNegotiable: term.isNegotiable,
           displayOrder: term.displayOrder,
+        })),
+        paymentMilestoneDates: manualPaymentMilestones.map((item) => ({
+          sourceTemplatePaymentMilestoneId:
+            item.sourceTemplatePaymentMilestoneId!,
+          anchorDate: item.anchorDate!.slice(0, 10),
         })),
       };
 

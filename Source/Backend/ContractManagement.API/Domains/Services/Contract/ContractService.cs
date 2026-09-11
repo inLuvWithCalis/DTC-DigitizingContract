@@ -485,6 +485,21 @@ namespace ContractManagement.Domains.Services.Contract
                             "Kế hoạch thanh toán của template không hợp lệ.");
                     }
 
+                    var paymentMilestoneDates = request.PaymentMilestoneDates
+                        .ToDictionary(x => x.SourceTemplatePaymentMilestoneId,
+                            x => x.AnchorDate.Date);
+                    var manualMilestoneIds = templatePaymentMilestones
+                        .Where(x => x.DueAnchor == (byte)PaymentDueAnchor.ManualDate)
+                        .Select(x => x.TemplatePaymentMilestoneId)
+                        .ToHashSet();
+                    if (paymentMilestoneDates.Keys.Any(id => !manualMilestoneIds.Contains(id)))
+                        throw new ArgumentException(
+                            "Ngày bắt đầu tính hạn chỉ được nhập cho đợt dùng Lịch thủ công.");
+                    if (manualMilestoneIds.Any(id => !paymentMilestoneDates.TryGetValue(id,
+                            out var date) || date == default))
+                        throw new ArgumentException(
+                            "Vui lòng nhập ngày bắt đầu tính hạn cho tất cả đợt dùng Lịch thủ công.");
+
                     if (templateTerms.Count == 0)
                     {
                         throw new InvalidOperationException(
@@ -757,8 +772,14 @@ namespace ContractManagement.Domains.Services.Contract
                             : RoundMoney(totals.TotalPayment * source.PaymentPercent / 100m,
                                 currencyCode);
                         allocated += amount;
-                        var anchorDate = source.DueAnchor == (byte)PaymentDueAnchor.ContractEffectiveDate
-                            ? request.EffectiveDate?.Date : null;
+                        var anchorDate = source.DueAnchor switch
+                        {
+                            (byte)PaymentDueAnchor.ContractEffectiveDate =>
+                                request.EffectiveDate?.Date,
+                            (byte)PaymentDueAnchor.ManualDate =>
+                                paymentMilestoneDates[source.TemplatePaymentMilestoneId],
+                            _ => null
+                        };
                         contractPaymentMilestones.Add(new TblContractPaymentMilestone
                         {
                             ContractId = contract.ContractId,
@@ -781,6 +802,7 @@ namespace ContractManagement.Domains.Services.Contract
                                 ? _paymentDueDates.Calculate(anchorDate.Value, source.DueOffsetDays,
                                     (PaymentDayCountMode)source.DayCountMode)
                                 : null,
+                            PaymentStatus = (byte)ContractPaymentMilestoneStatus.Unpaid,
                             CreatedEmployeeId = createdEmployeeId,
                             CreatedDate = now
                         });
@@ -1425,6 +1447,14 @@ namespace ContractManagement.Domains.Services.Contract
                 .ThenBy(x => x.TermId)
                 .ToListAsync();
 
+            var paymentMilestones = await _dbContext.TblContractPaymentMilestones
+                .AsNoTracking()
+                .Where(x => x.ContractId == contract.ContractId
+                    && x.VersionId == version.VersionId)
+                .OrderBy(x => x.DisplayOrder)
+                .ThenBy(x => x.PaymentMilestoneId)
+                .ToListAsync();
+
             var comments = await LoadCommentResponsesAsync(
                 contract.ContractId,
                 version.VersionId);
@@ -1585,6 +1615,10 @@ namespace ContractManagement.Domains.Services.Contract
                             DisplayOrder = term.DisplayOrder,
                             RowVersion = EncodeRowVersion(term.RowVersion)
                         })
+                        .ToList(),
+
+                    PaymentMilestones = paymentMilestones
+                        .Select(MapPaymentMilestoneDetail)
                         .ToList(),
 
                     Comments = comments
@@ -1765,6 +1799,22 @@ namespace ContractManagement.Domains.Services.Contract
                             .OrderBy(x => x.DisplayOrder)
                             .ThenBy(x => x.PaymentMilestoneId)
                             .ToListAsync();
+
+                        var paymentMilestoneDates = request.PaymentMilestoneDates
+                            .ToDictionary(x => x.SourceTemplatePaymentMilestoneId,
+                                x => x.AnchorDate.Date);
+                        var manualMilestoneIds = existingPaymentMilestones
+                            .Where(x => x.DueAnchor == (byte)PaymentDueAnchor.ManualDate
+                                && x.SourceTemplatePaymentMilestoneId.HasValue)
+                            .Select(x => x.SourceTemplatePaymentMilestoneId!.Value)
+                            .ToHashSet();
+                        if (paymentMilestoneDates.Keys.Any(id => !manualMilestoneIds.Contains(id)))
+                            throw new ArgumentException(
+                                "Ngày bắt đầu tính hạn không thuộc đợt Lịch thủ công của version hiện tại.");
+                        if (manualMilestoneIds.Any(id => !paymentMilestoneDates.TryGetValue(id,
+                                out var date) || date == default))
+                            throw new ArgumentException(
+                                "Vui lòng nhập ngày bắt đầu tính hạn cho tất cả đợt dùng Lịch thủ công.");
 
                         var previousAuditValues = ContractAuditValues.Create(
                             ("Status", contract.Status),
@@ -2107,6 +2157,16 @@ namespace ContractManagement.Domains.Services.Contract
                                         milestone.DueOffsetDays,
                                         (PaymentDayCountMode)milestone.DayCountMode)
                                     : null;
+                            }
+                            else if (milestone.DueAnchor ==
+                                     (byte)PaymentDueAnchor.ManualDate
+                                     && milestone.SourceTemplatePaymentMilestoneId is { } sourceId)
+                            {
+                                milestone.AnchorDate = paymentMilestoneDates[sourceId];
+                                milestone.DueDate = _paymentDueDates.Calculate(
+                                    milestone.AnchorDate.Value,
+                                    milestone.DueOffsetDays,
+                                    (PaymentDayCountMode)milestone.DayCountMode);
                             }
                             milestone.UpdatedEmployeeId = employeeId;
                             milestone.UpdatedDate = now;
@@ -2532,12 +2592,16 @@ namespace ContractManagement.Domains.Services.Contract
                             .OrderBy(x => x.DisplayOrder)
                             .ThenBy(x => x.PaymentMilestoneId)
                             .ToListAsync();
-                        if (await _dbContext.TblContractPaymentLedgers.AsNoTracking()
-                            .AnyAsync(x => x.ContractId == contract.ContractId
-                                && x.VersionId == sourceVersion.VersionId
-                                && x.Status == (byte)ContractPaymentStatus.Active))
+                        var paymentBlocksNegotiation = sourcePaymentMilestones.Count > 0
+                            ? sourcePaymentMilestones.Any(x => x.PaymentStatus ==
+                                (byte)ContractPaymentMilestoneStatus.Paid)
+                            : await _dbContext.TblContractPaymentLedgers.AsNoTracking()
+                                .AnyAsync(x => x.ContractId == contract.ContractId
+                                    && x.VersionId == sourceVersion.VersionId
+                                    && x.Status == (byte)ContractPaymentStatus.Active);
+                        if (paymentBlocksNegotiation)
                             throw new InvalidOperationException(
-                                "Không thể tạo vòng đàm phán mới khi version hiện tại đã có khoản thu đang hiệu lực.");
+                                "Không thể tạo vòng đàm phán mới khi version hiện tại đã ghi nhận thanh toán.");
 
                         var sourceComments = await _dbContext
                             .TblContractNegotiationComments
@@ -2749,6 +2813,9 @@ namespace ContractManagement.Domains.Services.Contract
                                         source.DueOffsetDays,
                                         (PaymentDayCountMode)source.DayCountMode)
                                     : null,
+                                PaymentStatus = (byte)ContractPaymentMilestoneStatus.Unpaid,
+                                PaidAt = null,
+                                PaidByEmployeeId = null,
                                 CreatedEmployeeId = employeeId,
                                 CreatedDate = now
                             };
@@ -3366,6 +3433,13 @@ namespace ContractManagement.Domains.Services.Contract
                 .ThenBy(x => x.TermId)
                 .ToListAsync();
 
+            var paymentMilestones = await _dbContext.TblContractPaymentMilestones
+                .AsNoTracking()
+                .Where(x => x.ContractId == contractId && x.VersionId == versionId)
+                .OrderBy(x => x.DisplayOrder)
+                .ThenBy(x => x.PaymentMilestoneId)
+                .ToListAsync();
+
             return new ContractVersionDetailResponse
             {
                 VersionId = version.VersionId,
@@ -3387,6 +3461,8 @@ namespace ContractManagement.Domains.Services.Contract
                 RowVersion = EncodeRowVersion(version.RowVersion),
                 Items = items.Select(MapItemDetail).ToList(),
                 Terms = terms.Select(MapTermDetail).ToList(),
+                PaymentMilestones = paymentMilestones
+                    .Select(MapPaymentMilestoneDetail).ToList(),
                 Comments = await LoadCommentResponsesAsync(
                     contractId,
                     versionId)
@@ -4044,6 +4120,45 @@ namespace ContractManagement.Domains.Services.Contract
                 throw new InvalidOperationException(
                     "Chỉ Contract đang Negotiating mới hỗ trợ xem Version history.");
             }
+        }
+
+        private static ContractPaymentMilestoneResponse MapPaymentMilestoneDetail(
+            TblContractPaymentMilestone milestone)
+        {
+            var paymentStatus =
+                (ContractPaymentMilestoneStatus)milestone.PaymentStatus;
+            var paidAmount = paymentStatus == ContractPaymentMilestoneStatus.Paid
+                ? milestone.Amount : 0m;
+            var isOverdue = paymentStatus == ContractPaymentMilestoneStatus.Unpaid
+                && milestone.DueDate.HasValue
+                && milestone.DueDate.Value.Date < DateTime.UtcNow.Date;
+            return new ContractPaymentMilestoneResponse
+            {
+                PaymentMilestoneId = milestone.PaymentMilestoneId,
+                SourceTemplatePaymentMilestoneId =
+                    milestone.SourceTemplatePaymentMilestoneId,
+                VersionId = milestone.VersionId,
+                MilestoneCode = milestone.MilestoneCode,
+                TitleVi = milestone.TitleVi,
+                TitleEn = milestone.TitleEn,
+                PaymentPercent = milestone.PaymentPercent,
+                Amount = milestone.Amount,
+                PaidAmount = paidAmount,
+                RemainingAmount = milestone.Amount - paidAmount,
+                DueAnchor = (PaymentDueAnchor)milestone.DueAnchor,
+                DueOffsetDays = milestone.DueOffsetDays,
+                DayCountMode = (PaymentDayCountMode)milestone.DayCountMode,
+                ConditionVi = milestone.ConditionVi,
+                ConditionEn = milestone.ConditionEn,
+                DisplayOrder = milestone.DisplayOrder,
+                AnchorDate = milestone.AnchorDate,
+                DueDate = milestone.DueDate,
+                PaymentStatus = paymentStatus,
+                IsOverdue = isOverdue,
+                PaidAt = milestone.PaidAt,
+                PaidByEmployeeId = milestone.PaidByEmployeeId,
+                RowVersion = EncodeRowVersion(milestone.RowVersion)
+            };
         }
 
         private async Task<(int ThreadCount, int CommentCount)>
@@ -6086,6 +6201,17 @@ namespace ContractManagement.Domains.Services.Contract
                     blockers,
                     ContractApprovalReadinessCodes.ContractTermRequired,
                     "Hợp đồng phải có ít nhất một điều khoản.");
+            }
+
+            if (await _dbContext.TblContractPaymentMilestones.AsNoTracking()
+                .AnyAsync(x => x.VersionId == version.VersionId
+                    && x.DueAnchor == (byte)PaymentDueAnchor.ManualDate
+                    && x.AnchorDate == null))
+            {
+                AddBlocker(
+                    blockers,
+                    ContractApprovalReadinessCodes.ManualPaymentMilestoneDateRequired,
+                    "Có đợt thanh toán dùng Lịch thủ công nhưng chưa nhập ngày bắt đầu tính hạn.");
             }
 
             if (contract.EffectiveDate.HasValue

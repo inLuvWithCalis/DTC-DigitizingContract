@@ -65,6 +65,7 @@ public static class ContractAuditActionTypes
     public const string PaymentAdded = "PaymentAdded";
     public const string PaymentVoided = "PaymentVoided";
     public const string PaymentMilestoneAnchored = "PaymentMilestoneAnchored";
+    public const string PaymentMilestoneStatusChanged = "PaymentMilestoneStatusChanged";
     public const string ContractCompleted = "ContractCompleted";
     public const string ContractAttachmentUploaded =
         "ContractAttachmentUploaded";

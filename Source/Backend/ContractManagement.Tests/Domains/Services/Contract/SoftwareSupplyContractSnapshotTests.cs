@@ -86,7 +86,7 @@ public sealed class SoftwareSupplyContractSnapshotTests
             terms);
         var json = SoftwareSupplyContractSnapshotFactory.Serialize(snapshot);
 
-        Assert.Equal(5, snapshot.SchemaVersion);
+        Assert.Equal(6, snapshot.SchemaVersion);
         Assert.Equal(contract.CreatedDate, snapshot.Contract.CreatedDate);
         Assert.Equal("DTC", snapshot.Tenant.LegalEntityName);
         Assert.Equal("Trần B", snapshot.Customer.RepresentativeName);

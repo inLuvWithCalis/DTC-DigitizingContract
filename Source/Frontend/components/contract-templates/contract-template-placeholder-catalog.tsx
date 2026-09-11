@@ -247,10 +247,11 @@ export function ContractTemplatePlaceholderCatalog() {
     const normalizedKeyword = keyword.trim().toLocaleLowerCase();
     const items = (catalog?.items ?? []).filter(
       (item) =>
-        filter === "all" ||
-        (filter === "system" && item.isSystem) ||
-        (filter === "custom" && !item.isSystem && item.isActive) ||
-        (filter === "inactive" && !item.isActive),
+        item.key !== "PAYMENT_SCHEDULE_TABLE" &&
+        (filter === "all" ||
+          (filter === "system" && item.isSystem) ||
+          (filter === "custom" && !item.isSystem && item.isActive) ||
+          (filter === "inactive" && !item.isActive)),
     );
     if (!normalizedKeyword) return items;
     return items.filter((item) =>

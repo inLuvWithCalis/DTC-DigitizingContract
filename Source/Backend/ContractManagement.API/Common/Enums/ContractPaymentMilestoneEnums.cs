@@ -12,7 +12,13 @@ public enum PaymentDueAnchor : byte
     ContractEffectiveDate = 2,
     AcceptanceCompleted = 3,
     PreviousMilestonePaid = 4,
-    Manual = 5
+    ManualDate = 5
+}
+
+public enum ContractPaymentMilestoneStatus : byte
+{
+    Unpaid = 0,
+    Paid = 1
 }
 
 public enum PaymentDayCountMode : byte

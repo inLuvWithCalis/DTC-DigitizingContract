@@ -1167,9 +1167,12 @@ public partial class DbDtctechContext : DbContext
                 table.HasCheckConstraint("CK_tbl_ContractPaymentMilestone_DueOffset", "[DueOffsetDays] >= 0");
                 table.HasCheckConstraint("CK_tbl_ContractPaymentMilestone_DueAnchor", "[DueAnchor] IN (1, 2, 3, 4, 5)");
                 table.HasCheckConstraint("CK_tbl_ContractPaymentMilestone_DayCount", "[DayCountMode] IN (1, 2)");
+                table.HasCheckConstraint("CK_tbl_ContractPaymentMilestone_PaymentStatus", "[PaymentStatus] IN (0, 1)");
+                table.HasCheckConstraint("CK_tbl_ContractPaymentMilestone_PaidMetadata", "([PaymentStatus] = 0 AND [PaidAt] IS NULL AND [PaidByEmployeeId] IS NULL) OR ([PaymentStatus] = 1 AND [PaidAt] IS NOT NULL AND [PaidByEmployeeId] IS NOT NULL)");
             });
             entity.HasIndex(e => new { e.VersionId, e.MilestoneCode }).IsUnique();
             entity.HasIndex(e => new { e.ContractId, e.VersionId, e.DisplayOrder });
+            entity.HasIndex(e => e.PaidByEmployeeId);
             entity.Property(e => e.MilestoneCode).HasMaxLength(100).IsUnicode(false);
             entity.Property(e => e.TitleVi).HasMaxLength(500);
             entity.Property(e => e.TitleEn).HasMaxLength(500);
@@ -1177,6 +1180,8 @@ public partial class DbDtctechContext : DbContext
             entity.Property(e => e.Amount).HasColumnType("decimal(18,2)");
             entity.Property(e => e.AnchorDate).HasColumnType("date");
             entity.Property(e => e.DueDate).HasColumnType("date");
+            entity.Property(e => e.PaymentStatus).HasDefaultValue((byte)0);
+            entity.Property(e => e.PaidAt).HasColumnType("datetime2");
             entity.Property(e => e.ConditionVi).HasMaxLength(2000);
             entity.Property(e => e.ConditionEn).HasMaxLength(2000);
             entity.Property(e => e.CreatedDate).HasColumnType("datetime2").HasDefaultValueSql("(sysutcdatetime())");
@@ -1185,6 +1190,7 @@ public partial class DbDtctechContext : DbContext
             entity.HasOne<TblContract>().WithMany().HasForeignKey(e => e.ContractId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<TblContractVersion>().WithMany().HasForeignKey(e => e.VersionId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<TblContractTerm>().WithMany().HasForeignKey(e => e.TermId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<TblEmployee>().WithMany().HasForeignKey(e => e.PaidByEmployeeId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<TblContractTemplate>(entity =>

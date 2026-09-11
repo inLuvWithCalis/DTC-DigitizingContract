@@ -161,3 +161,40 @@
 ::view-transition-new(root) {
   z-index: 9999;
 }
+
+.ProseMirror .tableWrapper {
+  overflow-x: auto;
+}
+
+.ProseMirror .contract-rich-text-table {
+  table-layout: fixed;
+}
+
+.ProseMirror .contract-rich-text-table td,
+.ProseMirror .contract-rich-text-table th {
+  position: relative;
+}
+
+.ProseMirror .contract-rich-text-table .selectedCell::after {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  content: "";
+  background: color-mix(in oklab, var(--primary) 14%, transparent);
+}
+
+.ProseMirror .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: -2px;
+  z-index: 3;
+  width: 4px;
+  pointer-events: none;
+  background: var(--primary);
+}
+
+.ProseMirror.resize-cursor {
+  cursor: col-resize;
+}

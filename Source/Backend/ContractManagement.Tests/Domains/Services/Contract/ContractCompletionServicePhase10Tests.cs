@@ -194,7 +194,7 @@ public sealed class ContractCompletionServicePhase10Tests
     }
 
     [Fact]
-    public async Task StructuredPayments_RequireMilestone_EnforceAmount_AndActivateNextDueDate()
+    public async Task StructuredPayments_UseMilestoneStatus_AndActivateNextDueDate()
     {
         await using var context = CreateContext();
         await SeedAsync(context, ContractStatus.Signed, includeAcceptance: true);
@@ -203,34 +203,31 @@ public sealed class ContractCompletionServicePhase10Tests
             (PaymentDueAnchor.PreviousMilestonePaid, 5, 600m));
         var service = CreateService(context, new TrackingPrivateStorage());
 
-        var missing = await Assert.ThrowsAsync<BusinessRuleException>(() =>
+        var legacyPayment = await Assert.ThrowsAsync<BusinessRuleException>(() =>
             service.AddPaymentAsync(ContractId, PaymentRequest(100m, "missing"),
                 AccountantId));
-        Assert.Equal("PaymentMilestoneRequired", missing.Code);
+        Assert.Equal("StructuredPaymentUsesMilestoneStatus", legacyPayment.Code);
 
-        var latestPaymentDate = DateTime.UtcNow.Date.AddDays(-1);
-        var partialRequest = PaymentRequest(300m, "partial",
-            milestones[0].PaymentMilestoneId);
-        partialRequest.PaymentDate = latestPaymentDate;
-        await service.AddPaymentAsync(ContractId, partialRequest, AccountantId);
-        var beforeFull = await context.TblContractPaymentMilestones.AsNoTracking()
-            .SingleAsync(x => x.PaymentMilestoneId == milestones[1].PaymentMilestoneId);
-        Assert.Null(beforeFull.AnchorDate);
-
-        var exceeds = await Assert.ThrowsAsync<BusinessRuleException>(() =>
-            service.AddPaymentAsync(ContractId,
-                PaymentRequest(101m, "exceeds", milestones[0].PaymentMilestoneId),
-                AccountantId));
-        Assert.Equal("PaymentExceedsMilestone", exceeds.Code);
-
-        var fullRequest = PaymentRequest(100m, "full",
-            milestones[0].PaymentMilestoneId);
-        fullRequest.PaymentDate = latestPaymentDate.AddDays(-2);
-        await service.AddPaymentAsync(ContractId, fullRequest, AccountantId);
+        var paid = await service.SetPaymentMilestoneStatusAsync(
+            ContractId, VersionId, milestones[0].PaymentMilestoneId,
+            StatusRequest(ContractPaymentMilestoneStatus.Paid), AccountantId);
         var activated = await context.TblContractPaymentMilestones.AsNoTracking()
             .SingleAsync(x => x.PaymentMilestoneId == milestones[1].PaymentMilestoneId);
-        Assert.Equal(latestPaymentDate, activated.AnchorDate);
-        Assert.Equal(latestPaymentDate.AddDays(5), activated.DueDate);
+
+        Assert.Equal(ContractPaymentMilestoneStatus.Paid, paid.PaymentStatus);
+        Assert.Equal(DateTime.UtcNow.Date, activated.AnchorDate);
+        Assert.Equal(DateTime.UtcNow.Date.AddDays(5), activated.DueDate);
+        var readiness = await service.GetReadinessAsync(ContractId, AccountantId);
+        Assert.Equal(400m, readiness.PaidAmount);
+        Assert.False(readiness.Ready);
+
+        await service.SetPaymentMilestoneStatusAsync(
+            ContractId, VersionId, milestones[1].PaymentMilestoneId,
+            StatusRequest(ContractPaymentMilestoneStatus.Paid), AccountantId);
+        var finalReadiness = await service.GetReadinessAsync(
+            ContractId, AccountantId);
+        Assert.Equal(ContractTotal, finalReadiness.PaidAmount);
+        Assert.True(finalReadiness.Ready);
     }
 
     [Fact]
@@ -244,9 +241,9 @@ public sealed class ContractCompletionServicePhase10Tests
             (PaymentDueAnchor.PreviousMilestonePaid, 5, 300m));
 
         await CreateService(context, new TrackingPrivateStorage())
-            .AddPaymentAsync(ContractId,
-                PaymentRequest(400m, "first-paid", milestones[0].PaymentMilestoneId),
-                AccountantId);
+            .SetPaymentMilestoneStatusAsync(ContractId, VersionId,
+                milestones[0].PaymentMilestoneId,
+                StatusRequest(ContractPaymentMilestoneStatus.Paid), AccountantId);
 
         var third = await context.TblContractPaymentMilestones.AsNoTracking()
             .SingleAsync(x => x.PaymentMilestoneId == milestones[2].PaymentMilestoneId);
@@ -255,33 +252,170 @@ public sealed class ContractCompletionServicePhase10Tests
     }
 
     [Fact]
-    public async Task ManualAnchor_RequiresManualMilestone_ComputesBusinessDays_AndAuditsReason()
+    public async Task RevertingMilestone_BlocksPaidDownstream_ThenClearsDependentDate()
+    {
+        await using var context = CreateContext();
+        await SeedAsync(context, ContractStatus.Signed, includeAcceptance: true);
+        var milestones = await SeedPaymentMilestonesAsync(context,
+            (PaymentDueAnchor.ContractSigned, 0, 400m),
+            (PaymentDueAnchor.PreviousMilestonePaid, 5, 600m));
+        var service = CreateService(context, new TrackingPrivateStorage());
+
+        await service.SetPaymentMilestoneStatusAsync(
+            ContractId, VersionId, milestones[0].PaymentMilestoneId,
+            StatusRequest(ContractPaymentMilestoneStatus.Paid), AccountantId);
+        await service.SetPaymentMilestoneStatusAsync(
+            ContractId, VersionId, milestones[1].PaymentMilestoneId,
+            StatusRequest(ContractPaymentMilestoneStatus.Paid), AccountantId);
+
+        var blocked = await Assert.ThrowsAsync<BusinessRuleException>(() =>
+            service.SetPaymentMilestoneStatusAsync(
+                ContractId, VersionId, milestones[0].PaymentMilestoneId,
+                StatusRequest(ContractPaymentMilestoneStatus.Unpaid), AccountantId));
+        Assert.Equal("PaymentMilestoneDownstreamPaid", blocked.Code);
+
+        await service.SetPaymentMilestoneStatusAsync(
+            ContractId, VersionId, milestones[1].PaymentMilestoneId,
+            StatusRequest(ContractPaymentMilestoneStatus.Unpaid), AccountantId);
+        await service.SetPaymentMilestoneStatusAsync(
+            ContractId, VersionId, milestones[0].PaymentMilestoneId,
+            StatusRequest(ContractPaymentMilestoneStatus.Unpaid), AccountantId);
+
+        var next = await context.TblContractPaymentMilestones.AsNoTracking()
+            .SingleAsync(x => x.PaymentMilestoneId == milestones[1].PaymentMilestoneId);
+        Assert.Null(next.AnchorDate);
+        Assert.Null(next.DueDate);
+        Assert.Null(next.PaidAt);
+        Assert.Null(next.PaidByEmployeeId);
+    }
+
+    [Fact]
+    public async Task MilestoneStatus_WritesAuditMetadata_AndRepeatedStatusIsIdempotent()
     {
         await using var context = CreateContext();
         await SeedAsync(context, ContractStatus.Signed, includeAcceptance: true);
         var milestone = Assert.Single(await SeedPaymentMilestonesAsync(context,
-            (PaymentDueAnchor.Manual, 1, ContractTotal)));
-        var anchor = new DateTime(2026, 9, 4);
-        var request = new SetContractPaymentMilestoneManualAnchorRequest
-        {
-            CurrentVersionId = VersionId,
-            ContractRowVersion = Encode(InitialRowVersion),
-            VersionRowVersion = Encode(InitialRowVersion),
-            MilestoneRowVersion = Encode(InitialRowVersion),
-            AnchorDate = anchor,
-            Reason = "Biên bản xác nhận điều kiện đã hoàn thành."
-        };
+            (PaymentDueAnchor.ContractSigned, 0, ContractTotal)));
+        var service = CreateService(context, new TrackingPrivateStorage());
 
-        var response = await CreateService(context, new TrackingPrivateStorage())
-            .SetPaymentMilestoneManualAnchorAsync(ContractId, VersionId,
-                milestone.PaymentMilestoneId, request, AccountantId);
+        var first = await service.SetPaymentMilestoneStatusAsync(
+            ContractId, VersionId, milestone.PaymentMilestoneId,
+            StatusRequest(ContractPaymentMilestoneStatus.Paid), AccountantId);
+        var repeatedRequest = StatusRequest(ContractPaymentMilestoneStatus.Paid);
+        repeatedRequest.MilestoneRowVersion = first.RowVersion;
+        var repeated = await service.SetPaymentMilestoneStatusAsync(
+            ContractId, VersionId, milestone.PaymentMilestoneId,
+            repeatedRequest, AccountantId);
 
-        Assert.Equal(anchor, response.AnchorDate);
-        Assert.Equal(new DateTime(2026, 9, 7), response.DueDate);
-        var audit = await context.TblContractAudits.AsNoTracking().SingleAsync(
-            item => item.ActionType == ContractAuditActionTypes.PaymentMilestoneAnchored);
-        Assert.Equal(request.Reason, audit.Reason);
+        Assert.Equal(ContractPaymentMilestoneStatus.Paid, repeated.PaymentStatus);
+        Assert.NotNull(repeated.PaidAt);
+        Assert.Equal(AccountantId, repeated.PaidByEmployeeId);
+        var audits = await context.TblContractAudits.AsNoTracking()
+            .Where(x => x.ActionType ==
+                ContractAuditActionTypes.PaymentMilestoneStatusChanged)
+            .ToListAsync();
+        var audit = Assert.Single(audits);
+        Assert.Equal(AccountantId, audit.ActorEmployeeId);
         Assert.Equal(milestone.PaymentMilestoneId, audit.SubjectId);
+        Assert.Contains("PaymentStatus", audit.NewValuesJson);
+    }
+
+    [Fact]
+    public async Task MilestoneStatus_RejectsUnauthorizedActor_WithoutMutation()
+    {
+        await using var context = CreateContext();
+        await SeedAsync(context, ContractStatus.Signed);
+        var milestone = Assert.Single(await SeedPaymentMilestonesAsync(context,
+            (PaymentDueAnchor.ContractSigned, 0, ContractTotal)));
+
+        var exception = await Assert.ThrowsAsync<RbacOperationException>(() =>
+            CreateService(context, new TrackingPrivateStorage())
+                .SetPaymentMilestoneStatusAsync(
+                    ContractId, VersionId, milestone.PaymentMilestoneId,
+                    StatusRequest(ContractPaymentMilestoneStatus.Paid), OwnerId));
+
+        Assert.Equal(AuthorizationErrorCodes.PermissionDenied, exception.Code);
+        var stored = await context.TblContractPaymentMilestones.AsNoTracking()
+            .SingleAsync();
+        Assert.Equal((byte)ContractPaymentMilestoneStatus.Unpaid,
+            stored.PaymentStatus);
+        Assert.DoesNotContain(context.TblContractAudits,
+            x => x.ActionType == ContractAuditActionTypes.PaymentMilestoneStatusChanged);
+    }
+
+    [Theory]
+    [InlineData(ContractStatus.Draft)]
+    [InlineData(ContractStatus.Completed)]
+    public async Task MilestoneStatus_RejectsContractOutsideSigned(
+        ContractStatus status)
+    {
+        await using var context = CreateContext();
+        await SeedAsync(context, status);
+        var milestone = Assert.Single(await SeedPaymentMilestonesAsync(context,
+            (PaymentDueAnchor.ContractSigned, 0, ContractTotal)));
+
+        var exception = await Assert.ThrowsAsync<BusinessRuleException>(() =>
+            CreateService(context, new TrackingPrivateStorage())
+                .SetPaymentMilestoneStatusAsync(
+                    ContractId, VersionId, milestone.PaymentMilestoneId,
+                    StatusRequest(ContractPaymentMilestoneStatus.Paid), AccountantId));
+
+        Assert.Equal("ContractMustBeSigned", exception.Code);
+        Assert.Equal((byte)ContractPaymentMilestoneStatus.Unpaid,
+            (await context.TblContractPaymentMilestones.AsNoTracking()
+                .SingleAsync()).PaymentStatus);
+    }
+
+    [Fact]
+    public async Task MilestoneStatus_StaleRowVersion_DoesNotChangeState()
+    {
+        await using var context = CreateContext();
+        await SeedAsync(context, ContractStatus.Signed);
+        var milestone = Assert.Single(await SeedPaymentMilestonesAsync(context,
+            (PaymentDueAnchor.ContractSigned, 0, ContractTotal)));
+        var request = StatusRequest(ContractPaymentMilestoneStatus.Paid);
+        request.MilestoneRowVersion = Convert.ToBase64String(
+            [8, 7, 6, 5, 4, 3, 2, 1]);
+
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() =>
+            CreateService(context, new TrackingPrivateStorage())
+                .SetPaymentMilestoneStatusAsync(
+                    ContractId, VersionId, milestone.PaymentMilestoneId,
+                    request, AccountantId));
+
+        Assert.Equal((byte)ContractPaymentMilestoneStatus.Unpaid,
+            (await context.TblContractPaymentMilestones.AsNoTracking()
+                .SingleAsync()).PaymentStatus);
+        Assert.DoesNotContain(context.TblContractAudits,
+            x => x.ActionType == ContractAuditActionTypes.PaymentMilestoneStatusChanged);
+    }
+
+    [Fact]
+    public async Task StructuredDetail_HidesLegacyLedger_AndDerivesOverdueState()
+    {
+        await using var context = CreateContext();
+        await SeedAsync(context, ContractStatus.Signed, includeAcceptance: true,
+            activePayments: [ContractTotal]);
+        var milestone = Assert.Single(await SeedPaymentMilestonesAsync(context,
+            (PaymentDueAnchor.ContractSigned, 0, ContractTotal)));
+        var stored = await context.TblContractPaymentMilestones
+            .SingleAsync(x => x.PaymentMilestoneId == milestone.PaymentMilestoneId);
+        stored.AnchorDate = DateTime.UtcNow.Date.AddDays(-2);
+        stored.DueDate = DateTime.UtcNow.Date.AddDays(-1);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var detail = await CreateService(context, new TrackingPrivateStorage())
+            .GetAsync(ContractId, AccountantId);
+
+        Assert.Empty(detail.Payments);
+        var response = Assert.Single(detail.PaymentMilestones);
+        Assert.Equal(ContractPaymentMilestoneStatus.Unpaid,
+            response.PaymentStatus);
+        Assert.True(response.IsOverdue);
+        Assert.Equal(0m, detail.Readiness.PaidAmount);
+        Assert.Equal(ContractTotal, detail.Readiness.RemainingAmount);
+        Assert.False(detail.Readiness.Ready);
     }
 
     [Fact]
@@ -693,14 +827,12 @@ public sealed class ContractCompletionServicePhase10Tests
 
     private static AddContractPaymentRequest PaymentRequest(
         decimal amount,
-        string referenceCode,
-        int? paymentMilestoneId = null) => new()
+        string referenceCode) => new()
         {
             CurrentVersionId = VersionId,
             ContractRowVersion = Encode(InitialRowVersion),
             VersionRowVersion = Encode(InitialRowVersion),
             PaymentDate = DateTime.UtcNow.Date,
-            PaymentMilestoneId = paymentMilestoneId,
             Amount = amount,
             CurrencyCode = "VND",
             PaymentMethod = "BankTransfer",
@@ -736,10 +868,10 @@ public sealed class ContractCompletionServicePhase10Tests
             PaymentPercent = value.Amount / ContractTotal * 100m,
             DueAnchor = (byte)value.Anchor,
             DueOffsetDays = value.OffsetDays,
-            DayCountMode = (byte)(value.Anchor == PaymentDueAnchor.Manual
+            DayCountMode = (byte)(value.Anchor == PaymentDueAnchor.ManualDate
                 ? PaymentDayCountMode.BusinessDays
                 : PaymentDayCountMode.CalendarDays),
-            ConditionVi = value.Anchor == PaymentDueAnchor.Manual
+            ConditionVi = value.Anchor == PaymentDueAnchor.ManualDate
                 ? "Theo xác nhận thủ công"
                 : null,
             DisplayOrder = index + 1,
@@ -763,6 +895,16 @@ public sealed class ContractCompletionServicePhase10Tests
             PaymentRowVersion = Encode(rowVersion),
             Reason = reason
         };
+
+    private static SetContractPaymentMilestoneStatusRequest StatusRequest(
+        ContractPaymentMilestoneStatus status) => new()
+    {
+        CurrentVersionId = VersionId,
+        ContractRowVersion = Encode(InitialRowVersion),
+        VersionRowVersion = Encode(InitialRowVersion),
+        MilestoneRowVersion = Encode(InitialRowVersion),
+        Status = status
+    };
 
     private static CompleteContractRequest CompleteRequest() => new()
     {

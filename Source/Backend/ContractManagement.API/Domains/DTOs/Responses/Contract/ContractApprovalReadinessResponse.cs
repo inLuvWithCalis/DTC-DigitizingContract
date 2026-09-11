@@ -16,6 +16,8 @@ public static class ContractApprovalReadinessCodes
         "BilingualItemNameRequired";
     public const string BilingualTermTitleRequired =
         "BilingualTermTitleRequired";
+    public const string ManualPaymentMilestoneDateRequired =
+        "ManualPaymentMilestoneDateRequired";
 }
 
 public sealed class ContractApprovalReadinessResponse

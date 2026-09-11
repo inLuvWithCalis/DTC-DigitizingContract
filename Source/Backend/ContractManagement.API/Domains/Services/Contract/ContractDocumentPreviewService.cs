@@ -456,18 +456,7 @@ public sealed class ContractDocumentPreviewService :
             })
             .ToArray();
 
-        var structuredPayments = terms.SelectMany(term => term.PaymentMilestones)
-            .Select(item => new ContractTemplateRenderPayment(
-                item.No,
-                BuildMilestoneDescription(item,
-                    (ContractLanguageMode)contract.LanguageMode),
-                $"{item.PaymentPercent:0.####}%", item.Amount,
-                BuildMilestoneDueCondition(item,
-                    (ContractLanguageMode)contract.LanguageMode)))
-            .ToArray();
-        var payments = structuredPayments.Length > 0
-            ? structuredPayments
-            : paymentSchedules.Select((payment, index) =>
+        var payments = paymentSchedules.Select((payment, index) =>
         {
             var amount = Convert.ToDecimal(payment.Amount);
             var percent = version.TotalAmount > 0
@@ -529,73 +518,6 @@ public sealed class ContractDocumentPreviewService :
             ? item.ItemNameEn
             : $"{item.ItemNameEn} — {item.ItemDescriptionEn}";
         return $"{vietnamese} / {english}";
-    }
-
-    private static string BuildMilestoneDescription(
-        ContractTemplateRenderPaymentMilestone item,
-        ContractLanguageMode languageMode)
-    {
-        if (languageMode != ContractLanguageMode.Bilingual
-            || string.IsNullOrWhiteSpace(item.TitleEn))
-            return item.TitleVi;
-        return $"{item.TitleVi} / {item.TitleEn.Trim()}";
-    }
-
-    private static string BuildMilestoneDueCondition(
-        ContractTemplateRenderPaymentMilestone item,
-        ContractLanguageMode languageMode)
-    {
-        var vietnamese = item.DueDate.HasValue
-            ? $"Hạn thanh toán {item.DueDate:dd/MM/yyyy}"
-            : BuildMilestoneDueRule(item, english: false);
-        if (languageMode != ContractLanguageMode.Bilingual)
-            return vietnamese;
-
-        var english = item.DueDate.HasValue
-            ? $"Due date {item.DueDate:dd/MM/yyyy}"
-            : BuildMilestoneDueRule(item, english: true);
-        return $"{vietnamese} / {english}";
-    }
-
-    private static string BuildMilestoneDueRule(
-        ContractTemplateRenderPaymentMilestone item,
-        bool english)
-    {
-        var anchor = english
-            ? item.DueAnchor switch
-            {
-                PaymentDueAnchor.ContractSigned => "the contract signing date",
-                PaymentDueAnchor.ContractEffectiveDate => "the effective date",
-                PaymentDueAnchor.AcceptanceCompleted => "acceptance completion",
-                PaymentDueAnchor.PreviousMilestonePaid =>
-                    "full payment of the previous installment",
-                _ => "the manually confirmed milestone"
-            }
-            : item.DueAnchor switch
-            {
-                PaymentDueAnchor.ContractSigned => "ngày ký hợp đồng",
-                PaymentDueAnchor.ContractEffectiveDate =>
-                    "ngày hợp đồng có hiệu lực",
-                PaymentDueAnchor.AcceptanceCompleted =>
-                    "ngày hoàn tất nghiệm thu",
-                PaymentDueAnchor.PreviousMilestonePaid =>
-                    "ngày thanh toán đủ đợt trước",
-                _ => "mốc được xác nhận thủ công"
-            };
-        var condition = english ? item.ConditionEn : item.ConditionVi;
-        var dayLabel = english
-            ? item.DayCountMode == PaymentDayCountMode.BusinessDays
-                ? "business days"
-                : "days"
-            : item.DayCountMode == PaymentDayCountMode.BusinessDays
-                ? "ngày làm việc"
-                : "ngày";
-        var rule = english
-            ? $"Within {item.DueOffsetDays} {dayLabel} from {anchor}"
-            : $"Trong vòng {item.DueOffsetDays} {dayLabel} kể từ {anchor}";
-        return string.IsNullOrWhiteSpace(condition)
-            ? rule
-            : $"{rule}; {condition.Trim()}";
     }
 
     private static string FormatDate(DateTime value) =>

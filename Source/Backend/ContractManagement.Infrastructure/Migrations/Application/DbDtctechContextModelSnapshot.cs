@@ -1775,8 +1775,19 @@ namespace ContractManagement.Migrations
                         .IsUnicode(false)
                         .HasColumnType("varchar(100)");
 
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("PaidByEmployeeId")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("PaymentPercent")
                         .HasColumnType("decimal(9,4)");
+
+                    b.Property<byte>("PaymentStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint")
+                        .HasDefaultValue((byte)0);
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -1810,6 +1821,8 @@ namespace ContractManagement.Migrations
 
                     b.HasKey("PaymentMilestoneId");
 
+                    b.HasIndex("PaidByEmployeeId");
+
                     b.HasIndex("TermId");
 
                     b.HasIndex("VersionId", "MilestoneCode")
@@ -1826,6 +1839,10 @@ namespace ContractManagement.Migrations
                             t.HasCheckConstraint("CK_tbl_ContractPaymentMilestone_DueAnchor", "[DueAnchor] IN (1, 2, 3, 4, 5)");
 
                             t.HasCheckConstraint("CK_tbl_ContractPaymentMilestone_DueOffset", "[DueOffsetDays] >= 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractPaymentMilestone_PaidMetadata", "([PaymentStatus] = 0 AND [PaidAt] IS NULL AND [PaidByEmployeeId] IS NULL) OR ([PaymentStatus] = 1 AND [PaidAt] IS NOT NULL AND [PaidByEmployeeId] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_tbl_ContractPaymentMilestone_PaymentStatus", "[PaymentStatus] IN (0, 1)");
 
                             t.HasCheckConstraint("CK_tbl_ContractPaymentMilestone_Percent", "[PaymentPercent] > 0 AND [PaymentPercent] <= 100");
                         });
@@ -4283,6 +4300,11 @@ namespace ContractManagement.Migrations
                         .HasForeignKey("ContractId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblEmployee", null)
+                        .WithMany()
+                        .HasForeignKey("PaidByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTerm", null)
                         .WithMany()

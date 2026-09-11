@@ -654,6 +654,8 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
         ContractAuditActionTypes.AcceptanceEvidenceUploaded,
         ContractAuditActionTypes.PaymentAdded,
         ContractAuditActionTypes.PaymentVoided,
+        ContractAuditActionTypes.PaymentMilestoneAnchored,
+        ContractAuditActionTypes.PaymentMilestoneStatusChanged,
         ContractAuditActionTypes.ContractCompleted,
         ContractAuditActionTypes.ContractAttachmentUploaded,
         ContractAuditActionTypes.ContractAttachmentDeleted,

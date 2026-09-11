@@ -9,6 +9,7 @@ public sealed class TblContractPaymentLedger
     public int ContractPaymentId { get; set; }
     public int ContractId { get; set; }
     public int VersionId { get; set; }
+    public int? PaymentMilestoneId { get; set; }
     public DateTime PaymentDate { get; set; }
     public decimal Amount { get; set; }
     public string CurrencyCode { get; set; } = "VND";

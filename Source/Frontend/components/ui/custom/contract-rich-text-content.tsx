@@ -3,6 +3,7 @@ import { Fragment } from "react";
 import { cn } from "@/lib/utils";
 import {
   parseContractRichText,
+  type ContractRichTextAlignment,
   type ContractRichTextRun,
 } from "@/lib/contract-rich-text";
 
@@ -36,6 +37,13 @@ const RichRuns = ({ runs }: { runs: ContractRichTextRun[] }) =>
     );
   });
 
+const alignmentClass = (alignment?: ContractRichTextAlignment) =>
+  alignment === "center"
+    ? "text-center"
+    : alignment === "right"
+      ? "text-right"
+      : "text-left";
+
 export function ContractRichTextContent({
   value,
   emptyText = "Chưa có nội dung",
@@ -56,7 +64,7 @@ export function ContractRichTextContent({
     <div className={cn("space-y-2 text-sm leading-6", className)}>
       {document.blocks.map((block, blockIndex) =>
         block.type === "paragraph" ? (
-          <p key={blockIndex} className="min-h-[1lh] whitespace-pre-wrap">
+          <p key={blockIndex} className={cn("min-h-[1lh] whitespace-pre-wrap", alignmentClass(block.alignment))}>
             <RichRuns runs={block.runs} />
           </p>
         ) : (
@@ -70,7 +78,14 @@ export function ContractRichTextContent({
                         key={cellIndex}
                         className="min-w-24 border border-border px-2 py-1.5 align-top"
                       >
-                        <RichRuns runs={cell.runs} />
+                        {cell.paragraphs.map((paragraph, paragraphIndex) => (
+                          <p
+                            key={paragraphIndex}
+                            className={cn("min-h-[1lh] whitespace-pre-wrap", alignmentClass(paragraph.alignment))}
+                          >
+                            <RichRuns runs={paragraph.runs} />
+                          </p>
+                        ))}
                       </td>
                     ))}
                   </tr>

@@ -9,11 +9,18 @@ public interface IContractCompletionService
         int contractId, int employeeId, CancellationToken cancellationToken = default);
     Task<ContractCompletionReadinessResponse> GetReadinessAsync(
         int contractId, int employeeId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ContractPaymentMilestoneResponse>> GetPaymentMilestonesAsync(
+        int contractId, int versionId, int employeeId,
+        CancellationToken cancellationToken = default);
     Task<ContractAcceptanceEvidenceResponse> UploadAcceptanceAsync(
         int contractId, UploadContractAcceptanceEvidenceRequest request,
         int employeeId, CancellationToken cancellationToken = default);
     Task<ContractPaymentResponse> AddPaymentAsync(
         int contractId, AddContractPaymentRequest request,
+        int employeeId, CancellationToken cancellationToken = default);
+    Task<ContractPaymentMilestoneResponse> SetPaymentMilestoneManualAnchorAsync(
+        int contractId, int versionId, int milestoneId,
+        SetContractPaymentMilestoneManualAnchorRequest request,
         int employeeId, CancellationToken cancellationToken = default);
     Task<ContractPaymentResponse> VoidPaymentAsync(
         int contractId, int paymentId, VoidContractPaymentRequest request,

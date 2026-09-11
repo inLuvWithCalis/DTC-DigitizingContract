@@ -15,7 +15,15 @@ import { ContractRichTextContent } from "@/components/ui/custom/contract-rich-te
 import { ContractRichTextEditor } from "@/components/ui/custom/contract-rich-text-editor";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { ContractTermKind } from "@/services/contract-template-api";
 
 export type ContractTermEditableField =
   | "termTitle"
@@ -32,6 +40,7 @@ export interface ContractTermCardValue {
   termContentEn?: string | null;
   isNegotiable: boolean;
   displayOrder: number;
+  termKind?: ContractTermKind;
 }
 
 interface ContractTermCardProps {
@@ -48,6 +57,7 @@ interface ContractTermCardProps {
     field: ContractTermEditableField,
     value: string | boolean,
   ) => void;
+  onKindChange?: (value: ContractTermKind) => void;
   onMove?: (direction: -1 | 1) => void;
   onRemove?: () => void;
   children?: ReactNode;
@@ -64,6 +74,7 @@ export function ContractTermCard({
   englishTitlePlaceholder = "English term title",
   englishContentPlaceholder = "English term content",
   onChange,
+  onKindChange,
   onMove,
   onRemove,
   children,
@@ -96,6 +107,9 @@ export function ContractTermCard({
           <span className="font-mono text-xs text-muted-foreground">
             {term.termCode}
           </span>
+          {term.termKind === ContractTermKind.Payment && (
+            <Badge>Thanh toán theo đợt</Badge>
+          )}
         </div>
 
         {editable && (
@@ -142,6 +156,29 @@ export function ContractTermCard({
 
       {editable ? (
         <div className="grid gap-4">
+          {onKindChange && (
+            <div className="space-y-2">
+              <Label htmlFor={`term-kind-${inputId}`}>Loại điều khoản</Label>
+              <Select
+                value={String(term.termKind ?? ContractTermKind.General)}
+                onValueChange={(value) =>
+                  onKindChange(Number(value) as ContractTermKind)
+                }
+              >
+                <SelectTrigger id={`term-kind-${inputId}`} className="w-full">
+                  <SelectValue placeholder="Chọn loại điều khoản" />
+                </SelectTrigger>
+                <SelectContent showSearch={false}>
+                  <SelectItem value={String(ContractTermKind.General)}>
+                    Điều khoản thường
+                  </SelectItem>
+                  <SelectItem value={String(ContractTermKind.Payment)}>
+                    Điều khoản thanh toán
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor={`term-title-${inputId}`}>
               Tiêu đề điều khoản <span className="text-destructive">*</span>

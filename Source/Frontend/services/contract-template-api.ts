@@ -1,5 +1,10 @@
 import axiosClient from "@/lib/axios-interceptor";
-import { ContractLanguageMode } from "@/services/contract-api";
+import {
+  ContractLanguageMode,
+  ContractTermKind,
+} from "@/services/contract-api";
+
+export { ContractTermKind } from "@/services/contract-api";
 
 export enum TemplateDocumentType {
   Quotation = 1,
@@ -23,6 +28,19 @@ export enum TemplateValidationStatus {
   NotValidated = 0,
   Valid = 1,
   Invalid = 2,
+}
+
+export enum PaymentDueAnchor {
+  ContractSigned = 1,
+  ContractEffectiveDate = 2,
+  AcceptanceCompleted = 3,
+  PreviousMilestonePaid = 4,
+  Manual = 5,
+}
+
+export enum PaymentDayCountMode {
+  CalendarDays = 1,
+  BusinessDays = 2,
 }
 
 export enum TemplatePlaceholderDataKind {
@@ -128,6 +146,7 @@ export interface RetireContractTemplateVersionRequest {
 }
 
 export interface CreateContractTemplateTermRequest {
+  termKind: ContractTermKind;
   termCode: string;
   termTitle: string;
   termTitleEn?: string | null;
@@ -271,6 +290,8 @@ export interface AvailableContractTemplateTermResponse {
   termContentEn?: string | null;
   isNegotiable: boolean;
   displayOrder: number;
+  termKind: ContractTermKind;
+  paymentMilestones: ContractTemplatePaymentMilestoneResponse[];
 }
 
 export interface AvailableContractTemplateVersionDetailResponse
@@ -314,6 +335,8 @@ export interface ContractTemplateTermResponse {
   termContentEn?: string | null;
   isNegotiable: boolean;
   displayOrder: number;
+  termKind: ContractTermKind;
+  paymentMilestones: ContractTemplatePaymentMilestoneResponse[];
   createdEmployeeId: number;
   createdDate: string;
   updatedEmployeeId?: number | null;
@@ -333,6 +356,37 @@ export interface ContractTemplateLegalBasisResponse {
   updatedEmployeeId?: number | null;
   updatedDate?: string | null;
   rowVersion: string;
+}
+
+export interface ContractTemplatePaymentMilestoneResponse {
+  templatePaymentMilestoneId: number;
+  templateVersionId: number;
+  templateTermId: number;
+  milestoneCode: string;
+  titleVi: string;
+  titleEn?: string | null;
+  paymentPercent: number;
+  dueAnchor: PaymentDueAnchor;
+  dueOffsetDays: number;
+  dayCountMode: PaymentDayCountMode;
+  conditionVi?: string | null;
+  conditionEn?: string | null;
+  displayOrder: number;
+  rowVersion: string;
+}
+
+export interface SaveContractTemplatePaymentMilestoneRequest {
+  milestoneCode: string;
+  titleVi: string;
+  titleEn?: string | null;
+  paymentPercent: number;
+  dueAnchor: PaymentDueAnchor;
+  dueOffsetDays: number;
+  dayCountMode: PaymentDayCountMode;
+  conditionVi?: string | null;
+  conditionEn?: string | null;
+  displayOrder: number;
+  versionRowVersion: string;
 }
 
 export interface ContractTemplateVersionDetailResponse {
@@ -534,6 +588,54 @@ export const contractTemplateApi = {
     axiosClient.delete<unknown, { versionId: number; termId: number }>(
       `${BASE_URL}/versions/${versionId}/terms/${termId}`,
       { data },
+    ),
+
+  addPaymentMilestone: (
+    versionId: number,
+    termId: number,
+    data: SaveContractTemplatePaymentMilestoneRequest,
+  ) =>
+    axiosClient.post<unknown, ContractTemplatePaymentMilestoneResponse>(
+      `${BASE_URL}/versions/${versionId}/terms/${termId}/payment-milestones`,
+      data,
+    ),
+
+  updatePaymentMilestone: (
+    versionId: number,
+    termId: number,
+    milestoneId: number,
+    data: SaveContractTemplatePaymentMilestoneRequest & { rowVersion: string },
+  ) =>
+    axiosClient.put<unknown, ContractTemplatePaymentMilestoneResponse>(
+      `${BASE_URL}/versions/${versionId}/terms/${termId}/payment-milestones/${milestoneId}`,
+      data,
+    ),
+
+  deletePaymentMilestone: (
+    versionId: number,
+    termId: number,
+    milestoneId: number,
+    rowVersion: string,
+    versionRowVersion: string,
+  ) =>
+    axiosClient.delete(
+      `${BASE_URL}/versions/${versionId}/terms/${termId}/payment-milestones/${milestoneId}`,
+      { data: { rowVersion, versionRowVersion } },
+    ),
+
+  reorderPaymentMilestones: (
+    versionId: number,
+    termId: number,
+    versionRowVersion: string,
+    milestones: Array<{
+      milestoneId: number;
+      rowVersion: string;
+      displayOrder: number;
+    }>,
+  ) =>
+    axiosClient.put<unknown, ContractTemplateVersionDetailResponse>(
+      `${BASE_URL}/versions/${versionId}/terms/${termId}/payment-milestones/order`,
+      { versionRowVersion, milestones },
     ),
 
   addLegalBasis: (

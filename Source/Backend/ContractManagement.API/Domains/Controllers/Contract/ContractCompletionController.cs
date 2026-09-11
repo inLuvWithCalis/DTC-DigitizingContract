@@ -25,6 +25,12 @@ public sealed class ContractCompletionController : ControllerBase
     public async Task<IActionResult> Readiness(int contractId, CancellationToken ct) =>
         Ok(ApiResponse<ContractCompletionReadinessResponse>.Ok(await _service.GetReadinessAsync(contractId, EmployeeId(), ct)));
 
+    [HttpGet("versions/{versionId:int}/payment-milestones")]
+    public async Task<IActionResult> GetPaymentMilestones(int contractId, int versionId,
+        CancellationToken ct) =>
+        Ok(ApiResponse<IReadOnlyList<ContractPaymentMilestoneResponse>>.Ok(
+            await _service.GetPaymentMilestonesAsync(contractId, versionId, EmployeeId(), ct)));
+
     [HttpPost("acceptance-evidence")]
     [SessionAuthorize(RbacPermissions.ContractAcceptanceManage)]
     [Consumes("multipart/form-data")]
@@ -36,6 +42,17 @@ public sealed class ContractCompletionController : ControllerBase
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> AddPayment(int contractId, [FromForm] AddContractPaymentRequest request, CancellationToken ct) =>
         Ok(ApiResponse<ContractPaymentResponse>.Ok(await _service.AddPaymentAsync(contractId, request, EmployeeId(), ct), "Đã ghi nhận khoản thanh toán."));
+
+    [HttpPost("versions/{versionId:int}/payment-milestones/{milestoneId:int}/manual-anchor")]
+    [SessionAuthorize(RbacPermissions.ContractPaymentManage)]
+    public async Task<IActionResult> SetPaymentMilestoneManualAnchor(
+        int contractId, int versionId, int milestoneId,
+        [FromBody] SetContractPaymentMilestoneManualAnchorRequest request,
+        CancellationToken ct) =>
+        Ok(ApiResponse<ContractPaymentMilestoneResponse>.Ok(
+            await _service.SetPaymentMilestoneManualAnchorAsync(contractId, versionId,
+                milestoneId, request, EmployeeId(), ct),
+            "Đã thiết lập ngày kích hoạt đợt thanh toán."));
 
     [HttpPost("payments/{paymentId:int}/void")]
     [SessionAuthorize(RbacPermissions.ContractPaymentManage)]

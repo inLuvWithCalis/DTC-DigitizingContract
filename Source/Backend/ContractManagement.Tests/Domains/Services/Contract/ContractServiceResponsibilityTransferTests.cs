@@ -988,8 +988,8 @@ public class ContractServiceResponsibilityTransferTests
             int employeeId,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(new ContractSubmissionArtifactRenderResult(
-                "{\"schemaVersion\":4}",
-                4,
+                "{\"schemaVersion\":5}",
+                5,
                 7001,
                 [0x50, 0x4B, 0x03, 0x04, 0x01],
                 "contract-submitted.docx",

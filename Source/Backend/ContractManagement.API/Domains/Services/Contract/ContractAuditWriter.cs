@@ -58,6 +58,8 @@ public sealed class ContractAuditWriter : IContractAuditWriter
                 Fields("AcceptanceEvidenceId", "FileId", "FileType", "Sha256", "CurrentVersionId"),
             [ContractAuditActionTypes.PaymentAdded] = PaymentFields(),
             [ContractAuditActionTypes.PaymentVoided] = PaymentFields(),
+            [ContractAuditActionTypes.PaymentMilestoneAnchored] =
+                Fields("PaymentMilestoneId", "CurrentVersionId", "AnchorDate", "DueDate"),
             [ContractAuditActionTypes.ContractCompleted] =
                 Fields("Status", "CurrentVersionId", "TotalAmount", "PaidAmount"),
             [ContractAuditActionTypes.ContractAttachmentUploaded] =
@@ -358,7 +360,7 @@ public sealed class ContractAuditWriter : IContractAuditWriter
         "FileType", "Sha256", "EvidenceStatus", "SupersedesEvidenceId");
 
     private static HashSet<string> PaymentFields() => Fields(
-        "ContractPaymentId", "CurrentVersionId", "PaymentDate", "Amount",
+        "ContractPaymentId", "PaymentMilestoneId", "CurrentVersionId", "PaymentDate", "Amount",
         "CurrencyCode", "PaymentMethod", "ReferenceCode", "EvidenceFileId",
         "PaymentStatus", "PaidAmount", "RemainingAmount");
 

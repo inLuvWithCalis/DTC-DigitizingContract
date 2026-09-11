@@ -107,6 +107,9 @@ export interface CustomerLookupResponse {
   customerTaxCode?: string | null;
   customerMobile?: string | null;
   customerPhone?: string | null;
+  customerContactPersonName?: string | null;
+  customerContactPersonPhone?: string | null;
+  customerContactPersonTitle?: string | null;
   status?: CustomerStatus | number | null;
 }
 

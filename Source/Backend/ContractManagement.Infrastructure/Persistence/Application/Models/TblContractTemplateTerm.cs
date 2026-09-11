@@ -44,6 +44,9 @@ public partial class TblContractTemplateTerm
     /// </summary>
     public string? TermContentEn { get; set; }
 
+    /// <summary>0: điều khoản thường; 1: điều khoản thanh toán có milestones.</summary>
+    public byte TermKind { get; set; }
+
     /// <summary>
     /// Khách hàng có được gửi comment đàm phán
     /// cho điều khoản này hay không.

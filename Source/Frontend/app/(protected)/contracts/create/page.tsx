@@ -70,6 +70,7 @@ import {
 import {
   calculateContractItemAmounts,
   calculateContractTotals,
+  roundContractMoney,
 } from "@/lib/contract-finance";
 import {
   customerApi,
@@ -88,8 +89,12 @@ import {
 } from "@/services/catalog/services-api";
 import {
   contractTemplateApi,
+  ContractTermKind,
+  PaymentDayCountMode,
+  PaymentDueAnchor,
   TemplateDocumentType,
   type AvailableContractTemplateVersionResponse,
+  type ContractTemplatePaymentMilestoneResponse,
 } from "@/services/contract-template-api";
 import { useAuthStore } from "@/hooks/use-auth-store";
 import { usePermission } from "@/hooks/use-permission";
@@ -209,6 +214,75 @@ const formatCurrency = (amount: number, currencyCode: string) => {
   }).format(amount);
 };
 
+const getPaymentAnchorLabel = (anchor: PaymentDueAnchor) => {
+  switch (anchor) {
+    case PaymentDueAnchor.ContractSigned:
+      return "ngày ký hợp đồng";
+    case PaymentDueAnchor.ContractEffectiveDate:
+      return "ngày hợp đồng có hiệu lực";
+    case PaymentDueAnchor.AcceptanceCompleted:
+      return "ngày hoàn tất nghiệm thu";
+    case PaymentDueAnchor.PreviousMilestonePaid:
+      return "ngày thanh toán đủ đợt trước";
+    default:
+      return "mốc được thiết lập thủ công";
+  }
+};
+
+function PaymentPlanReview({
+  milestones,
+  currencyCode,
+}: {
+  milestones: Array<ContractTemplatePaymentMilestoneResponse & { amount: number }>;
+  currencyCode: string;
+}) {
+  if (milestones.length === 0) return null;
+  return (
+    <div className="space-y-3 rounded-2xl border bg-muted/20 p-4">
+      <div className="flex items-start gap-3">
+        <WalletCards className="mt-0.5 size-5 text-primary" />
+        <div>
+          <p className="font-semibold">Kế hoạch thanh toán theo điều khoản</p>
+          <p className="text-sm text-muted-foreground">
+            Số tiền được tính lại theo tổng giá trị hiện tại. Muốn đổi cấu trúc
+            các đợt, hãy tạo version template mới.
+          </p>
+        </div>
+      </div>
+      <div className="grid gap-2 md:grid-cols-2">
+        {milestones.map((milestone) => (
+          <div
+            key={milestone.templatePaymentMilestoneId}
+            className="rounded-lg border bg-background p-3 text-sm"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <b>{milestone.titleVi}</b>
+              <Badge variant="secondary">{milestone.paymentPercent}%</Badge>
+            </div>
+            <p className="mt-1 font-semibold text-primary">
+              {formatCurrency(milestone.amount, currencyCode)}
+            </p>
+            <p className="mt-1 text-muted-foreground">
+              Trong {milestone.dueOffsetDays} ngày kể từ{" "}
+              {getPaymentAnchorLabel(milestone.dueAnchor)}.
+            </p>
+            {milestone.conditionVi && (
+              <p className="mt-1 text-muted-foreground">
+                {milestone.conditionVi}
+              </p>
+            )}
+            {milestone.dayCountMode === PaymentDayCountMode.BusinessDays && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Ngày làm việc hiện chỉ loại trừ thứ Bảy và Chủ nhật.
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function CreateContractPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
@@ -252,6 +326,9 @@ export default function CreateContractPage() {
   const [contractTerms, setContractTerms] = useState<CreateContractTermDraft[]>(
     [],
   );
+  const [paymentMilestones, setPaymentMilestones] = useState<
+    ContractTemplatePaymentMilestoneResponse[]
+  >([]);
   const [isLoadingTemplateDetail, setIsLoadingTemplateDetail] = useState(false);
   const [templateDetailError, setTemplateDetailError] = useState<string | null>(
     null,
@@ -454,6 +531,7 @@ export default function CreateContractPage() {
   useEffect(() => {
     if (!templateVersionId) {
       setContractTerms([]);
+      setPaymentMilestones([]);
       setTemplateDetailError(null);
       return;
     }
@@ -462,6 +540,7 @@ export default function CreateContractPage() {
     setIsLoadingTemplateDetail(true);
     setTemplateDetailError(null);
     setContractTerms([]);
+    setPaymentMilestones([]);
     contractTemplateApi
       .getAvailableByVersionId(Number(templateVersionId))
       .then((detail) => {
@@ -472,6 +551,7 @@ export default function CreateContractPage() {
               .map((term, index) => ({
                 clientId: `template-${term.templateTermId}`,
                 sourceTemplateTermId: term.templateTermId,
+                termKind: term.termKind,
                 termCode: term.termCode,
                 termTitle: term.termTitle,
                 termTitleEn: term.termTitleEn,
@@ -481,12 +561,19 @@ export default function CreateContractPage() {
                 displayOrder: index + 1,
               })),
           );
+          setPaymentMilestones(
+            detail.terms
+              .filter((term) => term.termKind === ContractTermKind.Payment)
+              .flatMap((term) => term.paymentMilestones)
+              .sort((a, b) => a.displayOrder - b.displayOrder),
+          );
         }
       })
       .catch((error) => {
         if (!cancelled) {
           console.error("Failed to load template terms:", error);
           setContractTerms([]);
+          setPaymentMilestones([]);
           setTemplateDetailError("Không thể tải điều khoản của template.");
         }
       })
@@ -725,6 +812,24 @@ export default function CreateContractPage() {
     [selectedCatalogItems, currencyCode],
   );
   const totalValue = financialTotals.totalPayment;
+  const paymentPlan = useMemo(() => {
+    const calculated = paymentMilestones.map((milestone) =>
+      roundContractMoney(
+        (totalValue * milestone.paymentPercent) / 100,
+        currencyCode,
+      ),
+    );
+    const allocatedBeforeLast = calculated
+      .slice(0, -1)
+      .reduce((sum, amount) => sum + amount, 0);
+    return paymentMilestones.map((milestone, index) => ({
+      ...milestone,
+      amount:
+        index === paymentMilestones.length - 1
+          ? totalValue - allocatedBeforeLast
+          : calculated[index],
+    }));
+  }, [currencyCode, paymentMilestones, totalValue]);
 
   const progressValue = ((currentStep + 1) / steps.length) * 100;
 
@@ -963,6 +1068,7 @@ export default function CreateContractPage() {
         items: itemsPayload,
         terms: contractTerms.map<CreateContractTermRequest>((term, index) => ({
           sourceTemplateTermId: term.sourceTemplateTermId ?? null,
+          termKind: term.termKind,
           termCode: term.termCode.trim().toUpperCase(),
           termTitle: term.termTitle.trim(),
           termTitleEn: term.termTitleEn?.trim() || null,
@@ -1206,6 +1312,21 @@ export default function CreateContractPage() {
                         </Button>
                       )}
                     </div>
+                    {selectedCustomer &&
+                      (selectedCustomer.customerContactPersonName ||
+                        selectedCustomer.customerContactPersonPhone) && (
+                        <p className="text-xs text-muted-foreground">
+                          Người liên hệ:{" "}
+                          <span className="font-medium text-foreground">
+                            {selectedCustomer.customerContactPersonName ||
+                              "Chưa có"}
+                          </span>
+                          {selectedCustomer.customerContactPersonTitle &&
+                            ` (${selectedCustomer.customerContactPersonTitle})`}
+                          {selectedCustomer.customerContactPersonPhone &&
+                            ` · SĐT: ${selectedCustomer.customerContactPersonPhone}`}
+                        </p>
+                      )}
                   </div>
 
                   <div className="space-y-2">
@@ -2041,6 +2162,10 @@ export default function CreateContractPage() {
                         }
                         onChange={setContractTerms}
                       />
+                      <PaymentPlanReview
+                        milestones={paymentPlan}
+                        currencyCode={currencyCode}
+                      />
                       {contractTermsValidationError &&
                         contractTerms.length > 0 && (
                           <Alert variant="destructive">
@@ -2091,10 +2216,10 @@ export default function CreateContractPage() {
                           Khách hàng
                         </p>
                         <p className="font-semibold">
-                          {selectedCustomer?.customerCompany || "Chưa chọn"}
+                          {selectedCustomer?.customerFullName || "Chưa chọn"}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          {selectedCustomer?.customerFullName}
+                          Tên công ty: {selectedCustomer?.customerCompany}
                         </p>
                         <p className="text-sm text-muted-foreground">
                           Mã KH: {selectedCustomer?.customerCode || "Chưa có"}
@@ -2106,6 +2231,21 @@ export default function CreateContractPage() {
                           Điện thoại:{" "}
                           {selectedCustomer?.customerMobile ||
                             selectedCustomer?.customerPhone ||
+                            "Chưa có"}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Người liên hệ:{" "}
+                          {selectedCustomer?.customerContactPersonName ||
+                            "Chưa có"}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Chức danh liên hệ:{" "}
+                          {selectedCustomer?.customerContactPersonTitle ||
+                            "Chưa có"}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Điện thoại liên hệ:{" "}
+                          {selectedCustomer?.customerContactPersonPhone ||
                             "Chưa có"}
                         </p>
                       </div>
@@ -2166,6 +2306,15 @@ export default function CreateContractPage() {
                     </div>
 
                     <Separator className="my-5" />
+
+                    <PaymentPlanReview
+                      milestones={paymentPlan}
+                      currencyCode={currencyCode}
+                    />
+
+                    {paymentPlan.length > 0 && (
+                      <Separator className="my-5" />
+                    )}
 
                     <div>
                       <p className="mb-2 text-sm font-semibold">
@@ -2339,6 +2488,9 @@ export default function CreateContractPage() {
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {selectedCustomer?.customerCode || "Chọn khách ở bước 1"}
+                      {selectedCustomer?.customerContactPersonName
+                        ? ` · LH: ${selectedCustomer.customerContactPersonName}`
+                        : ""}
                     </p>
                   </div>
                 </div>

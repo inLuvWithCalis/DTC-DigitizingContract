@@ -166,13 +166,13 @@ public sealed class ContractTemplatePreviewTests
     }
 
     [Fact]
-    public void Renderer_WithRichTermContent_PreservesBoldFontSizeAndTable()
+    public void Renderer_WithRichTermContent_PreservesFormattingAlignmentAndTableParagraphs()
     {
         var scalarValues = SoftwareSupplyPlaceholderCatalog.GetAll()
             .Where(item => item.DataKind == TemplatePlaceholderDataKind.Scalar)
             .ToDictionary(item => item.Key, _ => string.Empty, StringComparer.Ordinal);
         var richContent = ContractTermRichText.Prefix +
-            """{"blocks":[{"type":"paragraph","runs":[{"text":"Nội dung đậm","bold":true,"italic":true,"underline":true,"fontSize":18}]},{"type":"table","rows":[{"cells":[{"runs":[{"text":"Cột một"}]},{"runs":[{"text":"Cột hai","bold":true}]}]}]}]}""";
+            """{"blocks":[{"type":"paragraph","alignment":"center","runs":[{"text":"Nội dung đậm","bold":true,"italic":true,"underline":true,"fontSize":18}]},{"type":"table","rows":[{"cells":[{"paragraphs":[{"alignment":"right","runs":[{"text":"Cột một"}]}]},{"paragraphs":[{"alignment":"left","runs":[{"text":"Cột hai","bold":true}]},{"alignment":"center","runs":[{"text":"Dòng hai"}]}]}]}]}]}""";
         var renderData = new ContractTemplateRenderData(
             scalarValues,
             [],
@@ -199,11 +199,48 @@ public sealed class ContractTemplatePreviewTests
             W.UnderlineValues.Single,
             boldRun.RunProperties?.Underline?.Val?.Value);
         Assert.Equal("36", boldRun.RunProperties?.FontSize?.Val?.Value);
+        Assert.Equal(W.JustificationValues.Center,
+            boldRun.Ancestors<W.Paragraph>().Single()
+                .ParagraphProperties?.Justification?.Val?.Value);
 
         var richTable = mainPart.Document.Descendants<W.Table>()
             .Single(table => table.InnerText.Contains("Cột một", StringComparison.Ordinal));
         Assert.Contains("Cột hai", richTable.InnerText, StringComparison.Ordinal);
+        Assert.Contains("Dòng hai", richTable.InnerText, StringComparison.Ordinal);
         Assert.Equal(2, richTable.Descendants<W.TableCell>().Count());
+        var firstCellParagraph = richTable.Descendants<W.Paragraph>()
+            .Single(paragraph => paragraph.InnerText == "Cột một");
+        Assert.Equal(W.JustificationValues.Right,
+            firstCellParagraph.ParagraphProperties?.Justification?.Val?.Value);
+        Assert.Equal(2, richTable.Descendants<W.Paragraph>()
+            .Count(paragraph => paragraph.InnerText is "Cột hai" or "Dòng hai"));
+    }
+
+    [Fact]
+    public void Renderer_WithLegacyRichTextV1_RemainsReadableAndLeftAligned()
+    {
+        var scalarValues = SoftwareSupplyPlaceholderCatalog.GetAll()
+            .Where(item => item.DataKind == TemplatePlaceholderDataKind.Scalar)
+            .ToDictionary(item => item.Key, _ => string.Empty, StringComparer.Ordinal);
+        var legacyContent = ContractTermRichText.LegacyPrefix +
+            """{"blocks":[{"type":"paragraph","runs":[{"text":"Đoạn v1"}]},{"type":"table","rows":[{"cells":[{"runs":[{"text":"Ô v1"}]}]}]}]}""";
+        var renderData = new ContractTemplateRenderData(
+            scalarValues, [], [],
+            [new ContractTemplateRenderTerm(1, "V1", string.Empty, legacyContent, string.Empty)],
+            new ContractTemplateRenderSignature(string.Empty, string.Empty),
+            new ContractTemplateRenderSignature(string.Empty, string.Empty),
+            string.Empty);
+
+        var rendered = new ContractTemplatePreviewRenderer().Render(
+            CreateSourceDocument(), ContractLanguageMode.Vietnamese, renderData);
+
+        using var document = WordprocessingDocument.Open(new MemoryStream(rendered), false);
+        var paragraph = document.MainDocumentPart!.Document!
+            .Descendants<W.Paragraph>().Single(item => item.InnerText == "Đoạn v1");
+        var cellParagraph = document.MainDocumentPart.Document
+            .Descendants<W.Paragraph>().Single(item => item.InnerText == "Ô v1");
+        Assert.Null(paragraph.ParagraphProperties?.Justification);
+        Assert.Null(cellParagraph.ParagraphProperties?.Justification);
     }
 
     [Fact]
@@ -290,6 +327,53 @@ public sealed class ContractTemplatePreviewTests
         Assert.Equal(generated.PreviewFileId,
             values!["PreviewFileId"].GetInt32());
         Assert.True(values["PreviewSizeBytes"].GetInt64() > 0);
+    }
+
+    [Fact]
+    public async Task Preview_UsesConfiguredLegalBases_AndBecomesStaleWhenTheyChange()
+    {
+        await using var context = CreateContext();
+        var storage = new TestFileStorage(context);
+        await SeedValidDraftAsync(context, storage, CreateSourceDocument());
+        context.TblContractTemplateLegalBases.Add(new TblContractTemplateLegalBasis
+        {
+            TemplateVersionId = VersionId,
+            BasisCode = "REAL_LAW",
+            ContentVi = "Căn cứ Luật Việt Nam đang cấu hình thật",
+            ContentEn = "Based on the configured Vietnamese law",
+            DisplayOrder = 1,
+            CreatedEmployeeId = AdminOfficerId,
+            CreatedDate = DateTime.UtcNow,
+            RowVersion = [3, 3, 3, 3, 3, 3, 3, 3]
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var service = CreateService(context, storage);
+
+        await service.GeneratePreviewAsync(
+            VersionId,
+            PreviewRequest((await GetVersionAsync(context)).RowVersion),
+            AdminOfficerId);
+        var download = await service.DownloadPreviewAsync(VersionId, AdminOfficerId);
+
+        await using (download.Stream)
+        using (var document = WordprocessingDocument.Open(download.Stream, false))
+        {
+            var text = ReadAllText(document.MainDocumentPart!);
+            Assert.Contains("Căn cứ Luật Việt Nam đang cấu hình thật", text);
+            Assert.Contains("Based on the configured Vietnamese law", text);
+            Assert.DoesNotContain(SoftwareSupplyPreviewDatasetV1.LegalBases[0].ContentVi,
+                text);
+        }
+
+        var basis = await context.TblContractTemplateLegalBases.SingleAsync();
+        basis.ContentVi = "Căn cứ đã thay đổi sau khi preview";
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var exception = await Assert.ThrowsAsync<ContractTemplatePreviewException>(() =>
+            service.DownloadPreviewAsync(VersionId, AdminOfficerId));
+        Assert.Equal("PreviewStale", exception.FailureCode);
     }
 
     [Fact]

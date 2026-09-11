@@ -1,4 +1,4 @@
-﻿using ContractManagement.API.Common.Responses;
+using ContractManagement.API.Common.Responses;
 using ContractManagement.API.Domains.DTOs.Requests.Customer;
 using ContractManagement.API.Domains.DTOs.Responses.Customer;
 using ContractManagement.API.Domains.Interfaces.Customer;
@@ -121,6 +121,9 @@ namespace ContractManagement.API.Domains.Services.Customer
                     CustomerTaxCode = x.CustomerTaxCode,
                     CustomerMobile = x.CustomerMobile,
                     CustomerPhone = x.CustomerPhone,
+                    CustomerContactPersonName = x.CustomerContactPersonName,
+                    CustomerContactPersonPhone = x.CustomerContactPersonPhone,
+                    CustomerContactPersonTitle = x.CustomerContactPersonTitle,
                     Status = x.Status
                 })
                 .ToListAsync(cancellationToken);

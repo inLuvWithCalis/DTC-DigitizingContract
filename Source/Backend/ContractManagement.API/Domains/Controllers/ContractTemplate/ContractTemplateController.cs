@@ -650,6 +650,70 @@ public sealed class ContractTemplateController : ControllerBase
         }
     }
 
+    [HttpPost("versions/{versionId:int}/terms/{termId:int}/payment-milestones")]
+    public async Task<IActionResult> AddPaymentMilestone(int versionId, int termId,
+        [FromBody] CreateContractTemplatePaymentMilestoneRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetEmployeeId(out var employeeId, out var unauthorized)) return unauthorized!;
+        try
+        {
+            var result = await _service.AddPaymentMilestoneAsync(versionId, termId,
+                request, employeeId, cancellationToken);
+            return Ok(ApiResponse<ContractTemplatePaymentMilestoneResponse>.Ok(result,
+                "Thêm đợt thanh toán thành công."));
+        }
+        catch (UnauthorizedAccessException exception) { return Forbidden(exception); }
+    }
+
+    [HttpPut("versions/{versionId:int}/terms/{termId:int}/payment-milestones/{milestoneId:int}")]
+    public async Task<IActionResult> UpdatePaymentMilestone(int versionId, int termId,
+        int milestoneId, [FromBody] UpdateContractTemplatePaymentMilestoneRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetEmployeeId(out var employeeId, out var unauthorized)) return unauthorized!;
+        try
+        {
+            var result = await _service.UpdatePaymentMilestoneAsync(versionId, termId,
+                milestoneId, request, employeeId, cancellationToken);
+            return Ok(ApiResponse<ContractTemplatePaymentMilestoneResponse>.Ok(result,
+                "Cập nhật đợt thanh toán thành công."));
+        }
+        catch (UnauthorizedAccessException exception) { return Forbidden(exception); }
+    }
+
+    [HttpDelete("versions/{versionId:int}/terms/{termId:int}/payment-milestones/{milestoneId:int}")]
+    public async Task<IActionResult> DeletePaymentMilestone(int versionId, int termId,
+        int milestoneId, [FromBody] DeleteContractTemplatePaymentMilestoneRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetEmployeeId(out var employeeId, out var unauthorized)) return unauthorized!;
+        try
+        {
+            await _service.DeletePaymentMilestoneAsync(versionId, termId, milestoneId,
+                request, employeeId, cancellationToken);
+            return Ok(ApiResponse<object>.Ok(new { versionId, termId, milestoneId },
+                "Xóa đợt thanh toán thành công."));
+        }
+        catch (UnauthorizedAccessException exception) { return Forbidden(exception); }
+    }
+
+    [HttpPut("versions/{versionId:int}/terms/{termId:int}/payment-milestones/order")]
+    public async Task<IActionResult> ReorderPaymentMilestones(int versionId, int termId,
+        [FromBody] ReorderContractTemplatePaymentMilestonesRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetEmployeeId(out var employeeId, out var unauthorized)) return unauthorized!;
+        try
+        {
+            var result = await _service.ReorderPaymentMilestonesAsync(versionId, termId,
+                request, employeeId, cancellationToken);
+            return Ok(ApiResponse<ContractTemplateVersionDetailResponse>.Ok(result,
+                "Sắp xếp đợt thanh toán thành công."));
+        }
+        catch (UnauthorizedAccessException exception) { return Forbidden(exception); }
+    }
+
     [HttpPost("versions/{versionId:int}/legal-bases")]
     public async Task<IActionResult> AddLegalBasis(
         int versionId,

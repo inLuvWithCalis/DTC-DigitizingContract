@@ -114,6 +114,26 @@ public interface IContractTemplateService
         int employeeId,
         CancellationToken cancellationToken = default);
 
+    Task<ContractTemplatePaymentMilestoneResponse> AddPaymentMilestoneAsync(
+        int versionId, int termId,
+        CreateContractTemplatePaymentMilestoneRequest request, int employeeId,
+        CancellationToken cancellationToken = default);
+
+    Task<ContractTemplatePaymentMilestoneResponse> UpdatePaymentMilestoneAsync(
+        int versionId, int termId, int milestoneId,
+        UpdateContractTemplatePaymentMilestoneRequest request, int employeeId,
+        CancellationToken cancellationToken = default);
+
+    Task DeletePaymentMilestoneAsync(
+        int versionId, int termId, int milestoneId,
+        DeleteContractTemplatePaymentMilestoneRequest request, int employeeId,
+        CancellationToken cancellationToken = default);
+
+    Task<ContractTemplateVersionDetailResponse> ReorderPaymentMilestonesAsync(
+        int versionId, int termId,
+        ReorderContractTemplatePaymentMilestonesRequest request, int employeeId,
+        CancellationToken cancellationToken = default);
+
     Task<ContractTemplateLegalBasisResponse> AddLegalBasisAsync(
         int versionId,
         CreateContractTemplateLegalBasisRequest request,

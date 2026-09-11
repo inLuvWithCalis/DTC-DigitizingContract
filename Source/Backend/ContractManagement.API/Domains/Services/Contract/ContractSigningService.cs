@@ -37,19 +37,22 @@ public sealed class ContractSigningService : IContractSigningService
     private readonly IContractAuditWriter _auditWriter;
     private readonly IPrivateFileStorage _privateFileStorage;
     private readonly ICurrentTenant _currentTenant;
+    private readonly IContractPaymentDueDateService _paymentDueDates;
 
     public ContractSigningService(
         DbDtctechContext dbContext,
         IContractResourceAuthorizationService authorization,
         IContractAuditWriter auditWriter,
         IPrivateFileStorage privateFileStorage,
-        ICurrentTenant currentTenant)
+        ICurrentTenant currentTenant,
+        IContractPaymentDueDateService? paymentDueDates = null)
     {
         _dbContext = dbContext;
         _authorization = authorization;
         _auditWriter = auditWriter;
         _privateFileStorage = privateFileStorage;
         _currentTenant = currentTenant;
+        _paymentDueDates = paymentDueDates ?? new ContractPaymentDueDateService();
     }
 
     public async Task<ContractSigningDetailResponse> GetAsync(
@@ -338,6 +341,8 @@ public sealed class ContractSigningService : IContractSigningService
                 contract.UpdatedEmployeeId = employeeId;
                 contract.UpdateDate = now;
                 await _dbContext.SaveChangesAsync(cancellationToken);
+                await ActivateSignedPaymentMilestonesAsync(version.VersionId,
+                    contract.SignDate?.Date ?? now.Date, employeeId, cancellationToken);
 
                 _auditWriter.StageEmployeeAudits(
                 [
@@ -556,6 +561,24 @@ public sealed class ContractSigningService : IContractSigningService
                 ContractSigningErrorCodes.EvidenceFileRequired,
                 "Vui lòng chọn file scan đã ký.");
         }
+    }
+
+    private async Task ActivateSignedPaymentMilestonesAsync(int versionId,
+        DateTime anchorDate, int employeeId, CancellationToken cancellationToken)
+    {
+        var rows = await _dbContext.TblContractPaymentMilestones.Where(item =>
+            item.VersionId == versionId
+            && item.DueAnchor == (byte)PaymentDueAnchor.ContractSigned
+            && item.AnchorDate == null).ToListAsync(cancellationToken);
+        foreach (var row in rows)
+        {
+            row.AnchorDate = anchorDate;
+            row.DueDate = _paymentDueDates.Calculate(anchorDate, row.DueOffsetDays,
+                (PaymentDayCountMode)row.DayCountMode);
+            row.UpdatedEmployeeId = employeeId;
+            row.UpdatedDate = DateTime.UtcNow;
+        }
+        if (rows.Count > 0) await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private static string NormalizeRequired(

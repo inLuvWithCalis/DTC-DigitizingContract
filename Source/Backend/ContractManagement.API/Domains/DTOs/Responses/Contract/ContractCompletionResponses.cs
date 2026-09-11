@@ -26,6 +26,7 @@ public sealed class ContractPaymentResponse
     public int ContractId { get; set; }
     public int VersionId { get; set; }
     public int VersionNo { get; set; }
+    public int? PaymentMilestoneId { get; set; }
     public DateTime PaymentDate { get; set; }
     public decimal Amount { get; set; }
     public string CurrencyCode { get; set; } = string.Empty;
@@ -41,6 +42,29 @@ public sealed class ContractPaymentResponse
     public int? VoidedByEmployeeId { get; set; }
     public string? VoidedByEmployeeName { get; set; }
     public DateTime? VoidedAt { get; set; }
+    public string RowVersion { get; set; } = string.Empty;
+}
+
+public sealed class ContractPaymentMilestoneResponse
+{
+    public int PaymentMilestoneId { get; set; }
+    public int VersionId { get; set; }
+    public string MilestoneCode { get; set; } = string.Empty;
+    public string TitleVi { get; set; } = string.Empty;
+    public string? TitleEn { get; set; }
+    public decimal PaymentPercent { get; set; }
+    public decimal Amount { get; set; }
+    public decimal PaidAmount { get; set; }
+    public decimal RemainingAmount { get; set; }
+    public PaymentDueAnchor DueAnchor { get; set; }
+    public int DueOffsetDays { get; set; }
+    public PaymentDayCountMode DayCountMode { get; set; }
+    public string? ConditionVi { get; set; }
+    public string? ConditionEn { get; set; }
+    public int DisplayOrder { get; set; }
+    public DateTime? AnchorDate { get; set; }
+    public DateTime? DueDate { get; set; }
+    public string Status { get; set; } = string.Empty;
     public string RowVersion { get; set; } = string.Empty;
 }
 
@@ -73,5 +97,6 @@ public sealed class ContractCompletionDetailResponse
     public string VersionRowVersion { get; set; } = string.Empty;
     public ContractAcceptanceEvidenceResponse? AcceptanceEvidence { get; set; }
     public IReadOnlyList<ContractPaymentResponse> Payments { get; set; } = [];
+    public IReadOnlyList<ContractPaymentMilestoneResponse> PaymentMilestones { get; set; } = [];
     public ContractCompletionReadinessResponse Readiness { get; set; } = new();
 }

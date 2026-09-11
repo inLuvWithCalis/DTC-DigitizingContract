@@ -62,6 +62,9 @@ public partial class TblContractTerm
     /// </summary>
     public string? TermContentEn { get; set; }
 
+    /// <summary>Loại điều khoản đã snapshot từ template.</summary>
+    public byte TermKind { get; set; }
+
     /// <summary>
     /// Khách hàng có được gửi comment đàm phán cho term này hay không.
     ///

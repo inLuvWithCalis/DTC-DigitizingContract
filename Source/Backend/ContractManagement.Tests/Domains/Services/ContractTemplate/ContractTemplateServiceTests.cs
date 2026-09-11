@@ -490,6 +490,156 @@ public sealed class ContractTemplateServiceTests
     }
 
     [Fact]
+    public async Task PaymentTerm_MilestonesCanBeCreatedAndReordered_ButKindCannotBeCleared()
+    {
+        await using var context = CreateContext();
+        await SeedEmployeesAsync(context);
+        var service = CreateService(context);
+        var created = await service.CreateAsync(CreateRequest("PAYMENT-PLAN"),
+            AdminOfficerId);
+        var version = Assert.Single(created.Versions);
+        var term = await service.AddTermAsync(version.TemplateVersionId,
+            new CreateContractTemplateTermRequest
+            {
+                TermKind = ContractTermKind.Payment,
+                TermCode = "PAYMENT",
+                TermTitle = "Thanh toán",
+                DisplayOrder = 1,
+                VersionRowVersion = version.RowVersion
+            }, AdminOfficerId);
+        var afterTerm = await service.GetVersionAsync(version.TemplateVersionId,
+            AdminOfficerId);
+        await service.AddPaymentMilestoneAsync(version.TemplateVersionId,
+            term.TemplateTermId, new CreateContractTemplatePaymentMilestoneRequest
+            {
+                MilestoneCode = "M1",
+                TitleVi = "Đợt 1",
+                PaymentPercent = 40m,
+                DueAnchor = PaymentDueAnchor.ContractSigned,
+                DueOffsetDays = 5,
+                DayCountMode = PaymentDayCountMode.CalendarDays,
+                DisplayOrder = 1,
+                VersionRowVersion = afterTerm.RowVersion
+            }, AdminOfficerId);
+        var afterFirst = await service.GetVersionAsync(version.TemplateVersionId,
+            AdminOfficerId);
+        await service.AddPaymentMilestoneAsync(version.TemplateVersionId,
+            term.TemplateTermId, new CreateContractTemplatePaymentMilestoneRequest
+            {
+                MilestoneCode = "M2",
+                TitleVi = "Đợt 2",
+                PaymentPercent = 60m,
+                DueAnchor = PaymentDueAnchor.AcceptanceCompleted,
+                DueOffsetDays = 3,
+                DayCountMode = PaymentDayCountMode.BusinessDays,
+                DisplayOrder = 2,
+                VersionRowVersion = afterFirst.RowVersion
+            }, AdminOfficerId);
+        var beforeReorder = await service.GetVersionAsync(version.TemplateVersionId,
+            AdminOfficerId);
+        var first = beforeReorder.Terms.Single().PaymentMilestones
+            .Single(item => item.MilestoneCode == "M1");
+        var second = beforeReorder.Terms.Single().PaymentMilestones
+            .Single(item => item.MilestoneCode == "M2");
+
+        var reordered = await service.ReorderPaymentMilestonesAsync(
+            version.TemplateVersionId, term.TemplateTermId,
+            new ReorderContractTemplatePaymentMilestonesRequest
+            {
+                VersionRowVersion = beforeReorder.RowVersion,
+                Milestones =
+                [
+                    new() { MilestoneId = second.TemplatePaymentMilestoneId, RowVersion = second.RowVersion, DisplayOrder = 1 },
+                    new() { MilestoneId = first.TemplatePaymentMilestoneId, RowVersion = first.RowVersion, DisplayOrder = 2 }
+                ]
+            }, AdminOfficerId);
+        Assert.Equal("M2", reordered.Terms.Single().PaymentMilestones[0].MilestoneCode);
+
+        var currentTerm = reordered.Terms.Single();
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.UpdateTermAsync(version.TemplateVersionId,
+                currentTerm.TemplateTermId,
+                new UpdateContractTemplateTermRequest
+                {
+                    TermKind = ContractTermKind.General,
+                    TermCode = currentTerm.TermCode,
+                    TermTitle = currentTerm.TermTitle,
+                    IsNegotiable = currentTerm.IsNegotiable,
+                    DisplayOrder = currentTerm.DisplayOrder,
+                    RowVersion = currentTerm.RowVersion,
+                    VersionRowVersion = reordered.RowVersion
+                }, AdminOfficerId));
+    }
+
+    [Fact]
+    public async Task PaymentMilestone_UpdateCannotLeavePreviousPaymentAsFirstMilestone()
+    {
+        await using var context = CreateContext();
+        await SeedEmployeesAsync(context);
+        var service = CreateService(context);
+        var created = await service.CreateAsync(CreateRequest("PAYMENT-FIRST"),
+            AdminOfficerId);
+        var version = Assert.Single(created.Versions);
+        var term = await service.AddTermAsync(version.TemplateVersionId,
+            new CreateContractTemplateTermRequest
+            {
+                TermKind = ContractTermKind.Payment,
+                TermCode = "PAYMENT",
+                TermTitle = "Thanh toán",
+                DisplayOrder = 1,
+                VersionRowVersion = version.RowVersion
+            }, AdminOfficerId);
+        var afterTerm = await service.GetVersionAsync(version.TemplateVersionId,
+            AdminOfficerId);
+        await service.AddPaymentMilestoneAsync(version.TemplateVersionId,
+            term.TemplateTermId, new CreateContractTemplatePaymentMilestoneRequest
+            {
+                MilestoneCode = "M1",
+                TitleVi = "Đợt 1",
+                PaymentPercent = 40m,
+                DueAnchor = PaymentDueAnchor.ContractSigned,
+                DueOffsetDays = 0,
+                DayCountMode = PaymentDayCountMode.CalendarDays,
+                DisplayOrder = 1,
+                VersionRowVersion = afterTerm.RowVersion
+            }, AdminOfficerId);
+        var afterFirst = await service.GetVersionAsync(version.TemplateVersionId,
+            AdminOfficerId);
+        await service.AddPaymentMilestoneAsync(version.TemplateVersionId,
+            term.TemplateTermId, new CreateContractTemplatePaymentMilestoneRequest
+            {
+                MilestoneCode = "M2",
+                TitleVi = "Đợt 2",
+                PaymentPercent = 60m,
+                DueAnchor = PaymentDueAnchor.PreviousMilestonePaid,
+                DueOffsetDays = 0,
+                DayCountMode = PaymentDayCountMode.CalendarDays,
+                DisplayOrder = 2,
+                VersionRowVersion = afterFirst.RowVersion
+            }, AdminOfficerId);
+        var current = await service.GetVersionAsync(version.TemplateVersionId,
+            AdminOfficerId);
+        var first = current.Terms.Single().PaymentMilestones
+            .Single(item => item.MilestoneCode == "M1");
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.UpdatePaymentMilestoneAsync(version.TemplateVersionId,
+                term.TemplateTermId, first.TemplatePaymentMilestoneId,
+                new UpdateContractTemplatePaymentMilestoneRequest
+                {
+                    MilestoneCode = first.MilestoneCode,
+                    TitleVi = first.TitleVi,
+                    PaymentPercent = first.PaymentPercent,
+                    DueAnchor = first.DueAnchor,
+                    DueOffsetDays = first.DueOffsetDays,
+                    DayCountMode = first.DayCountMode,
+                    DisplayOrder = 3,
+                    RowVersion = first.RowVersion,
+                    VersionRowVersion = current.RowVersion
+                }, AdminOfficerId));
+    }
+
+    [Fact]
     public async Task DraftLegalBases_CanBeCreatedReorderedUpdatedAndDeleted()
     {
         await using var context = CreateContext();

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using ContractManagement.API.Common.Enums;
 
 namespace ContractManagement.API.Domains.DTOs.Requests.Contract;
 
@@ -8,6 +9,8 @@ namespace ContractManagement.API.Domains.DTOs.Requests.Contract;
 /// </summary>
 public sealed class CreateContractTermRequest
 {
+    public ContractTermKind? TermKind { get; set; }
+
     [Range(1, int.MaxValue)]
     public int? SourceTemplateTermId { get; set; }
 

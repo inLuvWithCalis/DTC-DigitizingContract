@@ -100,6 +100,8 @@ public sealed class RetireContractTemplateVersionRequest
 
 public sealed class CreateContractTemplateTermRequest
 {
+    public ContractTermKind TermKind { get; set; } = ContractTermKind.General;
+
     [Required]
     public string TermCode { get; set; } = string.Empty;
 
@@ -123,6 +125,8 @@ public sealed class CreateContractTemplateTermRequest
 
 public sealed class UpdateContractTemplateTermRequest
 {
+    public ContractTermKind TermKind { get; set; } = ContractTermKind.General;
+
     [Required]
     public string TermCode { get; set; } = string.Empty;
 
@@ -227,6 +231,66 @@ public sealed class ReorderContractTemplateLegalBasisItem
     [Required]
     public string RowVersion { get; set; } = string.Empty;
 
+    [Range(0, int.MaxValue)]
+    public int DisplayOrder { get; set; }
+}
+
+public class SaveContractTemplatePaymentMilestoneRequest
+{
+    [Required, MaxLength(100)]
+    public string MilestoneCode { get; set; } = string.Empty;
+    [Required, MaxLength(500)]
+    public string TitleVi { get; set; } = string.Empty;
+    [MaxLength(500)]
+    public string? TitleEn { get; set; }
+    [Range(typeof(decimal), "0.0001", "100")]
+    public decimal PaymentPercent { get; set; }
+    public PaymentDueAnchor DueAnchor { get; set; }
+    [Range(0, int.MaxValue)]
+    public int DueOffsetDays { get; set; }
+    public PaymentDayCountMode DayCountMode { get; set; }
+    [MaxLength(2000)]
+    public string? ConditionVi { get; set; }
+    [MaxLength(2000)]
+    public string? ConditionEn { get; set; }
+    [Range(0, int.MaxValue)]
+    public int DisplayOrder { get; set; }
+    [Required]
+    public string VersionRowVersion { get; set; } = string.Empty;
+}
+
+public sealed class CreateContractTemplatePaymentMilestoneRequest
+    : SaveContractTemplatePaymentMilestoneRequest;
+
+public sealed class UpdateContractTemplatePaymentMilestoneRequest
+    : SaveContractTemplatePaymentMilestoneRequest
+{
+    [Required]
+    public string RowVersion { get; set; } = string.Empty;
+}
+
+public sealed class DeleteContractTemplatePaymentMilestoneRequest
+{
+    [Required]
+    public string RowVersion { get; set; } = string.Empty;
+    [Required]
+    public string VersionRowVersion { get; set; } = string.Empty;
+}
+
+public sealed class ReorderContractTemplatePaymentMilestonesRequest
+{
+    [Required]
+    public string VersionRowVersion { get; set; } = string.Empty;
+    [Required]
+    public List<ReorderContractTemplatePaymentMilestoneItem> Milestones { get; set; } = [];
+}
+
+public sealed class ReorderContractTemplatePaymentMilestoneItem
+{
+    [Range(1, int.MaxValue)]
+    public int MilestoneId { get; set; }
+    [Required]
+    public string RowVersion { get; set; } = string.Empty;
     [Range(0, int.MaxValue)]
     public int DisplayOrder { get; set; }
 }

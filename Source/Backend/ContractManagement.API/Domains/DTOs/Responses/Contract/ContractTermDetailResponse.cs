@@ -19,6 +19,8 @@
 
         public string? TermContentEn { get; set; }
 
+        public global::ContractManagement.API.Common.Enums.ContractTermKind TermKind { get; set; }
+
         public bool IsNegotiable { get; set; }
 
         public int DisplayOrder { get; set; }

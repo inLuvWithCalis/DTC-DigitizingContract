@@ -1,4 +1,5 @@
-export const CONTRACT_RICH_TEXT_PREFIX = "contract-rich-text:v1:";
+export const CONTRACT_RICH_TEXT_PREFIX = "contract-rich-text:v2:";
+export const CONTRACT_RICH_TEXT_LEGACY_PREFIX = "contract-rich-text:v1:";
 
 export const CONTRACT_RICH_TEXT_FONT_SIZES = [10, 12, 14, 18, 24, 32] as const;
 
@@ -10,8 +11,15 @@ export interface ContractRichTextRun {
   fontSize?: number;
 }
 
-export interface ContractRichTextCell {
+export type ContractRichTextAlignment = "left" | "center" | "right";
+
+export interface ContractRichTextParagraph {
   runs: ContractRichTextRun[];
+  alignment?: ContractRichTextAlignment;
+}
+
+export interface ContractRichTextCell {
+  paragraphs: ContractRichTextParagraph[];
 }
 
 export interface ContractRichTextRow {
@@ -22,6 +30,7 @@ export type ContractRichTextBlock =
   | {
       type: "paragraph";
       runs: ContractRichTextRun[];
+      alignment?: ContractRichTextAlignment;
     }
   | {
       type: "table";
@@ -70,6 +79,23 @@ const normalizeRuns = (value: unknown): ContractRichTextRun[] => {
   return result;
 };
 
+const normalizeAlignment = (
+  value: unknown,
+): ContractRichTextAlignment | undefined =>
+  value === "center" || value === "right" ? value : undefined;
+
+const normalizeParagraph = (value: unknown): ContractRichTextParagraph => {
+  const record =
+    value && typeof value === "object"
+      ? (value as Record<string, unknown>)
+      : {};
+  const alignment = normalizeAlignment(record.alignment);
+  return {
+    runs: normalizeRuns(record.runs),
+    ...(alignment ? { alignment } : {}),
+  };
+};
+
 export const normalizeContractRichTextDocument = (
   value: unknown,
 ): ContractRichTextDocument | null => {
@@ -83,9 +109,11 @@ export const normalizeContractRichTextDocument = (
     const block = candidate as Record<string, unknown>;
 
     if (block.type === "paragraph") {
+      const alignment = normalizeAlignment(block.alignment);
       normalizedBlocks.push({
         type: "paragraph",
         runs: normalizeRuns(block.runs),
+        ...(alignment ? { alignment } : {}),
       });
       return;
     }
@@ -101,13 +129,16 @@ export const normalizeContractRichTextDocument = (
             ? (rowCandidate as { cells: unknown[] }).cells
             : [];
         return {
-          cells: cells.slice(0, 20).map((cellCandidate) => ({
-            runs: normalizeRuns(
+          cells: cells.slice(0, 20).map((cellCandidate) => {
+            const cell =
               cellCandidate && typeof cellCandidate === "object"
-                ? (cellCandidate as { runs?: unknown }).runs
-                : [],
-            ),
-          })),
+                ? (cellCandidate as Record<string, unknown>)
+                : {};
+            const paragraphs = Array.isArray(cell.paragraphs)
+              ? cell.paragraphs.slice(0, 100).map(normalizeParagraph)
+              : [normalizeParagraph({ runs: cell.runs })];
+            return { paragraphs };
+          }),
         };
       })
       .filter((row) => row.cells.length > 0);
@@ -129,14 +160,19 @@ export const parseContractRichText = (
   value?: string | null,
 ): ContractRichTextDocument => {
   const source = value ?? "";
-  if (!source.startsWith(CONTRACT_RICH_TEXT_PREFIX)) {
+  const prefix = source.startsWith(CONTRACT_RICH_TEXT_PREFIX)
+    ? CONTRACT_RICH_TEXT_PREFIX
+    : source.startsWith(CONTRACT_RICH_TEXT_LEGACY_PREFIX)
+      ? CONTRACT_RICH_TEXT_LEGACY_PREFIX
+      : null;
+  if (!prefix) {
     return plainTextDocument(source);
   }
 
   try {
     return (
       normalizeContractRichTextDocument(
-        JSON.parse(source.slice(CONTRACT_RICH_TEXT_PREFIX.length)),
+        JSON.parse(source.slice(prefix.length)),
       ) ?? plainTextDocument("")
     );
   } catch {
@@ -184,7 +220,10 @@ export const contractRichTextToEditorHtml = (value?: string | null) =>
   parseContractRichText(value).blocks
     .map((block) => {
       if (block.type === "paragraph") {
-        return `<p>${runsToHtml(block.runs) || "<br>"}</p>`;
+        const style = block.alignment
+          ? ` style="text-align:${block.alignment}"`
+          : "";
+        return `<p${style}>${runsToHtml(block.runs) || "<br>"}</p>`;
       }
 
       return `<table><tbody>${block.rows
@@ -192,8 +231,14 @@ export const contractRichTextToEditorHtml = (value?: string | null) =>
           (row) =>
             `<tr>${row.cells
               .map(
-                (cell) =>
-                  `<td>${runsToHtml(cell.runs) || "<br>"}</td>`,
+                (cell) => `<td>${cell.paragraphs
+                  .map((paragraph) => {
+                    const style = paragraph.alignment
+                      ? ` style="text-align:${paragraph.alignment}"`
+                      : "";
+                    return `<p${style}>${runsToHtml(paragraph.runs) || "<br>"}</p>`;
+                  })
+                  .join("")}</td>`,
               )
               .join("")}</tr>`,
         )

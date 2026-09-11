@@ -133,7 +133,7 @@ export function ContractTemplateFormDialog({
           <DialogDescription>
             {isEdit
               ? "Chỉ tên và mô tả có thể thay đổi sau khi tạo."
-              : "Hệ thống sẽ đồng thời tạo Version 1 ở trạng thái bản nháp."}
+              : "Hệ thống sẽ đồng thời tạo phiên bản đầu tiên ở trạng thái bản nháp."}
           </DialogDescription>
         </DialogHeader>
 
@@ -216,7 +216,7 @@ export function ContractTemplateFormDialog({
           </div>
           {!isEdit && (
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="initial-change-note">Ghi chú Version 1</Label>
+              <Label htmlFor="initial-change-note">Ghi chú phiên bản 1</Label>
               <Textarea
                 id="initial-change-note"
                 value={initialChangeNote}

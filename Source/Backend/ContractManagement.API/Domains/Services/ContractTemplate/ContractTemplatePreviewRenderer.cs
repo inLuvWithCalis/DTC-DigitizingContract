@@ -14,7 +14,7 @@ namespace ContractManagement.Domains.Services.ContractTemplate;
 /// </summary>
 public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRenderer
 {
-    public const string FormatVersion = "V8";
+    public const string FormatVersion = "V9";
 
     private const string GeneratedContentFont = "Times New Roman";
     private const string GeneratedContentFontSize = "24";
@@ -42,9 +42,6 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
         });
     }
 
-    public byte[] Render(byte[] sourceDocumentBytes, ContractLanguageMode languageMode)
-        => Render(sourceDocumentBytes, languageMode, CreateSampleRenderData(languageMode));
-
     public byte[] Render(
         byte[] sourceDocumentBytes,
         ContractLanguageMode languageMode,
@@ -59,11 +56,8 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                 "Không có bytes DOCX nguồn để tạo preview.");
         }
 
-        var sanitizedSourceDocumentBytes =
-            ContractTemplateObsoleteContentSanitizer.Sanitize(sourceDocumentBytes);
         using var output = new MemoryStream();
-        output.Write(sanitizedSourceDocumentBytes, 0,
-            sanitizedSourceDocumentBytes.Length);
+        output.Write(sourceDocumentBytes, 0, sourceDocumentBytes.Length);
         output.Position = 0;
 
         using (var document = WordprocessingDocument.Open(output, true))
@@ -79,7 +73,10 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                     "DOCX nguồn không có body để preview.");
             }
 
-            var definitions = renderData.Definitions ?? ContractPlaceholderCatalog.SystemDefinitions;
+            var definitions = renderData.Definitions
+                ?? throw new ContractTemplatePreviewException(
+                    "PlaceholderSnapshotMissing",
+                    "Dữ liệu render không có snapshot placeholder của template version.");
             var dynamicParagraphs = LocateDynamicParagraphs(mainPart, definitions);
             ReplaceDynamicBlocks(dynamicParagraphs, languageMode, renderData);
 
@@ -244,11 +241,17 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
         var elements = new List<OpenXmlElement>();
         foreach (var basis in renderData.LegalBases)
         {
-            elements.AddRange(CreateTermContentElements(basis.ContentVi));
+            elements.AddRange(CreateRichTextElements(
+                basis.ContentVi,
+                "ContractLegalBasisRichTextInvalid",
+                "Nội dung căn cứ tiếng Việt có định dạng rich text không hợp lệ."));
             if (languageMode == ContractLanguageMode.Bilingual
                 && !string.IsNullOrWhiteSpace(basis.ContentEn))
             {
-                elements.AddRange(CreateTermContentElements(basis.ContentEn));
+                elements.AddRange(CreateRichTextElements(
+                    basis.ContentEn,
+                    "ContractLegalBasisRichTextInvalid",
+                    "Nội dung căn cứ tiếng Anh có định dạng rich text không hợp lệ."));
             }
         }
 
@@ -256,21 +259,26 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
     }
 
     private static IEnumerable<OpenXmlElement> CreateTermContentElements(string? value)
+        => CreateRichTextElements(
+            value,
+            "ContractTermRichTextInvalid",
+            "Nội dung điều khoản có định dạng rich text không hợp lệ.");
+
+    private static IEnumerable<OpenXmlElement> CreateRichTextElements(
+        string? value,
+        string failureCode,
+        string failureMessage)
     {
-        if (!ContractTermRichText.IsEncoded(value))
+        if (string.IsNullOrWhiteSpace(value))
         {
-            return (value ?? string.Empty)
-                .Replace("\r\n", "\n", StringComparison.Ordinal)
-                .Split('\n')
-                .Select(line => (OpenXmlElement)CreateParagraph(line))
-                .ToList();
+            return [CreateParagraph(string.Empty)];
         }
 
         if (!ContractTermRichText.TryParse(value, out var document))
         {
             throw new ContractTemplatePreviewException(
-                "ContractTermRichTextInvalid",
-                "Nội dung điều khoản có định dạng rich text không hợp lệ.");
+                failureCode,
+                failureMessage);
         }
 
         var elements = new List<OpenXmlElement>();
@@ -783,6 +791,7 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
             SoftwareSupplyPreviewDatasetV1.CustomerSignature.SignerName),
         SoftwareSupplyPreviewDatasetV1.LegalDisclaimer)
         {
+            Definitions = ContractPlaceholderCatalog.SystemDefinitions,
             LegalBases = SoftwareSupplyPreviewDatasetV1.LegalBases.Select(basis =>
                 new ContractTemplateRenderLegalBasis(
                     basis.No, basis.ContentVi, basis.ContentEn)).ToList()

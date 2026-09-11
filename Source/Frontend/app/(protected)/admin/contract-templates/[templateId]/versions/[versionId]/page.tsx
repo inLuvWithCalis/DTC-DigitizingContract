@@ -371,14 +371,14 @@ export default function ContractTemplateVersionWorkspacePage() {
   const hasPreview = Boolean(version?.previewFileId);
   const hasTerms = Boolean(version?.terms.length);
   const paymentTerms =
-    version?.terms.filter((term) => term.termKind === ContractTermKind.Payment) ??
-    [];
+    version?.terms.filter(
+      (term) => term.termKind === ContractTermKind.Payment,
+    ) ?? [];
   const paymentPercentTotal =
     Math.round(
       paymentTerms
         .flatMap((term) => term.paymentMilestones)
-        .reduce((sum, milestone) => sum + milestone.paymentPercent, 0) *
-        10_000,
+        .reduce((sum, milestone) => sum + milestone.paymentPercent, 0) * 10_000,
     ) / 10_000;
   const hasValidPaymentMilestones =
     paymentTerms.length === 0 ||
@@ -387,10 +387,7 @@ export default function ContractTemplateVersionWorkspacePage() {
       paymentPercentTotal === 100);
   const canGeneratePreview = Boolean(isDraft && hasDocument && isDocumentValid);
   const canPublish = Boolean(
-    canGeneratePreview &&
-      hasPreview &&
-      hasTerms &&
-      hasValidPaymentMilestones,
+    canGeneratePreview && hasPreview && hasTerms && hasValidPaymentMilestones,
   );
   const templateHasDraft = Boolean(
     template?.versions.some(
@@ -714,7 +711,7 @@ export default function ContractTemplateVersionWorkspacePage() {
 
                 <TabsContent
                   value="preview"
-                  className="grid gap-4 lg:grid-cols-[1fr_360px]"
+                  className="grid gap-4 lg:grid-cols-[2fr_1fr]"
                 >
                   <Card>
                     <CardHeader>
@@ -816,13 +813,13 @@ export default function ContractTemplateVersionWorkspacePage() {
                         <RequirementRow met={isDocumentValid}>
                           DOCX hợp lệ
                         </RequirementRow>
-                        <RequirementRow met={hasPreview}>
-                          Đã tạo preview hiện hành
-                        </RequirementRow>
                         <RequirementRow met={hasValidPaymentMilestones}>
                           {paymentTerms.length === 0
                             ? "Không có điều khoản thanh toán"
                             : `Tổng tỷ lệ các đợt thanh toán đúng 100% (hiện tại ${paymentPercentTotal}%)`}
+                        </RequirementRow>
+                        <RequirementRow met={hasPreview}>
+                          Đã tạo preview hiện hành
                         </RequirementRow>
                       </ul>
                       {version.status === TemplateVersionStatus.Draft && (

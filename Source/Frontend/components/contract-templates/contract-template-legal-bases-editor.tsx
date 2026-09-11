@@ -33,6 +33,7 @@ import {
   type ContractTemplateVersionDetailResponse,
 } from "@/services/contract-template-api";
 import { getContractTemplateErrorMessage } from "./contract-template-utils";
+import { Card } from "../ui/card";
 
 interface Props {
   version: ContractTemplateVersionDetailResponse;
@@ -187,8 +188,8 @@ export function ContractTemplateLegalBasesEditor({
         <div>
           <p className="font-semibold">Căn cứ hợp đồng ({bases.length})</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Nội dung tại đây được chèn vào {"{{CONTRACT_LEGAL_BASES}}"} và
-            được chụp riêng khi tạo hợp đồng.
+            Nội dung tại đây được chèn vào {"{{CONTRACT_LEGAL_BASES}}"} và được
+            chụp riêng khi tạo hợp đồng.
           </p>
         </div>
         {isDraft && (
@@ -199,7 +200,7 @@ export function ContractTemplateLegalBasesEditor({
       </div>
 
       {bases.map((basis, index) => (
-        <div key={basis.templateLegalBasisId} className="rounded-2xl border bg-white p-4 shadow-xs">
+        <Card key={basis.templateLegalBasisId} className="p-4 shadow-xs">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">Căn cứ {index + 1}</Badge>
@@ -209,16 +210,39 @@ export function ContractTemplateLegalBasesEditor({
             </div>
             {isDraft && (
               <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" disabled={isMoving || index === 0} onClick={() => move(index, -1)} aria-label="Chuyển căn cứ lên">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={isMoving || index === 0}
+                  onClick={() => move(index, -1)}
+                  aria-label="Chuyển căn cứ lên"
+                >
                   <ArrowUp className="size-4" />
                 </Button>
-                <Button variant="ghost" size="icon" disabled={isMoving || index === bases.length - 1} onClick={() => move(index, 1)} aria-label="Chuyển căn cứ xuống">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={isMoving || index === bases.length - 1}
+                  onClick={() => move(index, 1)}
+                  aria-label="Chuyển căn cứ xuống"
+                >
                   <ArrowDown className="size-4" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={() => openEdit(basis)} aria-label="Sửa căn cứ">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => openEdit(basis)}
+                  aria-label="Sửa căn cứ"
+                >
                   <Pencil className="size-4" />
                 </Button>
-                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => setDeleting(basis)} aria-label="Xóa căn cứ">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setDeleting(basis)}
+                  aria-label="Xóa căn cứ"
+                >
                   <Trash2 className="size-4" />
                 </Button>
               </div>
@@ -233,7 +257,7 @@ export function ContractTemplateLegalBasesEditor({
               />
             </div>
           )}
-        </div>
+        </Card>
       ))}
 
       {bases.length === 0 && (
@@ -253,21 +277,41 @@ export function ContractTemplateLegalBasesEditor({
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label htmlFor="legal-basis-code">Mã căn cứ</Label>
-              <CodeInput id="legal-basis-code" value={basisCode} onValueChange={setBasisCode} />
+              <CodeInput
+                id="legal-basis-code"
+                value={basisCode}
+                onValueChange={setBasisCode}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="legal-basis-vi">Nội dung tiếng Việt</Label>
-              <ContractRichTextEditor id="legal-basis-vi" value={contentVi} onChange={setContentVi} ariaLabel="Nội dung căn cứ tiếng Việt" />
+              <ContractRichTextEditor
+                id="legal-basis-vi"
+                value={contentVi}
+                onChange={setContentVi}
+                ariaLabel="Nội dung căn cứ tiếng Việt"
+              />
             </div>
             {isBilingual && (
               <div className="space-y-2">
                 <Label htmlFor="legal-basis-en">Nội dung tiếng Anh</Label>
-                <ContractRichTextEditor id="legal-basis-en" value={contentEn} onChange={setContentEn} ariaLabel="Nội dung căn cứ tiếng Anh" />
+                <ContractRichTextEditor
+                  id="legal-basis-en"
+                  value={contentEn}
+                  onChange={setContentEn}
+                  ariaLabel="Nội dung căn cứ tiếng Anh"
+                />
               </div>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isSaving}>Hủy</Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsDialogOpen(false)}
+              disabled={isSaving}
+            >
+              Hủy
+            </Button>
             <Button onClick={save} disabled={isSaving}>
               {isSaving && <Loader2 className="size-4 animate-spin" />}
               {editing ? "Lưu thay đổi" : "Thêm căn cứ"}

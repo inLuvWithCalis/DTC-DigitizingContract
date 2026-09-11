@@ -704,6 +704,9 @@ public sealed class ContractTemplateService : IContractTemplateService
         var documentBytes = validation.DocumentBytes
             ?? throw new InvalidOperationException(
                 "DOCX đã được chấp nhận kỹ thuật nhưng thiếu payload kiểm tra.");
+        var validatedDefinitions = validation.Definitions
+            ?? throw new InvalidOperationException(
+                "DOCX đã được chấp nhận kỹ thuật nhưng thiếu snapshot placeholder.");
         var documentHash = Convert.ToHexString(SHA256.HashData(documentBytes))
             .ToLowerInvariant();
         FileStorageResponse? uploadedArtifact = null;
@@ -767,7 +770,8 @@ public sealed class ContractTemplateService : IContractTemplateService
                 var now = DateTime.UtcNow;
                 version.DocumentFileId = uploadedArtifact.FileId;
                 version.DocumentHash = documentHash;
-                version.PlaceholderBindingHash = ContractPlaceholderCatalog.Fingerprint(validation.Definitions ?? []);
+                version.PlaceholderBindingHash = ContractPlaceholderCatalog.Fingerprint(
+                    validatedDefinitions);
                 version.ValidationStatus = validation.IsCatalogValid
                     ? (byte)TemplateValidationStatus.Valid
                     : (byte)TemplateValidationStatus.Invalid;
@@ -858,7 +862,7 @@ public sealed class ContractTemplateService : IContractTemplateService
             fingerprint = CreatePreviewSourceHash(
                 preflightVersion.DocumentHash!,
                 (ContractLanguageMode)preflightTemplate.LanguageMode,
-                preflightVersion.PlaceholderBindingHash,
+                preflightVersion.PlaceholderBindingHash!,
                 preflightInput.CanonicalHash);
         }
         catch (DbUpdateConcurrencyException)
@@ -918,7 +922,7 @@ public sealed class ContractTemplateService : IContractTemplateService
             previewBytes = _previewRenderer.RenderSample(
                 sourceBytes,
                 (ContractLanguageMode)preflightTemplate.LanguageMode,
-                definitions.Length == 0 ? ContractPlaceholderCatalog.SystemDefinitions : definitions,
+                definitions,
                 samples,
                 preflightInput.RenderData);
         }
@@ -955,7 +959,7 @@ public sealed class ContractTemplateService : IContractTemplateService
                 var currentFingerprint = CreatePreviewSourceHash(
                     version.DocumentHash!,
                     (ContractLanguageMode)template.LanguageMode,
-                    version.PlaceholderBindingHash,
+                    version.PlaceholderBindingHash!,
                     currentInput.CanonicalHash);
                 if (!string.Equals(fingerprint, currentFingerprint,
                         StringComparison.Ordinal))
@@ -1056,7 +1060,7 @@ public sealed class ContractTemplateService : IContractTemplateService
         var fingerprint = CreatePreviewSourceHash(
             version.DocumentHash!,
             (ContractLanguageMode)template.LanguageMode,
-            version.PlaceholderBindingHash,
+            version.PlaceholderBindingHash!,
             previewInput.CanonicalHash);
 
         if (version.PreviewFileId is not > 0)
@@ -1132,7 +1136,7 @@ public sealed class ContractTemplateService : IContractTemplateService
             await ValidatePaymentTermsForPublishAsync(versionId, cancellationToken);
             fingerprint = CreatePreviewSourceHash(preflightVersion.DocumentHash!,
                 (ContractLanguageMode)preflightTemplate.LanguageMode,
-                preflightVersion.PlaceholderBindingHash,
+                preflightVersion.PlaceholderBindingHash!,
                 preflightInput.CanonicalHash);
             previewDocx = await DownloadCurrentPreviewBytesAsync(preflightVersion,
                 fingerprint, cancellationToken);
@@ -1175,7 +1179,7 @@ public sealed class ContractTemplateService : IContractTemplateService
                     versionId, cancellationToken);
                 var currentFingerprint = CreatePreviewSourceHash(version.DocumentHash!,
                     (ContractLanguageMode)template.LanguageMode,
-                    version.PlaceholderBindingHash,
+                    version.PlaceholderBindingHash!,
                     currentInput.CanonicalHash);
                 if (!string.Equals(fingerprint, currentFingerprint,
                         StringComparison.Ordinal))
@@ -2105,7 +2109,9 @@ public sealed class ContractTemplateService : IContractTemplateService
         var currentCatalog = await _placeholderCatalog.GetAsync(cancellationToken: cancellationToken);
         if (validation.CatalogRevision is not null && validation.CatalogRevision != ContractPlaceholderCatalog.Fingerprint(currentCatalog))
             throw new DbUpdateConcurrencyException("Catalog placeholder đã thay đổi trong khi upload. Hãy thử lại.");
-        var definitions = validation.Definitions ?? currentCatalog.Where(x => recognized.Contains(x.Key)).ToArray();
+        var definitions = validation.Definitions
+            ?? throw new InvalidOperationException(
+                "Kết quả validation thiếu snapshot placeholder.");
 
         if (IsInMemoryProvider())
         {
@@ -2140,7 +2146,9 @@ public sealed class ContractTemplateService : IContractTemplateService
                 PlaceholderKey = definition.Key,
                 FieldLabel = definition.Label,
                 DataSource = definition.DataSource,
-                SourceFieldKey = definition.SourceFieldKey,
+                SourceFieldKey = definition.SourceFieldKey
+                    ?? throw new InvalidOperationException(
+                        $"Placeholder {definition.Key} chưa có source field."),
                 DataKind = (byte)definition.DataKind,
                 Multiplicity = (byte)definition.Multiplicity,
                 IsSystem = definition.IsSystem,
@@ -2643,7 +2651,8 @@ public sealed class ContractTemplateService : IContractTemplateService
         if (version.Status != (byte)TemplateVersionStatus.Draft
             || version.ValidationStatus != (byte)TemplateValidationStatus.Valid
             || version.DocumentFileId is not > 0
-            || !IsSha256Hex(version.DocumentHash))
+            || !IsSha256Hex(version.DocumentHash)
+            || !IsSha256Hex(version.PlaceholderBindingHash))
         {
             throw new ContractTemplatePreviewException(
                 "PreviewPrerequisiteNotMet",
@@ -2660,7 +2669,8 @@ public sealed class ContractTemplateService : IContractTemplateService
         if (!canDownload
             || version.ValidationStatus != (byte)TemplateValidationStatus.Valid
             || version.DocumentFileId is not > 0
-            || !IsSha256Hex(version.DocumentHash))
+            || !IsSha256Hex(version.DocumentHash)
+            || !IsSha256Hex(version.PlaceholderBindingHash))
         {
             throw new ContractTemplatePreviewException("PreviewPrerequisiteNotMet",
                 "DOCX preview chỉ có thể tải khi TemplateVersion còn preview hợp lệ.");
@@ -2673,6 +2683,7 @@ public sealed class ContractTemplateService : IContractTemplateService
             || version.ValidationStatus != (byte)TemplateValidationStatus.Valid
             || version.DocumentFileId is not > 0
             || !IsSha256Hex(version.DocumentHash)
+            || !IsSha256Hex(version.PlaceholderBindingHash)
             || version.PreviewFileId is not > 0)
         {
             throw new ContractTemplatePreviewException("PublishPrerequisiteNotMet",
@@ -2683,16 +2694,15 @@ public sealed class ContractTemplateService : IContractTemplateService
     private static string CreatePreviewSourceHash(
         string documentHash,
         ContractLanguageMode languageMode,
-        string? bindingHash = null,
-        string? authoringDataHash = null)
+        string bindingHash,
+        string authoringDataHash)
     {
         var source = string.Join('|',
             documentHash.Trim().ToLowerInvariant(),
-            // Versions published before binding snapshots retain their original preview fingerprint.
-            bindingHash ?? "V2",
-            authoringDataHash ?? "NO_AUTHORING_DATA",
+            bindingHash,
+            authoringDataHash,
             SoftwareSupplyPreviewDatasetV1.Version,
-            bindingHash is null ? "V3" : ContractTemplatePreviewRenderer.FormatVersion,
+            ContractTemplatePreviewRenderer.FormatVersion,
             ((byte)languageMode).ToString(System.Globalization.CultureInfo.InvariantCulture));
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source)))
             .ToLowerInvariant();
@@ -3063,9 +3073,27 @@ public sealed class ContractTemplateService : IContractTemplateService
             NormalizeRequired(termCode, 100, nameof(termCode)),
             NormalizeRequired(termTitle, 500, nameof(termTitle)),
             NormalizeOptional(termTitleEn, 500),
-            NormalizeOptional(termContent),
-            NormalizeOptional(termContentEn),
+            NormalizeRichText(termContent, nameof(termContent)),
+            NormalizeRichText(termContentEn, nameof(termContentEn)),
             displayOrder);
+    }
+
+    private static string? NormalizeRichText(string? value, string parameterName)
+    {
+        var normalized = NormalizeOptional(value);
+        if (normalized is null)
+        {
+            return null;
+        }
+
+        if (!ContractTermRichText.TryParse(normalized, out _))
+        {
+            throw new ArgumentException(
+                "Nội dung phải dùng định dạng rich text v3 hợp lệ.",
+                parameterName);
+        }
+
+        return normalized;
     }
 
     private async Task EnsureSinglePaymentTermAsync(int versionId,
@@ -3134,9 +3162,15 @@ public sealed class ContractTemplateService : IContractTemplateService
             throw new ArgumentException("DisplayOrder không được âm.");
         }
 
+        var normalizedContentVi = NormalizeRichText(contentVi, nameof(contentVi))
+            ?? throw new ArgumentException(
+                "Nội dung căn cứ tiếng Việt không được để trống.",
+                nameof(contentVi));
+
         return (NormalizeRequired(basisCode, 100, nameof(basisCode)),
-            NormalizeRequired(contentVi, int.MaxValue, nameof(contentVi)),
-            NormalizeOptional(contentEn), displayOrder);
+            normalizedContentVi,
+            NormalizeRichText(contentEn, nameof(contentEn)),
+            displayOrder);
     }
 
     private static void ValidateLanguageMode(ContractLanguageMode mode)

@@ -148,10 +148,7 @@ public sealed class ContractDocumentPreviewService :
             ?? throw new InvalidOperationException(
                 "Phiên bản hiện hành của hợp đồng không còn khả dụng.");
 
-        var templateVersionId = version.TemplateVersionId
-            ?? contract.TemplateVersionId
-            ?? throw new InvalidOperationException(
-                "Hợp đồng không có template để tạo preview.");
+        var templateVersionId = version.TemplateVersionId;
 
         var template = await (
                 from templateVersion in _dbContext.TblContractTemplateVersions
@@ -236,7 +233,7 @@ public sealed class ContractDocumentPreviewService :
         renderData = renderData with
         {
             ScalarValues = scalars,
-            Definitions = definitions.Length == 0 ? ContractPlaceholderCatalog.SystemDefinitions : definitions
+            Definitions = definitions
         };
         // Included in the canonical submitted JSON/hash alongside the generated artifact.
         snapshot = snapshot with { PlaceholderValues = scalars };
@@ -270,11 +267,6 @@ public sealed class ContractDocumentPreviewService :
                 "Phase 8B chỉ hỗ trợ renderer cho hợp đồng cung cấp phần mềm.");
         }
 
-        if (contract.IsLegacy)
-        {
-            throw new InvalidOperationException(
-                "Hợp đồng legacy không có dữ liệu template để tạo preview động.");
-        }
     }
 
     private static void EnsureTemplatePolicy(

@@ -55,7 +55,7 @@ public sealed record ContractLegalSnapshot(
     string ContractName,
     string? ContractNameEn,
     byte ContractType,
-    int? TemplateVersionId,
+    int TemplateVersionId,
     DateTime CreatedDate,
     DateTime? SignDate,
     DateTime? EffectiveDate,
@@ -71,7 +71,7 @@ public sealed record ContractVersionLegalSnapshot(
     int VersionId,
     int VersionNo,
     int? SourceVersionId,
-    int? TemplateVersionId,
+    int TemplateVersionId,
     string CurrencyCode,
     decimal Subtotal,
     decimal TotalDiscount,
@@ -286,19 +286,6 @@ public static class SoftwareSupplyContractSnapshotFactory
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         return JsonSerializer.Serialize(snapshot, SerializerOptions);
-    }
-
-    public static SoftwareSupplyContractSnapshot Deserialize(string json)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-            throw new ArgumentException("Snapshot JSON không được để trống.", nameof(json));
-        var snapshot = JsonSerializer.Deserialize<SoftwareSupplyContractSnapshot>(
-            json, SerializerOptions)
-            ?? throw new JsonException("Snapshot JSON không hợp lệ.");
-        if (snapshot.SchemaVersion is < 4 or > CurrentSchemaVersion)
-            throw new JsonException(
-                $"Snapshot schema {snapshot.SchemaVersion} không được hỗ trợ.");
-        return snapshot;
     }
 
     private static string FirstRequired(

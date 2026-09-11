@@ -18,6 +18,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
+using static ContractManagement.Tests.ContractRichTextTestData;
 
 namespace ContractManagement.Tests.Domains.Services.Contract;
 
@@ -633,7 +634,7 @@ public class ContractServiceResponsibilityTransferTests
                 VersionId = VersionId,
                 TermCode = "GENERAL",
                 TermTitle = "Điều khoản cũ",
-                TermContent = "Nội dung cũ",
+                TermContent = RichText("Nội dung cũ"),
                 IsNegotiable = true,
                 DisplayOrder = 1,
                 CreatedEmployeeId = CreatorEmployeeId,
@@ -666,7 +667,7 @@ public class ContractServiceResponsibilityTransferTests
         request.Terms[0].RowVersion =
             Convert.ToBase64String(InitialRowVersion());
         request.Terms[0].TermTitle = "Điều khoản đã sửa";
-        request.Terms[0].TermContent = "Nội dung mới";
+        request.Terms[0].TermContent = RichText("Nội dung mới");
 
         await CreateService(context).UpdateDraftAsync(
             ContractId,
@@ -934,12 +935,12 @@ public class ContractServiceResponsibilityTransferTests
             CurrentVersionId = VersionId,
             ContractCode = "HD-TEST-11",
             ContractName = "Hợp đồng kiểm thử",
+            TemplateVersionId = 1,
             Status = (byte)ContractStatus.Draft,
             TotalAmount = 100m,
             CurrencyCode = "VND",
             LanguageMode =
                 (byte)ContractLanguageMode.Vietnamese,
-            IsLegacy = false,
             CreatedEmployeeId = CreatorEmployeeId,
             CreatedDate = DateTime.UtcNow,
             RowVersion = rowVersion ?? InitialRowVersion()
@@ -951,6 +952,7 @@ public class ContractServiceResponsibilityTransferTests
                 VersionId = VersionId,
                 ContractId = ContractId,
                 VersionNo = 1,
+                TemplateVersionId = 1,
                 IsLocked = false,
                 CreatedEmployeeId = CreatorEmployeeId,
                 CreatedDate = DateTime.UtcNow,
@@ -990,7 +992,7 @@ public class ContractServiceResponsibilityTransferTests
             Task.FromResult(new ContractSubmissionArtifactRenderResult(
                 "{\"schemaVersion\":6}",
                 6,
-                7001,
+                1,
                 [0x50, 0x4B, 0x03, 0x04, 0x01],
                 "contract-submitted.docx",
                 "%PDF-test"u8.ToArray(),
@@ -1075,7 +1077,7 @@ public class ContractServiceResponsibilityTransferTests
                 {
                     TermCode = "GENERAL",
                     TermTitle = "Điều khoản chung",
-                    TermContent = "Nội dung kiểm thử",
+                    TermContent = RichText("Nội dung kiểm thử"),
                     IsNegotiable = true,
                     DisplayOrder = 1
                 }

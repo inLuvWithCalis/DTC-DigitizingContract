@@ -66,30 +66,6 @@ public sealed class ContractTemplateDocumentValidatorTests
     }
 
     [Fact]
-    public async Task RetiredPaymentScheduleSection_IsRemovedBeforeCatalogValidation()
-    {
-        var tokens = RequiredTokens()
-            .Append("LỊCH THANH TOÁN")
-            .Append("{{PAYMENT_SCHEDULE_TABLE}}");
-
-        var result = await _validator.ValidateAsync(CreateFile(
-            CreateDocument(tokens), "template.docx"));
-
-        Assert.True(result.IsTechnicallyAccepted,
-            $"Technical failure: {result.FailureCode}");
-        Assert.True(result.IsCatalogValid, result.ValidationMessage);
-        Assert.DoesNotContain("PAYMENT_SCHEDULE_TABLE",
-            result.RecognizedPlaceholderKeys);
-        var sanitizedBytes = Assert.IsType<byte[]>(result.DocumentBytes);
-        using var document = WordprocessingDocument.Open(
-            new MemoryStream(sanitizedBytes), false);
-        var text = string.Concat(document.MainDocumentPart!.Document
-            .Descendants<W.Text>().Select(item => item.Text));
-        Assert.DoesNotContain("LỊCH THANH TOÁN", text);
-        Assert.DoesNotContain("PAYMENT_SCHEDULE_TABLE", text);
-    }
-
-    [Fact]
     public async Task SplitRunHeaderFooterAndTableTokens_AreAllRecognized()
     {
         var required = new[]

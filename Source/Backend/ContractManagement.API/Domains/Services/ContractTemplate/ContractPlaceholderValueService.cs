@@ -14,8 +14,7 @@ public sealed class ContractPlaceholderValueService(DbDtctechContext db, IContra
     public async Task<IReadOnlyDictionary<string, string>> CaptureAsync(TblContract contract, TblContractVersion version,
         bool refresh = false, CancellationToken cancellationToken = default)
     {
-        var templateId = version.TemplateVersionId ?? contract.TemplateVersionId;
-        if (templateId is null) return new Dictionary<string, string>();
+        var templateId = version.TemplateVersionId;
         var fields = await db.TblContractTemplateFields.AsNoTracking()
             .Where(x => x.TemplateVersionId == templateId && !x.IsSystem).ToListAsync(cancellationToken);
         var stored = await db.TblContractVersionPlaceholderValues
@@ -81,7 +80,7 @@ public sealed class ContractPlaceholderValueService(DbDtctechContext db, IContra
                 row = new() { ContractId = contract.ContractId, VersionId = version.VersionId, PlaceholderKey = f.PlaceholderKey };
                 db.TblContractVersionPlaceholderValues.Add(row);
             }
-            row.TemplateVersionId = templateId.Value;
+            row.TemplateVersionId = templateId;
             row.SourceFieldKey = f.SourceFieldKey!;
             row.RawValue = raw is IFormattable fmt ? fmt.ToString(null, CultureInfo.InvariantCulture) : raw?.ToString();
             row.RenderedValue = rendered;

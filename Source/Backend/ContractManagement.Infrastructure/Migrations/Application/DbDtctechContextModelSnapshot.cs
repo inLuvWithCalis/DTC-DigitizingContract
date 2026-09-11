@@ -301,11 +301,6 @@ namespace ContractManagement.Migrations
                     b.Property<DateTime?>("ExpireDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<bool>("IsLegacy")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(false);
-
                     b.Property<byte>("LanguageMode")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("tinyint")
@@ -334,7 +329,7 @@ namespace ContractManagement.Migrations
                         .HasColumnType("decimal(18,2)")
                         .HasDefaultValue(0m);
 
-                    b.Property<int?>("TemplateVersionId")
+                    b.Property<int>("TemplateVersionId")
                         .HasColumnType("int");
 
                     b.Property<decimal>("TotalAmount")
@@ -392,6 +387,8 @@ namespace ContractManagement.Migrations
                             t.HasCheckConstraint("CK_tbl_Contract_LanguageMode", "[LanguageMode] IN (1, 2)");
 
                             t.HasCheckConstraint("CK_tbl_Contract_Status", "[Status] IN (0, 1, 2, 3, 4, 5, 6, 7)");
+
+                            t.HasCheckConstraint("CK_tbl_Contract_TemplateVersionId", "[TemplateVersionId] > 0");
 
                             t.HasCheckConstraint("CK_tbl_Contract_TotalAmount", "[TotalAmount] >= 0");
                         });
@@ -2277,6 +2274,7 @@ namespace ContractManagement.Migrations
                         .HasColumnType("rowversion");
 
                     b.Property<string>("SourceFieldKey")
+                        .IsRequired()
                         .HasMaxLength(200)
                         .IsUnicode(false)
                         .HasColumnType("varchar(200)");
@@ -2877,7 +2875,7 @@ namespace ContractManagement.Migrations
                         .HasColumnType("decimal(18,2)")
                         .HasDefaultValue(0m);
 
-                    b.Property<int?>("TemplateVersionId")
+                    b.Property<int>("TemplateVersionId")
                         .HasColumnType("int");
 
                     b.Property<decimal>("TotalAmount")
@@ -2926,7 +2924,7 @@ namespace ContractManagement.Migrations
 
                             t.HasCheckConstraint("CK_tbl_ContractVersion_SourceVersionId", "[SourceVersionId] IS NULL OR [SourceVersionId] > 0");
 
-                            t.HasCheckConstraint("CK_tbl_ContractVersion_TemplateVersionId", "[TemplateVersionId] IS NULL OR [TemplateVersionId] > 0");
+                            t.HasCheckConstraint("CK_tbl_ContractVersion_TemplateVersionId", "[TemplateVersionId] > 0");
 
                             t.HasCheckConstraint("CK_tbl_ContractVersion_VersionNo", "[VersionNo] > 0");
                         });

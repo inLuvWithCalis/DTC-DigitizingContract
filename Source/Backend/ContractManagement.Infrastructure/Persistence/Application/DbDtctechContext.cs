@@ -279,6 +279,10 @@ public partial class DbDtctechContext : DbContext
                     "CK_tbl_Contract_LanguageMode",
                     "[LanguageMode] IN (1, 2)");
 
+                table.HasCheckConstraint(
+                    "CK_tbl_Contract_TemplateVersionId",
+                    "[TemplateVersionId] > 0");
+
                 // Giá trị hợp đồng không được âm.
                 table.HasCheckConstraint(
                     "CK_tbl_Contract_TotalAmount",
@@ -386,9 +390,6 @@ public partial class DbDtctechContext : DbContext
              */
             entity.Property(e => e.LanguageMode)
                 .HasDefaultValue((byte)1);
-
-            entity.Property(e => e.IsLegacy)
-                .HasDefaultValue(false);
 
             entity.Property(e => e.CreatedDate)
                 .HasDefaultValueSql(
@@ -1500,6 +1501,11 @@ public partial class DbDtctechContext : DbContext
                 .IsUnicode(false)
                 .IsRequired();
 
+            entity.Property(e => e.SourceFieldKey)
+                .HasMaxLength(200)
+                .IsUnicode(false)
+                .IsRequired();
+
             entity.Property(e => e.FieldLabel)
                 .HasMaxLength(300)
                 .IsRequired();
@@ -2007,11 +2013,10 @@ public partial class DbDtctechContext : DbContext
                     "CK_tbl_ContractVersion_SourceVersionId",
                     "[SourceVersionId] IS NULL OR [SourceVersionId] > 0");
 
-                // TemplateVersionId được phép null với hợp đồng legacy.
-                // Nếu có thì phải là logical ID hợp lệ.
+                // TemplateVersionId phải là logical ID hợp lệ.
                 table.HasCheckConstraint(
                     "CK_tbl_ContractVersion_TemplateVersionId",
-                    "[TemplateVersionId] IS NULL OR [TemplateVersionId] > 0");
+                    "[TemplateVersionId] > 0");
 
                 // Version bắt đầu từ 1, không chấp nhận 0 hoặc số âm.
                 table.HasCheckConstraint(

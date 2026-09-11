@@ -586,8 +586,7 @@ export default function ContractDetailPage() {
     canManageContract &&
     (contract.status === ContractStatus.Draft ||
       contract.status === ContractStatus.Negotiating) &&
-    contract.contractType === ContractType.SoftwareSupply &&
-    !contract.isLegacy;
+    contract.contractType === ContractType.SoftwareSupply;
 
   const viewContractPdf = async () => {
     if (isOpeningPdf) return;

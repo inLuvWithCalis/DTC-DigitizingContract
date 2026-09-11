@@ -35,7 +35,7 @@ public partial class TblContractVersion
     /// Phiên bản template được dùng để tạo version hợp đồng này.
     /// Phải lưu tại đây để lịch sử không thay đổi khi contract dùng template mới.
     /// </summary>
-    public int? TemplateVersionId { get; set; }
+    public int TemplateVersionId { get; set; }
 
     /// <summary>
     /// Lý do tạo phiên bản mới, ví dụ:

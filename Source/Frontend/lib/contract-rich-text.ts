@@ -1,6 +1,4 @@
 export const CONTRACT_RICH_TEXT_PREFIX = "contract-rich-text:v3:";
-export const CONTRACT_RICH_TEXT_V2_PREFIX = "contract-rich-text:v2:";
-export const CONTRACT_RICH_TEXT_LEGACY_PREFIX = "contract-rich-text:v1:";
 
 export const CONTRACT_RICH_TEXT_FONT_SIZES = [10, 12, 14, 18, 24, 32] as const;
 
@@ -177,6 +175,7 @@ export const normalizeContractRichTextDocument = (
   if (!Array.isArray(blocks)) return null;
 
   const normalizedBlocks: ContractRichTextBlock[] = [];
+  let invalid = false;
   blocks.slice(0, 500).forEach((candidate) => {
     if (!candidate || typeof candidate !== "object") return;
     const block = candidate as Record<string, unknown>;
@@ -192,7 +191,7 @@ export const normalizeContractRichTextDocument = (
     }
 
     if (block.type !== "table" || !Array.isArray(block.rows)) return;
-    let rows: ContractRichTextRow[] = block.rows
+    const rows: ContractRichTextRow[] = block.rows
       .slice(0, 50)
       .map((rowCandidate) => {
         const cells =
@@ -226,66 +225,39 @@ export const normalizeContractRichTextDocument = (
       });
 
     if (!hasValidLogicalGrid(rows)) {
-      rows = rows.map((row) => ({
-        cells: row.cells.map((cell) => ({ paragraphs: cell.paragraphs })),
-      }));
+      invalid = true;
+      return;
     }
 
     if (rows.length > 0) normalizedBlocks.push({ type: "table", rows });
   });
 
+  if (invalid) return null;
   return { blocks: normalizedBlocks };
 };
 
-const plainTextDocument = (value: string): ContractRichTextDocument => ({
-  blocks: value.split(/\r?\n/).map((line) => ({
-    type: "paragraph" as const,
-    runs: line ? [{ text: line }] : [],
-  })),
-});
-
-const withoutV3TableLayout = (
-  document: ContractRichTextDocument,
-): ContractRichTextDocument => ({
-  blocks: document.blocks.map((block) =>
-    block.type === "paragraph"
-      ? block
-      : {
-          type: "table",
-          rows: block.rows.map((row) => ({
-            cells: row.cells.map((cell) => ({
-              paragraphs: cell.paragraphs,
-            })),
-          })),
-        },
-  ),
-});
+const emptyDocument = (): ContractRichTextDocument => ({ blocks: [] });
 
 export const parseContractRichText = (
   value?: string | null,
 ): ContractRichTextDocument => {
   const source = value ?? "";
-  const prefix = source.startsWith(CONTRACT_RICH_TEXT_PREFIX)
-    ? CONTRACT_RICH_TEXT_PREFIX
-    : source.startsWith(CONTRACT_RICH_TEXT_V2_PREFIX)
-      ? CONTRACT_RICH_TEXT_V2_PREFIX
-    : source.startsWith(CONTRACT_RICH_TEXT_LEGACY_PREFIX)
-      ? CONTRACT_RICH_TEXT_LEGACY_PREFIX
-      : null;
-  if (!prefix) {
-    return plainTextDocument(source);
+  if (source.length === 0) {
+    return emptyDocument();
+  }
+  if (!source.startsWith(CONTRACT_RICH_TEXT_PREFIX)) {
+    throw new Error("Nội dung điều khoản không dùng định dạng rich text v3.");
   }
 
   try {
-    const document =
-      normalizeContractRichTextDocument(
-        JSON.parse(source.slice(prefix.length)),
-      ) ?? plainTextDocument("");
-    return prefix === CONTRACT_RICH_TEXT_PREFIX
-      ? document
-      : withoutV3TableLayout(document);
-  } catch {
-    return plainTextDocument("");
+    const document = normalizeContractRichTextDocument(
+      JSON.parse(source.slice(CONTRACT_RICH_TEXT_PREFIX.length)),
+    );
+    if (!document) throw new Error("Rich text v3 không hợp lệ.");
+    return document;
+  } catch (error) {
+    if (error instanceof Error) throw error;
+    throw new Error("Rich text v3 không hợp lệ.");
   }
 };
 
@@ -299,9 +271,8 @@ const hasMeaningfulContent = (document: ContractRichTextDocument) =>
 export const serializeContractRichText = (
   document: ContractRichTextDocument,
 ) => {
-  const normalized = normalizeContractRichTextDocument(document) ?? {
-    blocks: [],
-  };
+  const normalized = normalizeContractRichTextDocument(document);
+  if (!normalized) throw new Error("Rich text v3 không hợp lệ.");
   if (!hasMeaningfulContent(normalized)) return "";
   return `${CONTRACT_RICH_TEXT_PREFIX}${JSON.stringify(normalized)}`;
 };

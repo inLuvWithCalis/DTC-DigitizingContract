@@ -124,7 +124,8 @@ export default function TenantsPage() {
             <Building2 className="size-6 text-primary" /> Quản lý tenant
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Dữ liệu lấy trực tiếp từ Central Database; không dùng dữ liệu mô phỏng.
+            Dữ liệu lấy trực tiếp từ Central Database; không dùng dữ liệu mô
+            phỏng.
           </p>
         </div>
         <Button onClick={() => setCreateOpen(true)}>
@@ -145,8 +146,14 @@ export default function TenantsPage() {
                 className="pl-9"
               />
             </div>
-            <Button variant="outline" size="icon" onClick={() => void loadTenants()}>
-              <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => void loadTenants()}
+            >
+              <RefreshCw
+                className={loading ? "size-4 animate-spin" : "size-4"}
+              />
               <span className="sr-only">Tải lại</span>
             </Button>
           </div>
@@ -164,19 +171,50 @@ export default function TenantsPage() {
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={4} className="h-32 text-center"><Loader2 className="mx-auto size-5 animate-spin" /></TableCell></TableRow>
+                  <TableRow>
+                    <TableCell colSpan={4} className="h-32 text-center">
+                      <Loader2 className="mx-auto size-5 animate-spin" />
+                    </TableCell>
+                  </TableRow>
                 ) : filteredTenants.length === 0 ? (
-                  <TableRow><TableCell colSpan={4} className="h-32 text-center text-muted-foreground">Không có tenant phù hợp.</TableCell></TableRow>
+                  <TableRow>
+                    <TableCell
+                      colSpan={4}
+                      className="h-32 text-center text-muted-foreground"
+                    >
+                      Không có tenant phù hợp.
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   filteredTenants.map((tenant) => (
                     <TableRow key={tenant.tenantId}>
                       <TableCell>
                         <p className="font-medium">{tenant.tenantName}</p>
-                        <p className="font-mono text-xs text-muted-foreground">{tenant.tenantCode}</p>
+                        <p className="font-mono text-xs text-muted-foreground">
+                          {tenant.tenantCode}
+                        </p>
                       </TableCell>
-                      <TableCell className="font-mono text-xs">{tenant.databaseName}</TableCell>
-                      <TableCell>{tenant.databaseMode === TenantDatabaseMode.Dedicated ? "Dedicated" : "Shared"}</TableCell>
-                      <TableCell><Badge variant={tenant.status === TenantStatus.Active ? "default" : tenant.status === TenantStatus.Failed ? "destructive" : "secondary"}>{STATUS_LABELS[tenant.status]}</Badge></TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {tenant.databaseName}
+                      </TableCell>
+                      <TableCell>
+                        {tenant.databaseMode === TenantDatabaseMode.Dedicated
+                          ? "Dedicated"
+                          : "Shared"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            tenant.status === TenantStatus.Active
+                              ? "default"
+                              : tenant.status === TenantStatus.Failed
+                                ? "destructive"
+                                : "secondary"
+                          }
+                        >
+                          {STATUS_LABELS[tenant.status]}
+                        </Badge>
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -191,22 +229,77 @@ export default function TenantsPage() {
           <form onSubmit={handleCreate}>
             <DialogHeader>
               <DialogTitle>Tạo tenant mới</DialogTitle>
-              <DialogDescription>Database, migration/seed và Manager đầu tiên được tạo trong cùng luồng provisioning.</DialogDescription>
+              <DialogDescription>
+                Database, migration/seed và Manager đầu tiên được tạo trong cùng
+                luồng provisioning.
+              </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-5 sm:grid-cols-2">
-              <Field label="Mã tenant" required value={form.tenantCode} onChange={(value) => updateField("tenantCode", value.replace(/[^a-zA-Z0-9-]/g, "").toLowerCase())} />
-              <Field label="Tên tenant" required value={form.tenantName} onChange={(value) => updateField("tenantName", value)} />
-              <Field label="Mã nhân viên Manager" value={form.employeeCode} onChange={(value) => updateField("employeeCode", value)} />
-              <Field label="Tài khoản Manager" required value={form.employeeAccount} onChange={(value) => updateField("employeeAccount", value)} />
-              <Field label="Họ tên Manager" required value={form.employeeFullName} onChange={(value) => updateField("employeeFullName", value)} />
-              <Field label="Mật khẩu tạm" required type="password" minLength={12} value={form.employeePassword} onChange={(value) => updateField("employeePassword", value)} />
-              <Field label="Số điện thoại" value={form.employeeMobile} onChange={(value) => updateField("employeeMobile", value)} />
-              <Field label="Email" type="email" value={form.employeeEmail} onChange={(value) => updateField("employeeEmail", value)} />
+              <Field
+                label="Mã tenant"
+                required
+                value={form.tenantCode}
+                onChange={(value) =>
+                  updateField(
+                    "tenantCode",
+                    value.replace(/[^a-zA-Z0-9-]/g, "").toLowerCase(),
+                  )
+                }
+              />
+              <Field
+                label="Tên tenant"
+                required
+                value={form.tenantName}
+                onChange={(value) => updateField("tenantName", value)}
+              />
+              <Field
+                label="Mã nhân viên Manager"
+                value={form.employeeCode}
+                onChange={(value) => updateField("employeeCode", value)}
+              />
+              <Field
+                label="Tài khoản Manager"
+                required
+                value={form.employeeAccount}
+                onChange={(value) => updateField("employeeAccount", value)}
+              />
+              <Field
+                label="Họ tên Manager"
+                required
+                value={form.employeeFullName}
+                onChange={(value) => updateField("employeeFullName", value)}
+              />
+              <Field
+                label="Mật khẩu tạm"
+                required
+                type="password"
+                value={form.employeePassword}
+                onChange={(value) => updateField("employeePassword", value)}
+              />
+              <Field
+                label="Số điện thoại"
+                value={form.employeeMobile}
+                onChange={(value) => updateField("employeeMobile", value)}
+              />
+              <Field
+                label="Email"
+                type="email"
+                value={form.employeeEmail}
+                onChange={(value) => updateField("employeeEmail", value)}
+              />
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>Hủy</Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCreateOpen(false)}
+                disabled={creating}
+              >
+                Hủy
+              </Button>
               <Button type="submit" disabled={creating}>
-                {creating && <Loader2 className="size-4 animate-spin" />} Tạo tenant
+                {creating && <Loader2 className="size-4 animate-spin" />} Tạo
+                tenant
               </Button>
             </DialogFooter>
           </form>
@@ -234,8 +327,19 @@ function Field({
   const id = `tenant-${label.toLowerCase().replaceAll(" ", "-")}`;
   return (
     <div className="space-y-2">
-      <Label htmlFor={id}>{label}{required && <span className="text-destructive"> *</span>}</Label>
-      <Input id={id} type={type} required={required} minLength={minLength} value={value} onChange={(event) => onChange(event.target.value)} autoComplete={type === "password" ? "new-password" : undefined} />
+      <Label htmlFor={id}>
+        {label}
+        {required && <span className="text-destructive"> *</span>}
+      </Label>
+      <Input
+        id={id}
+        type={type}
+        required={required}
+        minLength={minLength}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        autoComplete={type === "password" ? "new-password" : undefined}
+      />
     </div>
   );
 }

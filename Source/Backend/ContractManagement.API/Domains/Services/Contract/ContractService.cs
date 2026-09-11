@@ -554,9 +554,6 @@ namespace ContractManagement.Domains.Services.Contract
 
                         LanguageMode = (byte)request.LanguageMode,
 
-                        // API này chỉ tạo hợp đồng mới, không tạo legacy.
-                        IsLegacy = false,
-
                         CreatedDate = now
                     };
 
@@ -722,9 +719,9 @@ namespace ContractManagement.Domains.Services.Contract
                                     TermTitle = requestTerm.TermTitle.Trim(),
                                     TermTitleEn = NormalizeOptional(
                                         requestTerm.TermTitleEn),
-                                    TermContent = NormalizeOptional(
+                                    TermContent = NormalizeRichText(
                                         requestTerm.TermContent),
-                                    TermContentEn = NormalizeOptional(
+                                    TermContentEn = NormalizeRichText(
                                         requestTerm.TermContentEn),
                                     TermKind = requestTerm.SourceTemplateTermId is { } sourceId
                                         ? templateTerms.Single(item => item.TemplateTermId == sourceId).TermKind
@@ -1493,7 +1490,6 @@ namespace ContractManagement.Domains.Services.Contract
                 LanguageMode =
                     (ContractLanguageMode)contract.LanguageMode,
 
-                IsLegacy = contract.IsLegacy,
                 CreatedEmployeeId = contract.CreatedEmployeeId,
                 CreatedDate = contract.CreatedDate,
                 UpdatedDate = contract.UpdateDate,
@@ -1674,12 +1670,6 @@ namespace ContractManagement.Domains.Services.Contract
                         {
                             throw new InvalidOperationException(
                                 "Hợp đồng ở trạng thái hiện tại không được sửa nội dung.");
-                        }
-
-                        if (contract.IsLegacy)
-                        {
-                            throw new InvalidOperationException(
-                                "Hợp đồng legacy không được chỉnh sửa bằng API này.");
                         }
 
                         if (!contract.CurrentVersionId.HasValue)
@@ -2086,10 +2076,10 @@ namespace ContractManagement.Domains.Services.Contract
                                 NormalizeOptional(requestTerm.TermTitleEn);
 
                             term.TermContent =
-                                NormalizeOptional(requestTerm.TermContent);
+                                NormalizeRichText(requestTerm.TermContent);
 
                             term.TermContentEn =
-                                NormalizeOptional(requestTerm.TermContentEn);
+                                NormalizeRichText(requestTerm.TermContentEn);
 
                             term.IsNegotiable = requestTerm.IsNegotiable;
 
@@ -2306,12 +2296,6 @@ namespace ContractManagement.Domains.Services.Contract
                         "Không tìm thấy hợp đồng.");
                 }
 
-                if (contract.IsLegacy)
-                {
-                    throw new InvalidOperationException(
-                        "Hợp đồng legacy không hỗ trợ quy trình này.");
-                }
-
                 var currentStatus =
                     (ContractStatus)contract.Status;
 
@@ -2475,12 +2459,6 @@ namespace ContractManagement.Domains.Services.Contract
                         {
                             throw new KeyNotFoundException(
                                 "Không tìm thấy hợp đồng.");
-                        }
-
-                        if (contract.IsLegacy)
-                        {
-                            throw new InvalidOperationException(
-                                "Hợp đồng legacy không hỗ trợ tạo vòng đàm phán.");
                         }
 
                         var previousContractStatus =
@@ -4468,12 +4446,6 @@ namespace ContractManagement.Domains.Services.Contract
                                 "Không tìm thấy hợp đồng.");
                         }
 
-                        if (contract.IsLegacy)
-                        {
-                            throw new InvalidOperationException(
-                                "Hợp đồng legacy không hỗ trợ gửi duyệt.");
-                        }
-
                         if (contract.ContractType !=
                             (byte)ContractType.SoftwareSupply)
                         {
@@ -4623,9 +4595,7 @@ namespace ContractManagement.Domains.Services.Contract
                                 $"Renderer không trả snapshot SoftwareSupply schema v{SoftwareSupplyContractSnapshotFactory.CurrentSchemaVersion}.");
                         }
 
-                        if (version.TemplateVersionId.HasValue
-                            && version.TemplateVersionId.Value !=
-                            rendered.TemplateVersionId)
+                        if (version.TemplateVersionId != rendered.TemplateVersionId)
                         {
                             throw new DbUpdateConcurrencyException(
                                 "TemplateVersion của version đã thay đổi trong lúc gửi duyệt.");
@@ -5603,6 +5573,23 @@ namespace ContractManagement.Domains.Services.Contract
                 : value.Trim();
         }
 
+        private static string? NormalizeRichText(string? value)
+        {
+            var normalized = NormalizeOptional(value);
+            if (normalized is null)
+            {
+                return null;
+            }
+
+            if (!ContractTermRichText.TryParse(normalized, out _))
+            {
+                throw new ArgumentException(
+                    "Nội dung điều khoản phải dùng định dạng rich text v3 hợp lệ.");
+            }
+
+            return normalized;
+        }
+
         private static string BuildCustomerAuditDisplayName(
             int customerId,
             string? customerCode,
@@ -5747,10 +5734,10 @@ namespace ContractManagement.Domains.Services.Contract
             AddChangedField(fields, "Tiêu đề tiếng Anh", current.TermTitleEn,
                 NormalizeOptional(requested.TermTitleEn));
             AddChangedField(fields, "Nội dung", current.TermContent,
-                NormalizeOptional(requested.TermContent));
+                NormalizeRichText(requested.TermContent));
             AddChangedField(fields, "Nội dung tiếng Anh",
                 current.TermContentEn,
-                NormalizeOptional(requested.TermContentEn));
+                NormalizeRichText(requested.TermContentEn));
             AddChangedField(fields, "Cho phép đàm phán",
                 current.IsNegotiable,
                 requested.IsNegotiable);

@@ -1,5 +1,6 @@
 using ContractManagement.API.Domains.Models.Contract;
 using ContractManagement.Infrastructure.Persistence.Application.Models;
+using static ContractManagement.Tests.ContractRichTextTestData;
 
 namespace ContractManagement.Tests.Domains.Services.Contract;
 
@@ -39,6 +40,7 @@ public sealed class SoftwareSupplyContractSnapshotTests
             ContractCode = "HD-001",
             ContractName = "Cung cấp phần mềm",
             ContractType = 1,
+            TemplateVersionId = 7,
             CurrencyCode = "VND",
             TotalAmount = 1_100_000,
             Subtotal = 1_000_000,
@@ -48,6 +50,7 @@ public sealed class SoftwareSupplyContractSnapshotTests
         {
             VersionId = 4,
             VersionNo = 1,
+            TemplateVersionId = 7,
             CurrencyCode = "VND",
             TotalAmount = 1_100_000,
             Subtotal = 1_000_000,
@@ -73,7 +76,7 @@ public sealed class SoftwareSupplyContractSnapshotTests
                 TermId = 6,
                 TermCode = "PAYMENT",
                 TermTitle = "Thanh toán",
-                TermContent = "Thanh toán một lần"
+                TermContent = RichText("Thanh toán một lần")
             }
         };
 
@@ -103,16 +106,4 @@ public sealed class SoftwareSupplyContractSnapshotTests
         Assert.Contains("\"totalAmount\":1100000", json);
     }
 
-    [Fact]
-    public void Deserialize_AcceptsSchemaV4WithoutPaymentMilestones()
-    {
-        var json = """
-            {"schemaVersion":4,"tenant":{"legalEntityName":"DTC","taxCode":"01","address":"HN","representativeName":"A","representativeTitle":"GD","phoneNumber":null,"faxNumber":null,"bankAccountNumber":null,"bankName":null},"customer":{"customerId":2,"legalName":"ABC","taxCode":null,"address":"DN","representativeName":"B","representativeTitle":"GD","phoneNumber":null,"faxNumber":null,"bankAccountNumber":null,"bankName":null},"contract":{"contractId":3,"contractCode":"HD","contractName":"Hợp đồng","contractNameEn":null,"contractType":1,"templateVersionId":null,"createdDate":"2026-09-10T00:00:00Z","signDate":null,"effectiveDate":null,"expireDate":null,"currencyCode":"VND","languageMode":1,"subtotal":1,"totalDiscount":0,"totalVat":0,"totalAmount":1},"version":{"versionId":4,"versionNo":1,"sourceVersionId":null,"templateVersionId":null,"currencyCode":"VND","subtotal":1,"totalDiscount":0,"totalVat":0,"totalAmount":1},"items":[],"terms":[]}
-            """;
-
-        var snapshot = SoftwareSupplyContractSnapshotFactory.Deserialize(json);
-
-        Assert.Equal(4, snapshot.SchemaVersion);
-        Assert.Null(snapshot.PaymentMilestones);
-    }
 }

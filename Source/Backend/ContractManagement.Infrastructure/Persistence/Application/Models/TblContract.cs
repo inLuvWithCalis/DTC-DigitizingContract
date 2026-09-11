@@ -26,9 +26,8 @@ public partial class TblContract
 
     /// <summary>
     /// Template version dùng để tạo hợp đồng.
-    /// Nullable để hỗ trợ hợp đồng Legacy được upload từ bên ngoài.
     /// </summary>
-    public int? TemplateVersionId { get; set; }
+    public int TemplateVersionId { get; set; }
 
     /// <summary>
     /// Hợp đồng cha, dùng cho hợp đồng bảo trì/duy trì phát sinh
@@ -90,11 +89,6 @@ public partial class TblContract
     /// Vietnamese hoặc Bilingual.
     /// </summary>
     public byte LanguageMode { get; set; }
-
-    /// <summary>
-    /// Hợp đồng cũ chỉ được upload để lưu trữ/tra cứu.
-    /// </summary>
-    public bool IsLegacy { get; set; }
 
     public int CreatedEmployeeId { get; set; }
 

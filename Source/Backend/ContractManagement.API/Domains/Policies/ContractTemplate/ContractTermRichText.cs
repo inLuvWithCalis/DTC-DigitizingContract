@@ -9,8 +9,6 @@ namespace ContractManagement.Domains.Policies.ContractTemplate;
 public static class ContractTermRichText
 {
     public const string Prefix = "contract-rich-text:v3:";
-    public const string Version2Prefix = "contract-rich-text:v2:";
-    public const string LegacyPrefix = "contract-rich-text:v1:";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -18,9 +16,7 @@ public static class ContractTermRichText
     };
 
     public static bool IsEncoded(string? value) =>
-        value?.StartsWith(Prefix, StringComparison.Ordinal) == true
-        || value?.StartsWith(Version2Prefix, StringComparison.Ordinal) == true
-        || value?.StartsWith(LegacyPrefix, StringComparison.Ordinal) == true;
+        value?.StartsWith(Prefix, StringComparison.Ordinal) == true;
 
     public static bool TryParse(
         string? value,
@@ -34,14 +30,8 @@ public static class ContractTermRichText
 
         try
         {
-            var isVersion3 = value!.StartsWith(Prefix, StringComparison.Ordinal);
-            var prefixLength = isVersion3
-                ? Prefix.Length
-                : value.StartsWith(Version2Prefix, StringComparison.Ordinal)
-                    ? Version2Prefix.Length
-                    : LegacyPrefix.Length;
             var parsed = JsonSerializer.Deserialize<ContractTermRichTextDocument>(
-                value[prefixLength..],
+                value![Prefix.Length..],
                 JsonOptions);
             if (parsed?.Blocks is null || parsed.Blocks.Count > 500)
             {
@@ -67,8 +57,7 @@ public static class ContractTermRichText
                 foreach (var row in block.Rows)
                 {
                     if (row.Cells is null
-                        || row.Cells.Count > 20
-                        || !isVersion3 && row.Cells.Count == 0)
+                        || row.Cells.Count > 20)
                     {
                         return false;
                     }
@@ -79,14 +68,7 @@ public static class ContractTermRichText
                     }
                 }
 
-                if (isVersion3)
-                {
-                    if (!IsTableGridValid(block.Rows)) return false;
-                }
-                else
-                {
-                    ClearTableLayout(block.Rows);
-                }
+                if (!IsTableGridValid(block.Rows)) return false;
             }
 
             document = parsed;
@@ -171,17 +153,6 @@ public static class ContractTermRichText
         }
 
         return activeRowspans.All(remaining => remaining == 0);
-    }
-
-    private static void ClearTableLayout(IEnumerable<ContractTermRichTextRow> rows)
-    {
-        foreach (var cell in rows.SelectMany(row => row.Cells))
-        {
-            cell.Colspan = null;
-            cell.Rowspan = null;
-            cell.Colwidth = null;
-            cell.VerticalAlign = null;
-        }
     }
 
     private static bool IsAlignmentValid(string? alignment) =>

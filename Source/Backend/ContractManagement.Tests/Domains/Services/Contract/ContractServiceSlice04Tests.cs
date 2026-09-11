@@ -11,6 +11,7 @@ using ContractManagement.Infrastructure.Persistence.Application.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using static ContractManagement.Tests.ContractRichTextTestData;
 
 namespace ContractManagement.Tests.Domains.Services.Contract;
 
@@ -156,7 +157,7 @@ public sealed class ContractServiceSlice04Tests
                 SourceTemplateTermId = 63,
                 TermCode = "GENERAL",
                 TermTitle = "Điều khoản chung đã sửa",
-                TermContent = "Nội dung được sửa trong wizard.",
+                TermContent = RichText("Nội dung được sửa trong wizard."),
                 IsNegotiable = false,
                 DisplayOrder = 2
             },
@@ -164,7 +165,7 @@ public sealed class ContractServiceSlice04Tests
             {
                 TermCode = "CUSTOM_1",
                 TermTitle = "Điều khoản bổ sung",
-                TermContent = "Nội dung bổ sung.",
+                TermContent = RichText("Nội dung bổ sung."),
                 IsNegotiable = true,
                 DisplayOrder = 1
             }
@@ -678,7 +679,7 @@ public sealed class ContractServiceSlice04Tests
                 TemplateLegalBasisId = 64,
                 TemplateVersionId = TemplateVersionId,
                 BasisCode = "CIVIL_CODE",
-                ContentVi = "Căn cứ Bộ luật Dân sự.",
+                ContentVi = RichText("Căn cứ Bộ luật Dân sự."),
                 DisplayOrder = 1,
                 CreatedEmployeeId = EmployeeId,
                 CreatedDate = DateTime.UtcNow,
@@ -867,7 +868,7 @@ public sealed class ContractServiceSlice04Tests
             ContractId = contract.ContractId,
             VersionId = version.VersionId,
             BasisCode = "CIVIL_CODE",
-            ContentVi = "Căn cứ Bộ luật Dân sự.",
+            ContentVi = RichText("Căn cứ Bộ luật Dân sự."),
             DisplayOrder = 1,
             CreatedEmployeeId = EmployeeId,
             CreatedDate = DateTime.UtcNow,

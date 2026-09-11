@@ -57,7 +57,6 @@ public sealed class CustomContractPlaceholderTests
     {
         Assert.Equal("10/09/2026", Registry.Format("contract.effective-date", new DateTime(2026, 9, 10), null, null));
         Assert.Equal("fallback", Registry.Format("customer.contact-name", " ", null, "fallback"));
-        Assert.Equal("Yes", Registry.Format("contract.is-legacy", true, "Yes/No", null));
         Assert.Equal("", Registry.Format("customer.contact-name", null, null, null));
         Assert.Throws<PlaceholderOperationException>(() => Registry.Format("customer.contact-name", null, "N0", "fallback"));
     }
@@ -67,7 +66,6 @@ public sealed class CustomContractPlaceholderTests
     [InlineData("BAD__KEY", "PlaceholderKeyInvalid")]
     [InlineData("BAD KEY", "PlaceholderKeyInvalid")]
     [InlineData("CUSTOMER_NAME", "SystemPlaceholderImmutable")]
-    [InlineData("PAYMENT_SCHEDULE_TABLE", "PlaceholderKeyRetired")]
     public async Task Create_RejectsInvalidOrReservedKeys(string key, string error)
     {
         await using var db = Context(); await SeedActor(db);
@@ -163,7 +161,7 @@ public sealed class CustomContractPlaceholderTests
         db.TblContractTemplateFields.Add(new()
         {
             TemplateVersionId = 20, PlaceholderKey = created.Key, FieldLabel = created.Label,
-            DataSource = created.DataSource, SourceFieldKey = created.SourceFieldKey,
+            DataSource = created.DataSource, SourceFieldKey = created.SourceFieldKey!,
             IsSystem = false, DataKind = 1, Multiplicity = 2
         });
         await db.SaveChangesAsync();
@@ -221,7 +219,7 @@ public sealed class CustomContractPlaceholderTests
         db.TblContractTemplateFields.Add(new()
         {
             TemplateVersionId = 20, PlaceholderKey = item.Key, FieldLabel = item.Label, DataSource = item.DataSource,
-            SourceFieldKey = item.SourceFieldKey, IsSystem = false, DataKind = 1, Multiplicity = 2
+            SourceFieldKey = item.SourceFieldKey!, IsSystem = false, DataKind = 1, Multiplicity = 2
         });
         await db.SaveChangesAsync();
         var contract = new TblContract { ContractId = 30, CustomerId = 10, EmployeeId = 1, TemplateVersionId = 20 };
@@ -241,15 +239,6 @@ public sealed class CustomContractPlaceholderTests
         Assert.Equal("Changed", (await values.CaptureAsync(contract, version, refresh: true))[item.Key]);
         version.VersionId = 41;
         await Assert.ThrowsAsync<PlaceholderOperationException>(() => values.CaptureAsync(contract, version));
-    }
-
-    [Fact]
-    public void LegacyMapping_FailsClosedForUnknownSource()
-    {
-        Assert.Throws<PlaceholderOperationException>(() => ContractPlaceholderCatalog.FromSnapshot(new()
-        { PlaceholderKey = "CUSTOMER_NAME", DataSource = "Customer.CustomerPassword" }));
-        Assert.True(ContractPlaceholderCatalog.FromSnapshot(new()
-        { PlaceholderKey = "CUSTOMER_NAME", DataSource = "Customer.CustomerFullName" }).IsSystem);
     }
 
     private static IFormFile File(byte[] bytes) => new FormFile(new MemoryStream(bytes), 0, bytes.Length, "File", "template.docx");

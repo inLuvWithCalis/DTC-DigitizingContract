@@ -39,9 +39,6 @@ public sealed class ContractPlaceholderDefinitionService(
             throw new PlaceholderOperationException("PlaceholderKeyInvalid", "Key chỉ gồm chữ in hoa, số và dấu gạch dưới; bắt đầu bằng chữ.");
         if (ContractPlaceholderCatalog.SystemDefinitions.Any(x => x.Key == key))
             throw new PlaceholderOperationException("SystemPlaceholderImmutable", "Không thể thay đổi hoặc dùng trùng key hệ thống.");
-        if (key == ContractTemplateObsoleteContentSanitizer.RetiredPaymentScheduleKey)
-            throw new PlaceholderOperationException("PlaceholderKeyRetired",
-                "Key placeholder này đã ngừng hỗ trợ và không thể sử dụng lại.");
         if (string.IsNullOrWhiteSpace(request.FieldLabel) || request.FieldLabel.Length > 300 || request.DefaultValue?.Length > 2000)
             throw new PlaceholderOperationException("PlaceholderKeyInvalid", "Tên hiển thị hoặc giá trị mặc định không hợp lệ.");
         var sourceKey = request.SourceFieldKey.Trim();

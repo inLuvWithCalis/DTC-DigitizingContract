@@ -20,6 +20,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using W = DocumentFormat.OpenXml.Wordprocessing;
+using static ContractManagement.Tests.ContractRichTextTestData;
 
 namespace ContractManagement.Tests.Domains.Services.ContractTemplate;
 
@@ -57,7 +58,11 @@ public sealed class ContractTemplatePreviewTests
         var sourceHash = SHA256.HashData(source);
         var renderer = new ContractTemplatePreviewRenderer();
 
-        var preview = renderer.Render(source, ContractLanguageMode.Bilingual);
+        var preview = renderer.RenderSample(
+            source,
+            ContractLanguageMode.Bilingual,
+            ContractPlaceholderCatalog.SystemDefinitions,
+            new Dictionary<string, string>());
 
         Assert.NotEqual(source, preview);
         Assert.Equal(sourceHash, SHA256.HashData(source));
@@ -69,7 +74,7 @@ public sealed class ContractTemplatePreviewTests
         Assert.Contains("39.187.500 VND", text);
         Assert.Contains("Nguyễn Văn Mẫu", text);
         Assert.Contains("Điều 4.", text);
-        Assert.Contains(SoftwareSupplyPreviewDatasetV1.LegalBases[0].ContentVi, text);
+        Assert.Contains("Căn cứ Bộ luật Dân sự số 91/2015/QH13", text);
         Assert.True(document.MainDocumentPart!.Document!.Body!
             .Elements<W.Table>().Count() >= 1);
     }
@@ -77,9 +82,11 @@ public sealed class ContractTemplatePreviewTests
     [Fact]
     public void Renderer_UsesConsistentFontAndOnlyBoldsGeneratedHeadings()
     {
-        var preview = new ContractTemplatePreviewRenderer().Render(
+        var preview = new ContractTemplatePreviewRenderer().RenderSample(
             CreateSourceDocument(),
-            ContractLanguageMode.Vietnamese);
+            ContractLanguageMode.Vietnamese,
+            ContractPlaceholderCatalog.SystemDefinitions,
+            new Dictionary<string, string>());
 
         using var stream = new MemoryStream(preview);
         using var document = WordprocessingDocument.Open(stream, false);
@@ -93,7 +100,8 @@ public sealed class ContractTemplatePreviewTests
         var termTitle = Assert.Single(runs, run =>
             run.InnerText == "Điều 1. Phạm vi cung cấp");
         var termContent = Assert.Single(runs, run =>
-            run.InnerText == SoftwareSupplyPreviewDatasetV1.Terms[0].ContentVi);
+            run.InnerText.StartsWith("Bên Cung Cấp cung cấp phần mềm",
+                StringComparison.Ordinal));
         var signer = Assert.Single(runs, run =>
             run.InnerText == SoftwareSupplyPreviewDatasetV1.ProviderSignature.SignerName);
 
@@ -130,17 +138,19 @@ public sealed class ContractTemplatePreviewTests
                 1, "Sản phẩm", "Phần mềm thật", 2, 1_000_000m,
                 "10%", "8%", 1_944_000m)],
             [new ContractTemplateRenderTerm(
-                1, "Phạm vi thật", "Actual scope", "Nội dung thật", "Actual content")],
+                1, "Phạm vi thật", "Actual scope", RichText("Nội dung thật"),
+                RichText("Actual content"))],
             new ContractTemplateRenderSignature("ĐẠI DIỆN BÊN CUNG CẤP", "Nhân viên Thật"),
             new ContractTemplateRenderSignature("ĐẠI DIỆN BÊN KHÁCH HÀNG", "Khách hàng Thật"),
             string.Empty)
         {
+            Definitions = ContractPlaceholderCatalog.SystemDefinitions,
             LegalBases =
             [
                 new ContractTemplateRenderLegalBasis(
                     1,
-                    "Căn cứ dữ liệu hợp đồng thật",
-                    "Based on actual contract data")
+                    RichText("Căn cứ dữ liệu hợp đồng thật"),
+                    RichText("Based on actual contract data"))
             ]
         };
 
@@ -168,8 +178,8 @@ public sealed class ContractTemplatePreviewTests
             .Where(item => item.DataKind == TemplatePlaceholderDataKind.Scalar)
             .ToDictionary(item => item.Key, _ => string.Empty, StringComparer.Ordinal);
         var paymentTerm = new ContractTemplateRenderTerm(
-            1, "Thanh toán", "Payment", "Bảng do người dùng tự nhập",
-            "User-authored table")
+            1, "Thanh toán", "Payment", RichText("Bảng do người dùng tự nhập"),
+            RichText("User-authored table"))
         {
             Kind = ContractTermKind.Payment,
             PaymentMilestones =
@@ -183,7 +193,10 @@ public sealed class ContractTemplatePreviewTests
         var data = new ContractTemplateRenderData(
             scalarValues, [], [paymentTerm],
             new ContractTemplateRenderSignature("Bên A", "A"),
-            new ContractTemplateRenderSignature("Bên B", "B"), string.Empty);
+            new ContractTemplateRenderSignature("Bên B", "B"), string.Empty)
+        {
+            Definitions = ContractPlaceholderCatalog.SystemDefinitions
+        };
 
         var rendered = new ContractTemplatePreviewRenderer().Render(
             CreateSourceDocument(), ContractLanguageMode.Vietnamese, data);
@@ -193,36 +206,6 @@ public sealed class ContractTemplatePreviewTests
         var text = ReadAllText(document.MainDocumentPart!);
         Assert.Contains("Bảng do người dùng tự nhập", text);
         Assert.DoesNotContain("Đợt không được tự sinh", text);
-        Assert.DoesNotContain("LỊCH THANH TOÁN", text);
-    }
-
-    [Fact]
-    public void Renderer_RemovesLegacyPaymentScheduleHeadingAndToken()
-    {
-        var legacyDefinition = new SoftwareSupplyPlaceholderDefinition(
-            "PAYMENT_SCHEDULE_TABLE",
-            "Bảng lịch thanh toán",
-            false,
-            TemplatePlaceholderDataKind.DynamicBlock,
-            TemplatePlaceholderMultiplicity.ZeroOrOne,
-            "Contract.PaymentSchedules")
-        {
-            SourceFieldKey = "system.PAYMENT_SCHEDULE_TABLE"
-        };
-        var definitions = ContractPlaceholderCatalog.SystemDefinitions
-            .Append(legacyDefinition)
-            .ToArray();
-        var rendered = new ContractTemplatePreviewRenderer().RenderSample(
-            CreateSourceDocument(includeLegacyPaymentScheduleSection: true),
-            ContractLanguageMode.Vietnamese,
-            definitions,
-            new Dictionary<string, string>(StringComparer.Ordinal));
-
-        using var document = WordprocessingDocument.Open(
-            new MemoryStream(rendered), false);
-        var text = ReadAllText(document.MainDocumentPart!);
-        Assert.DoesNotContain("LỊCH THANH TOÁN", text);
-        Assert.DoesNotContain("PAYMENT_SCHEDULE_TABLE", text);
     }
 
     [Fact]
@@ -240,7 +223,10 @@ public sealed class ContractTemplatePreviewTests
                 1, "Điều khoản rich text", string.Empty, richContent, string.Empty)],
             new ContractTemplateRenderSignature(string.Empty, string.Empty),
             new ContractTemplateRenderSignature(string.Empty, string.Empty),
-            string.Empty);
+            string.Empty)
+        {
+            Definitions = ContractPlaceholderCatalog.SystemDefinitions
+        };
 
         var rendered = new ContractTemplatePreviewRenderer().Render(
             CreateSourceDocument(),
@@ -276,47 +262,6 @@ public sealed class ContractTemplatePreviewTests
     }
 
     [Fact]
-    public void Renderer_WithLegacyRichTextV1_RemainsReadableAndLeftAligned()
-    {
-        var scalarValues = SoftwareSupplyPlaceholderCatalog.GetAll()
-            .Where(item => item.DataKind == TemplatePlaceholderDataKind.Scalar)
-            .ToDictionary(item => item.Key, _ => string.Empty, StringComparer.Ordinal);
-        var legacyContent = ContractTermRichText.LegacyPrefix +
-            """{"blocks":[{"type":"paragraph","runs":[{"text":"Đoạn v1"}]},{"type":"table","rows":[{"cells":[{"runs":[{"text":"Ô v1"}]}]}]}]}""";
-        var renderData = new ContractTemplateRenderData(
-            scalarValues, [],
-            [new ContractTemplateRenderTerm(1, "V1", string.Empty, legacyContent, string.Empty)],
-            new ContractTemplateRenderSignature(string.Empty, string.Empty),
-            new ContractTemplateRenderSignature(string.Empty, string.Empty),
-            string.Empty);
-
-        var rendered = new ContractTemplatePreviewRenderer().Render(
-            CreateSourceDocument(), ContractLanguageMode.Vietnamese, renderData);
-
-        using var document = WordprocessingDocument.Open(new MemoryStream(rendered), false);
-        var paragraph = document.MainDocumentPart!.Document!
-            .Descendants<W.Paragraph>().Single(item => item.InnerText == "Đoạn v1");
-        var cellParagraph = document.MainDocumentPart.Document
-            .Descendants<W.Paragraph>().Single(item => item.InnerText == "Ô v1");
-        Assert.Null(paragraph.ParagraphProperties?.Justification);
-        Assert.Null(cellParagraph.ParagraphProperties?.Justification);
-    }
-
-    [Fact]
-    public void RichTextParser_WithVersion2_RemainsReadableAndIgnoresV3CellLayout()
-    {
-        var content = ContractTermRichText.Version2Prefix +
-            """{"blocks":[{"type":"table","rows":[{"cells":[{"colspan":2,"rowspan":2,"colwidth":[120,180],"verticalAlign":"center","paragraphs":[{"runs":[{"text":"Ô v2"}]}]}]}]}]}""";
-
-        Assert.True(ContractTermRichText.TryParse(content, out var document));
-        var cell = Assert.Single(Assert.Single(document.Blocks).Rows[0].Cells);
-        Assert.Null(cell.Colspan);
-        Assert.Null(cell.Rowspan);
-        Assert.Null(cell.Colwidth);
-        Assert.Null(cell.VerticalAlign);
-    }
-
-    [Fact]
     public void RichTextParser_WithV3RowFullyCoveredByRowspan_AcceptsDocument()
     {
         var content = ContractTermRichText.Prefix +
@@ -338,7 +283,10 @@ public sealed class ContractTemplatePreviewTests
             [new ContractTemplateRenderTerm(1, "Bảng gộp", string.Empty, richContent, string.Empty)],
             new ContractTemplateRenderSignature(string.Empty, string.Empty),
             new ContractTemplateRenderSignature(string.Empty, string.Empty),
-            string.Empty);
+            string.Empty)
+        {
+            Definitions = ContractPlaceholderCatalog.SystemDefinitions
+        };
 
         var rendered = new ContractTemplatePreviewRenderer().Render(
             CreateSourceDocument(), ContractLanguageMode.Vietnamese, renderData);
@@ -419,7 +367,10 @@ public sealed class ContractTemplatePreviewTests
                 string.Empty)],
             new ContractTemplateRenderSignature(string.Empty, string.Empty),
             new ContractTemplateRenderSignature(string.Empty, string.Empty),
-            string.Empty);
+            string.Empty)
+        {
+            Definitions = ContractPlaceholderCatalog.SystemDefinitions
+        };
 
         var exception = Assert.Throws<ContractTemplatePreviewException>(() =>
             new ContractTemplatePreviewRenderer().Render(
@@ -435,14 +386,17 @@ public sealed class ContractTemplatePreviewTests
     [InlineData(false)]
     public void Renderer_RejectsDynamicBlockOutsideStandaloneBodyParagraph(bool inHeader)
     {
-        var renderer = new ContractTemplatePreviewRenderer();
         var source = CreateSourceDocument(
             includeHeaderFooterAndNotes: false,
             dynamicTermsInHeader: inHeader,
             dynamicTermsMixedWithText: !inHeader);
 
         var exception = Assert.Throws<ContractTemplatePreviewException>(() =>
-            renderer.Render(source, ContractLanguageMode.Vietnamese));
+            new ContractTemplatePreviewRenderer().RenderSample(
+                source,
+                ContractLanguageMode.Vietnamese,
+                ContractPlaceholderCatalog.SystemDefinitions,
+                new Dictionary<string, string>()));
 
         Assert.Equal("PreviewLayoutUnsupported", exception.FailureCode);
     }
@@ -497,8 +451,11 @@ public sealed class ContractTemplatePreviewTests
         {
             TemplateVersionId = VersionId,
             BasisCode = "REAL_LAW",
-            ContentVi = "Căn cứ Luật Việt Nam đang cấu hình thật",
-            ContentEn = "Based on the configured Vietnamese law",
+            ContentVi = RichText(
+                "- Căn cứ vào điều khoản 1 luật quốc tế",
+                "center",
+                bold: true),
+            ContentEn = RichText("Based on the configured international law"),
             DisplayOrder = 1,
             CreatedEmployeeId = AdminOfficerId,
             CreatedDate = DateTime.UtcNow,
@@ -518,14 +475,21 @@ public sealed class ContractTemplatePreviewTests
         using (var document = WordprocessingDocument.Open(download.Stream, false))
         {
             var text = ReadAllText(document.MainDocumentPart!);
-            Assert.Contains("Căn cứ Luật Việt Nam đang cấu hình thật", text);
-            Assert.Contains("Based on the configured Vietnamese law", text);
-            Assert.DoesNotContain(SoftwareSupplyPreviewDatasetV1.LegalBases[0].ContentVi,
-                text);
+            Assert.Contains("- Căn cứ vào điều khoản 1 luật quốc tế", text);
+            Assert.Contains("Based on the configured international law", text);
+            Assert.DoesNotContain("Căn cứ Bộ luật Dân sự số 91/2015/QH13", text);
+            var paragraph = document.MainDocumentPart!.Document!
+                .Descendants<W.Paragraph>()
+                .Single(item => item.InnerText ==
+                    "- Căn cứ vào điều khoản 1 luật quốc tế");
+            Assert.Equal(W.JustificationValues.Center,
+                paragraph.ParagraphProperties?.Justification?.Val?.Value);
+            Assert.True(paragraph.Descendants<W.Run>().Single()
+                .RunProperties?.Bold?.Val?.Value);
         }
 
         var basis = await context.TblContractTemplateLegalBases.SingleAsync();
-        basis.ContentVi = "Căn cứ đã thay đổi sau khi preview";
+        basis.ContentVi = RichText("Căn cứ đã thay đổi sau khi preview");
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
 
@@ -888,12 +852,15 @@ public sealed class ContractTemplatePreviewTests
             DocumentFileId = sourceFile.FileId,
             DocumentHash = Convert.ToHexString(SHA256.HashData(secondSource))
                 .ToLowerInvariant(),
+            PlaceholderBindingHash = ContractPlaceholderCatalog.Fingerprint(
+                ContractPlaceholderCatalog.SystemDefinitions),
             ValidatedByEmployeeId = AdminOfficerId,
             ValidatedDate = now,
             CreatedEmployeeId = AdminOfficerId,
             CreatedDate = now,
             RowVersion = [3, 3, 3, 3, 3, 3, 3, 3]
         });
+        AddSystemFieldSnapshots(context, nextVersionId, now);
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
 
@@ -994,16 +961,45 @@ public sealed class ContractTemplatePreviewTests
             ValidationStatus = (byte)TemplateValidationStatus.Valid,
             DocumentFileId = 1,
             DocumentHash = documentHash,
+            PlaceholderBindingHash = ContractPlaceholderCatalog.Fingerprint(
+                ContractPlaceholderCatalog.SystemDefinitions),
             ValidatedByEmployeeId = AdminOfficerId,
             ValidatedDate = now,
             CreatedEmployeeId = AdminOfficerId,
             CreatedDate = now,
             RowVersion = [2, 2, 2, 2, 2, 2, 2, 2]
         });
+        AddSystemFieldSnapshots(context, VersionId, now);
         await storage.SeedAsync(1, source, "ContractTemplateVersion", VersionId,
             AdminOfficerId);
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
+    }
+
+    private static void AddSystemFieldSnapshots(
+        DbDtctechContext context,
+        int templateVersionId,
+        DateTime createdDate)
+    {
+        context.TblContractTemplateFields.AddRange(
+            ContractPlaceholderCatalog.SystemDefinitions.Select(
+                (definition, index) => new TblContractTemplateField
+                {
+                    TemplateVersionId = templateVersionId,
+                    PlaceholderKey = definition.Key,
+                    FieldLabel = definition.Label,
+                    DataSource = definition.DataSource,
+                    SourceFieldKey = definition.SourceFieldKey
+                        ?? throw new InvalidOperationException(
+                            $"Placeholder {definition.Key} thiếu source field."),
+                    DataKind = (byte)definition.DataKind,
+                    Multiplicity = (byte)definition.Multiplicity,
+                    IsSystem = definition.IsSystem,
+                    IsRequired = definition.IsRequired,
+                    DisplayOrder = index,
+                    CreatedEmployeeId = AdminOfficerId,
+                    CreatedDate = createdDate
+                }));
     }
 
     private static Task SeedEmployeeAsync(
@@ -1055,8 +1051,7 @@ public sealed class ContractTemplatePreviewTests
         bool includeHeaderFooterAndNotes = false,
         bool dynamicTermsInHeader = false,
         bool dynamicTermsMixedWithText = false,
-        string? additionalBodyText = null,
-        bool includeLegacyPaymentScheduleSection = false)
+        string? additionalBodyText = null)
     {
         using var stream = new MemoryStream();
         using (var document = WordprocessingDocument.Create(
@@ -1091,14 +1086,6 @@ public sealed class ContractTemplatePreviewTests
                             new W.Run(new W.Text("CODE}}")))
                         : new W.Paragraph(new W.Run(new W.Text(token))));
                 }
-            }
-
-            if (includeLegacyPaymentScheduleSection)
-            {
-                body.Append(new W.Paragraph(new W.Run(
-                    new W.Text("LỊCH THANH TOÁN"))));
-                body.Append(new W.Paragraph(new W.Run(
-                    new W.Text("{{PAYMENT_SCHEDULE_TABLE}}"))));
             }
 
             if (!string.IsNullOrWhiteSpace(additionalBodyText))
@@ -1313,12 +1300,23 @@ public sealed class ContractTemplatePreviewTests
 
         public int RenderCalls { get; private set; }
 
-        public byte[] Render(byte[] sourceDocumentBytes,
-            ContractLanguageMode languageMode)
+        public byte[] RenderSample(
+            byte[] sourceDocumentBytes,
+            ContractLanguageMode languageMode,
+            IReadOnlyList<SoftwareSupplyPlaceholderDefinition> definitions,
+            IReadOnlyDictionary<string, string> customSamples,
+            ContractTemplateAuthoringPreviewData? authoringData = null)
         {
             RenderCalls++;
-            return _inner.Render(sourceDocumentBytes, languageMode);
+            return _inner.RenderSample(sourceDocumentBytes, languageMode,
+                definitions, customSamples, authoringData);
         }
+
+        public byte[] Render(
+            byte[] sourceDocumentBytes,
+            ContractLanguageMode languageMode,
+            ContractTemplateRenderData renderData) =>
+            _inner.Render(sourceDocumentBytes, languageMode, renderData);
     }
 
     private sealed class FakePdfRenderer(string content) : IContractTemplatePdfRenderer

@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.Net;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
+using static ContractManagement.Tests.ContractRichTextTestData;
 
 namespace ContractManagement.Tests.Domains.Services.Contract;
 
@@ -154,7 +155,7 @@ public class ContractServiceResponsibilityTests
             TemplateVersionId = replacementVersionId,
             TermCode = "GENERAL",
             TermTitle = "Replacement term",
-            TermContent = "Replacement published template term.",
+            TermContent = RichText("Replacement published template term."),
             IsNegotiable = true,
             DisplayOrder = 1,
             CreatedEmployeeId = CreatorEmployeeId,
@@ -640,7 +641,7 @@ public class ContractServiceResponsibilityTests
                 TemplateVersionId = TemplateVersionId,
                 TermCode = "GENERAL",
                 TermTitle = "Điều khoản chung",
-                TermContent = "Nội dung kiểm thử",
+                TermContent = RichText("Nội dung kiểm thử"),
                 IsNegotiable = true,
                 DisplayOrder = 1,
                 CreatedEmployeeId = CreatorEmployeeId,

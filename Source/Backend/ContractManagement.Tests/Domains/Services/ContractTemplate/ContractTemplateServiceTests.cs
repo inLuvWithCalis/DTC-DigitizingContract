@@ -8,6 +8,7 @@ using ContractManagement.Infrastructure.Persistence.Application;
 using ContractManagement.Infrastructure.Persistence.Application.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using static ContractManagement.Tests.ContractRichTextTestData;
 
 namespace ContractManagement.Tests.Domains.Services.ContractTemplate;
 
@@ -652,7 +653,7 @@ public sealed class ContractTemplateServiceTests
             new CreateContractTemplateLegalBasisRequest
             {
                 BasisCode = "CIVIL_CODE",
-                ContentVi = "Căn cứ Bộ luật Dân sự.",
+                ContentVi = RichText("Căn cứ Bộ luật Dân sự."),
                 DisplayOrder = 1,
                 VersionRowVersion = version.RowVersion
             }, AdminOfficerId);
@@ -662,7 +663,7 @@ public sealed class ContractTemplateServiceTests
             new CreateContractTemplateLegalBasisRequest
             {
                 BasisCode = "COMMERCIAL_LAW",
-                ContentVi = "Căn cứ Luật Thương mại.",
+                ContentVi = RichText("Căn cứ Luật Thương mại."),
                 DisplayOrder = 2,
                 VersionRowVersion = afterFirst.RowVersion
             }, AdminOfficerId);
@@ -689,7 +690,7 @@ public sealed class ContractTemplateServiceTests
             new UpdateContractTemplateLegalBasisRequest
             {
                 BasisCode = civil.BasisCode,
-                ContentVi = "Căn cứ Bộ luật Dân sự số 91/2015/QH13.",
+                ContentVi = RichText("Căn cứ Bộ luật Dân sự số 91/2015/QH13."),
                 DisplayOrder = civil.DisplayOrder,
                 RowVersion = civil.RowVersion,
                 VersionRowVersion = reordered.RowVersion
@@ -820,7 +821,7 @@ public sealed class ContractTemplateServiceTests
             TemplateLegalBasisId = 4,
             TemplateVersionId = 2,
             BasisCode = "CIVIL_CODE",
-            ContentVi = "Căn cứ Bộ luật Dân sự.",
+            ContentVi = RichText("Căn cứ Bộ luật Dân sự."),
             DisplayOrder = 1,
             CreatedEmployeeId = AdminOfficerId,
             CreatedDate = now,

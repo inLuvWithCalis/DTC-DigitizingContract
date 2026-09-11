@@ -427,7 +427,7 @@ export interface ContractVersionDetailResponse {
   versionId: number;
   versionNo: number;
   sourceVersionId?: number | null;
-  templateVersionId?: number | null;
+  templateVersionId: number;
   changeNote?: string | null;
   currencyCode: string;
   subtotal: number;
@@ -499,7 +499,7 @@ export interface ContractDetailResponse {
   contractName: string;
   contractNameEn?: string | null;
   contractType: ContractType;
-  templateVersionId?: number | null;
+  templateVersionId: number;
   parentContractId?: number | null;
   status: ContractStatus;
   signDate?: string | null;
@@ -512,7 +512,6 @@ export interface ContractDetailResponse {
   totalPayment: number;
   currencyCode: string;
   languageMode: ContractLanguageMode;
-  isLegacy: boolean;
   createdEmployeeId: number;
   createdDate: string;
   updatedDate?: string | null;

@@ -386,6 +386,7 @@ public sealed class ContractTemplateDocumentUploadServiceTests
                 PlaceholderKey = "EXISTING_FIELD",
                 FieldLabel = "Existing",
                 DataSource = "Existing.Value",
+                SourceFieldKey = "customer.name",
                 DisplayOrder = 0,
                 CreatedEmployeeId = AdminOfficerId,
                 CreatedDate = now,

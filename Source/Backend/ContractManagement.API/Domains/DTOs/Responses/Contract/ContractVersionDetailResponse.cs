@@ -11,7 +11,7 @@
 
         public int? SourceVersionId { get; set; }
 
-        public int? TemplateVersionId { get; set; }
+        public int TemplateVersionId { get; set; }
 
         public string? ChangeNote { get; set; }
 

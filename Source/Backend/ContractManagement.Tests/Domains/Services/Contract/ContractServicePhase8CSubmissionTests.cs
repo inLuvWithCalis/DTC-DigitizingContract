@@ -478,7 +478,6 @@ public sealed class ContractServicePhase8CSubmissionTests
             Subtotal = 100m,
             TotalAmount = 100m,
             LanguageMode = (byte)ContractLanguageMode.Vietnamese,
-            IsLegacy = false,
             CreatedEmployeeId = OwnerId,
             CreatedDate = DateTime.UtcNow,
             RowVersion = InitialRowVersion

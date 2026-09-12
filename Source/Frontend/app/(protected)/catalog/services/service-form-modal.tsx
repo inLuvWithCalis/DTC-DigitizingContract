@@ -26,7 +26,7 @@ import {
 interface ServiceFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (createdService?: ServiceResponse) => void;
   item?: ServiceResponse | null;
   viewOnly?: boolean;
 }
@@ -213,11 +213,12 @@ export function ServiceFormModal({
       if (isEditMode && item) {
         await serviceApi.update(item.serviceId, commonPayload);
         toast.success("Cập nhật dịch vụ thành công");
+        onSuccess();
       } else {
-        await serviceApi.create(commonPayload);
+        const createdService = await serviceApi.create(commonPayload);
         toast.success("Thêm dịch vụ mới thành công");
+        onSuccess(createdService);
       }
-      onSuccess();
       onClose();
     } catch (error: any) {
       const message =

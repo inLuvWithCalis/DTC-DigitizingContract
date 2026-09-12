@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import {
   AlertTriangle,
   CheckCircle2,
+  Eye,
   FileCheck2,
   Loader2,
   RotateCcw,
@@ -15,6 +16,15 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
@@ -32,10 +42,10 @@ import {
   contractCompletionApi,
   ContractCompletionDetailResponse,
   ContractPaymentDayCountMode,
-  ContractPaymentMilestoneResponse,
   ContractPaymentMilestoneStatus,
   ContractPaymentStatus,
 } from "@/services/contract-completion-api";
+import { formatDateTime } from "@/lib/format-date-time";
 
 interface Props {
   contract: ContractDetailResponse;
@@ -44,6 +54,16 @@ interface Props {
   canComplete: boolean;
   onContractRefetch: () => void | Promise<void>;
 }
+
+const MAX_EVIDENCE_SIZE = 20 * 1024 * 1024;
+const EVIDENCE_EXTENSIONS = ["pdf", "jpg", "jpeg", "png"];
+
+const evidenceContentType = (fileName: string) => {
+  const extension = fileName.split(".").pop()?.toLowerCase();
+  if (extension === "pdf") return "application/pdf";
+  if (extension === "png") return "image/png";
+  return "image/jpeg";
+};
 
 export function ContractClosing({
   contract,
@@ -65,21 +85,31 @@ export function ContractClosing({
   const [paymentFile, setPaymentFile] = useState<File>();
   const [voidingId, setVoidingId] = useState<number>();
   const [voidReason, setVoidReason] = useState("");
+  const [completingMilestoneId, setCompletingMilestoneId] = useState<number>();
+  const [milestonePaymentDate, setMilestonePaymentDate] = useState<Date>();
+  const [milestonePaymentMethod, setMilestonePaymentMethod] = useState("");
+  const [milestoneReference, setMilestoneReference] = useState("");
+  const [milestoneEvidence, setMilestoneEvidence] = useState<File>();
+  const [evidenceConfirmed, setEvidenceConfirmed] = useState(false);
+  const [reopeningMilestoneId, setReopeningMilestoneId] = useState<number>();
+  const [reopenReason, setReopenReason] = useState("");
   const [updatingMilestoneId, setUpdatingMilestoneId] = useState<number>();
-  const [confirmUnpaidMilestoneId, setConfirmUnpaidMilestoneId] =
-    useState<number>();
+  const [openingEvidenceFileId, setOpeningEvidenceFileId] = useState<number>();
   const [confirmComplete, setConfirmComplete] = useState(false);
 
-  const load = useCallback(async (showSpinner = true) => {
-    try {
-      if (showSpinner) setLoading(true);
-      setDetail(await contractCompletionApi.get(contract.contractId));
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, "Không thể tải hồ sơ hoàn tất."));
-    } finally {
-      setLoading(false);
-    }
-  }, [contract.contractId]);
+  const load = useCallback(
+    async (showSpinner = true) => {
+      try {
+        if (showSpinner) setLoading(true);
+        setDetail(await contractCompletionApi.get(contract.contractId));
+      } catch (error) {
+        toast.error(getApiErrorMessage(error, "Không thể tải hồ sơ hoàn tất."));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [contract.contractId],
+  );
   useEffect(() => {
     void load();
   }, [load]);
@@ -98,14 +128,75 @@ export function ContractClosing({
     }
   };
 
-  const updateMilestoneStatus = async (
-    milestone: ContractPaymentMilestoneResponse,
-    status: ContractPaymentMilestoneStatus,
-  ) => {
-    if (!detail) return false;
+  const resetCompleteMilestone = () => {
+    setCompletingMilestoneId(undefined);
+    setMilestonePaymentDate(undefined);
+    setMilestonePaymentMethod("");
+    setMilestoneReference("");
+    setMilestoneEvidence(undefined);
+    setEvidenceConfirmed(false);
+  };
+
+  const openCompleteMilestone = (milestoneId: number) => {
+    setCompletingMilestoneId(milestoneId);
+    setMilestonePaymentDate(new Date());
+    setMilestonePaymentMethod("");
+    setMilestoneReference("");
+    setMilestoneEvidence(undefined);
+    setEvidenceConfirmed(false);
+  };
+
+  const completeMilestone = async () => {
+    if (
+      !detail ||
+      !completingMilestoneId ||
+      !milestoneEvidence ||
+      !milestonePaymentDate
+    )
+      return;
+    const milestone = detail.paymentMilestones.find(
+      (item) => item.paymentMilestoneId === completingMilestoneId,
+    );
+    if (!milestone) return;
     try {
       setUpdatingMilestoneId(milestone.paymentMilestoneId);
-      await contractCompletionApi.setPaymentMilestoneStatus(
+      await contractCompletionApi.completePaymentMilestone(
+        contract.contractId,
+        detail.versionId,
+        milestone.paymentMilestoneId,
+        {
+          evidenceFile: milestoneEvidence,
+          currentVersionId: detail.versionId,
+          contractRowVersion: detail.contractRowVersion,
+          versionRowVersion: detail.versionRowVersion,
+          milestoneRowVersion: milestone.rowVersion,
+          paymentDate: format(milestonePaymentDate, "yyyy-MM-dd"),
+          paymentMethod: milestonePaymentMethod.trim(),
+          referenceCode: milestoneReference.trim(),
+        },
+      );
+      toast.success(`Đã hoàn tất ${milestone.titleVi} và lưu chứng từ.`);
+      resetCompleteMilestone();
+      await load(false);
+      await onContractRefetch();
+    } catch (error) {
+      toast.error(
+        getApiErrorMessage(error, "Không thể hoàn tất đợt thanh toán."),
+      );
+    } finally {
+      setUpdatingMilestoneId(undefined);
+    }
+  };
+
+  const reopenMilestone = async () => {
+    if (!detail || !reopeningMilestoneId || !reopenReason.trim()) return;
+    const milestone = detail.paymentMilestones.find(
+      (item) => item.paymentMilestoneId === reopeningMilestoneId,
+    );
+    if (!milestone?.activePayment) return;
+    try {
+      setUpdatingMilestoneId(milestone.paymentMilestoneId);
+      await contractCompletionApi.reopenPaymentMilestone(
         contract.contractId,
         detail.versionId,
         milestone.paymentMilestoneId,
@@ -114,24 +205,42 @@ export function ContractClosing({
           contractRowVersion: detail.contractRowVersion,
           versionRowVersion: detail.versionRowVersion,
           milestoneRowVersion: milestone.rowVersion,
-          status,
+          paymentRowVersion: milestone.activePayment.rowVersion,
+          reason: reopenReason.trim(),
         },
       );
-      toast.success(
-        status === ContractPaymentMilestoneStatus.Paid
-          ? `Đã đánh dấu ${milestone.titleVi} là đã nộp.`
-          : `Đã chuyển ${milestone.titleVi} về chưa nộp.`,
-      );
+      toast.success(`Đã chuyển ${milestone.titleVi} về chưa nộp.`);
+      setReopeningMilestoneId(undefined);
+      setReopenReason("");
       await load(false);
       await onContractRefetch();
-      return true;
     } catch (error) {
-      toast.error(
-        getApiErrorMessage(error, "Không thể cập nhật trạng thái thanh toán."),
-      );
-      return false;
+      toast.error(getApiErrorMessage(error, "Không thể hoàn tác thanh toán."));
     } finally {
       setUpdatingMilestoneId(undefined);
+    }
+  };
+
+  const openEvidence = async (fileId: number, fileName: string) => {
+    const previewWindow = window.open("about:blank", "_blank");
+    if (!previewWindow) {
+      toast.error("Trình duyệt đã chặn tab xem chứng từ.");
+      return;
+    }
+    previewWindow.opener = null;
+    previewWindow.document.body.textContent = "Đang tải chứng từ...";
+    try {
+      setOpeningEvidenceFileId(fileId);
+      const source = await contractCompletionApi.downloadEvidence(fileId);
+      const blob = new Blob([source], { type: evidenceContentType(fileName) });
+      const url = URL.createObjectURL(blob);
+      previewWindow.location.replace(url);
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      previewWindow.close();
+      toast.error(getApiErrorMessage(error, "Không thể mở chứng từ."));
+    } finally {
+      setOpeningEvidenceFileId(undefined);
     }
   };
 
@@ -148,8 +257,11 @@ export function ContractClosing({
   const paymentEditable =
     canManagePayment && contract.status === ContractStatus.Signed;
   const hasStructuredPayment = detail.paymentMilestones.length > 0;
-  const confirmUnpaidMilestone = detail.paymentMilestones.find(
-    (item) => item.paymentMilestoneId === confirmUnpaidMilestoneId,
+  const completingMilestone = detail.paymentMilestones.find(
+    (item) => item.paymentMilestoneId === completingMilestoneId,
+  );
+  const reopeningMilestone = detail.paymentMilestones.find(
+    (item) => item.paymentMilestoneId === reopeningMilestoneId,
   );
   const checks = [
     detail.readiness.signed,
@@ -230,17 +342,6 @@ export function ContractClosing({
               </b>
             </div>
           </div>
-          {canComplete && contract.status === ContractStatus.Signed && (
-            <Button
-              disabled={!detail.readiness.ready || busy}
-              onClick={() => setConfirmComplete(true)}
-            >
-              Đánh dấu hoàn tất
-            </Button>
-          )}
-          {contract.status === ContractStatus.Completed && (
-            <Badge className="bg-emerald-600">Hợp đồng đã hoàn tất</Badge>
-          )}
         </CardContent>
       </Card>
 
@@ -349,7 +450,7 @@ export function ContractClosing({
 
                     <div className="mt-3 space-y-1 text-muted-foreground">
                       <p>
-                        Số tiền dự kiến: {" "}
+                        Số tiền dự kiến:{" "}
                         <span className="font-medium text-foreground">
                           {formatCurrency(
                             milestone.amount,
@@ -369,44 +470,93 @@ export function ContractClosing({
                           Ngày làm việc hiện chỉ loại trừ thứ Bảy và Chủ nhật.
                         </p>
                       )}
-                      {isPaid && milestone.paidAt && (
-                        <p className="text-xs">
-                          Cập nhật lúc {" "}
-                          {new Date(milestone.paidAt).toLocaleString("vi-VN")}
+                      {isPaid && milestone.activePayment ? (
+                        <div className="mt-3 space-y-1 rounded-md border bg-muted/40 p-3 text-xs">
+                          <p>
+                            Thanh toán ngày{" "}
+                            {new Date(
+                              milestone.activePayment.paymentDate,
+                            ).toLocaleDateString("vi-VN")}
+                          </p>
+                          <p>
+                            {milestone.activePayment.paymentMethod} ·{" "}
+                            {milestone.activePayment.referenceCode}
+                          </p>
+                          <p>
+                            Ghi nhận bởi{" "}
+                            {milestone.activePayment.createdByEmployeeName ??
+                              `#${milestone.activePayment.createdByEmployeeId}`}{" "}
+                            lúc{" "}
+                            {formatDateTime(milestone.activePayment.createdAt)}
+                          </p>
+                        </div>
+                      ) : isPaid ? (
+                        <p className="mt-3 text-xs text-destructive">
+                          Dữ liệu không hợp lệ: thiếu khoản thanh toán hoặc
+                          chứng từ hiệu lực.
                         </p>
-                      )}
+                      ) : null}
                     </div>
 
-                    {paymentEditable && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={isPaid ? "outline" : "default"}
-                        className="mt-4 self-start"
-                        disabled={Boolean(updatingMilestoneId) || busy}
-                        onClick={() => {
-                          if (isPaid) {
-                            setConfirmUnpaidMilestoneId(
-                              milestone.paymentMilestoneId,
-                            );
-                            return;
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {isPaid && milestone.activePayment?.evidenceFileId && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={
+                            openingEvidenceFileId ===
+                            milestone.activePayment.evidenceFileId
                           }
-                          void updateMilestoneStatus(
-                            milestone,
-                            ContractPaymentMilestoneStatus.Paid,
-                          );
-                        }}
-                      >
-                        {isUpdating ? (
-                          <Loader2 className="mr-2 size-4 animate-spin" />
-                        ) : isPaid ? (
-                          <RotateCcw className="mr-2 size-4" />
-                        ) : (
-                          <CheckCircle2 className="mr-2 size-4" />
-                        )}
-                        {isPaid ? "Chuyển về chưa nộp" : "Đánh dấu đã nộp"}
-                      </Button>
-                    )}
+                          onClick={() =>
+                            void openEvidence(
+                              milestone.activePayment!.evidenceFileId!,
+                              milestone.activePayment!.evidenceFileName ??
+                                "chung-tu.pdf",
+                            )
+                          }
+                        >
+                          {openingEvidenceFileId ===
+                          milestone.activePayment.evidenceFileId ? (
+                            <Loader2 className="mr-2 size-4 animate-spin" />
+                          ) : (
+                            <Eye className="mr-2 size-4" />
+                          )}
+                          Xem chứng từ
+                        </Button>
+                      )}
+                      {paymentEditable && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={isPaid ? "outline" : "default"}
+                          disabled={
+                            Boolean(updatingMilestoneId) ||
+                            busy ||
+                            (isPaid && !milestone.activePayment)
+                          }
+                          onClick={() => {
+                            if (isPaid) {
+                              setReopeningMilestoneId(
+                                milestone.paymentMilestoneId,
+                              );
+                              setReopenReason("");
+                              return;
+                            }
+                            openCompleteMilestone(milestone.paymentMilestoneId);
+                          }}
+                        >
+                          {isUpdating ? (
+                            <Loader2 className="mr-2 size-4 animate-spin" />
+                          ) : isPaid ? (
+                            <RotateCcw className="mr-2 size-4" />
+                          ) : (
+                            <CheckCircle2 className="mr-2 size-4" />
+                          )}
+                          {isPaid ? "Chuyển về chưa nộp" : "Đánh dấu đã nộp"}
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -417,7 +567,8 @@ export function ContractClosing({
                 <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label>
-                      Ngày thanh toán <span className="text-destructive">*</span>
+                      Ngày thanh toán{" "}
+                      <span className="text-destructive">*</span>
                     </Label>
                     <DateFilter
                       date={paymentDate}
@@ -476,17 +627,20 @@ export function ContractClosing({
                       paymentDate &&
                       mutate(
                         () =>
-                          contractCompletionApi.addPayment(contract.contractId, {
-                            evidenceFile: paymentFile,
-                            currentVersionId: detail.versionId,
-                            contractRowVersion: detail.contractRowVersion,
-                            versionRowVersion: detail.versionRowVersion,
-                            paymentDate: format(paymentDate, "yyyy-MM-dd"),
-                            amount,
-                            currencyCode: detail.readiness.currencyCode,
-                            paymentMethod: method,
-                            referenceCode: reference,
-                          }),
+                          contractCompletionApi.addPayment(
+                            contract.contractId,
+                            {
+                              evidenceFile: paymentFile,
+                              currentVersionId: detail.versionId,
+                              contractRowVersion: detail.contractRowVersion,
+                              versionRowVersion: detail.versionRowVersion,
+                              paymentDate: format(paymentDate, "yyyy-MM-dd"),
+                              amount,
+                              currencyCode: detail.readiness.currencyCode,
+                              paymentMethod: method,
+                              referenceCode: reference,
+                            },
+                          ),
                         "Đã ghi nhận khoản thanh toán.",
                       )
                     }
@@ -509,7 +663,10 @@ export function ContractClosing({
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <b>
-                            {formatCurrency(payment.amount, payment.currencyCode)}
+                            {formatCurrency(
+                              payment.amount,
+                              payment.currencyCode,
+                            )}
                           </b>
                           <p className="text-sm text-muted-foreground">
                             {new Date(payment.paymentDate).toLocaleDateString(
@@ -536,7 +693,9 @@ export function ContractClosing({
                             className="mt-3"
                             size="sm"
                             variant="outline"
-                            onClick={() => setVoidingId(payment.contractPaymentId)}
+                            onClick={() =>
+                              setVoidingId(payment.contractPaymentId)
+                            }
                           >
                             Hủy khoản này
                           </Button>
@@ -554,29 +713,241 @@ export function ContractClosing({
           )}
         </CardContent>
       </Card>
+      <Card className="border-primary/20 bg-primary/5">
+        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="rounded-xl bg-primary/10 p-2.5 text-primary">
+              <CheckCircle2 className="size-5" />
+            </div>
+            <div>
+              <p className="font-semibold text-foreground">
+                {contract.status === ContractStatus.Completed
+                  ? "Hợp đồng đã được hoàn thành!"
+                  : !canComplete
+                    ? "Bạn không có quyền thực hiện thao tác hoàn tất hợp đồng."
+                    : contract.status !== ContractStatus.Signed
+                      ? "Hợp đồng cần ở trạng thái Đã ký để có thể hoàn tất."
+                      : detail.readiness.ready
+                        ? "Tất cả điều kiện đã được thỏa mãn. Bạn có thể xác nhận đóng hợp đồng ngay."
+                        : "Cần hoàn tất đủ 3 điều kiện (chữ ký scan, nghiệm thu, thanh toán) để đóng hợp đồng."}
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center">
+            {contract.status === ContractStatus.Completed ? (
+              <Badge className="bg-emerald-600 px-3 py-1.5 text-sm font-medium">
+                <CheckCircle2 className="mr-1.5 size-4" />
+                Hợp đồng đã hoàn tất
+              </Badge>
+            ) : (
+              <Button
+                size="lg"
+                disabled={
+                  !canComplete ||
+                  contract.status !== ContractStatus.Signed ||
+                  !detail.readiness.ready ||
+                  busy
+                }
+                onClick={() => setConfirmComplete(true)}
+                className="gap-2 shadow-sm"
+              >
+                <CheckCircle2 className="size-4" />
+                Đánh dấu hoàn tất
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
-      <ConfirmDialog
-        isOpen={Boolean(confirmUnpaidMilestone)}
-        onClose={() => setConfirmUnpaidMilestoneId(undefined)}
-        onConfirm={() => {
-          if (!confirmUnpaidMilestone) return;
-          void updateMilestoneStatus(
-            confirmUnpaidMilestone,
-            ContractPaymentMilestoneStatus.Unpaid,
-          ).then((succeeded) => {
-            if (succeeded) setConfirmUnpaidMilestoneId(undefined);
-          });
+      <Dialog
+        open={Boolean(completingMilestone)}
+        onOpenChange={(open) => !open && resetCompleteMilestone()}
+      >
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Hoàn tất đợt thanh toán</DialogTitle>
+            <DialogDescription>
+              {completingMilestone?.titleVi}. Số tiền được lấy cố định từ đợt
+              thanh toán và không thể chỉnh sửa.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="milestone-payment-date">
+                Ngày thanh toán <span className="text-destructive">*</span>
+              </Label>
+              <DateFilter
+                id="milestone-payment-date"
+                date={milestonePaymentDate}
+                onChange={setMilestonePaymentDate}
+                placeholder="Chọn ngày thanh toán"
+                className="flex-1"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Số tiền</Label>
+              <Input
+                disabled
+                value={
+                  completingMilestone
+                    ? formatCurrency(
+                        completingMilestone.amount,
+                        detail.readiness.currencyCode,
+                      )
+                    : ""
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="milestone-payment-method">
+                Phương thức thanh toán{" "}
+                <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="milestone-payment-method"
+                maxLength={100}
+                value={milestonePaymentMethod}
+                onChange={(event) =>
+                  setMilestonePaymentMethod(event.target.value)
+                }
+                placeholder="Chuyển khoản"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="milestone-reference">
+                Mã giao dịch <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="milestone-reference"
+                maxLength={100}
+                value={milestoneReference}
+                onChange={(event) => setMilestoneReference(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="milestone-evidence">
+                Chứng từ <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="milestone-evidence"
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (!file) {
+                    setMilestoneEvidence(undefined);
+                    return;
+                  }
+                  const extension = file.name.split(".").pop()?.toLowerCase();
+                  if (
+                    !extension ||
+                    !EVIDENCE_EXTENSIONS.includes(extension) ||
+                    file.size <= 0 ||
+                    file.size > MAX_EVIDENCE_SIZE
+                  ) {
+                    event.target.value = "";
+                    setMilestoneEvidence(undefined);
+                    toast.error(
+                      "Chứng từ phải là PDF/JPG/JPEG/PNG và không quá 20 MiB.",
+                    );
+                    return;
+                  }
+                  setMilestoneEvidence(file);
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                PDF, JPG, JPEG hoặc PNG; tối đa 20 MiB.
+              </p>
+            </div>
+            <label className="flex items-start gap-2 text-sm sm:col-span-2">
+              <Checkbox
+                checked={evidenceConfirmed}
+                onCheckedChange={(checked) =>
+                  setEvidenceConfirmed(checked === true)
+                }
+              />
+              <span>Tôi xác nhận chứng từ thuộc đúng đợt thanh toán này.</span>
+            </label>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={Boolean(updatingMilestoneId)}
+              onClick={resetCompleteMilestone}
+            >
+              Hủy
+            </Button>
+            <Button
+              disabled={
+                Boolean(updatingMilestoneId) ||
+                !milestonePaymentDate ||
+                !milestonePaymentMethod.trim() ||
+                !milestoneReference.trim() ||
+                !milestoneEvidence ||
+                !evidenceConfirmed
+              }
+              onClick={() => void completeMilestone()}
+            >
+              {updatingMilestoneId === completingMilestoneId && (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              )}
+              Hoàn tất đợt
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(reopeningMilestone)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReopeningMilestoneId(undefined);
+            setReopenReason("");
+          }
         }}
-        title="Chuyển về chưa nộp?"
-        description={
-          confirmUnpaidMilestone
-            ? `${confirmUnpaidMilestone.titleVi} sẽ được chuyển về trạng thái chưa nộp. Thời điểm và người cập nhật trạng thái đã nộp sẽ được xóa.`
-            : ""
-        }
-        confirmText="Chuyển về chưa nộp"
-        variant="destructive"
-        isLoading={Boolean(updatingMilestoneId)}
-      />
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Chuyển về chưa nộp?</DialogTitle>
+            <DialogDescription>
+              Khoản thanh toán sẽ chuyển sang trạng thái đã hủy. Chứng từ và
+              lịch sử audit vẫn được giữ nguyên.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="reopen-payment-reason">Lý do hoàn tác *</Label>
+            <Textarea
+              id="reopen-payment-reason"
+              maxLength={1000}
+              value={reopenReason}
+              onChange={(event) => setReopenReason(event.target.value)}
+              placeholder="Nhập lý do chuyển đợt thanh toán về chưa nộp..."
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={Boolean(updatingMilestoneId)}
+              onClick={() => {
+                setReopeningMilestoneId(undefined);
+                setReopenReason("");
+              }}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={Boolean(updatingMilestoneId) || !reopenReason.trim()}
+              onClick={() => void reopenMilestone()}
+            >
+              {updatingMilestoneId === reopeningMilestoneId && (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              )}
+              Chuyển về chưa nộp
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <ConfirmDialog
         isOpen={!hasStructuredPayment && Boolean(voidingId)}
         onClose={() => {

@@ -1701,7 +1701,10 @@ namespace ContractManagement.Migrations
                         .IsUnique()
                         .HasFilter("[EvidenceFileId] IS NOT NULL");
 
-                    b.HasIndex("PaymentMilestoneId");
+                    b.HasIndex("PaymentMilestoneId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_tbl_ContractPaymentLedger_ActiveMilestone")
+                        .HasFilter("[PaymentMilestoneId] IS NOT NULL AND [Status] = 1");
 
                     b.HasIndex("VoidedByEmployeeId");
 
@@ -2307,6 +2310,62 @@ namespace ContractManagement.Migrations
                             t.HasCheckConstraint("CK_tbl_ContractTemplateField_PlaceholderKey", "LEN(LTRIM(RTRIM([PlaceholderKey]))) > 0");
 
                             t.HasCheckConstraint("CK_tbl_ContractTemplateField_TemplateVersionId", "[TemplateVersionId] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplateItemTableColumnLayout", b =>
+                {
+                    b.Property<int>("ItemTableColumnLayoutId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ItemTableColumnLayoutId"));
+
+                    b.Property<string>("ColumnKey")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(sysutcdatetime())");
+
+                    b.Property<int>("CreatedEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<byte>("DisplayOrder")
+                        .HasColumnType("tinyint");
+
+                    b.Property<int>("TemplateVersionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<short>("WidthBps")
+                        .HasColumnType("smallint");
+
+                    b.HasKey("ItemTableColumnLayoutId")
+                        .HasName("PK_tbl_ContractTemplateItemTableColumnLayout");
+
+                    b.HasIndex("TemplateVersionId", "ColumnKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_tbl_ContractTemplateItemTableColumnLayout_Version_Key");
+
+                    b.HasIndex("TemplateVersionId", "DisplayOrder")
+                        .IsUnique()
+                        .HasDatabaseName("UX_tbl_ContractTemplateItemTableColumnLayout_Version_Order");
+
+                    b.ToTable("tbl_ContractTemplateItemTableColumnLayout", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateItemTableColumnLayout_DisplayOrder", "[DisplayOrder] BETWEEN 0 AND 7");
+
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateItemTableColumnLayout_WidthBps", "[WidthBps] BETWEEN 250 AND 10000");
                         });
                 });
 
@@ -4313,6 +4372,15 @@ namespace ContractManagement.Migrations
                         .WithMany()
                         .HasForeignKey("VersionId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplateItemTableColumnLayout", b =>
+                {
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplateVersion", null)
+                        .WithMany()
+                        .HasForeignKey("TemplateVersionId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

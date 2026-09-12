@@ -85,6 +85,8 @@ public partial class DbDtctechContext : DbContext
 
     public virtual DbSet<TblContractTemplateVersion> TblContractTemplateVersions { get; set; }
 
+    public virtual DbSet<TblContractTemplateItemTableColumnLayout> TblContractTemplateItemTableColumnLayouts { get; set; }
+
 
     /*
      * TemplateField và TemplateTerm là hai bảng cấu hình cho template version.
@@ -1138,7 +1140,10 @@ public partial class DbDtctechContext : DbContext
             });
             entity.HasIndex(e => new { e.VersionId, e.ReferenceCode }).IsUnique();
             entity.HasIndex(e => e.EvidenceFileId).IsUnique().HasFilter("[EvidenceFileId] IS NOT NULL");
-            entity.HasIndex(e => e.PaymentMilestoneId);
+            entity.HasIndex(e => e.PaymentMilestoneId)
+                .IsUnique()
+                .HasFilter("[PaymentMilestoneId] IS NOT NULL AND [Status] = 1")
+                .HasDatabaseName("UX_tbl_ContractPaymentLedger_ActiveMilestone");
             entity.Property(e => e.Amount).HasColumnType("decimal(18,2)");
             entity.Property(e => e.CurrencyCode).HasMaxLength(3).IsUnicode(false);
             entity.Property(e => e.PaymentMethod).HasMaxLength(100);
@@ -1444,6 +1449,40 @@ public partial class DbDtctechContext : DbContext
             entity.Property(e => e.RowVersion)
                 .IsRowVersion()
                 .IsConcurrencyToken();
+        });
+
+        modelBuilder.Entity<TblContractTemplateItemTableColumnLayout>(entity =>
+        {
+            entity.HasKey(e => e.ItemTableColumnLayoutId)
+                .HasName("PK_tbl_ContractTemplateItemTableColumnLayout");
+            entity.ToTable("tbl_ContractTemplateItemTableColumnLayout", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractTemplateItemTableColumnLayout_DisplayOrder",
+                    "[DisplayOrder] BETWEEN 0 AND 7");
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractTemplateItemTableColumnLayout_WidthBps",
+                    "[WidthBps] BETWEEN 250 AND 10000");
+            });
+            entity.HasIndex(e => new { e.TemplateVersionId, e.ColumnKey })
+                .IsUnique()
+                .HasDatabaseName(
+                    "UX_tbl_ContractTemplateItemTableColumnLayout_Version_Key");
+            entity.HasIndex(e => new { e.TemplateVersionId, e.DisplayOrder })
+                .IsUnique()
+                .HasDatabaseName(
+                    "UX_tbl_ContractTemplateItemTableColumnLayout_Version_Order");
+            entity.Property(e => e.ColumnKey)
+                .HasMaxLength(32)
+                .IsUnicode(false);
+            entity.Property(e => e.CreatedDate)
+                .HasColumnType("datetime2")
+                .HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.UpdatedDate).HasColumnType("datetime2");
+            entity.HasOne<TblContractTemplateVersion>()
+                .WithMany()
+                .HasForeignKey(e => e.TemplateVersionId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<TblContractTemplateField>(entity =>

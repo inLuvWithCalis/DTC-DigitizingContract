@@ -432,6 +432,8 @@ export default function ContractApprovalsPage() {
     }
   };
 
+  console.log("selected", selected?.contractId);
+
   const submitDecision = async (
     decision: ApprovalDecision,
     comment: string,
@@ -491,6 +493,7 @@ export default function ContractApprovalsPage() {
       setSelected(null);
       setDialogRequests([]);
       await loadInbox();
+      router.push(`/contracts/${selected?.contractId}#approval`);
     } catch (submitError) {
       if (isStaleRowVersion(submitError)) {
         toast.error(

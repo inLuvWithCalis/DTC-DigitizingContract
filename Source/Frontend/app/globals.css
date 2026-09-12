@@ -162,7 +162,19 @@
   z-index: 9999;
 }
 
-.ProseMirror .tableWrapper {
+.contract-rich-text-editor-surface {
+  contain: inline-size;
+}
+
+.contract-rich-text-editor-surface .ProseMirror {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.contract-rich-text-editor-surface .ProseMirror .tableWrapper {
+  width: 100%;
+  max-width: 100%;
   overflow-x: auto;
 }
 
@@ -173,6 +185,11 @@
 .ProseMirror .contract-rich-text-table td,
 .ProseMirror .contract-rich-text-table th {
   position: relative;
+}
+
+.contract-table-edge-hover,
+.contract-table-edge-hover * {
+  cursor: col-resize !important;
 }
 
 .ProseMirror .contract-rich-text-table .selectedCell::after {
@@ -192,7 +209,7 @@
   right: -4px;
   bottom: -2px;
   z-index: 3;
-  width: 8px;
+  width: 10px;
   pointer-events: none;
   cursor: col-resize;
   background: var(--primary);

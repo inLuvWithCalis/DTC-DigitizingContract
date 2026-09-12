@@ -392,6 +392,14 @@ public sealed class ContractTemplateService : IContractTemplateService
                 _dbContext.TblContractTemplateVersions.Add(version);
                 await _dbContext.SaveChangesAsync(cancellationToken);
 
+                _dbContext.TblContractTemplateItemTableColumnLayouts.AddRange(
+                    CreateItemTableLayoutRows(
+                        version.TemplateVersionId,
+                        ContractTableLayoutPolicy.DefaultItemColumnWidthsBps,
+                        employeeId,
+                        now));
+                await _dbContext.SaveChangesAsync(cancellationToken);
+
                 return await LoadTemplateDetailAsync(template, cancellationToken);
             }, cancellationToken);
         }
@@ -453,6 +461,62 @@ public sealed class ContractTemplateService : IContractTemplateService
     {
         await EnsureAdminOfficerAsync(employeeId, cancellationToken);
         return await LoadVersionDetailAsync(versionId, cancellationToken);
+    }
+
+    public async Task<ContractTemplateVersionDetailResponse>
+        UpdateItemTableLayoutAsync(
+            int versionId,
+            UpdateContractTemplateItemTableLayoutRequest request,
+            int employeeId,
+            CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        await EnsureAdminOfficerAsync(employeeId, cancellationToken);
+        var expectedRowVersion = DecodeRowVersion(
+            request.VersionRowVersion,
+            nameof(request.VersionRowVersion));
+        var widths = ContractTableLayoutPolicy.RequireCanonicalWidths(
+            request.ColumnWidthsBps,
+            ContractTableLayoutPolicy.ItemColumnKeys.Count,
+            "ItemTableLayoutInvalid");
+        int? oldPreviewFileId = null;
+
+        var result = await ExecuteInTransactionAsync(async () =>
+        {
+            await EnsureAdminOfficerAsync(employeeId, cancellationToken);
+            var version = await GetVersionForMutationAsync(
+                versionId, cancellationToken);
+            EnsureDraft(version);
+            EnsureRowVersionMatches(
+                version.RowVersion,
+                expectedRowVersion,
+                "Template version");
+            SetOriginalRowVersion(version, expectedRowVersion);
+
+            var rows = await LoadItemTableLayoutRowsAsync(
+                versionId,
+                tracking: true,
+                cancellationToken);
+            var now = DateTime.UtcNow;
+            foreach (var row in rows)
+            {
+                row.WidthBps = checked((short)widths[row.DisplayOrder]);
+                row.UpdatedEmployeeId = employeeId;
+                row.UpdatedDate = now;
+            }
+
+            oldPreviewFileId = version.PreviewFileId;
+            version.PreviewFileId = null;
+            TouchVersion(version, employeeId, now);
+            RotateVersionRowVersionIfNeeded(version);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return await LoadVersionDetailAsync(versionId, cancellationToken);
+        }, cancellationToken);
+
+        if (oldPreviewFileId is > 0 && _fileStorageService is not null)
+            await DeleteOldArtifactAfterCommitAsync(oldPreviewFileId.Value);
+
+        return result;
     }
 
     public async Task<ContractTemplateVersionDetailResponse> CopyVersionAsync(
@@ -526,6 +590,11 @@ public sealed class ContractTemplateService : IContractTemplateService
                 "Template version");
             SetOriginalRowVersion(source, expectedRowVersion);
 
+            var sourceLayout = await LoadItemTableLayoutRowsAsync(
+                source.TemplateVersionId,
+                tracking: false,
+                cancellationToken);
+
             var maxVersionNo = await _dbContext.TblContractTemplateVersions
                 .Where(version => version.TemplateId == template.TemplateId)
                 .Select(version => (int?)version.VersionNo)
@@ -556,6 +625,13 @@ public sealed class ContractTemplateService : IContractTemplateService
             {
                 throw CreateDraftVersionAlreadyExistsException();
             }
+
+            _dbContext.TblContractTemplateItemTableColumnLayouts.AddRange(
+                CreateItemTableLayoutRows(
+                    copy.TemplateVersionId,
+                    sourceLayout.Select(item => (int)item.WidthBps).ToArray(),
+                    employeeId,
+                    now));
 
             var sourceTerms = await _dbContext.TblContractTemplateTerms
                 .AsNoTracking()
@@ -1295,7 +1371,7 @@ public sealed class ContractTemplateService : IContractTemplateService
         }, cancellationToken);
     }
 
-    public async Task<(Stream Stream, string FileName)> DownloadPublishedPreviewPdfAsync(
+    public async Task<(Stream Stream, string FileName)> DownloadPreviewPdfAsync(
         int versionId,
         int employeeId,
         CancellationToken cancellationToken = default)
@@ -1304,6 +1380,25 @@ public sealed class ContractTemplateService : IContractTemplateService
         EnsureDocumentStorageIsConfigured();
         var version = await GetVersionForUploadPreflightAsync(versionId,
             cancellationToken);
+
+        if (version.Status == (byte)TemplateVersionStatus.Draft)
+        {
+            var renderer = _pdfRenderer ?? throw new InvalidOperationException(
+                "PDF renderer chưa được cấu hình cho Template preview.");
+            var preview = await DownloadPreviewAsync(
+                versionId,
+                employeeId,
+                cancellationToken);
+            await using var previewStream = preview.Stream;
+            await using var memory = new MemoryStream();
+            await previewStream.CopyToAsync(memory, cancellationToken);
+            var pdf = await renderer.ConvertPreviewToPdfAsync(
+                memory.ToArray(),
+                cancellationToken);
+            return (new MemoryStream(pdf, writable: false),
+                $"template-preview-{versionId}.pdf");
+        }
+
         if (version.Status != (byte)TemplateVersionStatus.Published
             && version.Status != (byte)TemplateVersionStatus.Retired
             || version.PublishedPreviewPdfFileId is not > 0)
@@ -2756,6 +2851,13 @@ public sealed class ContractTemplateService : IContractTemplateService
             .Where(item => item.TemplateVersionId == versionId)
             .OrderBy(item => item.DisplayOrder).ThenBy(item => item.TemplatePaymentMilestoneId)
             .ToListAsync(cancellationToken);
+        var itemTableLayout = await LoadItemTableLayoutRowsAsync(
+            versionId,
+            tracking: false,
+            cancellationToken);
+        var itemTableWidths = itemTableLayout
+            .Select(item => (int)item.WidthBps)
+            .ToArray();
 
         var basisCanonical = string.Join('\n', bases.Select(item => string.Join('|',
             EscapeCanonical(item.BasisCode),
@@ -2782,13 +2884,21 @@ public sealed class ContractTemplateService : IContractTemplateService
                 EscapeCanonical(term.TermContentEn), term.DisplayOrder.ToString(invariant),
                 milestoneCanonical);
         }));
-        var canonical = string.Join("\n", new[] { "LEGAL", basisCanonical, "TERMS", paymentCanonical });
+        var itemLayoutCanonical = string.Join(',', itemTableLayout.Select(item =>
+            $"{EscapeCanonical(item.ColumnKey)}:{item.DisplayOrder}:{item.WidthBps}"));
+        var canonical = string.Join("\n", new[]
+        {
+            "ITEM_LAYOUT", itemLayoutCanonical,
+            "LEGAL", basisCanonical,
+            "TERMS", paymentCanonical
+        });
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)))
             .ToLowerInvariant();
         var sampleTotal = SoftwareSupplyPreviewDatasetV1.Items.Sum(item => item.TotalAmount);
         return new TemplatePreviewInput(
             new ContractTemplateAuthoringPreviewData
             {
+                ItemTableColumnWidthsBps = itemTableWidths,
                 LegalBases = bases.Select((item, index) =>
                     new ContractTemplateRenderLegalBasis(
                         index + 1, item.ContentVi, item.ContentEn)).ToList(),
@@ -2988,6 +3098,10 @@ public sealed class ContractTemplateService : IContractTemplateService
             .OrderBy(item => item.DisplayOrder)
             .ThenBy(item => item.TemplatePaymentMilestoneId)
             .ToListAsync(cancellationToken);
+        var itemTableLayout = await LoadItemTableLayoutRowsAsync(
+            versionId,
+            tracking: false,
+            cancellationToken);
 
         var response = MapVersionDetail(version, template);
         response.Terms = terms.Select(MapTerm).ToList();
@@ -2998,7 +3112,54 @@ public sealed class ContractTemplateService : IContractTemplateService
                 .Select(MapPaymentMilestone).ToList();
         }
         response.LegalBases = legalBases.Select(MapLegalBasis).ToList();
+        response.ItemTableLayout = itemTableLayout
+            .Select(MapItemTableLayout)
+            .ToList();
         return response;
+    }
+
+    private async Task<List<TblContractTemplateItemTableColumnLayout>>
+        LoadItemTableLayoutRowsAsync(
+            int versionId,
+            bool tracking,
+            CancellationToken cancellationToken)
+    {
+        var query = _dbContext.TblContractTemplateItemTableColumnLayouts
+            .Where(item => item.TemplateVersionId == versionId);
+        if (!tracking) query = query.AsNoTracking();
+
+        var rows = await query
+            .OrderBy(item => item.DisplayOrder)
+            .ToListAsync(cancellationToken);
+        ContractTableLayoutPolicy.RequireItemColumnWidths(rows.Select(item => (
+            item.ColumnKey,
+            (int)item.DisplayOrder,
+            (int)item.WidthBps)));
+
+        return rows;
+    }
+
+    private static IEnumerable<TblContractTemplateItemTableColumnLayout>
+        CreateItemTableLayoutRows(
+            int versionId,
+            IReadOnlyList<int> widths,
+            int employeeId,
+            DateTime createdDate)
+    {
+        ContractTableLayoutPolicy.RequireCanonicalWidths(
+            widths,
+            ContractTableLayoutPolicy.ItemColumnKeys.Count,
+            "ItemTableLayoutInvalid");
+        return ContractTableLayoutPolicy.ItemColumnKeys.Select((key, order) =>
+            new TblContractTemplateItemTableColumnLayout
+            {
+                TemplateVersionId = versionId,
+                ColumnKey = key,
+                DisplayOrder = checked((byte)order),
+                WidthBps = checked((short)widths[order]),
+                CreatedEmployeeId = employeeId,
+                CreatedDate = createdDate
+            });
     }
 
     private async Task EnsureLegalBasisCodeAndOrderAreAvailableAsync(
@@ -3089,7 +3250,7 @@ public sealed class ContractTemplateService : IContractTemplateService
         if (!ContractTermRichText.TryParse(normalized, out _))
         {
             throw new ArgumentException(
-                "Nội dung phải dùng định dạng rich text v3 hợp lệ.",
+                "Nội dung phải dùng định dạng rich text v4 hợp lệ.",
                 parameterName);
         }
 
@@ -3542,6 +3703,16 @@ public sealed class ContractTemplateService : IContractTemplateService
             CreatedDate = version.CreatedDate,
             UpdatedDate = version.UpdatedDate,
             RowVersion = EncodeRowVersion(version.RowVersion)
+        };
+
+    private static ContractTemplateItemTableColumnLayoutResponse MapItemTableLayout(
+        TblContractTemplateItemTableColumnLayout item) => new()
+        {
+            ItemTableColumnLayoutId = item.ItemTableColumnLayoutId,
+            TemplateVersionId = item.TemplateVersionId,
+            ColumnKey = item.ColumnKey,
+            DisplayOrder = item.DisplayOrder,
+            WidthBps = item.WidthBps
         };
 
     private static ContractTemplatePreviewResponse MapPreviewResponse(

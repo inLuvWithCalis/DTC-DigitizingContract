@@ -14,11 +14,10 @@ namespace ContractManagement.Domains.Services.ContractTemplate;
 /// </summary>
 public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRenderer
 {
-    public const string FormatVersion = "V9";
+    public const string FormatVersion = "V10";
 
     private const string GeneratedContentFont = "Times New Roman";
     private const string GeneratedContentFontSize = "24";
-    private const int RichTableWidthDxa = 9_000;
 
     public byte[] RenderSample(byte[] sourceDocumentBytes, ContractLanguageMode languageMode,
         IReadOnlyList<SoftwareSupplyPlaceholderDefinition> definitions,
@@ -37,6 +36,8 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
         {
             ScalarValues = values,
             Definitions = definitions,
+            ItemTableColumnWidthsBps = authoringData?.ItemTableColumnWidthsBps
+                ?? data.ItemTableColumnWidthsBps,
             LegalBases = authoringData?.LegalBases ?? data.LegalBases,
             Terms = terms
         });
@@ -156,14 +157,18 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
     {
         foreach (var (key, paragraph) in paragraphs)
         {
+            var availableWidthDxa = GetAvailableWidthDxa(paragraph);
             IEnumerable<OpenXmlElement> replacements = key switch
             {
                 "CONTRACT_ITEM_TABLE" =>
                 [
-                    (OpenXmlElement)CreateItemTable(languageMode, renderData)
+                    (OpenXmlElement)CreateItemTable(
+                        languageMode, renderData, availableWidthDxa)
                 ],
-                "CONTRACT_LEGAL_BASES" => CreateLegalBasisElements(languageMode, renderData),
-                "CONTRACT_TERMS" => CreateTermElements(languageMode, renderData),
+                "CONTRACT_LEGAL_BASES" => CreateLegalBasisElements(
+                    languageMode, renderData, availableWidthDxa),
+                "CONTRACT_TERMS" => CreateTermElements(
+                    languageMode, renderData, availableWidthDxa),
                 "SIGNATURE_PROVIDER" =>
                 [
                     (OpenXmlElement)CreateSignatureBlock(
@@ -208,9 +213,63 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
         }
     }
 
+    private static int GetAvailableWidthDxa(W.Paragraph paragraph)
+    {
+        var containingCell = paragraph.Ancestors<W.TableCell>().FirstOrDefault();
+        if (containingCell is not null)
+        {
+            var explicitWidth = containingCell.TableCellProperties?
+                .GetFirstChild<W.TableCellWidth>();
+            if (explicitWidth?.Type?.Value == W.TableWidthUnitValues.Dxa
+                && int.TryParse(explicitWidth.Width?.Value, out var cellWidth)
+                && cellWidth > 0)
+            {
+                return cellWidth;
+            }
+
+            var row = containingCell.Parent as W.TableRow;
+            var table = containingCell.Ancestors<W.Table>().FirstOrDefault();
+            var gridWidths = table?.GetFirstChild<W.TableGrid>()?
+                .Elements<W.GridColumn>()
+                .Select(column => int.TryParse(column.Width?.Value, out var width)
+                    ? width
+                    : 0)
+                .ToArray();
+            if (row is not null && gridWidths is { Length: > 0 })
+            {
+                var startColumn = row.Elements<W.TableCell>()
+                    .TakeWhile(cell => !ReferenceEquals(cell, containingCell))
+                    .Sum(cell => (int?)(cell.TableCellProperties?
+                        .GetFirstChild<W.GridSpan>()?.Val?.Value) ?? 1);
+                var colspan = (int?)(containingCell.TableCellProperties?
+                    .GetFirstChild<W.GridSpan>()?.Val?.Value) ?? 1;
+                var gridWidth = gridWidths.Skip(startColumn).Take(colspan).Sum();
+                if (gridWidth > 0) return gridWidth;
+            }
+        }
+
+        var body = paragraph.Ancestors<W.Body>().FirstOrDefault();
+        var section = body?.Descendants<W.SectionProperties>().LastOrDefault();
+        var pageSize = section?.GetFirstChild<W.PageSize>();
+        var pageMargin = section?.GetFirstChild<W.PageMargin>();
+        var pageWidth = checked((int)(pageSize?.Width?.Value ?? 12_240U));
+        var leftMargin = checked((int)(pageMargin?.Left?.Value ?? 1_440U));
+        var rightMargin = checked((int)(pageMargin?.Right?.Value ?? 1_440U));
+        var available = pageWidth - leftMargin - rightMargin;
+        if (available <= 0)
+        {
+            throw new ContractTemplatePreviewException(
+                "PreviewLayoutUnsupported",
+                "Không xác định được chiều rộng vùng nội dung của DOCX.");
+        }
+
+        return available;
+    }
+
     private static IEnumerable<OpenXmlElement> CreateTermElements(
         ContractLanguageMode languageMode,
-        ContractTemplateRenderData renderData)
+        ContractTemplateRenderData renderData,
+        int availableWidthDxa)
     {
         var elements = new List<OpenXmlElement>();
         if (!string.IsNullOrWhiteSpace(renderData.Notice))
@@ -224,10 +283,12 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                 ? $"Điều {term.No}. {term.TitleVi} / Article {term.No}. {term.TitleEn}"
                 : $"Điều {term.No}. {term.TitleVi}";
             elements.Add(CreateParagraph(title, bold: true));
-            elements.AddRange(CreateTermContentElements(term.ContentVi));
+            elements.AddRange(CreateTermContentElements(
+                term.ContentVi, availableWidthDxa));
             if (languageMode == ContractLanguageMode.Bilingual)
             {
-                elements.AddRange(CreateTermContentElements(term.ContentEn));
+                elements.AddRange(CreateTermContentElements(
+                    term.ContentEn, availableWidthDxa));
             }
         }
 
@@ -236,7 +297,8 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
 
     private static IEnumerable<OpenXmlElement> CreateLegalBasisElements(
         ContractLanguageMode languageMode,
-        ContractTemplateRenderData renderData)
+        ContractTemplateRenderData renderData,
+        int availableWidthDxa)
     {
         var elements = new List<OpenXmlElement>();
         foreach (var basis in renderData.LegalBases)
@@ -244,30 +306,36 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
             elements.AddRange(CreateRichTextElements(
                 basis.ContentVi,
                 "ContractLegalBasisRichTextInvalid",
-                "Nội dung căn cứ tiếng Việt có định dạng rich text không hợp lệ."));
+                "Nội dung căn cứ tiếng Việt có định dạng rich text không hợp lệ.",
+                availableWidthDxa));
             if (languageMode == ContractLanguageMode.Bilingual
                 && !string.IsNullOrWhiteSpace(basis.ContentEn))
             {
                 elements.AddRange(CreateRichTextElements(
                     basis.ContentEn,
                     "ContractLegalBasisRichTextInvalid",
-                    "Nội dung căn cứ tiếng Anh có định dạng rich text không hợp lệ."));
+                    "Nội dung căn cứ tiếng Anh có định dạng rich text không hợp lệ.",
+                    availableWidthDxa));
             }
         }
 
         return elements;
     }
 
-    private static IEnumerable<OpenXmlElement> CreateTermContentElements(string? value)
+    private static IEnumerable<OpenXmlElement> CreateTermContentElements(
+        string? value,
+        int availableWidthDxa)
         => CreateRichTextElements(
             value,
             "ContractTermRichTextInvalid",
-            "Nội dung điều khoản có định dạng rich text không hợp lệ.");
+            "Nội dung điều khoản có định dạng rich text không hợp lệ.",
+            availableWidthDxa);
 
     private static IEnumerable<OpenXmlElement> CreateRichTextElements(
         string? value,
         string failureCode,
-        string failureMessage)
+        string failureMessage,
+        int availableWidthDxa)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -290,7 +358,10 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                 continue;
             }
 
-            elements.Add(CreateRichTable(block.Rows));
+            elements.Add(CreateRichTable(
+                block.Rows,
+                block.ColumnWidthsBps,
+                availableWidthDxa));
         }
 
         if (elements.Count == 0)
@@ -341,41 +412,22 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
     }
 
     private static W.Table CreateRichTable(
-        IEnumerable<ContractTermRichTextRow> rows)
+        IEnumerable<ContractTermRichTextRow> rows,
+        IReadOnlyList<int> columnWidthsBps,
+        int availableWidthDxa)
     {
         var layout = CreateRichTableLayout(rows.ToList());
-        var tableProperties = CreateGeneratedTableProperties();
-        tableProperties.Append(new W.TableLayout
-        {
-            Type = W.TableLayoutValues.Fixed
-        });
-        var table = new W.Table(tableProperties);
-        var tableGrid = new W.TableGrid();
-        foreach (var width in layout.ColumnWidths)
-        {
-            tableGrid.Append(new W.GridColumn { Width = width.ToString() });
-        }
-        table.Append(tableGrid);
+        var widths = ContractTableLayoutPolicy.MapToDxa(
+            columnWidthsBps, availableWidthDxa);
+        var table = CreateFixedTable(widths, availableWidthDxa);
 
         foreach (var sourceRow in layout.Rows)
         {
             var row = new W.TableRow();
             foreach (var layoutCell in sourceRow)
             {
-                var properties = new W.TableCellProperties(
-                    new W.TableCellWidth
-                    {
-                        Type = W.TableWidthUnitValues.Dxa,
-                        Width = layout.ColumnWidths
-                            .Skip(layoutCell.StartColumn)
-                            .Take(layoutCell.Colspan)
-                            .Sum()
-                            .ToString()
-                    });
-                if (layoutCell.Colspan > 1)
-                {
-                    properties.Append(new W.GridSpan { Val = layoutCell.Colspan });
-                }
+                var properties = CreateFixedCellProperties(
+                    widths, layoutCell.StartColumn, layoutCell.Colspan);
                 if (layoutCell.IsVerticalContinuation)
                 {
                     properties.Append(new W.VerticalMerge
@@ -406,10 +458,8 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                 else
                 {
                     var cell = layoutCell.Cell;
-                    var paragraphs = cell.Paragraphs.Count > 0
-                        ? cell.Paragraphs.Select(paragraph =>
-                        CreateRichParagraph(paragraph.Runs, paragraph.Alignment))
-                        : [CreateRichParagraph(cell.Runs)];
+                    var paragraphs = cell.Paragraphs.Select(paragraph =>
+                        CreateRichParagraph(paragraph.Runs, paragraph.Alignment));
                     tableCell.Append(paragraphs);
                 }
                 row.Append(tableCell);
@@ -425,7 +475,6 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
         IReadOnlyList<ContractTermRichTextRow> rows)
     {
         var columnCount = rows[0].Cells.Sum(cell => cell.Colspan ?? 1);
-        var widthWeights = new int?[columnCount];
         var activeSpans = new List<ActiveRichTableSpan>();
         var layoutRows = new List<IReadOnlyList<RichTableLayoutCell>>(rows.Count);
 
@@ -465,10 +514,6 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                 for (var column = cursor; column < cursor + colspan; column++)
                 {
                     occupied[column] = true;
-                    if (cell.Colwidth is { } colwidth && widthWeights[column] is null)
-                    {
-                        widthWeights[column] = colwidth[column - cursor];
-                    }
                 }
                 if ((cell.Rowspan ?? 1) > 1)
                 {
@@ -485,14 +530,7 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
             activeSpans = nextActiveSpans;
         }
 
-        var weights = widthWeights.Select(width => width ?? 100).ToArray();
-        var totalWeight = weights.Sum();
-        var columnWidths = weights
-            .Select(weight => Math.Max(1, RichTableWidthDxa * weight / totalWeight))
-            .ToArray();
-        columnWidths[^1] += RichTableWidthDxa - columnWidths.Sum();
-
-        return new RichTableLayout(layoutRows, columnWidths);
+        return new RichTableLayout(layoutRows);
     }
 
     private static W.TableVerticalAlignmentValues? ToTableVerticalAlignment(
@@ -505,8 +543,7 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
         };
 
     private sealed record RichTableLayout(
-        IReadOnlyList<IReadOnlyList<RichTableLayoutCell>> Rows,
-        IReadOnlyList<int> ColumnWidths);
+        IReadOnlyList<IReadOnlyList<RichTableLayoutCell>> Rows);
 
     private sealed record RichTableLayoutCell(
         ContractTermRichTextCell Cell,
@@ -551,7 +588,8 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
 
     private static W.Table CreateItemTable(
         ContractLanguageMode languageMode,
-        ContractTemplateRenderData renderData)
+        ContractTemplateRenderData renderData,
+        int availableWidthDxa)
     {
         var headers = languageMode == ContractLanguageMode.Bilingual
             ? new[] { "STT / No.", "Loại / Type", "Sản phẩm, dịch vụ / Description", "SL / Qty", "Đơn giá / Unit price", "CK / Disc.", "VAT", "Thành tiền / Total" }
@@ -587,29 +625,37 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
             FormatMoney(total, renderData.CurrencyCode)
         ]);
 
-        return CreateTable(rows, headerRow: true);
+        var columnWidths = ContractTableLayoutPolicy.MapToDxa(
+            ContractTableLayoutPolicy.RequireCanonicalWidths(
+                renderData.ItemTableColumnWidthsBps,
+                ContractTableLayoutPolicy.ItemColumnKeys.Count,
+                "ItemTableLayoutInvalid"),
+            availableWidthDxa);
+        return CreateTable(
+            rows,
+            headerRow: true,
+            columnWidths,
+            availableWidthDxa);
     }
 
     private static W.Table CreateTable(
         IEnumerable<IEnumerable<string>> rows,
-        bool headerRow)
+        bool headerRow,
+        IReadOnlyList<int> columnWidths,
+        int availableWidthDxa)
     {
-        var table = new W.Table(CreateGeneratedTableProperties());
+        var table = CreateFixedTable(columnWidths, availableWidthDxa);
 
         var rowIndex = 0;
         foreach (var values in rows)
         {
             var row = new W.TableRow();
-            foreach (var value in values)
+            foreach (var (value, columnIndex) in values.Select(
+                         (value, columnIndex) => (value, columnIndex)))
             {
                 var paragraph = CreateParagraph(value, bold: headerRow && rowIndex == 0);
                 row.Append(new W.TableCell(
-                    new W.TableCellProperties(
-                        new W.TableCellWidth
-                        {
-                            Type = W.TableWidthUnitValues.Auto,
-                            Width = "0"
-                        }),
+                    CreateFixedCellProperties(columnWidths, columnIndex, 1),
                     paragraph));
             }
 
@@ -620,16 +666,74 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
         return table;
     }
 
-    private static W.TableProperties CreateGeneratedTableProperties() =>
+    private static W.Table CreateFixedTable(
+        IReadOnlyList<int> columnWidths,
+        int availableWidthDxa)
+    {
+        var table = new W.Table(CreateGeneratedTableProperties(availableWidthDxa));
+        var grid = new W.TableGrid();
+        foreach (var width in columnWidths)
+            grid.Append(new W.GridColumn { Width = width.ToString() });
+        table.Append(grid);
+        return table;
+    }
+
+    private static W.TableCellProperties CreateFixedCellProperties(
+        IReadOnlyList<int> columnWidths,
+        int startColumn,
+        int colspan)
+    {
+        var properties = new W.TableCellProperties(
+            new W.TableCellWidth
+            {
+                Type = W.TableWidthUnitValues.Dxa,
+                Width = columnWidths
+                    .Skip(startColumn)
+                    .Take(colspan)
+                    .Sum()
+                    .ToString()
+            });
+        if (colspan > 1) properties.Append(new W.GridSpan { Val = colspan });
+        return properties;
+    }
+
+    private static W.TableProperties CreateGeneratedTableProperties(
+        int availableWidthDxa) =>
         new(
-            new W.TableWidth { Type = W.TableWidthUnitValues.Pct, Width = "5000" },
+            new W.TableWidth
+            {
+                Type = W.TableWidthUnitValues.Dxa,
+                Width = availableWidthDxa.ToString()
+            },
             new W.TableBorders(
                 new W.TopBorder { Val = W.BorderValues.Single, Size = 4 },
                 new W.LeftBorder { Val = W.BorderValues.Single, Size = 4 },
                 new W.BottomBorder { Val = W.BorderValues.Single, Size = 4 },
                 new W.RightBorder { Val = W.BorderValues.Single, Size = 4 },
                 new W.InsideHorizontalBorder { Val = W.BorderValues.Single, Size = 4 },
-                new W.InsideVerticalBorder { Val = W.BorderValues.Single, Size = 4 }));
+                new W.InsideVerticalBorder { Val = W.BorderValues.Single, Size = 4 }),
+            new W.TableLayout { Type = W.TableLayoutValues.Fixed },
+            new W.TableCellMarginDefault(
+                new W.TopMargin
+                {
+                    Type = W.TableWidthUnitValues.Dxa,
+                    Width = "50"
+                },
+                new W.TableCellLeftMargin
+                {
+                    Type = W.TableWidthValues.Dxa,
+                    Width = 80
+                },
+                new W.BottomMargin
+                {
+                    Type = W.TableWidthUnitValues.Dxa,
+                    Width = "50"
+                },
+                new W.TableCellRightMargin
+                {
+                    Type = W.TableWidthValues.Dxa,
+                    Width = 80
+                }));
 
     private static void ReplaceScalarTokens(
         OpenXmlPartRootElement root,
@@ -792,6 +896,8 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
         SoftwareSupplyPreviewDatasetV1.LegalDisclaimer)
         {
             Definitions = ContractPlaceholderCatalog.SystemDefinitions,
+            ItemTableColumnWidthsBps =
+                ContractTableLayoutPolicy.DefaultItemColumnWidthsBps,
             LegalBases = SoftwareSupplyPreviewDatasetV1.LegalBases.Select(basis =>
                 new ContractTemplateRenderLegalBasis(
                     basis.No, basis.ContentVi, basis.ContentEn)).ToList()

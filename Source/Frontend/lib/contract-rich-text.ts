@@ -1,4 +1,6 @@
-export const CONTRACT_RICH_TEXT_PREFIX = "contract-rich-text:v3:";
+export const CONTRACT_RICH_TEXT_PREFIX = "contract-rich-text:v4:";
+export const CONTRACT_TABLE_TOTAL_BPS = 10_000;
+export const CONTRACT_TABLE_MIN_COLUMN_BPS = 250;
 
 export const CONTRACT_RICH_TEXT_FONT_SIZES = [10, 12, 14, 18, 24, 32] as const;
 
@@ -21,7 +23,6 @@ export interface ContractRichTextCell {
   paragraphs: ContractRichTextParagraph[];
   colspan?: number;
   rowspan?: number;
-  colwidth?: number[];
   verticalAlign?: ContractRichTextVerticalAlignment;
 }
 
@@ -39,6 +40,7 @@ export type ContractRichTextBlock =
     }
   | {
       type: "table";
+      columnWidthsBps: number[];
       rows: ContractRichTextRow[];
     };
 
@@ -116,19 +118,91 @@ const normalizeVerticalAlignment = (
     ? value
     : undefined;
 
-const normalizeColumnWidths = (value: unknown, colspan: number) => {
-  if (!Array.isArray(value) || value.length !== colspan) return undefined;
-  const widths = value.map((width) =>
-    typeof width === "number" && Number.isFinite(width)
-      ? Math.round(width)
-      : Number.NaN,
-  );
-  return widths.every((width) => width >= 25 && width <= 2_000)
-    ? widths
-    : undefined;
+export const isCanonicalColumnWidthsBps = (
+  value: unknown,
+  columnCount: number,
+): value is number[] =>
+  Array.isArray(value) &&
+  value.length === columnCount &&
+  value.every(
+    (width) =>
+      typeof width === "number" &&
+      Number.isInteger(width) &&
+      width >= CONTRACT_TABLE_MIN_COLUMN_BPS &&
+      width <= CONTRACT_TABLE_TOTAL_BPS,
+  ) &&
+  value.reduce((sum, width) => sum + width, 0) === CONTRACT_TABLE_TOTAL_BPS;
+
+export const normalizeColumnWidthsBps = (
+  values: readonly number[],
+  columnCount = values.length,
+): number[] => {
+  if (
+    !Number.isInteger(columnCount) ||
+    columnCount <= 0 ||
+    columnCount * CONTRACT_TABLE_MIN_COLUMN_BPS > CONTRACT_TABLE_TOTAL_BPS
+  ) {
+    throw new Error("Số cột của bảng không hợp lệ.");
+  }
+
+  const weights = Array.from({ length: columnCount }, (_, index) => {
+    const value = values[index];
+    return typeof value === "number" && Number.isFinite(value) && value > 0
+      ? value
+      : 1;
+  });
+  const allocations = Array<number>(columnCount).fill(0);
+  let available = CONTRACT_TABLE_TOTAL_BPS;
+  let pending = Array.from({ length: columnCount }, (_, index) => index);
+
+  while (pending.length > 0) {
+    const weightTotal = pending.reduce(
+      (sum, index) => sum + weights[index],
+      0,
+    );
+    const belowMinimum = pending.filter(
+      (index) =>
+        (available * weights[index]) / weightTotal <
+        CONTRACT_TABLE_MIN_COLUMN_BPS,
+    );
+    if (belowMinimum.length === 0) {
+      pending.forEach((index) => {
+        allocations[index] = (available * weights[index]) / weightTotal;
+      });
+      break;
+    }
+
+    belowMinimum.forEach((index) => {
+      allocations[index] = CONTRACT_TABLE_MIN_COLUMN_BPS;
+      available -= CONTRACT_TABLE_MIN_COLUMN_BPS;
+    });
+    const belowMinimumSet = new Set(belowMinimum);
+    pending = pending.filter((index) => !belowMinimumSet.has(index));
+  }
+
+  const result = allocations.map(Math.floor);
+  result[result.length - 1] +=
+    CONTRACT_TABLE_TOTAL_BPS - result.reduce((sum, width) => sum + width, 0);
+  return result;
 };
 
-const hasValidLogicalGrid = (rows: ContractRichTextRow[]) => {
+export const columnWidthsBpsToPixels = (
+  widthsBps: readonly number[],
+  availableWidth: number,
+) => {
+  if (!isCanonicalColumnWidthsBps(widthsBps, widthsBps.length)) {
+    throw new Error("Độ rộng cột canonical không hợp lệ.");
+  }
+  const safeWidth = Math.max(widthsBps.length, Math.floor(availableWidth));
+  const result = widthsBps.map((width) =>
+    Math.max(1, Math.floor((safeWidth * width) / CONTRACT_TABLE_TOTAL_BPS)),
+  );
+  result[result.length - 1] +=
+    safeWidth - result.reduce((sum, width) => sum + width, 0);
+  return result;
+};
+
+const getLogicalColumnCount = (rows: ContractRichTextRow[]) => {
   const activeRowspans = Array<number>(20).fill(0);
   let expectedWidth: number | undefined;
 
@@ -147,7 +221,7 @@ const hasValidLogicalGrid = (rows: ContractRichTextRow[]) => {
         cursor + colspan > 20 ||
         occupied.slice(cursor, cursor + colspan).some(Boolean)
       ) {
-        return false;
+        return null;
       }
 
       for (let column = cursor; column < cursor + colspan; column += 1) {
@@ -159,12 +233,14 @@ const hasValidLogicalGrid = (rows: ContractRichTextRow[]) => {
 
     const width = occupied.lastIndexOf(true) + 1;
     if (width === 0 || (expectedWidth !== undefined && width !== expectedWidth)) {
-      return false;
+      return null;
     }
     expectedWidth ??= width;
   }
 
-  return activeRowspans.every((remaining) => remaining === 0);
+  return activeRowspans.every((remaining) => remaining === 0)
+    ? (expectedWidth ?? null)
+    : null;
 };
 
 export const normalizeContractRichTextDocument = (
@@ -206,30 +282,54 @@ export const normalizeContractRichTextDocument = (
               cellCandidate && typeof cellCandidate === "object"
                 ? (cellCandidate as Record<string, unknown>)
                 : {};
+            const allowedCellKeys = new Set([
+              "paragraphs",
+              "colspan",
+              "rowspan",
+              "verticalAlign",
+            ]);
+            if (Object.keys(cell).some((key) => !allowedCellKeys.has(key))) {
+              invalid = true;
+            }
+            if (
+              !Array.isArray(cell.paragraphs) ||
+              cell.paragraphs.length === 0 ||
+              cell.paragraphs.length > 100
+            ) {
+              invalid = true;
+            }
             const paragraphs = Array.isArray(cell.paragraphs)
               ? cell.paragraphs.slice(0, 100).map(normalizeParagraph)
-              : [normalizeParagraph({ runs: cell.runs })];
+              : [];
             const colspan = normalizeSpan(cell.colspan, 20);
             const rowspan = normalizeSpan(cell.rowspan, 50);
-            const colwidth = normalizeColumnWidths(cell.colwidth, colspan);
             const verticalAlign = normalizeVerticalAlignment(cell.verticalAlign);
             return {
               paragraphs,
               ...(colspan > 1 ? { colspan } : {}),
               ...(rowspan > 1 ? { rowspan } : {}),
-              ...(colwidth ? { colwidth } : {}),
               ...(verticalAlign ? { verticalAlign } : {}),
             };
           }),
         };
       });
 
-    if (!hasValidLogicalGrid(rows)) {
+    const columnCount = getLogicalColumnCount(rows);
+    if (
+      columnCount === null ||
+      !isCanonicalColumnWidthsBps(block.columnWidthsBps, columnCount)
+    ) {
       invalid = true;
       return;
     }
 
-    if (rows.length > 0) normalizedBlocks.push({ type: "table", rows });
+    if (rows.length > 0) {
+      normalizedBlocks.push({
+        type: "table",
+        columnWidthsBps: [...block.columnWidthsBps],
+        rows,
+      });
+    }
   });
 
   if (invalid) return null;
@@ -246,18 +346,18 @@ export const parseContractRichText = (
     return emptyDocument();
   }
   if (!source.startsWith(CONTRACT_RICH_TEXT_PREFIX)) {
-    throw new Error("Nội dung điều khoản không dùng định dạng rich text v3.");
+    throw new Error("Nội dung điều khoản không dùng định dạng rich text v4.");
   }
 
   try {
     const document = normalizeContractRichTextDocument(
       JSON.parse(source.slice(CONTRACT_RICH_TEXT_PREFIX.length)),
     );
-    if (!document) throw new Error("Rich text v3 không hợp lệ.");
+    if (!document) throw new Error("Rich text v4 không hợp lệ.");
     return document;
   } catch (error) {
     if (error instanceof Error) throw error;
-    throw new Error("Rich text v3 không hợp lệ.");
+    throw new Error("Rich text v4 không hợp lệ.");
   }
 };
 
@@ -272,7 +372,7 @@ export const serializeContractRichText = (
   document: ContractRichTextDocument,
 ) => {
   const normalized = normalizeContractRichTextDocument(document);
-  if (!normalized) throw new Error("Rich text v3 không hợp lệ.");
+  if (!normalized) throw new Error("Rich text v4 không hợp lệ.");
   if (!hasMeaningfulContent(normalized)) return "";
   return `${CONTRACT_RICH_TEXT_PREFIX}${JSON.stringify(normalized)}`;
 };
@@ -306,7 +406,10 @@ export const contractRichTextToEditorHtml = (value?: string | null) =>
         return `<p${style}>${runsToHtml(block.runs) || "<br>"}</p>`;
       }
 
-      return `<table style="table-layout:fixed;width:100%"><tbody>${block.rows
+      const colgroup = `<colgroup>${block.columnWidthsBps
+        .map((width) => `<col style="width:${width / 100}%">`)
+        .join("")}</colgroup>`;
+      return `<table style="table-layout:fixed;width:100%">${colgroup}<tbody>${block.rows
         .map(
           (row) =>
             `<tr>${row.cells
@@ -320,9 +423,6 @@ export const contractRichTextToEditorHtml = (value?: string | null) =>
                 const cellStyles = [
                   cell.verticalAlign
                     ? `vertical-align:${cell.verticalAlign}`
-                    : "",
-                  cell.colwidth?.length
-                    ? `width:${cell.colwidth.reduce((sum, width) => sum + width, 0)}px`
                     : "",
                 ].filter(Boolean);
                 const style = cellStyles.length > 0

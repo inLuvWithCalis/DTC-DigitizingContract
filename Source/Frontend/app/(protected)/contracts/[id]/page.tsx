@@ -352,10 +352,14 @@ export default function ContractDetailPage() {
       }
     }
 
-    const manualPaymentMilestones = contract.currentVersion.paymentMilestones
-      .filter((item) => item.dueAnchor === ContractPaymentDueAnchor.ManualDate);
+    const manualPaymentMilestones =
+      contract.currentVersion.paymentMilestones.filter(
+        (item) => item.dueAnchor === ContractPaymentDueAnchor.ManualDate,
+      );
     if (manualPaymentMilestones.some((item) => !item.anchorDate)) {
-      toast.error("Vui lòng nhập ngày bắt đầu tính hạn cho các đợt dùng Lịch thủ công.");
+      toast.error(
+        "Vui lòng nhập ngày bắt đầu tính hạn cho các đợt dùng Lịch thủ công.",
+      );
       return;
     }
 
@@ -897,16 +901,16 @@ export default function ContractDetailPage() {
         >
           <TabsList className="flex h-auto w-full flex-wrap justify-start">
             <TabsTrigger value="overview">Tổng quan</TabsTrigger>
+            <TabsTrigger value="documents">Chứng từ</TabsTrigger>
             <TabsTrigger value="negotiation">Vòng đàm phán</TabsTrigger>
             <TabsTrigger value="terms">Điều khoản - Trao đổi</TabsTrigger>
-            <TabsTrigger value="approval">Phê duyệt</TabsTrigger>
             {canViewCustomerAccess && (
               <TabsTrigger value="customer-access">
                 Truy cập khách hàng
               </TabsTrigger>
             )}
+            <TabsTrigger value="approval">Phê duyệt</TabsTrigger>
             <TabsTrigger value="signature">Ký hợp đồng</TabsTrigger>
-            <TabsTrigger value="documents">Chứng từ</TabsTrigger>
             <TabsTrigger value="closing">Đóng hợp đồng</TabsTrigger>
             <TabsTrigger value="activity">Lịch sử hoạt động</TabsTrigger>
           </TabsList>

@@ -1,6 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { isProseMirrorCellSelection, type JSONContent } from "@tiptap/core";
 import { TableCell, TableHeader, TableKit } from "@tiptap/extension-table";
 import TextAlign from "@tiptap/extension-text-align";
@@ -35,12 +40,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   CONTRACT_RICH_TEXT_FONT_SIZES,
+  columnWidthsBpsToPixels,
+  normalizeColumnWidthsBps,
   parseContractRichText,
   serializeContractRichText,
   type ContractRichTextBlock,
   type ContractRichTextAlignment,
   type ContractRichTextParagraph,
   type ContractRichTextRun,
+  type ContractRichTextRow,
   type ContractRichTextVerticalAlignment,
 } from "@/lib/contract-rich-text";
 import { cn } from "@/lib/utils";
@@ -53,6 +61,27 @@ interface ContractRichTextEditorProps {
   ariaLabel?: string;
   className?: string;
 }
+
+const DEFAULT_EDITOR_CONTENT_WIDTH = 800;
+const EDITOR_HORIZONTAL_PADDING = 24;
+const EDITOR_VIEWPORT_GUTTER = 16;
+
+const measureEditorContentWidth = (surface: HTMLDivElement) => {
+  const surfaceRect = surface.getBoundingClientRect();
+  const viewportWidth = document.documentElement.clientWidth;
+  const visibleSurfaceWidth = Math.max(
+    0,
+    viewportWidth - Math.max(0, surfaceRect.left) - EDITOR_VIEWPORT_GUTTER,
+  );
+
+  return Math.max(
+    200,
+    Math.floor(
+      Math.min(surface.clientWidth, visibleSurfaceWidth) -
+        EDITOR_HORIZONTAL_PADDING,
+    ),
+  );
+};
 
 const verticalAlignAttribute = {
   default: null,
@@ -107,7 +136,36 @@ const runsToTiptapContent = (runs: ContractRichTextRun[]): JSONContent[] => {
   return content;
 };
 
-const toTiptapContent = (value?: string | null): JSONContent => ({
+const cellStartColumns = (
+  rows: ContractRichTextRow[],
+  columnCount: number,
+) => {
+  const activeRowspans = Array<number>(columnCount).fill(0);
+  return rows.map((row) => {
+    const occupied = activeRowspans.map((remaining) => remaining > 0);
+    activeRowspans.forEach((remaining, index) => {
+      if (remaining > 0) activeRowspans[index] = remaining - 1;
+    });
+    let cursor = 0;
+    return row.cells.map((cell) => {
+      while (cursor < columnCount && occupied[cursor]) cursor += 1;
+      const start = cursor;
+      const colspan = cell.colspan ?? 1;
+      const rowspan = cell.rowspan ?? 1;
+      for (let column = start; column < start + colspan; column += 1) {
+        occupied[column] = true;
+        if (rowspan > 1) activeRowspans[column] = rowspan - 1;
+      }
+      cursor += colspan;
+      return start;
+    });
+  });
+};
+
+const toTiptapContent = (
+  value?: string | null,
+  availableWidth = 800,
+): JSONContent => ({
   type: "doc",
   content: parseContractRichText(value).blocks.map((block) => {
     if (block.type === "paragraph") {
@@ -118,16 +176,24 @@ const toTiptapContent = (value?: string | null): JSONContent => ({
       };
     }
 
+    const columnWidths = columnWidthsBpsToPixels(
+      block.columnWidthsBps,
+      availableWidth,
+    );
+    const starts = cellStartColumns(block.rows, columnWidths.length);
     return {
       type: "table",
-      content: block.rows.map((row) => ({
+      content: block.rows.map((row, rowIndex) => ({
         type: "tableRow",
-        content: row.cells.map((cell) => ({
+        content: row.cells.map((cell, cellIndex) => ({
           type: "tableCell",
           attrs: {
             colspan: cell.colspan ?? 1,
             rowspan: cell.rowspan ?? 1,
-            colwidth: cell.colwidth ?? null,
+            colwidth: columnWidths.slice(
+              starts[rowIndex][cellIndex],
+              starts[rowIndex][cellIndex] + (cell.colspan ?? 1),
+            ),
             verticalAlign: cell.verticalAlign ?? null,
           },
           content: cell.paragraphs.map((paragraph) => ({
@@ -214,7 +280,33 @@ const cellVerticalAlignment = (
     ? value
     : undefined;
 
-const fromTiptapContent = (document: JSONContent) => {
+const tablePixelWidths = (table: JSONContent) => {
+  const firstRow = (table.content ?? []).find(
+    (row) => row.type === "tableRow",
+  );
+  const widths: number[] = [];
+  (firstRow?.content ?? [])
+    .filter(
+      (cell) => cell.type === "tableCell" || cell.type === "tableHeader",
+    )
+    .forEach((cell) => {
+      const colspan = Math.max(1, Number(cell.attrs?.colspan) || 1);
+      const colwidth = Array.isArray(cell.attrs?.colwidth)
+        ? cell.attrs.colwidth.filter(
+            (width): width is number =>
+              typeof width === "number" && Number.isFinite(width) && width > 0,
+          )
+        : [];
+      widths.push(
+        ...(colwidth.length === colspan
+          ? colwidth
+          : Array<number>(colspan).fill(100)),
+      );
+    });
+  return widths;
+};
+
+const fromTiptapDocument = (document: JSONContent) => {
   const blocks: ContractRichTextBlock[] = [];
   document.content?.forEach((node) => {
     if (node.type === "paragraph") {
@@ -233,12 +325,6 @@ const fromTiptapContent = (document: JSONContent) => {
           .map((cell) => {
             const colspan = Number(cell.attrs?.colspan);
             const rowspan = Number(cell.attrs?.rowspan);
-            const colwidth = Array.isArray(cell.attrs?.colwidth)
-              ? cell.attrs.colwidth.filter(
-                  (width): width is number =>
-                    typeof width === "number" && Number.isFinite(width),
-                )
-              : undefined;
             const verticalAlign = cellVerticalAlignment(
               cell.attrs?.verticalAlign,
             );
@@ -248,15 +334,24 @@ const fromTiptapContent = (document: JSONContent) => {
                 .map(tiptapParagraph),
               ...(Number.isInteger(colspan) && colspan > 1 ? { colspan } : {}),
               ...(Number.isInteger(rowspan) && rowspan > 1 ? { rowspan } : {}),
-              ...(colwidth && colwidth.length > 0 ? { colwidth } : {}),
               ...(verticalAlign ? { verticalAlign } : {}),
             };
           }),
       }));
-    if (rows.length > 0) blocks.push({ type: "table", rows });
+    if (rows.length > 0) {
+      const pixels = tablePixelWidths(node);
+      blocks.push({
+        type: "table",
+        columnWidthsBps: normalizeColumnWidthsBps(pixels),
+        rows,
+      });
+    }
   });
-  return serializeContractRichText({ blocks });
+  return { blocks };
 };
+
+const fromTiptapContent = (document: JSONContent) =>
+  serializeContractRichText(fromTiptapDocument(document));
 
 export function ContractRichTextEditor({
   id,
@@ -267,7 +362,14 @@ export function ContractRichTextEditor({
   className,
 }: ContractRichTextEditorProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [resizeHint, setResizeHint] = useState<{
+    left: number;
+    top: number;
+    label: string;
+  }>();
   const fullscreenButtonRef = useRef<HTMLButtonElement>(null);
+  const editorSurfaceRef = useRef<HTMLDivElement>(null);
+  const editorContentWidthRef = useRef(DEFAULT_EDITOR_CONTENT_WIDTH);
   const lastEmittedValue = useRef(value ?? "");
   const editor = useEditor({
     immediatelyRender: false,
@@ -294,7 +396,7 @@ export function ContractRichTextEditor({
       TableKit.configure({
         table: {
           resizable: true,
-          cellMinWidth: 50,
+          cellMinWidth: 20,
           HTMLAttributes: { class: "contract-rich-text-table" },
         },
         tableCell: false,
@@ -303,7 +405,7 @@ export function ContractRichTextEditor({
       ContractTableCell,
       ContractTableHeader,
     ],
-    content: toTiptapContent(value),
+    content: toTiptapContent(value, DEFAULT_EDITOR_CONTENT_WIDTH),
     editorProps: {
       attributes: {
         id: id ?? "",
@@ -328,10 +430,68 @@ export function ContractRichTextEditor({
     const nextValue = value ?? "";
     if (!editor || lastEmittedValue.current === nextValue) return;
     lastEmittedValue.current = nextValue;
-    editor.commands.setContent(toTiptapContent(nextValue), {
-      emitUpdate: false,
-    });
+    editor.commands.setContent(
+      toTiptapContent(nextValue, editorContentWidthRef.current),
+      {
+        emitUpdate: false,
+      },
+    );
   }, [editor, value]);
+
+  useEffect(() => {
+    const surface = editorSurfaceRef.current;
+    if (!editor || !surface) return;
+
+    const applyMeasuredWidth = () => {
+      const nextWidth = measureEditorContentWidth(surface);
+      if (Math.abs(nextWidth - editorContentWidthRef.current) < 2) return;
+      editorContentWidthRef.current = nextWidth;
+      const current = serializeContractRichText(
+        fromTiptapDocument(editor.getJSON()),
+      );
+      editor.commands.setContent(toTiptapContent(current, nextWidth), {
+        emitUpdate: false,
+      });
+    };
+
+    applyMeasuredWidth();
+    const observer = new ResizeObserver(applyMeasuredWidth);
+    observer.observe(surface);
+    return () => observer.disconnect();
+  }, [editor, isFullscreen]);
+
+  const clearResizeHint = () => {
+    editorSurfaceRef.current?.classList.remove("contract-table-edge-hover");
+    setResizeHint(undefined);
+  };
+
+  const showResizeHint = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const surface = editorSurfaceRef.current;
+    const target = event.target as HTMLElement;
+    const cell = target.closest<HTMLTableCellElement>(
+      ".contract-rich-text-table td, .contract-rich-text-table th",
+    );
+    if (!surface || !cell) {
+      if (event.buttons === 0) clearResizeHint();
+      return;
+    }
+
+    const cellRect = cell.getBoundingClientRect();
+    const table = cell.closest<HTMLTableElement>("table");
+    if (!table || Math.abs(cellRect.right - event.clientX) > 10) {
+      if (event.buttons === 0) clearResizeHint();
+      return;
+    }
+
+    const surfaceRect = surface.getBoundingClientRect();
+    const tableWidth = Math.max(1, table.getBoundingClientRect().width);
+    surface.classList.add("contract-table-edge-hover");
+    setResizeHint({
+      left: cellRect.right - surfaceRect.left,
+      top: cellRect.top - surfaceRect.top + 4,
+      label: `${((cellRect.width / tableWidth) * 100).toFixed(1)}%`,
+    });
+  };
 
   const tableState = useEditorState({
     editor,
@@ -358,8 +518,14 @@ export function ContractRichTextEditor({
 
   const editorSurface = (
     <div
+      ref={editorSurfaceRef}
+      onPointerMove={showResizeHint}
+      onPointerLeave={(event) => {
+        if (event.buttons === 0) clearResizeHint();
+      }}
+      onPointerUp={clearResizeHint}
       className={cn(
-        "overflow-hidden rounded-md border bg-background",
+        "contract-rich-text-editor-surface relative w-full min-w-0 max-w-full overflow-hidden rounded-md border bg-background",
         className,
         isFullscreen && "flex min-h-0 flex-1 flex-col rounded-none border-0",
       )}
@@ -621,7 +787,20 @@ export function ContractRichTextEditor({
         </div>
       )}
 
-      <div className={cn("relative", isFullscreen && "min-h-0 flex-1")}>
+      <div
+        className={cn(
+          "relative min-w-0 max-w-full overflow-hidden",
+          isFullscreen && "min-h-0 flex-1",
+        )}
+      >
+        {resizeHint && (
+          <span
+            className="pointer-events-none absolute z-30 -translate-x-1/2 rounded bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground shadow"
+            style={{ left: resizeHint.left, top: resizeHint.top }}
+          >
+            {resizeHint.label}
+          </span>
+        )}
         {editor.isEmpty && (
           <span className="pointer-events-none absolute left-3 top-2.5 z-10 text-sm text-muted-foreground">
             {placeholder}
@@ -629,7 +808,10 @@ export function ContractRichTextEditor({
         )}
         <EditorContent
           editor={editor}
-          className={isFullscreen ? "h-full [&_.tiptap]:h-full" : undefined}
+          className={cn(
+            "min-w-0 max-w-full",
+            isFullscreen && "h-full [&_.tiptap]:h-full",
+          )}
         />
       </div>
     </div>

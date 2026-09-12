@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace ContractManagement.Domains.Policies.ContractTemplate;
 
@@ -8,7 +9,7 @@ namespace ContractManagement.Domains.Policies.ContractTemplate;
 /// </summary>
 public static class ContractTermRichText
 {
-    public const string Prefix = "contract-rich-text:v3:";
+    public const string Prefix = "contract-rich-text:v4:";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -68,7 +69,13 @@ public static class ContractTermRichText
                     }
                 }
 
-                if (!IsTableGridValid(block.Rows)) return false;
+                if (!TryGetTableColumnCount(block.Rows, out var columnCount)
+                    || !ContractTableLayoutPolicy.AreCanonicalWidths(
+                        block.ColumnWidthsBps,
+                        columnCount))
+                {
+                    return false;
+                }
             }
 
             document = parsed;
@@ -89,22 +96,20 @@ public static class ContractTermRichText
 
     private static bool IsCellValid(ContractTermRichTextCell cell)
     {
-        if (cell.Paragraphs is { Count: > 0 })
-        {
-            return cell.Paragraphs.Count <= 100
-                   && cell.Paragraphs.All(paragraph =>
-                       IsAlignmentValid(paragraph.Alignment)
-                       && AreRunsValid(paragraph.Runs));
-        }
-
-        return AreRunsValid(cell.Runs);
+        return cell.ExtensionData is null or { Count: 0 }
+               && cell.Paragraphs is { Count: > 0 and <= 100 }
+               && cell.Paragraphs.All(paragraph =>
+                   IsAlignmentValid(paragraph.Alignment)
+                   && AreRunsValid(paragraph.Runs));
     }
 
-    private static bool IsTableGridValid(
-        IReadOnlyCollection<ContractTermRichTextRow> rows)
+    private static bool TryGetTableColumnCount(
+        IReadOnlyCollection<ContractTermRichTextRow> rows,
+        out int columnCount)
     {
         var activeRowspans = new int[20];
         int? expectedWidth = null;
+        columnCount = 0;
 
         foreach (var row in rows)
         {
@@ -121,10 +126,7 @@ public static class ContractTermRichText
                 var rowspan = cell.Rowspan ?? 1;
                 if (colspan is < 1 or > 20
                     || rowspan is < 1 or > 50
-                    || !IsVerticalAlignmentValid(cell.VerticalAlign)
-                    || (cell.Colwidth is not null
-                        && (cell.Colwidth.Count != colspan
-                            || cell.Colwidth.Any(width => width is < 25 or > 2_000))))
+                    || !IsVerticalAlignmentValid(cell.VerticalAlign))
                 {
                     return false;
                 }
@@ -152,7 +154,14 @@ public static class ContractTermRichText
             expectedWidth ??= width;
         }
 
-        return activeRowspans.All(remaining => remaining == 0);
+        if (!activeRowspans.All(remaining => remaining == 0)
+            || expectedWidth is null)
+        {
+            return false;
+        }
+
+        columnCount = expectedWidth.Value;
+        return true;
     }
 
     private static bool IsAlignmentValid(string? alignment) =>
@@ -172,6 +181,7 @@ public sealed class ContractTermRichTextBlock
     public string Type { get; set; } = string.Empty;
     public List<ContractTermRichTextRun> Runs { get; set; } = [];
     public List<ContractTermRichTextRow> Rows { get; set; } = [];
+    public List<int> ColumnWidthsBps { get; set; } = [];
     public string? Alignment { get; set; }
 }
 
@@ -182,14 +192,13 @@ public sealed class ContractTermRichTextRow
 
 public sealed class ContractTermRichTextCell
 {
-    // Runs is retained for v1 documents. V2 stores paragraphs so alignment and
-    // multiple paragraphs inside a cell survive round trips.
-    public List<ContractTermRichTextRun> Runs { get; set; } = [];
     public List<ContractTermRichTextParagraph> Paragraphs { get; set; } = [];
     public int? Colspan { get; set; }
     public int? Rowspan { get; set; }
-    public List<int>? Colwidth { get; set; }
     public string? VerticalAlign { get; set; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 public sealed class ContractTermRichTextParagraph

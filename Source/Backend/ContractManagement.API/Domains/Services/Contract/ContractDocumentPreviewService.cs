@@ -218,7 +218,27 @@ public sealed class ContractDocumentPreviewService :
                 item.LegalBasisId, item.BasisCode, item.ContentVi,
                 item.ContentEn, item.DisplayOrder)).ToArray()
         };
-        var renderData = CreateRenderData(snapshot, customer);
+        var itemLayoutRows = await _dbContext
+            .TblContractTemplateItemTableColumnLayouts
+            .AsNoTracking()
+            .Where(item => item.TemplateVersionId == templateVersionId)
+            .OrderBy(item => item.DisplayOrder)
+            .Select(item => new
+            {
+                item.ColumnKey,
+                item.DisplayOrder,
+                item.WidthBps
+            })
+            .ToListAsync(cancellationToken);
+        var itemTableWidths = ContractTableLayoutPolicy.RequireItemColumnWidths(
+            itemLayoutRows.Select(item => (
+                item.ColumnKey,
+                (int)item.DisplayOrder,
+                (int)item.WidthBps)));
+        var renderData = CreateRenderData(snapshot, customer) with
+        {
+            ItemTableColumnWidthsBps = itemTableWidths
+        };
         var fields = await _dbContext.TblContractTemplateFields.AsNoTracking()
             .Where(x => x.TemplateVersionId == templateVersionId).ToListAsync(cancellationToken);
         var definitions = fields.Select(ContractPlaceholderCatalog.FromSnapshot).ToArray();

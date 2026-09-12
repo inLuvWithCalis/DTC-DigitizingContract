@@ -5584,7 +5584,7 @@ namespace ContractManagement.Domains.Services.Contract
             if (!ContractTermRichText.TryParse(normalized, out _))
             {
                 throw new ArgumentException(
-                    "Nội dung điều khoản phải dùng định dạng rich text v3 hợp lệ.");
+                    "Nội dung điều khoản phải dùng định dạng rich text v4 hợp lệ.");
             }
 
             return normalized;

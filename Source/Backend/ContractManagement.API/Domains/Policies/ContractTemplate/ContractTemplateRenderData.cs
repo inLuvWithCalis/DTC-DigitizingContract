@@ -18,6 +18,8 @@ public sealed record ContractTemplateRenderData(
     public IReadOnlyList<SoftwareSupplyPlaceholderDefinition>? Definitions { get; init; }
 
     public IReadOnlyList<ContractTemplateRenderLegalBasis> LegalBases { get; init; } = [];
+
+    public IReadOnlyList<int> ItemTableColumnWidthsBps { get; init; } = [];
 }
 
 public sealed record ContractTemplateRenderItem(
@@ -65,6 +67,7 @@ public sealed record ContractTemplateRenderLegalBasis(
 /// </summary>
 public sealed record ContractTemplateAuthoringPreviewData
 {
+    public IReadOnlyList<int> ItemTableColumnWidthsBps { get; init; } = [];
     public IReadOnlyList<ContractTemplateRenderLegalBasis> LegalBases { get; init; } = [];
     public IReadOnlyList<ContractTemplateRenderTerm> Terms { get; init; } = [];
 }

@@ -47,8 +47,9 @@ export function ContractTerms({
 }) {
   const isEditable = canEdit;
   const terms = contract.currentVersion?.terms || [];
-  const manualPaymentMilestones = (contract.currentVersion?.paymentMilestones ?? [])
-    .filter((item) => item.dueAnchor === ContractPaymentDueAnchor.ManualDate);
+  const manualPaymentMilestones = (
+    contract.currentVersion?.paymentMilestones ?? []
+  ).filter((item) => item.dueAnchor === ContractPaymentDueAnchor.ManualDate);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
@@ -83,7 +84,10 @@ export function ContractTerms({
     });
   };
 
-  const handleManualPaymentDateChange = (milestoneId: number, value: string) => {
+  const handleManualPaymentDateChange = (
+    milestoneId: number,
+    value: string,
+  ) => {
     onDraftChange?.();
     setContract((prev) => {
       if (!prev?.currentVersion) return prev;
@@ -91,10 +95,11 @@ export function ContractTerms({
         ...prev,
         currentVersion: {
           ...prev.currentVersion,
-          paymentMilestones: prev.currentVersion.paymentMilestones.map((item) =>
-            item.paymentMilestoneId === milestoneId
-              ? { ...item, anchorDate: value || null, dueDate: null }
-              : item,
+          paymentMilestones: prev.currentVersion.paymentMilestones.map(
+            (item) =>
+              item.paymentMilestoneId === milestoneId
+                ? { ...item, anchorDate: value || null, dueDate: null }
+                : item,
           ),
         },
       };
@@ -226,8 +231,8 @@ export function ContractTerms({
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+      <Card className="gap-0 p-0">
+        <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="flex min-w-0 items-start gap-3">
             <div className="rounded-xl bg-primary/10 p-2.5 text-primary">
               <MessageSquareText className="size-5" />
@@ -356,7 +361,9 @@ export function ContractTerms({
           <CardContent className="grid gap-4 md:grid-cols-2">
             {manualPaymentMilestones.map((milestone) => (
               <div key={milestone.paymentMilestoneId} className="space-y-1.5">
-                <Label htmlFor={`contract-payment-date-${milestone.paymentMilestoneId}`}>
+                <Label
+                  htmlFor={`contract-payment-date-${milestone.paymentMilestoneId}`}
+                >
                   {milestone.titleVi} — Ngày bắt đầu tính hạn
                 </Label>
                 <Input

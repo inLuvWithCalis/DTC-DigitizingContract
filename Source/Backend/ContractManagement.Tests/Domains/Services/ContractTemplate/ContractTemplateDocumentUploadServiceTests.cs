@@ -378,6 +378,18 @@ public sealed class ContractTemplateDocumentUploadServiceTests
             CreatedDate = now,
             RowVersion = [2, 2, 2, 2, 2, 2, 2, 2]
         });
+        context.TblContractTemplateItemTableColumnLayouts.AddRange(
+            ContractTableLayoutPolicy.ItemColumnKeys.Select((columnKey, index) =>
+                new TblContractTemplateItemTableColumnLayout
+                {
+                    TemplateVersionId = VersionId,
+                    ColumnKey = columnKey,
+                    DisplayOrder = checked((byte)index),
+                    WidthBps = checked((short)ContractTableLayoutPolicy
+                        .DefaultItemColumnWidthsBps[index]),
+                    CreatedEmployeeId = AdminOfficerId,
+                    CreatedDate = now
+                }));
         if (includeExistingField)
         {
             context.TblContractTemplateFields.Add(new TblContractTemplateField

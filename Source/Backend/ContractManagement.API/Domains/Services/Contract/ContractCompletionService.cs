@@ -18,6 +18,7 @@ public sealed class ContractCompletionService : IContractCompletionService
 {
     private const string AcceptanceObjectType = "ContractAcceptanceEvidence";
     private const string PaymentObjectType = "ContractPaymentEvidence";
+    private static readonly TimeSpan BusinessUtcOffset = TimeSpan.FromHours(7);
     private readonly DbDtctechContext _db;
     private readonly IContractResourceAuthorizationService _authorization;
     private readonly IContractAuditWriter _audit;
@@ -122,7 +123,7 @@ public sealed class ContractCompletionService : IContractCompletionService
             employeeId,
             cancellationToken);
         if (request.Amount <= 0) throw Rule("PaymentAmountInvalid", "Số tiền thanh toán phải lớn hơn 0.");
-        if (request.PaymentDate == default || request.PaymentDate.Date > DateTime.UtcNow.Date)
+        if (!IsPaymentDateValid(request.PaymentDate, DateTimeOffset.UtcNow))
             throw Rule("PaymentDateInvalid", "Ngày thanh toán không hợp lệ hoặc nằm trong tương lai.");
         var method = Required(request.PaymentMethod, 100, "Phương thức thanh toán");
         var reference = Required(request.ReferenceCode, 100, "Mã tham chiếu").ToUpperInvariant();
@@ -185,119 +186,279 @@ public sealed class ContractCompletionService : IContractCompletionService
         }
     }
 
-    public async Task<ContractPaymentMilestoneResponse> SetPaymentMilestoneStatusAsync(
-        int contractId, int versionId, int milestoneId,
-        SetContractPaymentMilestoneStatusRequest request, int employeeId,
-        CancellationToken cancellationToken = default)
+    public async Task<CompletePaymentMilestoneResponse>
+        CompletePaymentMilestoneAsync(
+            int contractId, int versionId, int milestoneId,
+            CompleteContractPaymentMilestoneRequest request, int employeeId,
+            CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        await _authorization.EnsureCanManagePaymentAsync(
-            contractId, employeeId, cancellationToken);
+        if (request.EvidenceFile is null || request.EvidenceFile.Length <= 0)
+            throw Rule("PaymentEvidenceRequired",
+                "Vui lòng chọn chứng từ thanh toán.");
         if (request.CurrentVersionId != versionId)
             throw Rule("CompletionStateChanged", "Version hiện hành đã thay đổi.",
                 StatusCodes.Status409Conflict);
-        if (!Enum.IsDefined(request.Status))
-            throw Rule("PaymentMilestoneStatusInvalid",
-                "Trạng thái đợt thanh toán không hợp lệ.");
+        if (!IsPaymentDateValid(request.PaymentDate, DateTimeOffset.UtcNow))
+            throw Rule("PaymentDateInvalid",
+                "Ngày thanh toán không hợp lệ hoặc nằm trong tương lai.");
+
+        var method = Required(request.PaymentMethod, 100,
+            "Phương thức thanh toán");
+        var reference = Required(request.ReferenceCode, 100,
+            "Mã tham chiếu").ToUpperInvariant();
+        await _authorization.EnsureCanManagePaymentAsync(
+            contractId, employeeId, cancellationToken);
+        var stored = await SaveFileAsync(request.EvidenceFile,
+            PaymentObjectType, contractId, cancellationToken);
+
+        try
+        {
+            return await ExecuteInTransactionAsync(async () =>
+            {
+                var (contract, version) = await LoadWritableStateAsync(
+                    contractId, request.CurrentVersionId,
+                    request.ContractRowVersion, request.VersionRowVersion,
+                    cancellationToken);
+                EnsureSigned(contract, version);
+                var milestone = await _db.TblContractPaymentMilestones
+                    .SingleOrDefaultAsync(x =>
+                        x.PaymentMilestoneId == milestoneId
+                        && x.ContractId == contractId
+                        && x.VersionId == versionId,
+                        cancellationToken)
+                    ?? throw new KeyNotFoundException(
+                        "Không tìm thấy đợt thanh toán.");
+                Match(milestone.RowVersion,
+                    Decode(request.MilestoneRowVersion),
+                    "Đợt thanh toán");
+                if (milestone.PaymentStatus !=
+                    (byte)ContractPaymentMilestoneStatus.Unpaid)
+                {
+                    throw Rule("PaymentMilestoneAlreadyPaid",
+                        "Đợt thanh toán đã được hoàn tất.",
+                        StatusCodes.Status409Conflict);
+                }
+
+                if (await _db.TblContractPaymentLedgers.AnyAsync(x =>
+                        x.PaymentMilestoneId == milestoneId
+                        && x.Status == (byte)ContractPaymentStatus.Active,
+                        cancellationToken))
+                {
+                    throw Rule("PaymentMilestoneActivePaymentExists",
+                        "Đợt thanh toán đã có khoản thanh toán hiệu lực.",
+                        StatusCodes.Status409Conflict);
+                }
+
+                if (await _db.TblContractPaymentLedgers.AnyAsync(x =>
+                        x.VersionId == versionId
+                        && x.ReferenceCode == reference,
+                        cancellationToken))
+                {
+                    throw Rule("PaymentReferenceDuplicated",
+                        "Mã tham chiếu đã tồn tại trong version hợp đồng.",
+                        StatusCodes.Status409Conflict);
+                }
+
+                var paidBefore = await _db.TblContractPaymentLedgers
+                    .Where(x => x.VersionId == versionId
+                        && x.Status == (byte)ContractPaymentStatus.Active)
+                    .SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0m;
+                var now = DateTime.UtcNow;
+                var previousMilestoneValues = MilestoneAudit(milestone,
+                    version.VersionId);
+                var metadata = CreateFile(stored, PaymentObjectType,
+                    contractId, employeeId);
+                _db.TblFileStorages.Add(metadata);
+                await _db.SaveChangesAsync(cancellationToken);
+
+                var payment = new TblContractPaymentLedger
+                {
+                    ContractId = contractId,
+                    VersionId = versionId,
+                    PaymentMilestoneId = milestoneId,
+                    PaymentDate = request.PaymentDate.Date,
+                    Amount = milestone.Amount,
+                    CurrencyCode = version.CurrencyCode,
+                    PaymentMethod = method,
+                    ReferenceCode = reference,
+                    EvidenceFileId = metadata.FileId,
+                    Status = (byte)ContractPaymentStatus.Active,
+                    CreatedByEmployeeId = employeeId,
+                    CreatedAt = now
+                };
+                _db.TblContractPaymentLedgers.Add(payment);
+
+                milestone.PaymentStatus =
+                    (byte)ContractPaymentMilestoneStatus.Paid;
+                milestone.PaidAt = now;
+                milestone.PaidByEmployeeId = employeeId;
+                milestone.UpdatedEmployeeId = employeeId;
+                milestone.UpdatedDate = now;
+                await ActivateNextMilestoneAsync(milestone, now.Date,
+                    employeeId, cancellationToken);
+                await _db.SaveChangesAsync(cancellationToken);
+
+                _audit.StageEmployeeAudits(
+                [
+                    new(contractId, versionId, employeeId,
+                        ContractAuditActionTypes.PaymentAdded,
+                        ContractAuditResults.Succeeded, now,
+                        SubjectType: ContractAuditSubjectTypes.Payment,
+                        SubjectId: payment.ContractPaymentId,
+                        NewValues: PaymentAudit(payment,
+                            paidBefore + payment.Amount,
+                            version.TotalAmount - paidBefore - payment.Amount)),
+                    new(contractId, versionId, employeeId,
+                        ContractAuditActionTypes.PaymentMilestoneStatusChanged,
+                        ContractAuditResults.Succeeded, now,
+                        SubjectType: ContractAuditSubjectTypes.Payment,
+                        SubjectId: milestone.PaymentMilestoneId,
+                        PreviousValues: previousMilestoneValues,
+                        NewValues: MilestoneAudit(milestone,
+                            version.VersionId))
+                ]);
+                await _db.SaveChangesAsync(cancellationToken);
+
+                var detail = await LoadDetailAsync(contractId,
+                    cancellationToken);
+                return new CompletePaymentMilestoneResponse
+                {
+                    Milestone = detail.PaymentMilestones.Single(x =>
+                        x.PaymentMilestoneId == milestoneId),
+                    Payment = await LoadPaymentAsync(
+                        payment.ContractPaymentId, cancellationToken)
+                };
+            }, cancellationToken);
+        }
+        catch
+        {
+            _db.ChangeTracker.Clear();
+            await _files.DeleteAsync(stored.TenantCode, stored.StorageKey,
+                cancellationToken);
+            throw;
+        }
+    }
+
+    public async Task<ReopenPaymentMilestoneResponse>
+        ReopenPaymentMilestoneAsync(
+            int contractId, int versionId, int milestoneId,
+            ReopenContractPaymentMilestoneRequest request, int employeeId,
+            CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.CurrentVersionId != versionId)
+            throw Rule("CompletionStateChanged", "Version hiện hành đã thay đổi.",
+                StatusCodes.Status409Conflict);
+        var reason = Required(request.Reason, 1000,
+            "Lý do hoàn tác đợt thanh toán");
+        await _authorization.EnsureCanManagePaymentAsync(
+            contractId, employeeId, cancellationToken);
 
         return await ExecuteInTransactionAsync(async () =>
         {
-            var (contract, version) = await LoadWritableStateAsync(contractId,
-                request.CurrentVersionId, request.ContractRowVersion,
-                request.VersionRowVersion, cancellationToken);
+            var (contract, version) = await LoadWritableStateAsync(
+                contractId, request.CurrentVersionId,
+                request.ContractRowVersion, request.VersionRowVersion,
+                cancellationToken);
             EnsureSigned(contract, version);
-            var milestone = await _db.TblContractPaymentMilestones.SingleOrDefaultAsync(
-                x => x.PaymentMilestoneId == milestoneId
+            var milestone = await _db.TblContractPaymentMilestones
+                .SingleOrDefaultAsync(x => x.PaymentMilestoneId == milestoneId
                     && x.ContractId == contractId && x.VersionId == versionId,
-                cancellationToken)
-                ?? throw new KeyNotFoundException("Không tìm thấy đợt thanh toán.");
+                    cancellationToken)
+                ?? throw new KeyNotFoundException(
+                    "Không tìm thấy đợt thanh toán.");
             Match(milestone.RowVersion, Decode(request.MilestoneRowVersion),
                 "Đợt thanh toán");
-
-            var currentStatus = (ContractPaymentMilestoneStatus)milestone.PaymentStatus;
-            if (currentStatus == request.Status)
-                return (await LoadDetailAsync(contractId, cancellationToken))
-                    .PaymentMilestones.Single(x => x.PaymentMilestoneId == milestoneId);
-
-            var now = DateTime.UtcNow;
-            var previousValues = ContractAuditValues.Create(
-                ("PaymentMilestoneId", milestone.PaymentMilestoneId),
-                ("CurrentVersionId", version.VersionId),
-                ("PaymentStatus", milestone.PaymentStatus),
-                ("PaidAt", milestone.PaidAt),
-                ("PaidByEmployeeId", milestone.PaidByEmployeeId));
-
-            if (request.Status == ContractPaymentMilestoneStatus.Paid)
+            if (milestone.PaymentStatus !=
+                (byte)ContractPaymentMilestoneStatus.Paid)
             {
-                milestone.PaymentStatus = (byte)ContractPaymentMilestoneStatus.Paid;
-                milestone.PaidAt = now;
-                milestone.PaidByEmployeeId = employeeId;
-
-                var next = await _db.TblContractPaymentMilestones
-                    .Where(x => x.VersionId == versionId
-                        && x.DisplayOrder > milestone.DisplayOrder)
-                    .OrderBy(x => x.DisplayOrder)
-                    .ThenBy(x => x.PaymentMilestoneId)
-                    .FirstOrDefaultAsync(cancellationToken);
-                if (next?.DueAnchor == (byte)PaymentDueAnchor.PreviousMilestonePaid
-                    && !next.AnchorDate.HasValue)
-                {
-                    next.AnchorDate = now.Date;
-                    next.DueDate = _paymentDueDates.Calculate(now.Date,
-                        next.DueOffsetDays,
-                        (PaymentDayCountMode)next.DayCountMode);
-                    next.UpdatedEmployeeId = employeeId;
-                    next.UpdatedDate = now;
-                }
+                throw Rule("PaymentMilestoneNotPaid",
+                    "Đợt thanh toán chưa ở trạng thái đã nộp.",
+                    StatusCodes.Status409Conflict);
             }
-            else
-            {
-                var hasPaidDownstream = await _db.TblContractPaymentMilestones.AnyAsync(
-                    x => x.VersionId == versionId
-                        && x.DisplayOrder > milestone.DisplayOrder
-                        && x.PaymentStatus == (byte)ContractPaymentMilestoneStatus.Paid,
+
+            var hasPaidDownstream = await _db.TblContractPaymentMilestones
+                .AnyAsync(x => x.VersionId == versionId
+                    && x.DisplayOrder > milestone.DisplayOrder
+                    && x.PaymentStatus ==
+                        (byte)ContractPaymentMilestoneStatus.Paid,
                     cancellationToken);
-                if (hasPaidDownstream)
-                    throw Rule("PaymentMilestoneDownstreamPaid",
-                        "Không thể chuyển về chưa nộp khi một đợt phía sau đã được đánh dấu đã nộp.",
-                        StatusCodes.Status409Conflict);
+            if (hasPaidDownstream)
+                throw Rule("PaymentMilestoneDownstreamPaid",
+                    "Không thể hoàn tác khi một đợt phía sau đã được hoàn tất.",
+                    StatusCodes.Status409Conflict);
 
-                milestone.PaymentStatus = (byte)ContractPaymentMilestoneStatus.Unpaid;
-                milestone.PaidAt = null;
-                milestone.PaidByEmployeeId = null;
-                var next = await _db.TblContractPaymentMilestones
-                    .Where(x => x.VersionId == versionId
-                        && x.DisplayOrder > milestone.DisplayOrder)
-                    .OrderBy(x => x.DisplayOrder)
-                    .ThenBy(x => x.PaymentMilestoneId)
-                    .FirstOrDefaultAsync(cancellationToken);
-                if (next?.DueAnchor == (byte)PaymentDueAnchor.PreviousMilestonePaid
-                    && next.PaymentStatus == (byte)ContractPaymentMilestoneStatus.Unpaid)
-                {
-                    next.AnchorDate = null;
-                    next.DueDate = null;
-                    next.UpdatedEmployeeId = employeeId;
-                    next.UpdatedDate = now;
-                }
-            }
+            var payment = await _db.TblContractPaymentLedgers
+                .SingleOrDefaultAsync(x =>
+                    x.PaymentMilestoneId == milestoneId
+                    && x.Status == (byte)ContractPaymentStatus.Active,
+                    cancellationToken)
+                ?? throw Rule("PaymentMilestoneEvidenceMissing",
+                    "Đợt đã nộp không có khoản thanh toán và chứng từ hiệu lực.",
+                    StatusCodes.Status409Conflict);
+            if (payment.EvidenceFileId is not > 0)
+                throw Rule("PaymentMilestoneEvidenceMissing",
+                    "Đợt đã nộp không có chứng từ hiệu lực.",
+                    StatusCodes.Status409Conflict);
+            Match(payment.RowVersion, Decode(request.PaymentRowVersion),
+                "Khoản thanh toán");
 
+            var paidBefore = await _db.TblContractPaymentLedgers
+                .Where(x => x.VersionId == versionId
+                    && x.Status == (byte)ContractPaymentStatus.Active)
+                .SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0m;
+            var now = DateTime.UtcNow;
+            var previousPaymentValues = PaymentAudit(payment, paidBefore,
+                version.TotalAmount - paidBefore);
+            var previousMilestoneValues = MilestoneAudit(milestone,
+                version.VersionId);
+
+            payment.Status = (byte)ContractPaymentStatus.Voided;
+            payment.VoidReason = reason;
+            payment.VoidedByEmployeeId = employeeId;
+            payment.VoidedAt = now;
+            milestone.PaymentStatus =
+                (byte)ContractPaymentMilestoneStatus.Unpaid;
+            milestone.PaidAt = null;
+            milestone.PaidByEmployeeId = null;
             milestone.UpdatedEmployeeId = employeeId;
             milestone.UpdatedDate = now;
-            _audit.StageEmployeeAudits([new(contractId, version.VersionId, employeeId,
-                ContractAuditActionTypes.PaymentMilestoneStatusChanged,
-                ContractAuditResults.Succeeded, now,
-                SubjectType: ContractAuditSubjectTypes.Payment,
-                SubjectId: milestone.PaymentMilestoneId,
-                PreviousValues: previousValues,
-                NewValues: ContractAuditValues.Create(
-                    ("PaymentMilestoneId", milestone.PaymentMilestoneId),
-                    ("CurrentVersionId", version.VersionId),
-                    ("PaymentStatus", milestone.PaymentStatus),
-                    ("PaidAt", milestone.PaidAt),
-                    ("PaidByEmployeeId", milestone.PaidByEmployeeId))) ]);
+            await ClearNextMilestoneAnchorAsync(milestone, employeeId, now,
+                cancellationToken);
             await _db.SaveChangesAsync(cancellationToken);
-            return (await LoadDetailAsync(contractId, cancellationToken))
-                .PaymentMilestones.Single(x => x.PaymentMilestoneId == milestoneId);
+
+            _audit.StageEmployeeAudits(
+            [
+                new(contractId, versionId, employeeId,
+                    ContractAuditActionTypes.PaymentVoided,
+                    ContractAuditResults.Succeeded, now,
+                    Reason: reason,
+                    SubjectType: ContractAuditSubjectTypes.Payment,
+                    SubjectId: payment.ContractPaymentId,
+                    PreviousValues: previousPaymentValues,
+                    NewValues: PaymentAudit(payment,
+                        paidBefore - payment.Amount,
+                        version.TotalAmount - paidBefore + payment.Amount)),
+                new(contractId, versionId, employeeId,
+                    ContractAuditActionTypes.PaymentMilestoneStatusChanged,
+                    ContractAuditResults.Succeeded, now,
+                    Reason: reason,
+                    SubjectType: ContractAuditSubjectTypes.Payment,
+                    SubjectId: milestone.PaymentMilestoneId,
+                    PreviousValues: previousMilestoneValues,
+                    NewValues: MilestoneAudit(milestone, version.VersionId))
+            ]);
+            await _db.SaveChangesAsync(cancellationToken);
+
+            var detail = await LoadDetailAsync(contractId, cancellationToken);
+            return new ReopenPaymentMilestoneResponse
+            {
+                Milestone = detail.PaymentMilestones.Single(x =>
+                    x.PaymentMilestoneId == milestoneId),
+                Payment = await LoadPaymentAsync(payment.ContractPaymentId,
+                    cancellationToken)
+            };
         }, cancellationToken);
     }
 
@@ -382,11 +543,26 @@ public sealed class ContractCompletionService : IContractCompletionService
         var milestoneRows = await _db.TblContractPaymentMilestones.AsNoTracking()
             .Where(x => x.ContractId == contractId && x.VersionId == version.VersionId)
             .OrderBy(x => x.DisplayOrder).ThenBy(x => x.PaymentMilestoneId).ToListAsync(ct);
+        var activePaymentsByMilestone = payments
+            .Where(payment => payment.Status == ContractPaymentStatus.Active
+                && payment.PaymentMilestoneId.HasValue
+                && payment.EvidenceFileId is > 0
+                && !string.IsNullOrWhiteSpace(payment.EvidenceFileName))
+            .GroupBy(payment => payment.PaymentMilestoneId!.Value)
+            .ToDictionary(group => group.Key, group => group.ToList());
         var milestoneResponses = milestoneRows.Select(row =>
         {
             var paymentStatus = (ContractPaymentMilestoneStatus)row.PaymentStatus;
+            activePaymentsByMilestone.TryGetValue(row.PaymentMilestoneId,
+                out var candidates);
+            var activePayment = candidates is { Count: 1 }
+                && candidates[0].Amount == row.Amount
+                && string.Equals(candidates[0].CurrencyCode,
+                    version.CurrencyCode, StringComparison.OrdinalIgnoreCase)
+                    ? candidates[0]
+                    : null;
             var paidAmount = paymentStatus == ContractPaymentMilestoneStatus.Paid
-                ? row.Amount : 0m;
+                ? activePayment?.Amount ?? 0m : 0m;
             var isOverdue = paymentStatus == ContractPaymentMilestoneStatus.Unpaid
                 && row.DueDate.HasValue
                 && row.DueDate.Value.Date < DateTime.UtcNow.Date;
@@ -407,6 +583,10 @@ public sealed class ContractCompletionService : IContractCompletionService
                 DueDate = row.DueDate, PaymentStatus = paymentStatus,
                 IsOverdue = isOverdue, PaidAt = row.PaidAt,
                 PaidByEmployeeId = row.PaidByEmployeeId,
+                ActivePayment = paymentStatus ==
+                    ContractPaymentMilestoneStatus.Paid
+                    ? activePayment
+                    : null,
                 RowVersion = Encode(row.RowVersion)
             };
         }).ToList();
@@ -424,19 +604,52 @@ public sealed class ContractCompletionService : IContractCompletionService
         var acceptance = await _db.TblContractAcceptanceEvidences.AsNoTracking().AnyAsync(x => x.ContractId == contract.ContractId && x.VersionId == version.VersionId, ct);
         var milestoneAmounts = await _db.TblContractPaymentMilestones.AsNoTracking()
             .Where(x => x.VersionId == version.VersionId)
-            .Select(x => new { x.Amount, x.PaymentStatus })
+            .Select(x => new
+            {
+                x.PaymentMilestoneId,
+                x.Amount,
+                x.PaymentStatus
+            })
             .ToListAsync(ct);
+        var structuredPaymentRows = await (
+            from payment in _db.TblContractPaymentLedgers.AsNoTracking()
+            join file in _db.TblFileStorages.AsNoTracking()
+                on payment.EvidenceFileId equals (int?)file.FileId
+            where payment.VersionId == version.VersionId
+                && payment.PaymentMilestoneId.HasValue
+                && payment.Status == (byte)ContractPaymentStatus.Active
+                && file.ObjectType == PaymentObjectType
+                && file.ObjectId == contract.ContractId
+            select new
+            {
+                PaymentMilestoneId = payment.PaymentMilestoneId!.Value,
+                payment.Amount,
+                payment.CurrencyCode
+            }).ToListAsync(ct);
+        var validStructuredPaymentAmounts = milestoneAmounts
+            .Where(milestone =>
+            {
+                var matches = structuredPaymentRows.Where(payment =>
+                    payment.PaymentMilestoneId == milestone.PaymentMilestoneId)
+                    .ToList();
+                return milestone.PaymentStatus ==
+                        (byte)ContractPaymentMilestoneStatus.Paid
+                    && matches.Count == 1
+                    && matches[0].Amount == milestone.Amount
+                    && string.Equals(matches[0].CurrencyCode,
+                        version.CurrencyCode,
+                        StringComparison.OrdinalIgnoreCase);
+            })
+            .Select(milestone => milestone.Amount)
+            .ToList();
         var paid = milestoneAmounts.Count > 0
-            ? milestoneAmounts
-                .Where(x => x.PaymentStatus == (byte)ContractPaymentMilestoneStatus.Paid)
-                .Sum(x => x.Amount)
+            ? validStructuredPaymentAmounts.Sum()
             : await _db.TblContractPaymentLedgers.AsNoTracking()
                 .Where(x => x.VersionId == version.VersionId
                     && x.Status == (byte)ContractPaymentStatus.Active)
                 .SumAsync(x => (decimal?)x.Amount, ct) ?? 0;
         var allStructuredMilestonesPaid = milestoneAmounts.Count == 0
-            || milestoneAmounts.All(x => x.PaymentStatus ==
-                (byte)ContractPaymentMilestoneStatus.Paid);
+            || validStructuredPaymentAmounts.Count == milestoneAmounts.Count;
         var paidForEvaluation = allStructuredMilestonesPaid ? paid : 0m;
         var evaluation = ContractCompletionPolicy.Evaluate((ContractStatus)contract.Status,
             signed, acceptance, version.TotalAmount, paidForEvaluation);
@@ -492,6 +705,17 @@ public sealed class ContractCompletionService : IContractCompletionService
             throw Rule("ContractMustBeSigned", "Chỉ hợp đồng Đã ký mới được cập nhật hồ sơ hoàn tất.", StatusCodes.Status409Conflict);
     }
 
+    internal static bool IsPaymentDateValid(
+        DateTime paymentDate,
+        DateTimeOffset utcNow)
+    {
+        var currentBusinessDate = utcNow
+            .ToOffset(BusinessUtcOffset)
+            .Date;
+        return paymentDate != default
+            && paymentDate.Date <= currentBusinessDate;
+    }
+
     private async Task<StoredPrivateFile> SaveFileAsync(IFormFile file, string objectType, int contractId, CancellationToken ct)
     {
         var tenant = _tenant.GetRequiredTenant();
@@ -532,6 +756,52 @@ public sealed class ContractCompletionService : IContractCompletionService
             VoidedByEmployeeName = voider, VoidedAt = p.VoidedAt, RowVersion = Encode(p.RowVersion) };
     }
 
+    private async Task ActivateNextMilestoneAsync(
+        TblContractPaymentMilestone milestone,
+        DateTime anchorDate,
+        int employeeId,
+        CancellationToken cancellationToken)
+    {
+        var next = await _db.TblContractPaymentMilestones
+            .Where(x => x.VersionId == milestone.VersionId
+                && x.DisplayOrder > milestone.DisplayOrder)
+            .OrderBy(x => x.DisplayOrder)
+            .ThenBy(x => x.PaymentMilestoneId)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (next?.DueAnchor != (byte)PaymentDueAnchor.PreviousMilestonePaid
+            || next.AnchorDate.HasValue)
+            return;
+
+        next.AnchorDate = anchorDate;
+        next.DueDate = _paymentDueDates.Calculate(anchorDate,
+            next.DueOffsetDays, (PaymentDayCountMode)next.DayCountMode);
+        next.UpdatedEmployeeId = employeeId;
+        next.UpdatedDate = DateTime.UtcNow;
+    }
+
+    private async Task ClearNextMilestoneAnchorAsync(
+        TblContractPaymentMilestone milestone,
+        int employeeId,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        var next = await _db.TblContractPaymentMilestones
+            .Where(x => x.VersionId == milestone.VersionId
+                && x.DisplayOrder > milestone.DisplayOrder)
+            .OrderBy(x => x.DisplayOrder)
+            .ThenBy(x => x.PaymentMilestoneId)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (next?.DueAnchor != (byte)PaymentDueAnchor.PreviousMilestonePaid
+            || next.PaymentStatus !=
+                (byte)ContractPaymentMilestoneStatus.Unpaid)
+            return;
+
+        next.AnchorDate = null;
+        next.DueDate = null;
+        next.UpdatedEmployeeId = employeeId;
+        next.UpdatedDate = now;
+    }
+
     private async Task ActivateMilestonesAsync(int versionId, PaymentDueAnchor anchor,
         DateTime anchorDate, int employeeId, CancellationToken ct)
     {
@@ -555,6 +825,14 @@ public sealed class ContractCompletionService : IContractCompletionService
         ("PaymentMilestoneId", p.PaymentMilestoneId), ("PaymentDate", p.PaymentDate), ("Amount", p.Amount),
         ("CurrencyCode", p.CurrencyCode), ("PaymentMethod", p.PaymentMethod), ("ReferenceCode", p.ReferenceCode), ("EvidenceFileId", p.EvidenceFileId),
         ("PaymentStatus", p.Status), ("PaidAmount", paid), ("RemainingAmount", remaining));
+    private static IReadOnlyDictionary<string, object?> MilestoneAudit(
+        TblContractPaymentMilestone milestone,
+        int versionId) => ContractAuditValues.Create(
+            ("PaymentMilestoneId", milestone.PaymentMilestoneId),
+            ("CurrentVersionId", versionId),
+            ("PaymentStatus", milestone.PaymentStatus),
+            ("PaidAt", milestone.PaidAt),
+            ("PaidByEmployeeId", milestone.PaidByEmployeeId));
     private static string Required(string? value, int max, string label) { var v = value?.Trim(); if (string.IsNullOrWhiteSpace(v)) throw Rule("RequiredField", $"{label} là bắt buộc."); if (v.Length > max) throw Rule("FieldTooLong", $"{label} không được vượt quá {max} ký tự."); return v; }
     private static byte[] Decode(string value) { try { var bytes = Convert.FromBase64String(value); return bytes.Length > 0 ? bytes : throw new FormatException(); } catch { throw Rule("StaleRowVersion", "RowVersion không hợp lệ.", StatusCodes.Status409Conflict); } }
     private static void Match(byte[] current, byte[] expected, string name) { if (!current.AsSpan().SequenceEqual(expected)) throw new DbUpdateConcurrencyException($"{name} đã thay đổi."); }

@@ -48,6 +48,7 @@ import { ConfirmDialog } from "@/components/ui/custom/confirm-dialog";
 import { format } from "date-fns";
 import { CustomerFormModal } from "@/app/(protected)/customers/customer-form-modal";
 import { ProductFormModal } from "@/app/(protected)/catalog/products/product-form-modal";
+import { ServiceFormModal } from "@/app/(protected)/catalog/services/service-form-modal";
 import {
   CreateContractTermsEditor,
   type CreateContractTermDraft,
@@ -237,12 +238,24 @@ function PaymentPlanReview({
   manualDates,
   onManualDateChange,
 }: {
-  milestones: Array<ContractTemplatePaymentMilestoneResponse & { amount: number }>;
+  milestones: Array<
+    ContractTemplatePaymentMilestoneResponse & { amount: number }
+  >;
   currencyCode: string;
   manualDates: Record<number, string>;
   onManualDateChange: (milestoneId: number, date: string) => void;
 }) {
   if (milestones.length === 0) return null;
+
+  const totalPercent =
+    Math.round(
+      milestones.reduce((sum, item) => sum + item.paymentPercent, 0) * 10_000,
+    ) / 10_000;
+  const totalAmount = milestones.reduce(
+    (sum, item) => sum + (item.amount || 0),
+    0,
+  );
+
   return (
     <div className="space-y-3 rounded-2xl border bg-muted/20 p-4">
       <div className="flex items-start gap-3">
@@ -284,13 +297,17 @@ function PaymentPlanReview({
             )}
             {milestone.dueAnchor === PaymentDueAnchor.ManualDate && (
               <div className="mt-3 space-y-1.5">
-                <Label htmlFor={`manual-payment-date-${milestone.templatePaymentMilestoneId}`}>
+                <Label
+                  htmlFor={`manual-payment-date-${milestone.templatePaymentMilestoneId}`}
+                >
                   Ngày bắt đầu tính hạn
                 </Label>
                 <Input
                   id={`manual-payment-date-${milestone.templatePaymentMilestoneId}`}
                   type="date"
-                  value={manualDates[milestone.templatePaymentMilestoneId] ?? ""}
+                  value={
+                    manualDates[milestone.templatePaymentMilestoneId] ?? ""
+                  }
                   onChange={(event) =>
                     onManualDateChange(
                       milestone.templatePaymentMilestoneId,
@@ -302,6 +319,24 @@ function PaymentPlanReview({
             )}
           </div>
         ))}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-background p-3 text-sm md:col-span-2">
+          <div>
+            <p className="font-semibold text-foreground">
+              Tổng cộng ({milestones.length} đợt)
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Tổng tỷ lệ và giá trị thanh toán của tất cả các đợt
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Badge variant={totalPercent === 100 ? "secondary" : "destructive"}>
+              {totalPercent}%
+            </Badge>
+            <span className="text-base font-bold text-primary">
+              {formatCurrency(totalAmount, currencyCode)}
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -339,6 +374,7 @@ export default function CreateContractPage() {
   const [catalogResultIds, setCatalogResultIds] = useState<string[]>([]);
   const [isLoadingCatalog, setIsLoadingCatalog] = useState(true);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [availableTemplates, setAvailableTemplates] = useState<
     AvailableTemplateView[]
   >([]);
@@ -591,14 +627,16 @@ export default function CreateContractPage() {
               })),
           );
           const milestones = detail.terms
-              .filter((term) => term.termKind === ContractTermKind.Payment)
-              .flatMap((term) => term.paymentMilestones)
-              .sort((a, b) => a.displayOrder - b.displayOrder);
+            .filter((term) => term.termKind === ContractTermKind.Payment)
+            .flatMap((term) => term.paymentMilestones)
+            .sort((a, b) => a.displayOrder - b.displayOrder);
           setPaymentMilestones(milestones);
           setManualPaymentDates(
             Object.fromEntries(
               milestones
-                .filter((item) => item.dueAnchor === PaymentDueAnchor.ManualDate)
+                .filter(
+                  (item) => item.dueAnchor === PaymentDueAnchor.ManualDate,
+                )
                 .map((item) => [item.templatePaymentMilestoneId, ""]),
             ),
           );
@@ -754,6 +792,27 @@ export default function CreateContractPage() {
     ]);
     setCatalogSearch("");
     setItemFilter("product");
+    setCatalogPage(1);
+  };
+
+  const handleServiceCreated = (createdService?: ServiceResponse) => {
+    if (!createdService) return;
+
+    const catalogItem = mapServiceToCatalogItem(createdService);
+    setCatalogItems((currentItems) => [
+      catalogItem,
+      ...currentItems.filter((item) => item.id !== catalogItem.id),
+    ]);
+    setSelectedItems((currentItems) => [
+      catalogItem.id,
+      ...currentItems.filter((id) => id !== catalogItem.id),
+    ]);
+    setCatalogResultIds((currentItems) => [
+      catalogItem.id,
+      ...currentItems.filter((id) => id !== catalogItem.id),
+    ]);
+    setCatalogSearch("");
+    setItemFilter("service");
     setCatalogPage(1);
   };
 
@@ -1066,7 +1125,9 @@ export default function CreateContractPage() {
       return;
     }
     if (!manualPaymentDatesValid) {
-      toast.error("Vui lòng nhập ngày bắt đầu tính hạn cho các đợt dùng Lịch thủ công.");
+      toast.error(
+        "Vui lòng nhập ngày bắt đầu tính hạn cho các đợt dùng Lịch thủ công.",
+      );
       setCurrentStep(2);
       return;
     }
@@ -1807,15 +1868,26 @@ export default function CreateContractPage() {
                         </span>
                       </div>
                       {canManageCatalog && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setIsProductModalOpen(true)}
-                        >
-                          <Plus className="size-4" />
-                          Tạo nhanh sản phẩm
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setIsProductModalOpen(true)}
+                          >
+                            <Plus className="size-4" />
+                            Tạo nhanh sản phẩm
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setIsServiceModalOpen(true)}
+                          >
+                            <Plus className="size-4" />
+                            Tạo nhanh dịch vụ
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -2381,9 +2453,7 @@ export default function CreateContractPage() {
                       }
                     />
 
-                    {paymentPlan.length > 0 && (
-                      <Separator className="my-5" />
-                    )}
+                    {paymentPlan.length > 0 && <Separator className="my-5" />}
 
                     <div>
                       <p className="mb-2 text-sm font-semibold">
@@ -2643,11 +2713,18 @@ export default function CreateContractPage() {
       )}
 
       {canManageCatalog && (
-        <ProductFormModal
-          isOpen={isProductModalOpen}
-          onClose={() => setIsProductModalOpen(false)}
-          onSuccess={handleProductCreated}
-        />
+        <>
+          <ProductFormModal
+            isOpen={isProductModalOpen}
+            onClose={() => setIsProductModalOpen(false)}
+            onSuccess={handleProductCreated}
+          />
+          <ServiceFormModal
+            isOpen={isServiceModalOpen}
+            onClose={() => setIsServiceModalOpen(false)}
+            onSuccess={handleServiceCreated}
+          />
+        </>
       )}
 
       <ConfirmDialog

@@ -86,6 +86,15 @@ public sealed class GenerateContractTemplatePreviewRequest
     public string VersionRowVersion { get; set; } = string.Empty;
 }
 
+public sealed class UpdateContractTemplateItemTableLayoutRequest
+{
+    [Required]
+    public string VersionRowVersion { get; set; } = string.Empty;
+
+    [Required]
+    public List<int> ColumnWidthsBps { get; set; } = [];
+}
+
 public sealed class PublishContractTemplateVersionRequest
 {
     [Required]

@@ -428,6 +428,18 @@ public sealed class ContractDocumentPreviewServiceTests
                     CreatedEmployeeId = OwnerId,
                     CreatedDate = DateTime.UtcNow
                 }));
+        context.TblContractTemplateItemTableColumnLayouts.AddRange(
+            ContractTableLayoutPolicy.ItemColumnKeys.Select((columnKey, index) =>
+                new TblContractTemplateItemTableColumnLayout
+                {
+                    TemplateVersionId = TemplateVersionId,
+                    ColumnKey = columnKey,
+                    DisplayOrder = checked((byte)index),
+                    WidthBps = checked((short)ContractTableLayoutPolicy
+                        .DefaultItemColumnWidthsBps[index]),
+                    CreatedEmployeeId = OwnerId,
+                    CreatedDate = DateTime.UtcNow
+                }));
         context.TblFileStorages.Add(new TblFileStorage
         {
             FileId = FileId,

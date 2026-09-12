@@ -375,6 +375,14 @@ export interface ContractTemplatePaymentMilestoneResponse {
   rowVersion: string;
 }
 
+export interface ContractTemplateItemTableColumnLayoutResponse {
+  itemTableColumnLayoutId: number;
+  templateVersionId: number;
+  columnKey: string;
+  displayOrder: number;
+  widthBps: number;
+}
+
 export interface SaveContractTemplatePaymentMilestoneRequest {
   milestoneCode: string;
   titleVi: string;
@@ -410,6 +418,7 @@ export interface ContractTemplateVersionDetailResponse {
   rowVersion: string;
   terms: ContractTemplateTermResponse[];
   legalBases: ContractTemplateLegalBasisResponse[];
+  itemTableLayout: ContractTemplateItemTableColumnLayoutResponse[];
 }
 
 export interface ContractTemplatePreviewResponse {
@@ -492,6 +501,15 @@ export const contractTemplateApi = {
       { headers: { "Cache-Control": "no-cache" } },
     ),
 
+  updateItemTableLayout: (
+    versionId: number,
+    data: { versionRowVersion: string; columnWidthsBps: number[] },
+  ) =>
+    axiosClient.put<unknown, ContractTemplateVersionDetailResponse>(
+      `${BASE_URL}/versions/${versionId}/item-table-layout`,
+      data,
+    ),
+
   copyVersion: (
     sourceVersionId: number,
     data: CopyContractTemplateVersionRequest,
@@ -549,7 +567,7 @@ export const contractTemplateApi = {
       data,
     ),
 
-  downloadPublishedPreviewPdf: (versionId: number) =>
+  downloadPreviewPdf: (versionId: number) =>
     axiosClient.get<unknown, Blob>(
       `${BASE_URL}/versions/${versionId}/preview/pdf`,
       { responseType: "blob" },

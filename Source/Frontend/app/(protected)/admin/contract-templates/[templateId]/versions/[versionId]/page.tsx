@@ -505,11 +505,11 @@ export default function ContractTemplateVersionWorkspacePage() {
                     <TabsTrigger value="legal-bases">
                       <Scale /> Căn cứ
                     </TabsTrigger>
-                    <TabsTrigger value="document">
-                      <FileText /> Tài liệu DOCX
-                    </TabsTrigger>
                     <TabsTrigger value="placeholders">
                       <Braces /> Placeholder
+                    </TabsTrigger>
+                    <TabsTrigger value="document">
+                      <FileText /> Tài liệu DOCX
                     </TabsTrigger>
                     <TabsTrigger value="preview">
                       <Eye /> Preview & phát hành

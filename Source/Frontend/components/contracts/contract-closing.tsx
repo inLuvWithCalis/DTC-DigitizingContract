@@ -458,18 +458,18 @@ export function ContractClosing({
                           )}
                         </span>
                       </p>
-                      <p>
+                      <p className="flex items-center gap-2">
                         {milestone.dueDate
                           ? `Hạn ${new Date(milestone.dueDate).toLocaleDateString("vi-VN")}`
                           : "Chưa phát sinh mốc tính hạn"}
+                        {milestone.dayCountMode ===
+                          ContractPaymentDayCountMode.BusinessDays && (
+                          <span className="mt-1 inline-block rounded-sm bg-muted px-2 py-0.5 text-xs text-foreground">
+                            Ngày làm việc hiện chỉ loại trừ thứ Bảy và Chủ nhật.
+                          </span>
+                        )}
                       </p>
                       {milestone.conditionVi && <p>{milestone.conditionVi}</p>}
-                      {milestone.dayCountMode ===
-                        ContractPaymentDayCountMode.BusinessDays && (
-                        <p className="text-xs">
-                          Ngày làm việc hiện chỉ loại trừ thứ Bảy và Chủ nhật.
-                        </p>
-                      )}
                       {isPaid && milestone.activePayment ? (
                         <div className="mt-3 space-y-1 rounded-md border bg-muted/40 p-3 text-xs">
                           <p>

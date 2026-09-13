@@ -3396,14 +3396,14 @@
     "semantic_hash": "4cc2cac899fc2a7d141bca0f8797b9de"
   },
   "SystemAdmin/app/(protected)/audit-logs/page.tsx": {
-    "mtime": 1788271330.2020876,
-    "seen": 1788272102.7755766,
-    "ast_hash": "0e30eecdf4774cef32677c2f6a4a3e59",
+    "mtime": 1789308629.7147927,
+    "seen": 1789308734.997013,
+    "ast_hash": "39804604542f8571b7e0096b15d9ba7e",
     "semantic_hash": ""
   },
   "SystemAdmin/app/(protected)/dashboard/page.tsx": {
-    "mtime": 1788508931.2635872,
-    "seen": 1788511512.101383,
+    "mtime": 1789307788.7414434,
+    "seen": 1789307991.2954376,
     "ast_hash": "df29ec06eb540a2ab02a07272e17e1f7",
     "semantic_hash": ""
   },
@@ -3414,9 +3414,9 @@
     "semantic_hash": ""
   },
   "SystemAdmin/app/(protected)/tenants/page.tsx": {
-    "mtime": 1789130486.4854155,
-    "seen": 1789134904.5281887,
-    "ast_hash": "5c6f0561b360693a858f371b850e545c",
+    "mtime": 1789308249.9482756,
+    "seen": 1789308360.9604728,
+    "ast_hash": "12417d4037fac018601686eaef85388c",
     "semantic_hash": ""
   },
   "SystemAdmin/app/layout.tsx": {
@@ -3582,10 +3582,10 @@
     "semantic_hash": "22ea76a6bf2971c43ab6c3915d5b5a17"
   },
   "SystemAdmin/components/ui/custom/data-table.tsx": {
-    "mtime": 1782470747.2645924,
-    "seen": 1787847669.3080397,
-    "ast_hash": "ad432138a260fe5ed2b26e5ac5d8f754",
-    "semantic_hash": "ad432138a260fe5ed2b26e5ac5d8f754"
+    "mtime": 1789308435.6280742,
+    "seen": 1789308734.997146,
+    "ast_hash": "af8ad685ce47c24a47d75d5fd0a20b0f",
+    "semantic_hash": ""
   },
   "SystemAdmin/components/ui/custom/date-range-filter.tsx": {
     "mtime": 1782465115.854493,
@@ -6306,14 +6306,14 @@
     "semantic_hash": ""
   },
   "SystemAdmin/components/dashboard/admin-dashboard-summary.tsx": {
-    "mtime": 1788508776.4883728,
-    "seen": 1788508930.504353,
+    "mtime": 1789307788.7442026,
+    "seen": 1789307991.295457,
     "ast_hash": "2cb73587f5d7e55b07a329f6f91b226d",
     "semantic_hash": ""
   },
   "SystemAdmin/components/dashboard/security-trend-chart.tsx": {
-    "mtime": 1788508788.1192853,
-    "seen": 1788508930.5043542,
+    "mtime": 1789307788.7430527,
+    "seen": 1789307991.295458,
     "ast_hash": "c8a1d3defb2e61ca774f514ee315ce39",
     "semantic_hash": ""
   },
@@ -7437,6 +7437,18 @@
     "mtime": 1789288349.5541475,
     "seen": 1789288635.57908,
     "ast_hash": "02573b801a6548bf365174446d6aeb8b",
+    "semantic_hash": ""
+  },
+  "SystemAdmin/components/ui/custom/summary-cards.tsx": {
+    "mtime": 1789308190.5558197,
+    "seen": 1789308360.9605668,
+    "ast_hash": "f873e1651ba2d814745531982191cd09",
+    "semantic_hash": ""
+  },
+  "SystemAdmin/components/security-audits/central-security-audit-log.tsx": {
+    "mtime": 1789308624.2142553,
+    "seen": 1789308734.997074,
+    "ast_hash": "b22c7288a449f6f5950b06da08f8ad67",
     "semantic_hash": ""
   }
 }

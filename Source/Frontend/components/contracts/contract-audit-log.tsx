@@ -202,7 +202,7 @@ const FIELD_LABELS: Record<string, string> = {
   Sha256: "Mã băm SHA-256",
   SupersedesEvidenceId: "Thay thế bản scan",
   AcceptanceEvidenceId: "Biên bản nghiệm thu",
-  ContractPaymentId: "Khoản thanh toán",
+  ContractPaymentId: "Mã thanh toán hợp đồng",
   PaymentDate: "Ngày thanh toán",
   Amount: "Số tiền",
   PaymentMethod: "Phương thức thanh toán",
@@ -211,6 +211,9 @@ const FIELD_LABELS: Record<string, string> = {
   PaymentStatus: "Trạng thái thanh toán",
   PaidAmount: "Đã thanh toán",
   RemainingAmount: "Còn phải thanh toán",
+  PaidAt: "Ngày thanh toán",
+  PaidByEmployeeId: "Người thanh toán",
+  PaymentMilestoneId: "Mã đợt thanh toán",
 };
 
 const PHONE_SOURCE_LABELS: Record<string, string> = {

@@ -113,7 +113,7 @@ export function DataTable<TData, TValue>({
         </div>
 
         {searchKey && (
-          <div className="relative w-full md:w-64">
+          <div className="relative w-full md:w-100">
             <Input
               placeholder={searchPlaceholder}
               value={

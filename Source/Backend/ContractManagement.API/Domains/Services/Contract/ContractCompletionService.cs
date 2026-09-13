@@ -820,12 +820,12 @@ public sealed class ContractCompletionService : IContractCompletionService
         if (rows.Count > 0) await _db.SaveChangesAsync(ct);
     }
 
-    private static IReadOnlyDictionary<string, object?> PaymentAudit(TblContractPaymentLedger p, decimal paid, decimal remaining) => ContractAuditValues.Create(
+    private static IReadOnlyCollection<ContractAuditValueInput> PaymentAudit(TblContractPaymentLedger p, decimal paid, decimal remaining) => ContractAuditValues.Create(
         ("ContractPaymentId", p.ContractPaymentId), ("CurrentVersionId", p.VersionId),
         ("PaymentMilestoneId", p.PaymentMilestoneId), ("PaymentDate", p.PaymentDate), ("Amount", p.Amount),
         ("CurrencyCode", p.CurrencyCode), ("PaymentMethod", p.PaymentMethod), ("ReferenceCode", p.ReferenceCode), ("EvidenceFileId", p.EvidenceFileId),
         ("PaymentStatus", p.Status), ("PaidAmount", paid), ("RemainingAmount", remaining));
-    private static IReadOnlyDictionary<string, object?> MilestoneAudit(
+    private static IReadOnlyCollection<ContractAuditValueInput> MilestoneAudit(
         TblContractPaymentMilestone milestone,
         int versionId) => ContractAuditValues.Create(
             ("PaymentMilestoneId", milestone.PaymentMilestoneId),

@@ -13,8 +13,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.Net;
 using System.ComponentModel.DataAnnotations;
-using System.Text.Json;
 using static ContractManagement.Tests.ContractRichTextTestData;
+using static ContractManagement.Tests.AuditValueTestData;
 
 namespace ContractManagement.Tests.Domains.Services.Contract;
 
@@ -62,24 +62,26 @@ public class ContractServiceResponsibilityTests
         Assert.Null(audits[1].PreviousResponsibleEmployeeId);
         Assert.Null(audits[1].Reason);
 
-        using var createdValuesDocument = JsonDocument.Parse(
-            audits[0].NewValuesJson!);
-        var createdValues = createdValuesDocument.RootElement;
         Assert.Equal(
             (byte)ContractType.SoftwareSupply,
-            createdValues.GetProperty("ContractType").GetByte());
+            ContractValue(audits[0], AuditValueSide.New,
+                ContractAuditFieldCode.ContractType).IntegerValue);
         Assert.Equal(
             (byte)ContractLanguageMode.Vietnamese,
-            createdValues.GetProperty("LanguageMode").GetByte());
+            ContractValue(audits[0], AuditValueSide.New,
+                ContractAuditFieldCode.LanguageMode).IntegerValue);
         Assert.Equal(
             TemplateVersionId,
-            createdValues.GetProperty("TemplateVersionId").GetInt32());
+            ContractValue(audits[0], AuditValueSide.New,
+                ContractAuditFieldCode.TemplateVersionId).IntegerValue);
         Assert.Contains(
             "Sản phẩm kiểm thử",
-            createdValues.GetProperty("AddedItems").GetString());
+            ContractValue(audits[0], AuditValueSide.New,
+                ContractAuditFieldCode.AddedItems).StringValue);
         Assert.Contains(
             "GENERAL",
-            createdValues.GetProperty("AddedTerms").GetString());
+            ContractValue(audits[0], AuditValueSide.New,
+                ContractAuditFieldCode.AddedTerms).StringValue);
     }
 
     [Fact]

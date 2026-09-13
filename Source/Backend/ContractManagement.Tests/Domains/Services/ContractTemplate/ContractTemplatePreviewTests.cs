@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text.Json;
 using ContractManagement.API.Common.Enums;
 using ContractManagement.API.Domains.DTOs.Requests.ContractTemplate;
 using ContractManagement.Common.Enums;
@@ -21,11 +20,51 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using W = DocumentFormat.OpenXml.Wordprocessing;
 using static ContractManagement.Tests.ContractRichTextTestData;
+using static ContractManagement.Tests.AuditValueTestData;
 
 namespace ContractManagement.Tests.Domains.Services.ContractTemplate;
 
 public sealed class ContractTemplatePreviewTests
 {
+    [Fact]
+    public void TemplateAuditFieldVocabulary_IsExactlyElevenTypedFields()
+    {
+        Assert.Equal(
+        [
+            ContractTemplateAuditFieldCode.DocumentFileId,
+            ContractTemplateAuditFieldCode.DocumentExtension,
+            ContractTemplateAuditFieldCode.DocumentSizeBytes,
+            ContractTemplateAuditFieldCode.ValidationStatus,
+            ContractTemplateAuditFieldCode.RecognizedPlaceholderCount,
+            ContractTemplateAuditFieldCode.PreviewFileId,
+            ContractTemplateAuditFieldCode.PreviewSizeBytes,
+            ContractTemplateAuditFieldCode.PreviewStatus,
+            ContractTemplateAuditFieldCode.PublishedPreviewPdfFileId,
+            ContractTemplateAuditFieldCode.PublishedPreviewPdfSizeBytes,
+            ContractTemplateAuditFieldCode.PublishStatus
+        ], Enum.GetValues<ContractTemplateAuditFieldCode>());
+
+        var values = ContractTemplateAuditValues.Create(
+            ("DocumentFileId", 1),
+            ("DocumentExtension", "docx"),
+            ("DocumentSizeBytes", 2L),
+            ("ValidationStatus", "Valid"),
+            ("RecognizedPlaceholderCount", 3),
+            ("PreviewFileId", 4),
+            ("PreviewSizeBytes", 5L),
+            ("PreviewStatus", "Current"),
+            ("PublishedPreviewPdfFileId", 6),
+            ("PublishedPreviewPdfSizeBytes", 7L),
+            ("PublishStatus", "Published"));
+
+        Assert.Equal(11, values.Count);
+        Assert.All(values, value => Assert.Equal(
+            1,
+            (value.IntegerValue.HasValue ? 1 : 0)
+            + (value.LongValue.HasValue ? 1 : 0)
+            + (value.StringValue is not null ? 1 : 0)));
+    }
+
     private const int TenantId = 1010;
     private const int AdminOfficerId = 1011;
     private const int ManagerId = 1012;
@@ -522,11 +561,21 @@ public sealed class ContractTemplatePreviewTests
         Assert.Equal(ContractTemplateAuditActionTypes.PreviewGenerated,
             audit.ActionType);
         Assert.Equal(ContractTemplateAuditResults.Succeeded, audit.Result);
-        var values = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
-            audit.NewValuesJson!);
         Assert.Equal(generated.PreviewFileId,
-            values!["PreviewFileId"].GetInt32());
-        Assert.True(values["PreviewSizeBytes"].GetInt64() > 0);
+            TemplateValue(audit, AuditValueSide.New,
+                ContractTemplateAuditFieldCode.PreviewFileId).IntegerValue);
+        Assert.True(TemplateValue(audit, AuditValueSide.New,
+            ContractTemplateAuditFieldCode.PreviewSizeBytes).LongValue > 0);
+        var previousFile = TemplateValue(audit, AuditValueSide.Previous,
+            ContractTemplateAuditFieldCode.PreviewFileId);
+        Assert.True(previousFile.IsNull);
+        Assert.Null(previousFile.IntegerValue);
+
+        var sizeValue = TemplateValue(audit, AuditValueSide.New,
+            ContractTemplateAuditFieldCode.PreviewSizeBytes);
+        sizeValue.LongValue++;
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            context.SaveChangesAsync());
     }
 
     [Fact]

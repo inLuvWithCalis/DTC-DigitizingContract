@@ -37,6 +37,9 @@ public sealed class Phase12SqlServerReleaseGateTests
                 Assert.Empty(await tenantB.Database.GetPendingMigrationsAsync());
             }
 
+            await AssertNormalizedPersistenceSchemaAsync(connectionA);
+            await AssertNormalizedPersistenceSchemaAsync(connectionB);
+
             var seeded = await SeedTenantAAsync(connectionA);
             var tenantBEmployeeId = await SeedTenantBEmployeeAsync(connectionB);
 
@@ -123,6 +126,7 @@ public sealed class Phase12SqlServerReleaseGateTests
             ContractType = (byte)ContractType.SoftwareSupply,
             ContractCode = $"PH12-{Guid.NewGuid():N}",
             ContractName = "Phase 12 SQL Server isolation contract",
+            TemplateVersionId = 1,
             Status = (byte)ContractStatus.Draft,
             TotalAmount = 100m,
             Subtotal = 100m,
@@ -171,6 +175,104 @@ public sealed class Phase12SqlServerReleaseGateTests
         stale.ContractName = "Phase 12 stale concurrent update";
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() =>
             staleContext.SaveChangesAsync());
+    }
+
+    private static async Task AssertNormalizedPersistenceSchemaAsync(
+        string connectionString)
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync();
+
+        await using var removedColumns = connection.CreateCommand();
+        removedColumns.CommandText =
+            """
+            SELECT COUNT_BIG(*)
+            FROM sys.columns AS c
+            INNER JOIN sys.tables AS t ON t.object_id = c.object_id
+            WHERE (t.name = 'tbl_ContractAudit'
+                    AND c.name IN ('PreviousValuesJson', 'NewValuesJson'))
+               OR (t.name = 'tbl_ContractTemplateAudit'
+                    AND c.name IN ('PreviousValuesJson', 'NewValuesJson'))
+               OR (t.name = 'tbl_ContractPlaceholderAudit'
+                    AND c.name IN ('PreviousValuesJson', 'NewValuesJson'))
+               OR (t.name = 'tbl_ContractVersion' AND c.name = 'SnapshotJson')
+               OR (t.name = 'tbl_ContractCustomerOtpDeliveryOutbox'
+                    AND c.name = 'EncryptedPayload');
+            """;
+        Assert.Equal(0L, (long)(await removedColumns.ExecuteScalarAsync())!);
+
+        await using var newSchema = connection.CreateCommand();
+        newSchema.CommandText =
+            """
+            SELECT
+                (SELECT COUNT_BIG(*)
+                 FROM sys.tables
+                 WHERE name IN (
+                    'tbl_ContractAuditValue',
+                    'tbl_ContractTemplateAuditValue',
+                    'tbl_ContractVersionLegalSnapshot',
+                    'tbl_ContractVersionPartySnapshot',
+                    'tbl_ContractVersionPaymentMilestoneSnapshot'))
+              + (SELECT COUNT_BIG(*)
+                 FROM sys.columns AS c
+                 INNER JOIN sys.tables AS t ON t.object_id = c.object_id
+                 WHERE t.name = 'tbl_ContractCustomerOtpDeliveryOutbox'
+                   AND c.name IN (
+                    'PhoneCiphertext', 'OtpCiphertext',
+                    'EmailCiphertext', 'DeliveryExpiresAt'));
+            """;
+        Assert.Equal(9L, (long)(await newSchema.ExecuteScalarAsync())!);
+
+        await using var schemaGuards = connection.CreateCommand();
+        schemaGuards.CommandText =
+            """
+            SELECT
+                (SELECT COUNT_BIG(*)
+                 FROM sys.check_constraints
+                 WHERE name IN (
+                    'CK_tbl_ContractVersion_LockState',
+                    'CK_tbl_ContractCustomerOtpDeliveryOutbox_Ciphertexts',
+                    'CK_tbl_ContractCustomerOtpDeliveryOutbox_Expiry',
+                    'CK_tbl_ContractVersionLegalSnapshot_Financials',
+                    'CK_tbl_ContractVersionLegalSnapshot_Ids',
+                    'CK_tbl_ContractVersionPartySnapshot_Role',
+                    'CK_tbl_ContractVersionPartySnapshot_Source',
+                    'CK_tbl_ContractVersionPaymentMilestoneSnapshot_Ids',
+                    'CK_tbl_ContractVersionPaymentMilestoneSnapshot_Values'))
+              + (SELECT COUNT_BIG(*)
+                 FROM sys.indexes
+                 WHERE name IN (
+                    'IX_tbl_ContractVersionLegalSnapshot_VersionId',
+                    'IX_tbl_ContractVersionPartySnapshot_ContractVersionLegalSnapshotId_PartyRole',
+                    'IX_tbl_ContractVersionPaymentMilestoneSnapshot_ContractVersionLegalSnapshotId_DisplayOrder',
+                    'IX_tbl_ContractVersionPaymentMilestoneSnapshot_ContractVersionLegalSnapshotId_SourcePaymentMilestoneId'));
+            """;
+        Assert.Equal(13L, (long)(await schemaGuards.ExecuteScalarAsync())!);
+
+        await using var generatedDefaults = connection.CreateCommand();
+        generatedDefaults.CommandText =
+            """
+            SELECT COUNT_BIG(*)
+            FROM sys.default_constraints AS d
+            INNER JOIN sys.columns AS c
+                ON c.object_id = d.parent_object_id
+               AND c.column_id = d.parent_column_id
+            INNER JOIN sys.tables AS t ON t.object_id = c.object_id
+            WHERE t.name = 'tbl_ContractCustomerOtpDeliveryOutbox'
+              AND c.name IN (
+                'PhoneCiphertext', 'OtpCiphertext',
+                'EmailCiphertext', 'DeliveryExpiresAt');
+            """;
+        Assert.Equal(0L, (long)(await generatedDefaults.ExecuteScalarAsync())!);
+
+        await using var jsonConstraints = connection.CreateCommand();
+        jsonConstraints.CommandText =
+            """
+            SELECT COUNT_BIG(*)
+            FROM sys.check_constraints
+            WHERE definition LIKE '%ISJSON%';
+            """;
+        Assert.Equal(0L, (long)(await jsonConstraints.ExecuteScalarAsync())!);
     }
 
     private static TblEmployee Employee(

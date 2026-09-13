@@ -2,7 +2,6 @@ using ContractManagement.Domains.Interfaces.Contract;
 using ContractManagement.Infrastructure.MultiTenancy.Interfaces;
 using ContractManagement.Infrastructure.Persistence.Application;
 using ContractManagement.Infrastructure.Persistence.Application.Models;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace ContractManagement.Domains.Services.Contract;
@@ -37,8 +36,8 @@ public sealed class ContractAuditWriter : IContractAuditWriter
      * makes an accidental addition of a phone, token, comment body, or snapshot
      * fail fast instead of silently persisting sensitive data.
      */
-    private static readonly IReadOnlyDictionary<string, HashSet<string>>
-        AllowedValueKeysByAction = new Dictionary<string, HashSet<string>>(
+    private static readonly IReadOnlyDictionary<string, HashSet<ContractAuditFieldCode>>
+        AllowedValueKeysByAction = new Dictionary<string, HashSet<ContractAuditFieldCode>>(
             StringComparer.Ordinal)
         {
             [ContractAuditActionTypes.ContractCreated] = ContractFields(),
@@ -181,8 +180,24 @@ public sealed class ContractAuditWriter : IContractAuditWriter
                     httpContext?.TraceIdentifier,
                     MaxCorrelationIdLength)
                 ?? Guid.NewGuid().ToString("N");
+            var previousContractStatus = ResolveHeaderByte(
+                request.PreviousContractStatus,
+                request.PreviousValues,
+                ContractAuditFieldCode.Status);
+            var newContractStatus = ResolveHeaderByte(
+                request.NewContractStatus,
+                request.NewValues,
+                ContractAuditFieldCode.Status);
+            var previousResponsibleEmployeeId = ResolveHeaderInt32(
+                request.PreviousResponsibleEmployeeId,
+                request.PreviousValues,
+                ContractAuditFieldCode.ResponsibleEmployeeId);
+            var newResponsibleEmployeeId = ResolveHeaderInt32(
+                request.NewResponsibleEmployeeId,
+                request.NewValues,
+                ContractAuditFieldCode.ResponsibleEmployeeId);
 
-            return new TblContractAudit
+            var audit = new TblContractAudit
             {
                 TenantId = tenantId,
                 ContractId = request.ContractId,
@@ -195,24 +210,36 @@ public sealed class ContractAuditWriter : IContractAuditWriter
                     request.ActorCustomerAccessSessionId,
                 ActionType = request.ActionType,
                 Result = request.Result,
-                PreviousContractStatus = request.PreviousContractStatus,
-                NewContractStatus = request.NewContractStatus,
+                PreviousContractStatus = previousContractStatus,
+                NewContractStatus = newContractStatus,
                 PreviousResponsibleEmployeeId =
-                    request.PreviousResponsibleEmployeeId,
-                NewResponsibleEmployeeId = request.NewResponsibleEmployeeId,
+                    previousResponsibleEmployeeId,
+                NewResponsibleEmployeeId = newResponsibleEmployeeId,
                 Reason = SanitizeReason(request.Reason),
-                PreviousValuesJson = SerializeSafeValues(
-                    request.ActionType,
-                    request.PreviousValues),
-                NewValuesJson = SerializeSafeValues(
-                    request.ActionType,
-                    request.NewValues),
                 FailureCode = NormalizeCode(request.FailureCode),
                 OccurredAt = request.OccurredAt,
                 IpAddress = ipAddress,
                 UserAgent = userAgent,
                 CorrelationId = correlationId
             };
+
+            foreach (var value in CreateSafeValues(
+                         request.ActionType,
+                         AuditValueSide.Previous,
+                         request.PreviousValues))
+            {
+                audit.Values.Add(value);
+            }
+
+            foreach (var value in CreateSafeValues(
+                         request.ActionType,
+                         AuditValueSide.New,
+                         request.NewValues))
+            {
+                audit.Values.Add(value);
+            }
+
+            return audit;
         }).ToList();
 
         _dbContext.TblContractAudits.AddRange(audits);
@@ -253,13 +280,14 @@ public sealed class ContractAuditWriter : IContractAuditWriter
         }
     }
 
-    private static string? SerializeSafeValues(
+    private static IReadOnlyCollection<TblContractAuditValue> CreateSafeValues(
         string actionType,
-        IReadOnlyDictionary<string, object?>? values)
+        AuditValueSide side,
+        IReadOnlyCollection<ContractAuditValueInput>? values)
     {
         if (values is null || values.Count == 0)
         {
-            return null;
+            return [];
         }
 
         if (!AllowedValueKeysByAction.TryGetValue(
@@ -270,27 +298,120 @@ public sealed class ContractAuditWriter : IContractAuditWriter
                 "Contract audit action does not permit before/after values.");
         }
 
-        var safeValues = new Dictionary<string, object?>(StringComparer.Ordinal);
-        foreach (var (key, value) in values)
+        var safeValues = new List<TblContractAuditValue>(values.Count);
+        var seen = new HashSet<ContractAuditFieldCode>();
+        foreach (var value in values)
         {
-            if (!allowedKeys.Contains(key) || !IsSafeScalar(value))
+            if (!allowedKeys.Contains(value.FieldCode)
+                || !seen.Add(value.FieldCode)
+                || value.ValueKind != ContractAuditFieldKinds.Get(value.FieldCode)
+                || !IsValidValue(value))
             {
                 throw new InvalidOperationException(
                     "Contract audit value is not allowed for this action.");
             }
 
-            safeValues[key] = value is string text
-                ? NormalizeSafeString(text)
-                : value;
+            if (value.FieldCode is ContractAuditFieldCode.Status
+                or ContractAuditFieldCode.ResponsibleEmployeeId)
+            {
+                continue;
+            }
+
+            safeValues.Add(new TblContractAuditValue
+            {
+                ValueSide = side,
+                FieldCode = (short)value.FieldCode,
+                ValueKind = value.ValueKind,
+                IsNull = value.IsNull,
+                IntegerValue = value.IntegerValue,
+                DecimalValue = value.DecimalValue,
+                StringValue = value.StringValue is null
+                    ? null
+                    : NormalizeSafeString(value.StringValue),
+                DateTimeValue = value.DateTimeValue,
+                BooleanValue = value.BooleanValue
+            });
         }
 
-        return JsonSerializer.Serialize(safeValues);
+        return safeValues;
     }
 
-    private static bool IsSafeScalar(object? value) => value is null
-        or bool or byte or short or int or long or decimal or double or float
-        or DateTime or DateTimeOffset or Guid
-        || value is string text && text.Length <= MaxSafeStringLength;
+    private static byte? ResolveHeaderByte(
+        byte? explicitValue,
+        IReadOnlyCollection<ContractAuditValueInput>? values,
+        ContractAuditFieldCode fieldCode)
+    {
+        var input = values?.SingleOrDefault(value =>
+            value.FieldCode == fieldCode);
+        if (input is null)
+        {
+            return explicitValue;
+        }
+
+        var inputValue = input.IsNull
+            ? null
+            : checked((byte?)input.IntegerValue);
+        if (explicitValue.HasValue && explicitValue != inputValue)
+        {
+            throw new InvalidOperationException(
+                $"Contract audit header {fieldCode} is inconsistent.");
+        }
+
+        return explicitValue ?? inputValue;
+    }
+
+    private static int? ResolveHeaderInt32(
+        int? explicitValue,
+        IReadOnlyCollection<ContractAuditValueInput>? values,
+        ContractAuditFieldCode fieldCode)
+    {
+        var input = values?.SingleOrDefault(value =>
+            value.FieldCode == fieldCode);
+        if (input is null)
+        {
+            return explicitValue;
+        }
+
+        var inputValue = input.IsNull
+            ? null
+            : checked((int?)input.IntegerValue);
+        if (explicitValue.HasValue && explicitValue != inputValue)
+        {
+            throw new InvalidOperationException(
+                $"Contract audit header {fieldCode} is inconsistent.");
+        }
+
+        return explicitValue ?? inputValue;
+    }
+
+    private static bool IsValidValue(ContractAuditValueInput value)
+    {
+        var populated = (value.IntegerValue.HasValue ? 1 : 0)
+            + (value.DecimalValue.HasValue ? 1 : 0)
+            + (value.StringValue is not null ? 1 : 0)
+            + (value.DateTimeValue.HasValue ? 1 : 0)
+            + (value.BooleanValue.HasValue ? 1 : 0);
+        if (value.IsNull)
+        {
+            return populated == 0;
+        }
+
+        if (populated != 1)
+        {
+            return false;
+        }
+
+        return value.ValueKind switch
+        {
+            AuditScalarValueKind.Integer => value.IntegerValue.HasValue,
+            AuditScalarValueKind.Decimal => value.DecimalValue.HasValue,
+            AuditScalarValueKind.String => value.StringValue is not null
+                && value.StringValue.Length <= MaxSafeStringLength,
+            AuditScalarValueKind.DateTime => value.DateTimeValue.HasValue,
+            AuditScalarValueKind.Boolean => value.BooleanValue.HasValue,
+            _ => false
+        };
+    }
 
     private static string? NormalizeCode(string? value)
     {
@@ -339,7 +460,7 @@ public sealed class ContractAuditWriter : IContractAuditWriter
             : normalized[..MaxSafeStringLength];
     }
 
-    private static HashSet<string> ContractFields() => Fields(
+    private static HashSet<ContractAuditFieldCode> ContractFields() => Fields(
         "Status", "ResponsibleEmployeeId", "CurrentVersionId", "CustomerId",
         "CustomerName", "ContractName", "ContractNameEn", "EffectiveDate",
         "ExpireDate", "CurrencyCode", "Subtotal", "TotalDiscount", "TotalVat",
@@ -347,42 +468,51 @@ public sealed class ContractAuditWriter : IContractAuditWriter
         "RemovedItems", "AddedTerms", "UpdatedTerms", "RemovedTerms",
         "ContractType", "LanguageMode", "TemplateVersionId", "ParentContractId");
 
-    private static HashSet<string> ApprovalFields() => Fields(
+    private static HashSet<ContractAuditFieldCode> ApprovalFields() => Fields(
         "Status", "CurrentVersionId", "VersionLocked", "ApprovalRequestId",
-        "ApprovalStatus", "WorkflowId", "SnapshotSchemaVersion",
+        "ApprovalStatus", "WorkflowId",
         "TemplateVersionId", "SnapshotHash", "DocxFileId", "DocxHash",
         "PdfFileId", "PdfHash", "ArtifactCount", "InvalidatedLinkCount",
         "RevokedSessionCount", "ResolvedByEmployeeId");
 
-    private static HashSet<string> AttachmentFields() => Fields(
+    private static HashSet<ContractAuditFieldCode> AttachmentFields() => Fields(
         "AttachmentId", "FileId", "FileName", "DocumentType", "UploadDate");
 
-    private static HashSet<string> SignedEvidenceFields() => Fields(
+    private static HashSet<ContractAuditFieldCode> SignedEvidenceFields() => Fields(
         "Status", "CurrentVersionId", "SignedEvidenceId", "FileId",
         "FileType", "Sha256", "EvidenceStatus", "SupersedesEvidenceId");
 
-    private static HashSet<string> PaymentFields() => Fields(
+    private static HashSet<ContractAuditFieldCode> PaymentFields() => Fields(
         "ContractPaymentId", "PaymentMilestoneId", "CurrentVersionId", "PaymentDate", "Amount",
         "CurrencyCode", "PaymentMethod", "ReferenceCode", "EvidenceFileId",
         "PaymentStatus", "PaidAmount", "RemainingAmount");
 
-    private static HashSet<string> VerificationPhoneFields() => Fields(
+    private static HashSet<ContractAuditFieldCode> VerificationPhoneFields() => Fields(
         "VerificationPhoneId", "VerificationPhoneMasked", "PhoneSource",
         "LinkId", "LinkState");
 
-    private static HashSet<string> CommentFields() => Fields(
+    private static HashSet<ContractAuditFieldCode> CommentFields() => Fields(
         "Source", "Target", "TermId", "ParentCommentId", "State");
 
-    private static HashSet<string> LinkFields() => Fields(
+    private static HashSet<ContractAuditFieldCode> LinkFields() => Fields(
         "VerificationPhoneId", "LinkId", "PreviousLinkId", "NewLinkId",
         "CurrentVersionId", "ExpiresAt", "LinkState");
 
-    private static HashSet<string> OtpFields() => Fields(
+    private static HashSet<ContractAuditFieldCode> OtpFields() => Fields(
         "LinkId", "CustomerOtpChallengeId", "CurrentVersionId", "ExpiresAt",
         "ChallengeState", "FailedAttemptCount");
 
-    private static HashSet<string> Fields(params string[] fields) =>
-        new(fields, StringComparer.Ordinal);
+    private static HashSet<ContractAuditFieldCode> Fields(params string[] fields) =>
+        fields.Select(field =>
+        {
+            if (!Enum.TryParse<ContractAuditFieldCode>(field, false, out var code))
+            {
+                throw new InvalidOperationException(
+                    $"Unknown contract audit field '{field}'.");
+            }
+
+            return code;
+        }).ToHashSet();
 
     private static string? NormalizeAndLimit(
         string? value,

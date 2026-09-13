@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text.Json;
 using ContractManagement.API.Common.Enums;
 using ContractManagement.API.Domains.DTOs.Requests.ContractTemplate;
 using ContractManagement.Common.Enums;
@@ -19,6 +18,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using W = DocumentFormat.OpenXml.Wordprocessing;
+using static ContractManagement.Tests.AuditValueTestData;
 
 namespace ContractManagement.Tests.Domains.Services.ContractTemplate;
 
@@ -99,10 +99,12 @@ public sealed class ContractTemplateDocumentUploadServiceTests
         Assert.Equal(ContractTemplateAuditResults.Succeeded, audit.Result);
         Assert.Equal(TenantId, audit.TenantId);
         Assert.Equal(AdminOfficerId, audit.ActorEmployeeId);
-        var auditJson = string.Concat(audit.PreviousValuesJson,
-            audit.NewValuesJson, audit.FailureCode);
-        Assert.DoesNotContain("template-version-904.docx", auditJson);
-        Assert.DoesNotContain("CONTRACT_CODE", auditJson);
+        Assert.DoesNotContain("template-version-904.docx",
+            audit.Values.Select(value => value.StringValue));
+        Assert.DoesNotContain("CONTRACT_CODE",
+            audit.Values.Select(value => value.StringValue));
+        Assert.DoesNotContain("template-version-904.docx",
+            audit.FailureCode ?? string.Empty);
     }
 
     [Fact]

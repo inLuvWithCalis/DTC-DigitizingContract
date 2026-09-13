@@ -22,10 +22,6 @@ public partial class TblContractTemplateAudit
 
     public string? FailureCode { get; set; }
 
-    public string? PreviousValuesJson { get; set; }
-
-    public string? NewValuesJson { get; set; }
-
     public DateTime OccurredAt { get; set; }
 
     public string? IpAddress { get; set; }
@@ -33,4 +29,7 @@ public partial class TblContractTemplateAudit
     public string? UserAgent { get; set; }
 
     public string CorrelationId { get; set; } = null!;
+
+    public ICollection<TblContractTemplateAuditValue> Values { get; set; } =
+        new List<TblContractTemplateAuditValue>();
 }

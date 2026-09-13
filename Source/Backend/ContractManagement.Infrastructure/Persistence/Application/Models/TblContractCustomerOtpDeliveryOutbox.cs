@@ -1,7 +1,8 @@
 namespace ContractManagement.Infrastructure.Persistence.Application.Models;
 
 /// <summary>
-/// Durable encrypted OTP delivery work item. Recipient and OTP are encrypted together.
+/// Durable OTP delivery work item. Every sensitive scalar uses an independent
+/// authenticated binary envelope; no plaintext or aggregate JSON is persisted.
 /// </summary>
 public sealed class TblContractCustomerOtpDeliveryOutbox
 {
@@ -9,7 +10,13 @@ public sealed class TblContractCustomerOtpDeliveryOutbox
 
     public int ChallengeId { get; set; }
 
-    public string EncryptedPayload { get; set; } = null!;
+    public byte[] PhoneCiphertext { get; set; } = null!;
+
+    public byte[] OtpCiphertext { get; set; } = null!;
+
+    public byte[]? EmailCiphertext { get; set; }
+
+    public DateTime DeliveryExpiresAt { get; set; }
 
     public string Status { get; set; } = null!;
 

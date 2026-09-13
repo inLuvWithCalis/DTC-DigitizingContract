@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
+using static ContractManagement.Tests.AuditValueTestData;
 
 namespace ContractManagement.Tests.Domains.Services.Contract;
 
@@ -90,10 +91,19 @@ public sealed class ContractServiceSlice06Tests
             pendingToken,
             "+84912345678");
         var outbox = await context.TblContractCustomerOtpDeliveryOutbox.SingleAsync();
-        var message = cryptography.DecryptDeliveryPayload(outbox.EncryptedPayload);
+        var message = new CustomerOtpDeliveryMessage(
+            cryptography.DecryptScalar(outbox.PhoneCiphertext),
+            cryptography.DecryptScalar(outbox.OtpCiphertext),
+            outbox.EmailCiphertext is null
+                ? null
+                : cryptography.DecryptScalar(outbox.EmailCiphertext),
+            outbox.DeliveryExpiresAt);
         Assert.Equal(provider == "Smtp" ? "Email" : "Sms", challengeResponse.DeliveryChannel);
         Assert.Equal(provider == "Smtp" ? "customer@example.test" : null, message.EmailAddress);
         Assert.Equal((await context.TblContractCustomerOtpChallenges.SingleAsync()).ExpiresAt, message.ExpiresAt);
+        Assert.Equal(message.ExpiresAt, outbox.DeliveryExpiresAt);
+        if (provider == "Smtp") Assert.NotNull(outbox.EmailCiphertext);
+        else Assert.Null(outbox.EmailCiphertext);
         var issue = await customerAccess.VerifyOtpAsync(
             pendingToken,
             challengeResponse.PublicChallengeId,
@@ -184,30 +194,26 @@ public sealed class ContractServiceSlice06Tests
 
         var phoneAudit = await context.TblContractAudits.SingleAsync(x =>
             x.ActionType == ContractAuditActionTypes.VerificationPhoneChanged);
-        using var previousDocument = JsonDocument.Parse(
-            phoneAudit.PreviousValuesJson!);
-        using var newDocument = JsonDocument.Parse(
-            phoneAudit.NewValuesJson!);
         Assert.Equal(
             "********5678",
-            previousDocument.RootElement
-                .GetProperty("VerificationPhoneMasked").GetString());
+            ContractValue(phoneAudit, AuditValueSide.Previous,
+                ContractAuditFieldCode.VerificationPhoneMasked).StringValue);
         Assert.Equal(
             "********4321",
-            newDocument.RootElement
-                .GetProperty("VerificationPhoneMasked").GetString());
+            ContractValue(phoneAudit, AuditValueSide.New,
+                ContractAuditFieldCode.VerificationPhoneMasked).StringValue);
         Assert.Equal(
             link.LinkId,
-            previousDocument.RootElement.GetProperty("LinkId").GetInt32());
+            ContractValue(phoneAudit, AuditValueSide.Previous,
+                ContractAuditFieldCode.LinkId).IntegerValue);
 
         var revokedAudit = await context.TblContractAudits.SingleAsync(x =>
             x.ActionType == ContractAuditActionTypes.CustomerAccessLinkRevoked
             && x.SubjectId == link.LinkId);
-        using var revokedDocument = JsonDocument.Parse(
-            revokedAudit.NewValuesJson!);
         Assert.Equal(
             "Revoked",
-            revokedDocument.RootElement.GetProperty("LinkState").GetString());
+            ContractValue(revokedAudit, AuditValueSide.New,
+                ContractAuditFieldCode.LinkState).StringValue);
         Assert.Null((await context.TblContracts.SingleAsync())
             .CurrentCustomerAccessLinkId);
     }
@@ -250,16 +256,14 @@ public sealed class ContractServiceSlice06Tests
 
         var audit = await context.TblContractAudits.SingleAsync(x =>
             x.ActionType == ContractAuditActionTypes.CustomerAccessLinkReplaced);
-        using var previousDocument = JsonDocument.Parse(
-            audit.PreviousValuesJson!);
-        using var newDocument = JsonDocument.Parse(audit.NewValuesJson!);
         Assert.Equal(
             previous.LinkId,
-            previousDocument.RootElement
-                .GetProperty("PreviousLinkId").GetInt32());
+            ContractValue(audit, AuditValueSide.Previous,
+                ContractAuditFieldCode.PreviousLinkId).IntegerValue);
         Assert.Equal(
             replacement.LinkId,
-            newDocument.RootElement.GetProperty("NewLinkId").GetInt32());
+            ContractValue(audit, AuditValueSide.New,
+                ContractAuditFieldCode.NewLinkId).IntegerValue);
     }
 
     private static DbDtctechContext CreateContext()

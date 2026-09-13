@@ -17,8 +17,6 @@ using ContractManagement.Infrastructure.Persistence.Application.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Data;
 using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using ContractManagement.API.Domains.CustomerAccess;
 using ContractManagement.Infrastructure.MultiTenancy.Interfaces;
 
@@ -566,7 +564,7 @@ namespace ContractManagement.Domains.Services.Contract
 
                     /*
                      * Bước 2: Tạo Version 1.
-                     * Version Draft chưa khóa nên SnapshotJson/Hash để null.
+                     * Version Draft chưa khóa nên SnapshotHash để null.
                      */
                     var contractVersion = new TblContractVersion
                     {
@@ -581,7 +579,6 @@ namespace ContractManagement.Domains.Services.Contract
                         TotalVat = 0m,
                         TotalAmount = 0m,
 
-                        SnapshotJson = null,
                         SnapshotHash = null,
 
                         IsLocked = false,
@@ -2165,15 +2162,10 @@ namespace ContractManagement.Domains.Services.Contract
                         contract.UpdateDate = now;
 
                         var previousAuditValuesWithRemovedEntries =
-                            previousAuditValues.ToDictionary(
-                                entry => entry.Key,
-                                entry => entry.Value,
-                                StringComparer.Ordinal);
-
-                        previousAuditValuesWithRemovedEntries["RemovedItems"] =
-                            BuildAuditSummary(removedItemAudits);
-                        previousAuditValuesWithRemovedEntries["RemovedTerms"] =
-                            BuildAuditSummary(removedTermAudits);
+                            previousAuditValues.Concat(ContractAuditValues.Create(
+                                ("RemovedItems", BuildAuditSummary(removedItemAudits)),
+                                ("RemovedTerms", BuildAuditSummary(removedTermAudits))))
+                            .ToList();
 
                         _contractAuditWriter.StageEmployeeAudits(
                         [
@@ -2615,31 +2607,31 @@ namespace ContractManagement.Domains.Services.Contract
                                     "Hồ sơ pháp lý doanh nghiệp chưa được cấu hình.");
                             var placeholderValues = await PlaceholderValues
                                 .CaptureAsync(contract, sourceVersion);
-                            var snapshotJson =
-                                SoftwareSupplyContractSnapshotFactory.Serialize(
-                                    SoftwareSupplyContractSnapshotFactory.Create(
-                                        tenantLegalProfile,
-                                        customer,
-                                        contract,
-                                        sourceVersion,
-                                        sourceItems,
-                                        sourceTerms,
-                                        sourcePaymentMilestones) with
-                                    {
-                                        PlaceholderValues = placeholderValues.Count == 0 ? null : placeholderValues,
-                                        LegalBases = sourceLegalBases.Select(item =>
-                                            new ContractLegalBasisSnapshot(
-                                                item.LegalBasisId, item.BasisCode,
-                                                item.ContentVi, item.ContentEn,
-                                                item.DisplayOrder)).ToArray()
-                                    });
+                            var snapshot = SoftwareSupplyContractSnapshotFactory.Create(
+                                tenantLegalProfile,
+                                customer,
+                                contract,
+                                sourceVersion,
+                                sourceItems,
+                                sourceTerms,
+                                sourcePaymentMilestones) with
+                            {
+                                PlaceholderValues = placeholderValues.Count == 0 ? null : placeholderValues,
+                                LegalBases = sourceLegalBases.Select(item =>
+                                    new ContractLegalBasisSnapshot(
+                                        item.LegalBasisId, item.BasisCode,
+                                        item.ContentVi, item.ContentEn,
+                                        item.DisplayOrder)).ToArray()
+                            };
 
-                            sourceVersion.SnapshotJson = snapshotJson;
                             sourceVersion.SnapshotHash =
-                                CalculateSnapshotHash(snapshotJson);
+                                SoftwareSupplyContractSnapshotFactory.CalculateHash(snapshot);
                             sourceVersion.IsLocked = true;
                             sourceVersion.LockedDate = now;
                             sourceVersion.LockedByEmployeeId = employeeId;
+                            _dbContext.TblContractVersionLegalSnapshots.Add(
+                                SoftwareSupplyContractSnapshotFactory.CreatePersistenceGraph(
+                                    snapshot, employeeId, now));
                         }
 
                         var newVersion = new TblContractVersion
@@ -2656,7 +2648,6 @@ namespace ContractManagement.Domains.Services.Contract
                                 sourceVersion.TotalDiscount,
                             TotalVat = sourceVersion.TotalVat,
                             TotalAmount = sourceVersion.TotalAmount,
-                            SnapshotJson = null,
                             SnapshotHash = null,
                             IsLocked = false,
                             LockedDate = null,
@@ -4384,7 +4375,7 @@ namespace ContractManagement.Domains.Services.Contract
         /// Khi gửi thành công:
         /// - Contract chuyển sang PendingApproval.
         /// - Version được khóa.
-        /// - SnapshotJson và SnapshotHash được tạo.
+        /// - Relational snapshot và SnapshotHash được tạo.
         /// - Approval request ở trạng thái Pending được tạo.
         /// </summary>
         public async Task<SubmitContractForApprovalResponse>
@@ -4588,11 +4579,11 @@ namespace ContractManagement.Domains.Services.Contract
                         var rendered = await artifactRenderer.RenderAsync(
                             contract.ContractId,
                             employeeId);
-                        if (rendered.SnapshotSchemaVersion !=
-                            SoftwareSupplyContractSnapshotFactory.CurrentSchemaVersion)
+                        if (rendered.Snapshot.Version.VersionId != version.VersionId
+                            || rendered.Snapshot.Contract.ContractId != contract.ContractId)
                         {
                             throw new InvalidOperationException(
-                                $"Renderer không trả snapshot SoftwareSupply schema v{SoftwareSupplyContractSnapshotFactory.CurrentSchemaVersion}.");
+                                "Renderer trả snapshot không thuộc contract/version đang gửi duyệt.");
                         }
 
                         if (version.TemplateVersionId != rendered.TemplateVersionId)
@@ -4666,17 +4657,20 @@ namespace ContractManagement.Domains.Services.Contract
                             docxMetadata,
                             pdfMetadata);
 
-                        var snapshotJson = rendered.SnapshotJson;
-                        var snapshotHash = CalculateSnapshotHash(snapshotJson);
+                        var snapshotHash =
+                            SoftwareSupplyContractSnapshotFactory.CalculateHash(
+                                rendered.Snapshot);
 
                         var now = DateTime.UtcNow;
 
                         version.TemplateVersionId = rendered.TemplateVersionId;
-                        version.SnapshotJson = snapshotJson;
                         version.SnapshotHash = snapshotHash;
                         version.IsLocked = true;
                         version.LockedDate = now;
                         version.LockedByEmployeeId = employeeId;
+                        _dbContext.TblContractVersionLegalSnapshots.Add(
+                            SoftwareSupplyContractSnapshotFactory.CreatePersistenceGraph(
+                                rendered.Snapshot, employeeId, now));
 
                         var invalidatedAccess =
                             await InvalidateNegotiationAccessAsync(
@@ -4740,8 +4734,6 @@ namespace ContractManagement.Domains.Services.Contract
                                     approvalRequest.ApprovalRequestId),
                                 ("ApprovalStatus", approvalRequest.Status),
                                 ("WorkflowId", approvalRequest.WorkflowId),
-                                ("SnapshotSchemaVersion",
-                                    rendered.SnapshotSchemaVersion),
                                 ("TemplateVersionId",
                                     rendered.TemplateVersionId),
                                 ("SnapshotHash", snapshotHash),
@@ -6490,21 +6482,5 @@ namespace ContractManagement.Domains.Services.Contract
             }
         }
 
-        private static string CalculateSnapshotHash(
-            string snapshotJson)
-        {
-            var contentBytes =
-                Encoding.UTF8.GetBytes(snapshotJson);
-
-            var hashBytes =
-                SHA256.HashData(contentBytes);
-
-            /*
-             * SHA-256 luôn tạo 64 ký tự hexadecimal.
-             */
-            return Convert
-                .ToHexString(hashBytes)
-                .ToLowerInvariant();
-        }
     }
 }

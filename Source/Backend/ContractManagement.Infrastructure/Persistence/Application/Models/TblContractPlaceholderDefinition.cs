@@ -23,7 +23,11 @@ public sealed class TblContractPlaceholderAudit
     public string PlaceholderKey { get; set; } = string.Empty;
     public int ActorEmployeeId { get; set; }
     public string ActionType { get; set; } = string.Empty;
-    public string? PreviousValuesJson { get; set; }
-    public string NewValuesJson { get; set; } = string.Empty;
+    public string? PreviousSourceFieldKey { get; set; }
+    public string? PreviousFormatString { get; set; }
+    public bool? PreviousIsActive { get; set; }
+    public string NewSourceFieldKey { get; set; } = string.Empty;
+    public string? NewFormatString { get; set; }
+    public bool NewIsActive { get; set; }
     public DateTime OccurredAt { get; set; }
 }

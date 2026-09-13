@@ -183,7 +183,6 @@ const FIELD_LABELS: Record<string, string> = {
   ApprovalStatus: "Trạng thái duyệt",
   ResolvedByEmployeeId: "Người xử lý duyệt",
   WorkflowId: "Quy trình duyệt",
-  SnapshotSchemaVersion: "Phiên bản schema snapshot",
   SnapshotHash: "Mã băm snapshot",
   DocxFileId: "Tệp DOCX trình duyệt",
   DocxHash: "Mã băm DOCX",

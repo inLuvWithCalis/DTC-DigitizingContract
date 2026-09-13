@@ -82,6 +82,26 @@ public sealed class ContractApprovalServicePhase8DTests
     }
 
     [Fact]
+    public async Task Approve_MissingRelationalSnapshot_DoesNotResolveRequest()
+    {
+        await using var context = CreateContext();
+        var storage = await SeedPendingApprovalAsync(context, includeSnapshot: false);
+        var service = CreateService(context, storage, CreateAuditWriter(context));
+
+        var error = await Assert.ThrowsAsync<BusinessRuleException>(() => service.DecideAsync(
+            ApprovalRequestId,
+            ApprovalRequestStatus.Approved,
+            DecisionRequest("Không có snapshot quan hệ."),
+            ManagerAId));
+        Assert.Equal("ApprovalArtifactMissing", error.Code);
+
+        var approval = await context.TblContractApprovalRequests
+            .AsNoTracking()
+            .SingleAsync();
+        Assert.Equal((byte)ApprovalRequestStatus.Pending, approval.Status);
+    }
+
+    [Fact]
     public async Task TwoManagers_OnlyFirstDecisionWins()
     {
         await using var context = CreateContext();
@@ -452,7 +472,9 @@ public sealed class ContractApprovalServicePhase8DTests
     }
 
     private static async Task<MemoryPrivateFileStorage>
-        SeedPendingApprovalAsync(DbDtctechContext context)
+        SeedPendingApprovalAsync(
+            DbDtctechContext context,
+            bool includeSnapshot = true)
     {
         context.TblEmployees.AddRange(
             Employee(OwnerId, "Owner", EmployeeType.Sale),
@@ -480,7 +502,6 @@ public sealed class ContractApprovalServicePhase8DTests
             ContractId = ContractId,
             VersionNo = 1,
             CurrencyCode = "VND",
-            SnapshotJson = "{\"schemaVersion\":4}",
             SnapshotHash = new string('a', 64),
             IsLocked = true,
             LockedDate = DateTime.UtcNow,
@@ -489,6 +510,15 @@ public sealed class ContractApprovalServicePhase8DTests
             CreatedDate = DateTime.UtcNow,
             RowVersion = InitialRowVersion.ToArray()
         });
+        if (includeSnapshot)
+        {
+            context.TblContractVersionLegalSnapshots.Add(
+                ContractManagement.API.Domains.Models.Contract
+                    .SoftwareSupplyContractSnapshotFactory.CreatePersistenceGraph(
+                        ContractSnapshotTestData.Create(ContractId, VersionId),
+                        OwnerId,
+                        DateTime.UtcNow));
+        }
         context.TblContractApprovalRequests.Add(
             new TblContractApprovalRequest
             {

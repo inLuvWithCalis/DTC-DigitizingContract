@@ -85,7 +85,8 @@ public sealed class CustomContractPlaceholderTests
         Assert.Equal(TemplatePlaceholderMultiplicity.ZeroOrOne, created.Multiplicity);
         Assert.Equal(8, Convert.FromBase64String(created.RowVersion!).Length);
         var audit = await db.TblContractPlaceholderAudits.SingleAsync();
-        Assert.DoesNotContain("PII", audit.NewValuesJson);
+        Assert.DoesNotContain("PII", audit.NewSourceFieldKey);
+        Assert.DoesNotContain("PII", audit.NewFormatString ?? string.Empty);
         audit.ActionType = "edited";
         await Assert.ThrowsAsync<InvalidOperationException>(() => db.SaveChangesAsync());
     }
@@ -122,6 +123,43 @@ public sealed class CustomContractPlaceholderTests
         Assert.Equal("PlaceholderConcurrencyConflict", (await Assert.ThrowsAsync<PlaceholderOperationException>(() => service.SaveAsync(created.Id, update, 1, default))).Code);
         update.PlaceholderKey = "RENAMED"; update.RowVersion = changed.RowVersion;
         Assert.Equal("PlaceholderKeyInvalid", (await Assert.ThrowsAsync<PlaceholderOperationException>(() => service.SaveAsync(created.Id, update, 1, default))).Code);
+    }
+
+    [Fact]
+    public async Task UpdateAndDeactivate_WriteTypedBeforeAfterSnapshots()
+    {
+        await using var db = Context(); await SeedActor(db);
+        var service = Service(db);
+        var created = await service.SaveAsync(null, Request(), 1, default);
+        var update = Request();
+        update.RowVersion = created.RowVersion;
+        update.SourceFieldKey = "contract.effective-date";
+        update.FormatString = "yyyy-MM-dd";
+
+        var changed = await service.SaveAsync(created.Id, update, 1, default);
+        var updatedAudit = await db.TblContractPlaceholderAudits.SingleAsync(
+            audit => audit.ActionType == "PlaceholderDefinitionUpdated");
+        Assert.Equal("customer.contact-name",
+            updatedAudit.PreviousSourceFieldKey);
+        Assert.Equal("contract.effective-date", updatedAudit.NewSourceFieldKey);
+        Assert.Null(updatedAudit.PreviousFormatString);
+        Assert.Equal("yyyy-MM-dd", updatedAudit.NewFormatString);
+        Assert.True(updatedAudit.PreviousIsActive);
+        Assert.True(updatedAudit.NewIsActive);
+
+        await service.SetActiveAsync(
+            changed.Id!.Value,
+            false,
+            changed.RowVersion!,
+            1,
+            default);
+        var deactivatedAudit = await db.TblContractPlaceholderAudits.SingleAsync(
+            audit => audit.ActionType == "PlaceholderDefinitionDeactivated");
+        Assert.Equal("contract.effective-date",
+            deactivatedAudit.PreviousSourceFieldKey);
+        Assert.Equal("contract.effective-date", deactivatedAudit.NewSourceFieldKey);
+        Assert.True(deactivatedAudit.PreviousIsActive);
+        Assert.False(deactivatedAudit.NewIsActive);
     }
 
     [Fact]

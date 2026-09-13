@@ -57,7 +57,10 @@ public sealed class ContractServicePhase8CSubmissionTests
         Assert.Equal((byte)ContractStatus.PendingApproval, contract.Status);
         Assert.Null(contract.CurrentCustomerAccessLinkId);
         Assert.True(version.IsLocked);
-        Assert.Contains("\"schemaVersion\":6", version.SnapshotJson);
+        var legalSnapshot = await context.TblContractVersionLegalSnapshots
+            .Include(snapshot => snapshot.Parties)
+            .SingleAsync(snapshot => snapshot.VersionId == VersionId);
+        Assert.Equal(2, legalSnapshot.Parties.Count);
         Assert.Equal(TemplateVersionId, version.TemplateVersionId);
         Assert.Equal(2, artifacts.Count);
         Assert.All(artifacts, artifact =>
@@ -595,7 +598,7 @@ public sealed class ContractServicePhase8CSubmissionTests
         var version = await context.TblContractVersions.AsNoTracking().SingleAsync();
         Assert.Equal((byte)ContractStatus.Negotiating, contract.Status);
         Assert.False(version.IsLocked);
-        Assert.Null(version.SnapshotJson);
+        Assert.Empty(context.TblContractVersionLegalSnapshots);
         Assert.Empty(context.TblContractApprovalRequests);
         Assert.Equal(expectedFileCount, await context.TblFileStorages.CountAsync());
     }
@@ -611,8 +614,8 @@ public sealed class ContractServicePhase8CSubmissionTests
         {
             CallCount++;
             return Task.FromResult(new ContractSubmissionArtifactRenderResult(
-                "{\"schemaVersion\":6,\"contract\":{\"contractId\":8802}}",
-                6,
+                ContractSnapshotTestData.Create(ContractId, VersionId,
+                    TemplateVersionId),
                 TemplateVersionId,
                 [0x50, 0x4B, 0x03, 0x04, 0x01],
                 "HD-8C-001-submitted.docx",

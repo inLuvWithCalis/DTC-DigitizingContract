@@ -87,12 +87,18 @@ public sealed class SoftwareSupplyContractSnapshotTests
             version,
             items,
             terms);
-        var json = SoftwareSupplyContractSnapshotFactory.Serialize(snapshot);
+        var hash = SoftwareSupplyContractSnapshotFactory.CalculateHash(snapshot);
+        var persisted = SoftwareSupplyContractSnapshotFactory.CreatePersistenceGraph(
+            snapshot, 10, DateTime.UtcNow);
 
-        Assert.Equal(6, snapshot.SchemaVersion);
+        tenant.LegalEntityName = "Tenant master đã đổi";
+        customer.CustomerRepresentativeName = "Customer master đã đổi";
+        contract.ContractName = "Contract master đã đổi";
+
         Assert.Equal(contract.CreatedDate, snapshot.Contract.CreatedDate);
         Assert.Equal("DTC", snapshot.Tenant.LegalEntityName);
         Assert.Equal("Trần B", snapshot.Customer.RepresentativeName);
+        Assert.Equal("Cung cấp phần mềm", snapshot.Contract.ContractName);
         Assert.Equal("02367300001", snapshot.Customer.PhoneNumber);
         Assert.Equal("02367300002", snapshot.Customer.FaxNumber);
         Assert.Equal("012345678901", snapshot.Customer.BankAccountNumber);
@@ -103,7 +109,24 @@ public sealed class SoftwareSupplyContractSnapshotTests
         Assert.Equal("Ngân hàng DTC", snapshot.Tenant.BankName);
         Assert.Single(snapshot.Items);
         Assert.Single(snapshot.Terms);
-        Assert.Contains("\"totalAmount\":1100000", json);
+        Assert.Equal(64, hash.Length);
+        Assert.Equal(hash, SoftwareSupplyContractSnapshotFactory.CalculateHash(snapshot));
+        Assert.Equal(2, persisted.Parties.Count);
+        Assert.Equal(1_100_000, persisted.TotalAmount);
+    }
+
+    [Fact]
+    public void CalculateHash_ChangesWhenOneScalarChanges()
+    {
+        var snapshot = ContractSnapshotTestData.Create(1, 2);
+        var changed = snapshot with
+        {
+            Contract = snapshot.Contract with { ContractName = "Tên đã đổi" }
+        };
+
+        Assert.NotEqual(
+            SoftwareSupplyContractSnapshotFactory.CalculateHash(snapshot),
+            SoftwareSupplyContractSnapshotFactory.CalculateHash(changed));
     }
 
 }

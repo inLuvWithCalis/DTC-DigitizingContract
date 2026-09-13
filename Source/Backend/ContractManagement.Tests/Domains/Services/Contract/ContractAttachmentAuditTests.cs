@@ -11,7 +11,7 @@ using ContractManagement.Infrastructure.Persistence.Application.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using System.Text.Json;
+using static ContractManagement.Tests.AuditValueTestData;
 
 namespace ContractManagement.Tests.Domains.Services.Contract;
 
@@ -55,16 +55,14 @@ public sealed class ContractAttachmentAuditTests
             ContractAuditSubjectTypes.Contract,
             uploadedAudit.SubjectType);
         Assert.Equal(ContractId, uploadedAudit.SubjectId);
-        using (var document = JsonDocument.Parse(
-                   uploadedAudit.NewValuesJson!))
-        {
-            Assert.Equal(
-                "signed-contract.pdf",
-                document.RootElement.GetProperty("FileName").GetString());
-            Assert.Equal(
-                6,
-                document.RootElement.GetProperty("DocumentType").GetByte());
-        }
+        Assert.Equal(
+            "signed-contract.pdf",
+            ContractValue(uploadedAudit, AuditValueSide.New,
+                ContractAuditFieldCode.FileName).StringValue);
+        Assert.Equal(
+            6,
+            ContractValue(uploadedAudit, AuditValueSide.New,
+                ContractAuditFieldCode.DocumentType).IntegerValue);
 
         await service.DeleteAsync(
             ContractId,
@@ -75,11 +73,10 @@ public sealed class ContractAttachmentAuditTests
             x.ActionType ==
                 ContractAuditActionTypes.ContractAttachmentDeleted);
         Assert.Equal(ContractId, deletedAudit.SubjectId);
-        using var deletedDocument = JsonDocument.Parse(
-            deletedAudit.PreviousValuesJson!);
         Assert.Equal(
             "signed-contract.pdf",
-            deletedDocument.RootElement.GetProperty("FileName").GetString());
+            ContractValue(deletedAudit, AuditValueSide.Previous,
+                ContractAuditFieldCode.FileName).StringValue);
         Assert.Empty(context.TblContractAttachments);
     }
 

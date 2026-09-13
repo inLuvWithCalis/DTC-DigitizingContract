@@ -53,9 +53,10 @@ public sealed class ContractDocumentPreviewServiceTests
         (await context.TblContracts.SingleAsync()).Status = (byte)ContractStatus.Negotiating;
         await context.SaveChangesAsync();
         var submission = await service.RenderAsync(ContractId, OwnerId);
-        Assert.Contains("Frozen contact", submission.SnapshotJson);
-        Assert.DoesNotContain("Changed later", submission.SnapshotJson);
-        Assert.Contains("placeholderValues", submission.SnapshotJson);
+        Assert.Equal("Frozen contact",
+            submission.Snapshot.PlaceholderValues!["CUSTOM_CONTACT"]);
+        Assert.DoesNotContain("Changed later",
+            submission.Snapshot.PlaceholderValues.Values);
         using var submitted = WordprocessingDocument.Open(new MemoryStream(submission.DocxContent), false);
         Assert.Contains("Frozen contact", submitted.MainDocumentPart!.Document!.InnerText);
         Assert.DoesNotContain("{{", submitted.MainDocumentPart!.Document!.InnerText);
@@ -153,7 +154,7 @@ public sealed class ContractDocumentPreviewServiceTests
     }
 
     [Fact]
-    public async Task Submission_RendersDocxAndPdfFromTheSameSchemaV6Snapshot()
+    public async Task Submission_RendersDocxAndPdfFromTheSameTypedSnapshot()
     {
         await using var context = CreateContext();
         var source = CreateSourceDocument();
@@ -163,11 +164,10 @@ public sealed class ContractDocumentPreviewServiceTests
 
         var result = await service.RenderAsync(ContractId, OwnerId);
 
-        Assert.Equal(6, result.SnapshotSchemaVersion);
         Assert.Equal(TemplateVersionId, result.TemplateVersionId);
-        Assert.Contains("\"schemaVersion\":6", result.SnapshotJson);
-        Assert.Contains("\"contractCode\":\"HD-8B-001\"", result.SnapshotJson);
-        Assert.Contains("\"basisCode\":\"COMMERCIAL_LAW\"", result.SnapshotJson);
+        Assert.Equal("HD-8B-001", result.Snapshot.Contract.ContractCode);
+        Assert.Contains(result.Snapshot.LegalBases!,
+            basis => basis.BasisCode == "COMMERCIAL_LAW");
         Assert.Equal("HD-8B-001-submitted.docx", result.DocxFileName);
         Assert.Equal("HD-8B-001-submitted.pdf", result.PdfFileName);
         Assert.Equal(result.DocxContent, pdfRenderer.InputDocx);

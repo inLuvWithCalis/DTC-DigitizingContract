@@ -67,7 +67,11 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
             records,
             tenantId,
             cancellationToken);
-        var items = records.Select(audit => Map(audit, lookup)).ToList();
+        var values = await LoadAuditValuesAsync(records, cancellationToken);
+        var items = records.Select(audit => Map(
+            audit,
+            lookup,
+            values.GetValueOrDefault(audit.ContractAuditId))).ToList();
         var last = records.LastOrDefault();
 
         return new ContractAuditCursorPageResponse
@@ -106,7 +110,11 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
             records,
             tenantId,
             cancellationToken);
-        var rows = records.Select(audit => Map(audit, lookup)).ToList();
+        var values = await LoadAuditValuesAsync(records, cancellationToken);
+        var rows = records.Select(audit => Map(
+            audit,
+            lookup,
+            values.GetValueOrDefault(audit.ContractAuditId))).ToList();
         var content = Encoding.UTF8.GetBytes("\uFEFF" + BuildCsv(rows));
         var fileName = $"contract-audits-{DateTime.UtcNow:yyyyMMdd-HHmmss}.csv";
         return new ContractAuditExportFile(content, fileName);
@@ -376,7 +384,8 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
 
     private static ContractAuditResponse Map(
         TblContractAudit audit,
-        AuditLookupContext lookup)
+        AuditLookupContext lookup,
+        AuditValueLookup? values)
     {
         lookup.Contracts.TryGetValue(audit.ContractId, out var contract);
         CustomerActorLookup? customerActor = null;
@@ -428,8 +437,14 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
             ActionType = audit.ActionType,
             Result = audit.Result,
             FailureCode = audit.FailureCode,
-            PreviousValues = ParseValues(audit.PreviousValuesJson),
-            NewValues = ParseValues(audit.NewValuesJson),
+            PreviousValues = AddHeaderValues(
+                values?.Previous,
+                audit.PreviousContractStatus,
+                audit.PreviousResponsibleEmployeeId),
+            NewValues = AddHeaderValues(
+                values?.New,
+                audit.NewContractStatus,
+                audit.NewResponsibleEmployeeId),
             Reason = audit.Reason,
             OccurredAt = audit.OccurredAt,
             IpAddress = audit.IpAddress,
@@ -540,14 +555,95 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
         }
     }
 
-    private static Dictionary<string, JsonElement>? ParseValues(string? json)
+    private async Task<Dictionary<int, AuditValueLookup>> LoadAuditValuesAsync(
+        IReadOnlyCollection<TblContractAudit> audits,
+        CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(json))
+        var auditIds = audits.Select(audit => audit.ContractAuditId).ToList();
+        if (auditIds.Count == 0)
+        {
+            return [];
+        }
+
+        var rows = await _dbContext.TblContractAuditValues.AsNoTracking()
+            .Where(value => auditIds.Contains(value.ContractAuditId))
+            .OrderBy(value => value.ContractAuditId)
+            .ThenBy(value => value.ValueSide)
+            .ThenBy(value => value.FieldCode)
+            .ToListAsync(cancellationToken);
+
+        return rows.GroupBy(value => value.ContractAuditId)
+            .ToDictionary(
+                group => group.Key,
+                group => new AuditValueLookup(
+                    BuildValues(group, AuditValueSide.Previous),
+                    BuildValues(group, AuditValueSide.New)));
+    }
+
+    private static Dictionary<string, object?>? BuildValues(
+        IEnumerable<TblContractAuditValue> values,
+        AuditValueSide side)
+    {
+        var result = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var value in values.Where(value => value.ValueSide == side))
+        {
+            if (!Enum.IsDefined(typeof(ContractAuditFieldCode), value.FieldCode))
+            {
+                throw new InvalidOperationException(
+                    "Contract audit contains an unknown field code.");
+            }
+
+            var field = (ContractAuditFieldCode)value.FieldCode;
+            result.Add(field.ToString(), ReadValue(value));
+        }
+
+        return result.Count == 0 ? null : result;
+    }
+
+    private static Dictionary<string, object?>? AddHeaderValues(
+        Dictionary<string, object?>? values,
+        byte? contractStatus,
+        int? responsibleEmployeeId)
+    {
+        if (!contractStatus.HasValue && !responsibleEmployeeId.HasValue)
+        {
+            return values;
+        }
+
+        var result = values is null
+            ? new Dictionary<string, object?>(StringComparer.Ordinal)
+            : new Dictionary<string, object?>(values, StringComparer.Ordinal);
+        if (contractStatus.HasValue)
+        {
+            result.Add(nameof(ContractAuditFieldCode.Status),
+                contractStatus.Value);
+        }
+        if (responsibleEmployeeId.HasValue)
+        {
+            result.Add(nameof(ContractAuditFieldCode.ResponsibleEmployeeId),
+                responsibleEmployeeId.Value);
+        }
+
+        return result;
+    }
+
+    private static object? ReadValue(TblContractAuditValue value)
+    {
+        if (value.IsNull)
         {
             return null;
         }
 
-        return JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json);
+        return value.ValueKind switch
+        {
+            AuditScalarValueKind.Integer => value.IntegerValue,
+            AuditScalarValueKind.Decimal => value.DecimalValue,
+            AuditScalarValueKind.String => value.StringValue,
+            AuditScalarValueKind.DateTime => value.DateTimeValue,
+            AuditScalarValueKind.Boolean => value.BooleanValue,
+            _ => throw new InvalidOperationException(
+                "Contract audit contains an invalid value kind.")
+        };
     }
 
     private static string? FirstNonEmpty(params string?[] values) =>
@@ -700,6 +796,10 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
         string? DisplayName,
         string? MaskedPhone,
         string? PhoneSource);
+
+    private sealed record AuditValueLookup(
+        Dictionary<string, object?>? Previous,
+        Dictionary<string, object?>? New);
 
     private sealed record ContractLookup(
         string? ContractCode,

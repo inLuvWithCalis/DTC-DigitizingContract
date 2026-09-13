@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using ContractManagement.API.Common.Enums;
 using ContractManagement.API.Domains.DTOs.Requests.ContractTemplate;
@@ -48,7 +47,7 @@ public sealed class ContractPlaceholderDefinitionService(
         {
             PlaceholderKey = key, CreatedEmployeeId = actor, CreatedDate = DateTime.UtcNow
         };
-        var previous = id.HasValue ? AuditValues(entity) : null;
+        var previous = id.HasValue ? AuditSnapshot(entity) : null;
         if (id.HasValue)
         {
             CheckRowVersion(entity, request.RowVersion);
@@ -77,7 +76,7 @@ public sealed class ContractPlaceholderDefinitionService(
         var entity = await FindAsync(id, ct);
         CheckRowVersion(entity, rowVersion);
         registry.GetRequired(entity.SourceFieldKey);
-        var previous = AuditValues(entity);
+        var previous = AuditSnapshot(entity);
         entity.IsActive = active;
         entity.UpdatedEmployeeId = actor;
         entity.UpdatedDate = DateTime.UtcNow;
@@ -111,7 +110,7 @@ public sealed class ContractPlaceholderDefinitionService(
             throw new PlaceholderOperationException("PlaceholderInUse",
                 "Placeholder đã được dùng trong template và không thể xóa. Hãy ngừng sử dụng để giữ lịch sử.");
 
-        var previous = AuditValues(entity);
+        var previous = AuditSnapshot(entity);
         StageAudit(entity, actor, "PlaceholderDefinitionDeleted", previous);
         db.TblContractPlaceholderDefinitions.Remove(entity);
         await SaveChangesAsync(ct);
@@ -134,15 +133,33 @@ public sealed class ContractPlaceholderDefinitionService(
         db.Entry(entity).Property(x => x.RowVersion).OriginalValue = expected;
     }
 
-    private static string AuditValues(TblContractPlaceholderDefinition entity) => JsonSerializer.Serialize(new
-    { entity.SourceFieldKey, entity.FormatString, entity.IsActive }); // Excludes labels/defaults and resolved PII.
+    private static PlaceholderAuditSnapshot AuditSnapshot(
+        TblContractPlaceholderDefinition entity) => new(
+        entity.SourceFieldKey,
+        entity.FormatString,
+        entity.IsActive); // Excludes labels/defaults and resolved PII.
 
-    private void StageAudit(TblContractPlaceholderDefinition entity, int actor, string action, string? previous) =>
+    private void StageAudit(
+        TblContractPlaceholderDefinition entity,
+        int actor,
+        string action,
+        PlaceholderAuditSnapshot? previous) =>
         db.TblContractPlaceholderAudits.Add(new()
         {
             PlaceholderKey = entity.PlaceholderKey, ActorEmployeeId = actor, ActionType = action,
-            PreviousValuesJson = previous, NewValuesJson = AuditValues(entity), OccurredAt = DateTime.UtcNow
+            PreviousSourceFieldKey = previous?.SourceFieldKey,
+            PreviousFormatString = previous?.FormatString,
+            PreviousIsActive = previous?.IsActive,
+            NewSourceFieldKey = entity.SourceFieldKey,
+            NewFormatString = entity.FormatString,
+            NewIsActive = entity.IsActive,
+            OccurredAt = DateTime.UtcNow
         });
+
+    private sealed record PlaceholderAuditSnapshot(
+        string SourceFieldKey,
+        string? FormatString,
+        bool IsActive);
 
     private async Task SaveChangesAsync(CancellationToken ct)
     {

@@ -1,6 +1,5 @@
 using ContractManagement.Infrastructure.Persistence.Application.Models;
 using Microsoft.EntityFrameworkCore;
-using System.Text.Json;
 
 namespace ContractManagement.Infrastructure.Persistence.Application;
 
@@ -17,9 +16,11 @@ public partial class DbDtctechContext
     {
         RevokeCustomerAccessForCancelledContracts();
         PopulateContractAuditSnapshots();
+        ValidateLockedVersionChanges();
         AssignSyntheticRowVersionsForInMemory();
         ValidateContractAuditEntries();
         ValidateContractTemplateAuditEntries();
+        ValidateContractPlaceholderAuditEntries();
         ValidateAuthorizationAuditEntries();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
@@ -38,9 +39,11 @@ public partial class DbDtctechContext
     {
         RevokeCustomerAccessForCancelledContracts();
         await PopulateContractAuditSnapshotsAsync(cancellationToken);
+        await ValidateLockedVersionChangesAsync(cancellationToken);
         AssignSyntheticRowVersionsForInMemory();
         ValidateContractAuditEntries();
         ValidateContractTemplateAuditEntries();
+        ValidateContractPlaceholderAuditEntries();
         ValidateAuthorizationAuditEntries();
         return await base.SaveChangesAsync(
             acceptAllChangesOnSuccess,
@@ -313,8 +316,6 @@ public partial class DbDtctechContext
 
     private void AssignSyntheticRowVersionsForInMemory()
     {
-        if (ChangeTracker.Entries<TblContractPlaceholderAudit>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
-            throw new InvalidOperationException("Placeholder audit chỉ được thêm mới.");
         if (Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory")
         {
             return;
@@ -412,11 +413,33 @@ public partial class DbDtctechContext
                 "Contract audit là dữ liệu append-only và không được sửa hoặc xóa.");
         }
 
+        if (ChangeTracker.Entries<TblContractAuditValue>().Any(entry =>
+                entry.State is EntityState.Modified or EntityState.Deleted))
+        {
+            throw new InvalidOperationException(
+                "Contract audit value là dữ liệu append-only và không được sửa hoặc xóa.");
+        }
+
         foreach (var entry in ChangeTracker
                      .Entries<TblContractAudit>()
                      .Where(entry => entry.State == EntityState.Added))
         {
             ValidateNewContractAudit(entry.Entity);
+        }
+
+        foreach (var entry in ChangeTracker.Entries<TblContractAuditValue>()
+                     .Where(entry => entry.State == EntityState.Added))
+        {
+            ValidateAuditScalarValue(
+                entry.Entity.ValueSide,
+                entry.Entity.FieldCode,
+                entry.Entity.ValueKind,
+                entry.Entity.IsNull,
+                entry.Entity.IntegerValue,
+                entry.Entity.DecimalValue,
+                entry.Entity.StringValue,
+                entry.Entity.DateTimeValue,
+                entry.Entity.BooleanValue);
         }
     }
 
@@ -427,6 +450,44 @@ public partial class DbDtctechContext
         {
             throw new InvalidOperationException(
                 "Authorization audit is append-only and cannot be updated or deleted.");
+        }
+    }
+
+    private void ValidateContractPlaceholderAuditEntries()
+    {
+        if (ChangeTracker.Entries<TblContractPlaceholderAudit>().Any(entry =>
+                entry.State is EntityState.Modified or EntityState.Deleted))
+        {
+            throw new InvalidOperationException(
+                "Placeholder audit chỉ được thêm mới.");
+        }
+
+        foreach (var audit in ChangeTracker
+                     .Entries<TblContractPlaceholderAudit>()
+                     .Where(entry => entry.State == EntityState.Added)
+                     .Select(entry => entry.Entity))
+        {
+            var isCreate = audit.ActionType == "PlaceholderDefinitionCreated";
+            var isAllowedAction = audit.ActionType is
+                "PlaceholderDefinitionCreated"
+                or "PlaceholderDefinitionUpdated"
+                or "PlaceholderDefinitionActivated"
+                or "PlaceholderDefinitionDeactivated"
+                or "PlaceholderDefinitionDeleted";
+            if (audit.ActorEmployeeId <= 0
+                || string.IsNullOrWhiteSpace(audit.PlaceholderKey)
+                || !isAllowedAction
+                || string.IsNullOrWhiteSpace(audit.NewSourceFieldKey)
+                || audit.OccurredAt.Kind != DateTimeKind.Utc
+                || (isCreate && (audit.PreviousSourceFieldKey is not null
+                    || audit.PreviousFormatString is not null
+                    || audit.PreviousIsActive.HasValue))
+                || (!isCreate
+                    && string.IsNullOrWhiteSpace(audit.PreviousSourceFieldKey)))
+            {
+                throw new InvalidOperationException(
+                    "Placeholder audit typed snapshot không hợp lệ.");
+            }
         }
     }
 
@@ -525,9 +586,6 @@ public partial class DbDtctechContext
                 "Contract audit phải có action, result và correlation.");
         }
 
-        ValidateJsonObject(audit.PreviousValuesJson, "PreviousValuesJson");
-        ValidateJsonObject(audit.NewValuesJson, "NewValuesJson");
-
         if (audit.FailureCode is not null
             && string.IsNullOrWhiteSpace(audit.FailureCode))
         {
@@ -542,27 +600,49 @@ public partial class DbDtctechContext
         }
     }
 
-    private static void ValidateJsonObject(string? json, string fieldName)
+    private static void ValidateAuditScalarValue(
+        AuditValueSide side,
+        short fieldCode,
+        AuditScalarValueKind kind,
+        bool isNull,
+        long? integerValue,
+        decimal? decimalValue,
+        string? stringValue,
+        DateTime? dateTimeValue,
+        bool? booleanValue)
     {
-        if (json is null)
+        if (!Enum.IsDefined(side) || fieldCode <= 0 || !Enum.IsDefined(kind))
         {
+            throw new InvalidOperationException("Audit scalar metadata không hợp lệ.");
+        }
+
+        var populated = (integerValue.HasValue ? 1 : 0)
+            + (decimalValue.HasValue ? 1 : 0)
+            + (stringValue is not null ? 1 : 0)
+            + (dateTimeValue.HasValue ? 1 : 0)
+            + (booleanValue.HasValue ? 1 : 0);
+        if (isNull)
+        {
+            if (populated != 0)
+            {
+                throw new InvalidOperationException(
+                    "Audit scalar null không được chứa typed value.");
+            }
             return;
         }
 
-        try
+        var correctKind = kind switch
         {
-            using var document = JsonDocument.Parse(json);
-            if (document.RootElement.ValueKind != JsonValueKind.Object)
-            {
-                throw new InvalidOperationException(
-                    $"Contract audit {fieldName} must be a JSON object.");
-            }
-        }
-        catch (JsonException exception)
+            AuditScalarValueKind.Integer => integerValue.HasValue,
+            AuditScalarValueKind.Decimal => decimalValue.HasValue,
+            AuditScalarValueKind.String => stringValue is { Length: <= 500 },
+            AuditScalarValueKind.DateTime => dateTimeValue.HasValue,
+            AuditScalarValueKind.Boolean => booleanValue.HasValue,
+            _ => false
+        };
+        if (populated != 1 || !correctKind)
         {
-            throw new InvalidOperationException(
-                $"Contract audit {fieldName} is invalid JSON.",
-                exception);
+            throw new InvalidOperationException("Audit scalar value không hợp lệ.");
         }
     }
 }

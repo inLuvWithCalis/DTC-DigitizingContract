@@ -227,7 +227,6 @@ public sealed class Slice04ResourceAuthorizationTests
             ContractId = ContractId,
             VersionNo = 1,
             CurrencyCode = "VND",
-            SnapshotJson = "{\"schemaVersion\":4}",
             SnapshotHash = new string('a', 64),
             IsLocked = true,
             CreatedEmployeeId = ResponsibleEmployeeId,

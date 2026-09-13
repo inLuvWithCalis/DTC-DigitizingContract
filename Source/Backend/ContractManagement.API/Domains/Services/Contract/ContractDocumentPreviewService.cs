@@ -14,7 +14,7 @@ using Microsoft.EntityFrameworkCore;
 namespace ContractManagement.Domains.Services.Contract;
 
 /// <summary>
-/// Renders SoftwareSupply DOCX/PDF from one schema-v5 snapshot. Preview results
+/// Renders SoftwareSupply DOCX/PDF from one typed snapshot. Preview results
 /// remain ephemeral; the submit pipeline persists the separate submission result
 /// only after both formats have been generated successfully.
 /// </summary>
@@ -102,8 +102,7 @@ public sealed class ContractDocumentPreviewService :
             cancellationToken);
 
         return new ContractSubmissionArtifactRenderResult(
-            SoftwareSupplyContractSnapshotFactory.Serialize(rendered.Snapshot),
-            rendered.Snapshot.SchemaVersion,
+            rendered.Snapshot,
             rendered.TemplateVersionId,
             rendered.Content,
             $"{rendered.SafeContractCode}-submitted.docx",
@@ -255,7 +254,7 @@ public sealed class ContractDocumentPreviewService :
             ScalarValues = scalars,
             Definitions = definitions
         };
-        // Included in the canonical submitted JSON/hash alongside the generated artifact.
+        // Included in the canonical relational aggregate/hash alongside the artifact.
         snapshot = snapshot with { PlaceholderValues = scalars };
         var source = await ReadTemplateSourceAsync(
             template.Version,

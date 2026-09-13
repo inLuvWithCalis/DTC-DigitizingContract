@@ -2599,41 +2599,41 @@ public sealed class ContractTemplateService : IContractTemplateService
         }
     }
 
-    private static IReadOnlyDictionary<string, object?> BuildPreviewAuditValues(
+    private static IReadOnlyCollection<ContractTemplateAuditValueInput> BuildPreviewAuditValues(
         int? previewFileId,
         long? sizeBytes,
         string status)
     {
-        var values = new Dictionary<string, object?>(StringComparer.Ordinal)
+        var values = new List<(string Key, object? Value)>
         {
-            ["PreviewFileId"] = previewFileId,
-            ["PreviewStatus"] = status
+            ("PreviewFileId", previewFileId),
+            ("PreviewStatus", status)
         };
         if (sizeBytes.HasValue)
         {
-            values["PreviewSizeBytes"] = Math.Max(sizeBytes.Value, 0);
+            values.Add(("PreviewSizeBytes", Math.Max(sizeBytes.Value, 0)));
         }
 
-        return values;
+        return ContractTemplateAuditValues.Create(values.ToArray());
     }
 
-    private static IReadOnlyDictionary<string, object?> BuildPublishAuditValues(
+    private static IReadOnlyCollection<ContractTemplateAuditValueInput> BuildPublishAuditValues(
         int? pdfFileId,
         long? sizeBytes,
         string status)
     {
-        var values = new Dictionary<string, object?>(StringComparer.Ordinal)
+        var values = new List<(string Key, object? Value)>
         {
-            ["PublishedPreviewPdfFileId"] = pdfFileId,
-            ["PublishStatus"] = status
+            ("PublishedPreviewPdfFileId", pdfFileId),
+            ("PublishStatus", status)
         };
         if (sizeBytes.HasValue)
         {
-            values["PublishedPreviewPdfSizeBytes"] =
-                Math.Max(sizeBytes.Value, 0);
+            values.Add(("PublishedPreviewPdfSizeBytes",
+                Math.Max(sizeBytes.Value, 0)));
         }
 
-        return values;
+        return ContractTemplateAuditValues.Create(values.ToArray());
     }
 
     private async Task<byte[]> DownloadAndVerifySourceDocumentAsync(
@@ -2994,34 +2994,35 @@ public sealed class ContractTemplateService : IContractTemplateService
         }
     }
 
-    private static IReadOnlyDictionary<string, object?> BuildAuditValues(
+    private static IReadOnlyCollection<ContractTemplateAuditValueInput> BuildAuditValues(
         int? documentFileId,
         string? extension,
         long? sizeBytes,
         string validationStatus,
         int? recognizedPlaceholderCount)
     {
-        var values = new Dictionary<string, object?>(StringComparer.Ordinal)
+        var values = new List<(string Key, object? Value)>
         {
-            ["DocumentFileId"] = documentFileId,
-            ["ValidationStatus"] = validationStatus
+            ("DocumentFileId", documentFileId),
+            ("ValidationStatus", validationStatus)
         };
         if (extension is not null)
         {
-            values["DocumentExtension"] = GetSafeAuditExtension(extension);
+            values.Add(("DocumentExtension", GetSafeAuditExtension(extension)));
         }
 
         if (sizeBytes.HasValue)
         {
-            values["DocumentSizeBytes"] = Math.Max(sizeBytes.Value, 0);
+            values.Add(("DocumentSizeBytes", Math.Max(sizeBytes.Value, 0)));
         }
 
         if (recognizedPlaceholderCount.HasValue)
         {
-            values["RecognizedPlaceholderCount"] = recognizedPlaceholderCount.Value;
+            values.Add(("RecognizedPlaceholderCount",
+                recognizedPlaceholderCount.Value));
         }
 
-        return values;
+        return ContractTemplateAuditValues.Create(values.ToArray());
     }
 
     private static string GetSafeAuditExtension(string? fileNameOrExtension)

@@ -383,9 +383,11 @@ public sealed class ContractServiceSlice04Tests
         Assert.True(versions[0].IsLocked);
         Assert.False(string.IsNullOrWhiteSpace(
             versions[0].SnapshotHash));
-        Assert.Contains(
-            "\"schemaVersion\":6",
-            versions[0].SnapshotJson);
+        var relationalSnapshot = await context.TblContractVersionLegalSnapshots
+            .Include(snapshot => snapshot.Parties)
+            .Include(snapshot => snapshot.PaymentMilestones)
+            .SingleAsync(snapshot => snapshot.VersionId == versions[0].VersionId);
+        Assert.Equal(2, relationalSnapshot.Parties.Count);
         Assert.False(versions[1].IsLocked);
         Assert.Equal(versions[0].VersionId,
             versions[1].SourceVersionId);
@@ -402,7 +404,7 @@ public sealed class ContractServiceSlice04Tests
             copiedMilestone.PaymentStatus);
         Assert.Null(copiedMilestone.PaidAt);
         Assert.Null(copiedMilestone.PaidByEmployeeId);
-        Assert.Contains("\"legalBases\"", versions[0].SnapshotJson);
+        Assert.Single(relationalSnapshot.PaymentMilestones);
         Assert.Equal(100m, versions[1].TotalAmount);
     }
 
@@ -507,8 +509,16 @@ public sealed class ContractServiceSlice04Tests
         source.IsLocked = true;
         source.LockedDate = DateTime.UtcNow.AddMinutes(-5);
         source.LockedByEmployeeId = EmployeeId;
-        source.SnapshotJson = "{\"schemaVersion\":4}";
         source.SnapshotHash = new string('a', 64);
+        context.TblContractVersionLegalSnapshots.Add(
+            ContractManagement.API.Domains.Models.Contract
+                .SoftwareSupplyContractSnapshotFactory.CreatePersistenceGraph(
+                    ContractSnapshotTestData.Create(
+                        contract.ContractId,
+                        source.VersionId,
+                        source.TemplateVersionId),
+                    EmployeeId,
+                    DateTime.UtcNow));
         context.TblContractApprovalRequests.Add(
             new TblContractApprovalRequest
             {
@@ -538,7 +548,7 @@ public sealed class ContractServiceSlice04Tests
             .AsNoTracking()
             .SingleAsync();
         Assert.True(persistedSource.IsLocked);
-        Assert.Equal("{\"schemaVersion\":4}", persistedSource.SnapshotJson);
+        Assert.NotNull(persistedSource.SnapshotHash);
         Assert.False(response.CurrentVersion.IsLocked);
         Assert.Equal(ContractStatus.Negotiating, response.Status);
         Assert.Equal((byte)ContractStatus.Negotiating, persistedContract.Status);

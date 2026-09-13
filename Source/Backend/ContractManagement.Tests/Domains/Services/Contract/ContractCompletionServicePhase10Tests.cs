@@ -4,6 +4,7 @@ using ContractManagement.API.Common.Enums;
 using ContractManagement.API.Common.Exceptions;
 using ContractManagement.API.Common.Security;
 using ContractManagement.API.Domains.DTOs.Requests.Contract;
+using ContractManagement.API.Domains.Models.Contract;
 using ContractManagement.Domains.Interfaces.Contract;
 using ContractManagement.Domains.Interfaces.File;
 using ContractManagement.Domains.Services.Contract;
@@ -398,7 +399,11 @@ public sealed class ContractCompletionServicePhase10Tests
         var audit = Assert.Single(audits);
         Assert.Equal(AccountantId, audit.ActorEmployeeId);
         Assert.Equal(milestone.PaymentMilestoneId, audit.SubjectId);
-        Assert.Contains("PaymentStatus", audit.NewValuesJson);
+        Assert.True(await context.TblContractAuditValues.AnyAsync(value =>
+            value.ContractAuditId == audit.ContractAuditId
+            && value.ValueSide == AuditValueSide.New
+            && value.FieldCode ==
+                (short)ContractAuditFieldCode.PaymentStatus));
     }
 
     [Fact]
@@ -821,20 +826,31 @@ public sealed class ContractCompletionServicePhase10Tests
             CreatedDate = DateTime.UtcNow,
             RowVersion = InitialRowVersion.ToArray()
         });
-        context.TblContractVersions.Add(new TblContractVersion
+        var version = new TblContractVersion
         {
             VersionId = VersionId,
             ContractId = ContractId,
             VersionNo = 1,
             CurrencyCode = "VND",
             TotalAmount = ContractTotal,
-            SnapshotJson = "{\"schemaVersion\":4}",
-            SnapshotHash = new string('a', 64),
-            IsLocked = true,
-            LockedDate = DateTime.UtcNow.AddDays(-1),
-            LockedByEmployeeId = OwnerId,
+            IsLocked = false,
             CreatedEmployeeId = OwnerId,
             CreatedDate = DateTime.UtcNow.AddDays(-2),
+            RowVersion = InitialRowVersion.ToArray()
+        };
+        context.TblContractVersions.Add(version);
+        context.TblContractTerms.Add(new TblContractTerm
+        {
+            TermId = 12030,
+            ContractId = ContractId,
+            VersionId = VersionId,
+            TermCode = "PAYMENT",
+            TermTitle = "Thanh toán",
+            TermKind = (byte)ContractTermKind.Payment,
+            IsNegotiable = true,
+            DisplayOrder = 1,
+            CreatedEmployeeId = OwnerId,
+            CreatedDate = DateTime.UtcNow,
             RowVersion = InitialRowVersion.ToArray()
         });
 
@@ -897,6 +913,18 @@ public sealed class ContractCompletionServicePhase10Tests
             paymentId++;
         }
 
+        await context.SaveChangesAsync();
+
+        var snapshot = ContractSnapshotTestData.Create(ContractId, VersionId);
+        version.SnapshotHash = SoftwareSupplyContractSnapshotFactory.CalculateHash(snapshot);
+        version.IsLocked = true;
+        version.LockedDate = DateTime.UtcNow.AddDays(-1);
+        version.LockedByEmployeeId = OwnerId;
+        context.TblContractVersionLegalSnapshots.Add(
+            SoftwareSupplyContractSnapshotFactory.CreatePersistenceGraph(
+                snapshot,
+                OwnerId,
+                DateTime.UtcNow.AddDays(-1)));
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
     }
@@ -961,21 +989,9 @@ public sealed class ContractCompletionServicePhase10Tests
         SeedPaymentMilestonesAsync(DbDtctechContext context,
             params (PaymentDueAnchor Anchor, int OffsetDays, decimal Amount)[] values)
     {
-        var term = new TblContractTerm
-        {
-            ContractId = ContractId,
-            VersionId = VersionId,
-            TermCode = "PAYMENT",
-            TermTitle = "Thanh toán",
-            TermKind = (byte)ContractTermKind.Payment,
-            IsNegotiable = true,
-            DisplayOrder = 1,
-            CreatedEmployeeId = OwnerId,
-            CreatedDate = DateTime.UtcNow,
-            RowVersion = InitialRowVersion.ToArray()
-        };
-        context.TblContractTerms.Add(term);
-        await context.SaveChangesAsync();
+        var term = await context.TblContractTerms
+            .SingleAsync(x => x.VersionId == VersionId
+                && x.TermKind == (byte)ContractTermKind.Payment);
         var rows = values.Select((value, index) => new TblContractPaymentMilestone
         {
             ContractId = ContractId,

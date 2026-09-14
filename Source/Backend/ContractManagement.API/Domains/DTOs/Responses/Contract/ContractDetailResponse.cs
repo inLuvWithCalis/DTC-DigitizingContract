@@ -17,7 +17,7 @@ namespace ContractManagement.API.Domains.DTOs.Responses.Contract
 
         public ContractType ContractType { get; set; }
 
-        public int? TemplateVersionId { get; set; }
+        public int TemplateVersionId { get; set; }
 
         public int? ParentContractId { get; set; }
 
@@ -42,8 +42,6 @@ namespace ContractManagement.API.Domains.DTOs.Responses.Contract
         public string CurrencyCode { get; set; } = string.Empty;
 
         public ContractLanguageMode LanguageMode { get; set; }
-
-        public bool IsLegacy { get; set; }
 
         public int CreatedEmployeeId { get; set; }
 

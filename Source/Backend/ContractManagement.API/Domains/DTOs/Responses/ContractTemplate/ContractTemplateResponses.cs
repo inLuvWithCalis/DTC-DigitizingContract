@@ -156,6 +156,17 @@ public sealed class ContractTemplateVersionDetailResponse
     public List<ContractTemplateTermResponse> Terms { get; set; } = [];
 
     public List<ContractTemplateLegalBasisResponse> LegalBases { get; set; } = [];
+
+    public List<ContractTemplateItemTableColumnLayoutResponse> ItemTableLayout { get; set; } = [];
+}
+
+public sealed class ContractTemplateItemTableColumnLayoutResponse
+{
+    public int ItemTableColumnLayoutId { get; set; }
+    public int TemplateVersionId { get; set; }
+    public string ColumnKey { get; set; } = string.Empty;
+    public int DisplayOrder { get; set; }
+    public int WidthBps { get; set; }
 }
 
 public sealed class ContractTemplatePreviewResponse

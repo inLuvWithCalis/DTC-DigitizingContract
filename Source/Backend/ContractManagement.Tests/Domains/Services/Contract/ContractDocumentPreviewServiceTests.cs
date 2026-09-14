@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using W = DocumentFormat.OpenXml.Wordprocessing;
+using static ContractManagement.Tests.ContractRichTextTestData;
 
 namespace ContractManagement.Tests.Domains.Services.Contract;
 
@@ -36,12 +37,6 @@ public sealed class ContractDocumentPreviewServiceTests
         await SeedAsync(context, source);
         var customer = await context.TblCustomers.SingleAsync();
         customer.CustomerContactPersonName = "Frozen contact";
-        context.TblContractTemplateFields.AddRange(ContractPlaceholderCatalog.SystemDefinitions.Select(x => new TblContractTemplateField
-        {
-            TemplateVersionId = TemplateVersionId, PlaceholderKey = x.Key, FieldLabel = x.Label, DataSource = x.DataSource,
-            SourceFieldKey = x.SourceFieldKey, IsSystem = true, IsRequired = x.IsRequired,
-            DataKind = (byte)x.DataKind, Multiplicity = (byte)x.Multiplicity
-        }));
         context.TblContractTemplateFields.Add(new()
         {
             TemplateVersionId = TemplateVersionId, PlaceholderKey = "CUSTOM_CONTACT", FieldLabel = "Contact",
@@ -58,9 +53,10 @@ public sealed class ContractDocumentPreviewServiceTests
         (await context.TblContracts.SingleAsync()).Status = (byte)ContractStatus.Negotiating;
         await context.SaveChangesAsync();
         var submission = await service.RenderAsync(ContractId, OwnerId);
-        Assert.Contains("Frozen contact", submission.SnapshotJson);
-        Assert.DoesNotContain("Changed later", submission.SnapshotJson);
-        Assert.Contains("placeholderValues", submission.SnapshotJson);
+        Assert.Equal("Frozen contact",
+            submission.Snapshot.PlaceholderValues!["CUSTOM_CONTACT"]);
+        Assert.DoesNotContain("Changed later",
+            submission.Snapshot.PlaceholderValues.Values);
         using var submitted = WordprocessingDocument.Open(new MemoryStream(submission.DocxContent), false);
         Assert.Contains("Frozen contact", submitted.MainDocumentPart!.Document!.InnerText);
         Assert.DoesNotContain("{{", submitted.MainDocumentPart!.Document!.InnerText);
@@ -118,6 +114,14 @@ public sealed class ContractDocumentPreviewServiceTests
         Assert.Contains("Phần mềm quản lý hợp đồng", text);
         Assert.Contains("Phạm vi cung cấp", text);
         Assert.Contains("Căn cứ Luật Thương mại", text);
+        var legalBasisParagraph = document.MainDocumentPart.Document
+            .Descendants<W.Paragraph>()
+            .Single(paragraph => paragraph.InnerText ==
+                "Căn cứ Luật Thương mại.");
+        Assert.Equal(W.JustificationValues.Center,
+            legalBasisParagraph.ParagraphProperties?.Justification?.Val?.Value);
+        Assert.True(legalBasisParagraph.Descendants<W.Run>().Single()
+            .RunProperties?.Bold?.Val?.Value);
         Assert.Contains(
             document.MainDocumentPart.Document.Descendants<W.Paragraph>(),
             paragraph => paragraph.InnerText == "1.080");
@@ -150,7 +154,7 @@ public sealed class ContractDocumentPreviewServiceTests
     }
 
     [Fact]
-    public async Task Submission_RendersDocxAndPdfFromTheSameSchemaV6Snapshot()
+    public async Task Submission_RendersDocxAndPdfFromTheSameTypedSnapshot()
     {
         await using var context = CreateContext();
         var source = CreateSourceDocument();
@@ -160,11 +164,10 @@ public sealed class ContractDocumentPreviewServiceTests
 
         var result = await service.RenderAsync(ContractId, OwnerId);
 
-        Assert.Equal(6, result.SnapshotSchemaVersion);
         Assert.Equal(TemplateVersionId, result.TemplateVersionId);
-        Assert.Contains("\"schemaVersion\":6", result.SnapshotJson);
-        Assert.Contains("\"contractCode\":\"HD-8B-001\"", result.SnapshotJson);
-        Assert.Contains("\"basisCode\":\"COMMERCIAL_LAW\"", result.SnapshotJson);
+        Assert.Equal("HD-8B-001", result.Snapshot.Contract.ContractCode);
+        Assert.Contains(result.Snapshot.LegalBases!,
+            basis => basis.BasisCode == "COMMERCIAL_LAW");
         Assert.Equal("HD-8B-001-submitted.docx", result.DocxFileName);
         Assert.Equal("HD-8B-001-submitted.pdf", result.PdfFileName);
         Assert.Equal(result.DocxContent, pdfRenderer.InputDocx);
@@ -357,8 +360,8 @@ public sealed class ContractDocumentPreviewServiceTests
             TermCode = "SCOPE",
             TermTitle = "Phạm vi cung cấp",
             TermTitleEn = "Scope of supply",
-            TermContent = "Cung cấp phần mềm theo danh mục.",
-            TermContentEn = "Supply software as listed.",
+            TermContent = RichText("Cung cấp phần mềm theo danh mục."),
+            TermContentEn = RichText("Supply software as listed."),
             IsNegotiable = true,
             DisplayOrder = 1,
             CreatedEmployeeId = OwnerId,
@@ -371,8 +374,11 @@ public sealed class ContractDocumentPreviewServiceTests
             ContractId = ContractId,
             VersionId = VersionId,
             BasisCode = "COMMERCIAL_LAW",
-            ContentVi = "Căn cứ Luật Thương mại.",
-            ContentEn = "Pursuant to the Commercial Law.",
+            ContentVi = RichText(
+                "Căn cứ Luật Thương mại.",
+                "center",
+                bold: true),
+            ContentEn = RichText("Pursuant to the Commercial Law."),
             DisplayOrder = 1,
             CreatedEmployeeId = OwnerId,
             CreatedDate = DateTime.UtcNow,
@@ -399,10 +405,41 @@ public sealed class ContractDocumentPreviewServiceTests
             ValidationStatus = (byte)TemplateValidationStatus.Valid,
             DocumentFileId = FileId,
             DocumentHash = Convert.ToHexString(SHA256.HashData(source)),
+            PlaceholderBindingHash = ContractPlaceholderCatalog.Fingerprint(
+                ContractPlaceholderCatalog.SystemDefinitions),
             CreatedEmployeeId = OwnerId,
             CreatedDate = DateTime.UtcNow,
             RowVersion = [1]
         });
+        context.TblContractTemplateFields.AddRange(
+            ContractPlaceholderCatalog.SystemDefinitions.Select(
+                (definition, index) => new TblContractTemplateField
+                {
+                    TemplateVersionId = TemplateVersionId,
+                    PlaceholderKey = definition.Key,
+                    FieldLabel = definition.Label,
+                    DataSource = definition.DataSource,
+                    SourceFieldKey = definition.SourceFieldKey!,
+                    DataKind = (byte)definition.DataKind,
+                    Multiplicity = (byte)definition.Multiplicity,
+                    IsSystem = definition.IsSystem,
+                    IsRequired = definition.IsRequired,
+                    DisplayOrder = index,
+                    CreatedEmployeeId = OwnerId,
+                    CreatedDate = DateTime.UtcNow
+                }));
+        context.TblContractTemplateItemTableColumnLayouts.AddRange(
+            ContractTableLayoutPolicy.ItemColumnKeys.Select((columnKey, index) =>
+                new TblContractTemplateItemTableColumnLayout
+                {
+                    TemplateVersionId = TemplateVersionId,
+                    ColumnKey = columnKey,
+                    DisplayOrder = checked((byte)index),
+                    WidthBps = checked((short)ContractTableLayoutPolicy
+                        .DefaultItemColumnWidthsBps[index]),
+                    CreatedEmployeeId = OwnerId,
+                    CreatedDate = DateTime.UtcNow
+                }));
         context.TblFileStorages.Add(new TblFileStorage
         {
             FileId = FileId,

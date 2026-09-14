@@ -48,6 +48,12 @@ public interface IContractTemplateService
         int employeeId,
         CancellationToken cancellationToken = default);
 
+    Task<ContractTemplateVersionDetailResponse> UpdateItemTableLayoutAsync(
+        int versionId,
+        UpdateContractTemplateItemTableLayoutRequest request,
+        int employeeId,
+        CancellationToken cancellationToken = default);
+
     Task<ContractTemplateVersionDetailResponse> CopyVersionAsync(
         int sourceVersionId,
         CopyContractTemplateVersionRequest request,
@@ -83,7 +89,7 @@ public interface IContractTemplateService
         int employeeId,
         CancellationToken cancellationToken = default);
 
-    Task<(Stream Stream, string FileName)> DownloadPublishedPreviewPdfAsync(
+    Task<(Stream Stream, string FileName)> DownloadPreviewPdfAsync(
         int versionId,
         int employeeId,
         CancellationToken cancellationToken = default);

@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { ContractTermKind } from "@/services/contract-template-api";
+import { Card } from "../ui/card";
 
 export type ContractTermEditableField =
   | "termTitle"
@@ -80,12 +81,7 @@ export function ContractTermCard({
   children,
 }: ContractTermCardProps) {
   return (
-    <div
-      className={cn(
-        "rounded-2xl border bg-white p-4 shadow-xs transition-[border-color,box-shadow]",
-        className,
-      )}
-    >
+    <Card className={cn("p-4 shadow-xs", className)}>
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline">Điều {term.displayOrder}</Badge>
@@ -271,7 +267,7 @@ export function ContractTermCard({
         </div>
       )}
 
-      {children && <div className="mt-4">{children}</div>}
-    </div>
+      {children && <div>{children}</div>}
+    </Card>
   );
 }

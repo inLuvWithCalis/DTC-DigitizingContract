@@ -1,5 +1,6 @@
 using ContractManagement.API.Common.Enums;
 using ContractManagement.API.Domains.DTOs.Requests.Contract;
+using ContractManagement.API.Domains.Models.Contract;
 using ContractManagement.Domains.Interfaces.Contract;
 using ContractManagement.Domains.Services.Contract;
 using ContractManagement.Infrastructure.MultiTenancy.Enums;
@@ -487,6 +488,13 @@ public sealed class ContractServiceSlice05Tests
 
         var version = await context.TblContractVersions.SingleAsync();
         version.IsLocked = true;
+        version.SnapshotHash = SoftwareSupplyContractSnapshotFactory.CalculateHash(
+            ContractSnapshotTestData.Create(ContractId, VersionId));
+        context.TblContractVersionLegalSnapshots.Add(
+            SoftwareSupplyContractSnapshotFactory.CreatePersistenceGraph(
+                ContractSnapshotTestData.Create(ContractId, VersionId),
+                EmployeeId,
+                DateTime.UtcNow));
         await context.SaveChangesAsync();
 
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(

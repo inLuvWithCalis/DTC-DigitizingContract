@@ -42,14 +42,14 @@ public sealed record SoftwareSupplyPlaceholderDefinition(
 }
 
 /// <summary>
-/// Catalog V2 cho template hợp đồng cung cấp phần mềm.
+/// Catalog V4 cho template hợp đồng cung cấp phần mềm.
 ///
 /// Tenant chỉ cấu hình template/version/term. Tenant không được thay đổi
 /// key, DataSource, requiredness hoặc multiplicity của catalog này.
 /// </summary>
 public static class SoftwareSupplyPlaceholderCatalog
 {
-    public const string Version = "V3";
+    public const string Version = "V4";
 
     private static readonly IReadOnlyList<SoftwareSupplyPlaceholderDefinition>
         Items =
@@ -89,8 +89,7 @@ public static class SoftwareSupplyPlaceholderCatalog
             new("CUSTOMER_CITY", "Tỉnh/thành khách hàng", false, TemplatePlaceholderDataKind.Scalar, TemplatePlaceholderMultiplicity.ZeroOrOne, "Customer.CustomerCity"),
             new("CUSTOMER_COUNTRY", "Quốc gia khách hàng", false, TemplatePlaceholderDataKind.Scalar, TemplatePlaceholderMultiplicity.ZeroOrOne, "Customer.CustomerCountry"),
             new("CONTRACT_TOTAL_AMOUNT", "Tổng giá trị hợp đồng", false, TemplatePlaceholderDataKind.Scalar, TemplatePlaceholderMultiplicity.ZeroOrOne, "Contract.TotalAmount"),
-            new("CONTRACT_TOTAL_AMOUNT_IN_WORDS", "Tổng giá trị bằng chữ", false, TemplatePlaceholderDataKind.Scalar, TemplatePlaceholderMultiplicity.ZeroOrOne, "Manual.ContractTotalAmountInWords"),
-            new("PAYMENT_SCHEDULE_TABLE", "Bảng lịch thanh toán", false, TemplatePlaceholderDataKind.DynamicBlock, TemplatePlaceholderMultiplicity.ZeroOrOne, "Contract.PaymentSchedules")
+            new("CONTRACT_TOTAL_AMOUNT_IN_WORDS", "Tổng giá trị bằng chữ", false, TemplatePlaceholderDataKind.Scalar, TemplatePlaceholderMultiplicity.ZeroOrOne, "Manual.ContractTotalAmountInWords")
         ];
 
     public static IReadOnlyList<SoftwareSupplyPlaceholderDefinition> All => Items;

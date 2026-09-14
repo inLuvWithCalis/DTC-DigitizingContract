@@ -3,11 +3,14 @@ using ContractManagement.API.Common.Exceptions;
 using ContractManagement.API.Domains.DTOs.Requests.ContractTemplate;
 using ContractManagement.API.Domains.DTOs.Responses.ContractTemplate;
 using ContractManagement.Common.Enums;
+using ContractManagement.Domains.Interfaces.ContractTemplate;
+using ContractManagement.Domains.Policies.ContractTemplate;
 using ContractManagement.Domains.Services.ContractTemplate;
 using ContractManagement.Infrastructure.Persistence.Application;
 using ContractManagement.Infrastructure.Persistence.Application.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using static ContractManagement.Tests.ContractRichTextTestData;
 
 namespace ContractManagement.Tests.Domains.Services.ContractTemplate;
 
@@ -47,6 +50,118 @@ public sealed class ContractTemplateServiceTests
         Assert.Null(version.DocumentFileId);
         Assert.False(string.IsNullOrWhiteSpace(result.RowVersion));
         Assert.False(string.IsNullOrWhiteSpace(version.RowVersion));
+        var layout = await context.TblContractTemplateItemTableColumnLayouts
+            .Where(column => column.TemplateVersionId == version.TemplateVersionId)
+            .OrderBy(column => column.DisplayOrder)
+            .ToListAsync();
+        Assert.Equal(
+            ContractTableLayoutPolicy.ItemColumnKeys,
+            layout.Select(column => column.ColumnKey));
+        Assert.Equal(
+            ContractTableLayoutPolicy.DefaultItemColumnWidthsBps,
+            layout.Select(column => (int)column.WidthBps));
+    }
+
+    [Fact]
+    public async Task DraftItemTableLayout_CanBeUpdatedAndInvalidatesPreview()
+    {
+        await using var context = CreateContext();
+        await SeedEmployeesAsync(context);
+        var service = CreateService(context);
+        var created = await service.CreateAsync(
+            CreateRequest("LAYOUT-UPDATE"), AdminOfficerId);
+        var draft = Assert.Single(created.Versions);
+        var entity = await context.TblContractTemplateVersions.SingleAsync(
+            version => version.TemplateVersionId == draft.TemplateVersionId);
+        entity.PreviewFileId = 987;
+        await context.SaveChangesAsync();
+
+        var updated = await service.UpdateItemTableLayoutAsync(
+            draft.TemplateVersionId,
+            new UpdateContractTemplateItemTableLayoutRequest
+            {
+                VersionRowVersion = draft.RowVersion,
+                ColumnWidthsBps =
+                    [700, 900, 2_900, 650, 1_300, 900, 650, 2_000]
+            },
+            AdminOfficerId);
+
+        Assert.Equal(
+            [700, 900, 2_900, 650, 1_300, 900, 650, 2_000],
+            updated.ItemTableLayout.Select(column => column.WidthBps));
+        Assert.Null(updated.PreviewFileId);
+        Assert.NotEqual(draft.RowVersion, updated.RowVersion);
+    }
+
+    [Theory]
+    [InlineData(600, 900, 3_000, 650, 1_300, 900, 650, 1_999)]
+    [InlineData(200, 1_300, 3_000, 650, 1_300, 900, 650, 2_000)]
+    public async Task ItemTableLayout_WithNonCanonicalWidths_IsRejected(
+        int first,
+        int second,
+        int third,
+        int fourth,
+        int fifth,
+        int sixth,
+        int seventh,
+        int eighth)
+    {
+        await using var context = CreateContext();
+        await SeedEmployeesAsync(context);
+        var service = CreateService(context);
+        var created = await service.CreateAsync(
+            CreateRequest("LAYOUT-INVALID"), AdminOfficerId);
+        var draft = Assert.Single(created.Versions);
+
+        var exception = await Assert.ThrowsAsync<ContractTemplatePreviewException>(
+            () => service.UpdateItemTableLayoutAsync(
+                draft.TemplateVersionId,
+                new UpdateContractTemplateItemTableLayoutRequest
+                {
+                    VersionRowVersion = draft.RowVersion,
+                    ColumnWidthsBps =
+                        [first, second, third, fourth, fifth, sixth, seventh, eighth]
+                },
+                AdminOfficerId));
+
+        Assert.Equal("ItemTableLayoutInvalid", exception.FailureCode);
+    }
+
+    [Fact]
+    public async Task PublishedItemTableLayout_CannotBeUpdated()
+    {
+        await using var context = CreateContext();
+        await SeedEmployeesAsync(context);
+        var published = await SeedPublishedTemplateAsync(context);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CreateService(context).UpdateItemTableLayoutAsync(
+                published.TemplateVersionId,
+                new UpdateContractTemplateItemTableLayoutRequest
+                {
+                    VersionRowVersion = Encode(published.RowVersion),
+                    ColumnWidthsBps = ContractTableLayoutPolicy
+                        .DefaultItemColumnWidthsBps.ToList()
+                },
+                AdminOfficerId));
+    }
+
+    [Fact]
+    public async Task MissingItemTableLayout_IsRejectedWithoutDefaultFallback()
+    {
+        await using var context = CreateContext();
+        await SeedEmployeesAsync(context);
+        var published = await SeedPublishedTemplateAsync(context);
+        context.TblContractTemplateItemTableColumnLayouts.RemoveRange(
+            context.TblContractTemplateItemTableColumnLayouts);
+        await context.SaveChangesAsync();
+
+        var exception = await Assert.ThrowsAsync<ContractTemplatePreviewException>(
+            () => CreateService(context).GetVersionAsync(
+                published.TemplateVersionId,
+                AdminOfficerId));
+
+        Assert.Equal("ItemTableLayoutInvalid", exception.FailureCode);
     }
 
     [Theory]
@@ -194,6 +309,9 @@ public sealed class ContractTemplateServiceTests
         Assert.Equal("PAYMENT", Assert.Single(copy.Terms).TermCode);
         Assert.Equal("CIVIL_CODE", Assert.Single(copy.LegalBases).BasisCode);
         Assert.NotEqual(source.TemplateVersionId, copy.TemplateVersionId);
+        Assert.Equal(
+            ContractTableLayoutPolicy.DefaultItemColumnWidthsBps,
+            copy.ItemTableLayout.Select(column => column.WidthBps));
 
         var exception = await Assert.ThrowsAsync<BusinessRuleException>(() =>
             service.CopyVersionAsync(
@@ -652,7 +770,7 @@ public sealed class ContractTemplateServiceTests
             new CreateContractTemplateLegalBasisRequest
             {
                 BasisCode = "CIVIL_CODE",
-                ContentVi = "Căn cứ Bộ luật Dân sự.",
+                ContentVi = RichText("Căn cứ Bộ luật Dân sự."),
                 DisplayOrder = 1,
                 VersionRowVersion = version.RowVersion
             }, AdminOfficerId);
@@ -662,7 +780,7 @@ public sealed class ContractTemplateServiceTests
             new CreateContractTemplateLegalBasisRequest
             {
                 BasisCode = "COMMERCIAL_LAW",
-                ContentVi = "Căn cứ Luật Thương mại.",
+                ContentVi = RichText("Căn cứ Luật Thương mại."),
                 DisplayOrder = 2,
                 VersionRowVersion = afterFirst.RowVersion
             }, AdminOfficerId);
@@ -689,7 +807,7 @@ public sealed class ContractTemplateServiceTests
             new UpdateContractTemplateLegalBasisRequest
             {
                 BasisCode = civil.BasisCode,
-                ContentVi = "Căn cứ Bộ luật Dân sự số 91/2015/QH13.",
+                ContentVi = RichText("Căn cứ Bộ luật Dân sự số 91/2015/QH13."),
                 DisplayOrder = civil.DisplayOrder,
                 RowVersion = civil.RowVersion,
                 VersionRowVersion = reordered.RowVersion
@@ -804,6 +922,18 @@ public sealed class ContractTemplateServiceTests
         };
         context.TblContractTemplates.Add(template);
         context.TblContractTemplateVersions.Add(version);
+        context.TblContractTemplateItemTableColumnLayouts.AddRange(
+            ContractTableLayoutPolicy.ItemColumnKeys.Select((columnKey, index) =>
+                new TblContractTemplateItemTableColumnLayout
+                {
+                    TemplateVersionId = version.TemplateVersionId,
+                    ColumnKey = columnKey,
+                    DisplayOrder = checked((byte)index),
+                    WidthBps = checked((short)ContractTableLayoutPolicy
+                        .DefaultItemColumnWidthsBps[index]),
+                    CreatedEmployeeId = AdminOfficerId,
+                    CreatedDate = now
+                }));
         context.TblContractTemplateTerms.Add(new TblContractTemplateTerm
         {
             TemplateTermId = 3,
@@ -820,7 +950,7 @@ public sealed class ContractTemplateServiceTests
             TemplateLegalBasisId = 4,
             TemplateVersionId = 2,
             BasisCode = "CIVIL_CODE",
-            ContentVi = "Căn cứ Bộ luật Dân sự.",
+            ContentVi = RichText("Căn cứ Bộ luật Dân sự."),
             DisplayOrder = 1,
             CreatedEmployeeId = AdminOfficerId,
             CreatedDate = now,

@@ -69,7 +69,15 @@ export function ContractRichTextContent({
           </p>
         ) : (
           <div key={blockIndex} className="overflow-x-auto">
-            <table className="w-full min-w-96 border-collapse text-left text-sm">
+            <table className="w-full min-w-96 table-fixed border-collapse text-left text-sm">
+              <colgroup>
+                {block.columnWidthsBps.map((width, columnIndex) => (
+                  <col
+                    key={columnIndex}
+                    style={{ width: `${width / 100}%` }}
+                  />
+                ))}
+              </colgroup>
               <tbody>
                 {block.rows.map((row, rowIndex) => (
                   <tr key={rowIndex}>
@@ -81,9 +89,6 @@ export function ContractRichTextContent({
                         className="min-w-24 border border-border px-2 py-1.5 align-top"
                         style={{
                           verticalAlign: cell.verticalAlign ?? "top",
-                          width: cell.colwidth?.length
-                            ? `${cell.colwidth.reduce((sum, width) => sum + width, 0)}px`
-                            : undefined,
                         }}
                       >
                         {cell.paragraphs.map((paragraph, paragraphIndex) => (

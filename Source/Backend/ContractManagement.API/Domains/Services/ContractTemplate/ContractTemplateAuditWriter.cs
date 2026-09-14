@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using ContractManagement.Domains.Interfaces.ContractTemplate;
 using ContractManagement.Domains.Policies.ContractTemplate;
@@ -41,21 +40,6 @@ public sealed class ContractTemplateAuditWriter : IContractTemplateAuditWriter
         ContractTemplateAuditResults.Conflict
     ];
 
-    private static readonly HashSet<string> SafeValueKeys =
-    [
-        "DocumentFileId",
-        "DocumentExtension",
-        "DocumentSizeBytes",
-        "ValidationStatus",
-        "RecognizedPlaceholderCount",
-        "PreviewFileId",
-        "PreviewSizeBytes",
-        "PreviewStatus",
-        "PublishedPreviewPdfFileId",
-        "PublishedPreviewPdfSizeBytes",
-        "PublishStatus"
-    ];
-
     private readonly DbDtctechContext _dbContext;
     private readonly ICurrentTenant _currentTenant;
     private readonly IHttpContextAccessor _httpContextAccessor;
@@ -89,7 +73,7 @@ public sealed class ContractTemplateAuditWriter : IContractTemplateAuditWriter
         var records = requests.Select(request =>
         {
             ValidateRequest(request);
-            return new TblContractTemplateAudit
+            var audit = new TblContractTemplateAudit
             {
                 TenantId = tenantId,
                 TemplateId = request.TemplateId,
@@ -98,8 +82,6 @@ public sealed class ContractTemplateAuditWriter : IContractTemplateAuditWriter
                 ActionType = request.ActionType,
                 Result = request.Result,
                 FailureCode = NormalizeFailureCode(request.FailureCode),
-                PreviousValuesJson = SerializeSafeValues(request.PreviousValues),
-                NewValuesJson = SerializeSafeValues(request.NewValues),
                 OccurredAt = request.OccurredAt,
                 IpAddress = ipAddress,
                 UserAgent = userAgent,
@@ -108,6 +90,22 @@ public sealed class ContractTemplateAuditWriter : IContractTemplateAuditWriter
                     ?? Limit(httpContext?.TraceIdentifier, MaxCorrelationIdLength)
                     ?? Guid.NewGuid().ToString("N")
             };
+
+            foreach (var value in CreateSafeValues(
+                         AuditValueSide.Previous,
+                         request.PreviousValues))
+            {
+                audit.Values.Add(value);
+            }
+
+            foreach (var value in CreateSafeValues(
+                         AuditValueSide.New,
+                         request.NewValues))
+            {
+                audit.Values.Add(value);
+            }
+
+            return audit;
         }).ToList();
 
         _dbContext.TblContractTemplateAudits.AddRange(records);
@@ -130,50 +128,84 @@ public sealed class ContractTemplateAuditWriter : IContractTemplateAuditWriter
         }
     }
 
-    private static string? SerializeSafeValues(
-        IReadOnlyDictionary<string, object?>? values)
+    private static IReadOnlyCollection<TblContractTemplateAuditValue>
+        CreateSafeValues(
+            AuditValueSide side,
+            IReadOnlyCollection<ContractTemplateAuditValueInput>? values)
     {
         if (values is null || values.Count == 0)
         {
-            return null;
+            return [];
         }
 
-        var normalized = new Dictionary<string, object?>(StringComparer.Ordinal);
-        foreach (var (key, value) in values)
+        var normalized = new List<TblContractTemplateAuditValue>(values.Count);
+        var seen = new HashSet<ContractTemplateAuditFieldCode>();
+        foreach (var value in values)
         {
-            if (!SafeValueKeys.Contains(key) || !IsSafeValue(key, value))
+            if (!seen.Add(value.FieldCode) || !IsSafeValue(value))
             {
                 throw new InvalidOperationException(
                     "Template audit value không nằm trong safelist.");
             }
 
-            normalized[key] = value;
+            normalized.Add(new TblContractTemplateAuditValue
+            {
+                ValueSide = side,
+                FieldCode = (byte)value.FieldCode,
+                IsNull = value.IsNull,
+                IntegerValue = value.IntegerValue,
+                LongValue = value.LongValue,
+                StringValue = value.StringValue
+            });
         }
 
-        return JsonSerializer.Serialize(normalized);
+        return normalized;
     }
 
-    private static bool IsSafeValue(string key, object? value) => key switch
+    private static bool IsSafeValue(ContractTemplateAuditValueInput value)
     {
-        "DocumentFileId" => value is null || value is int fileId && fileId > 0,
-        "DocumentExtension" => value is "doc" or "docx" or "docm" or "dotx"
-            or "dotm" or "other",
-        "DocumentSizeBytes" => value is long size && size >= 0,
-        "ValidationStatus" => value is "Valid" or "Invalid" or "Unchanged",
-        "RecognizedPlaceholderCount" => value is int count && count >= 0
-            && count <= 10_000,
-        "PreviewFileId" => value is null || value is int previewFileId
-            && previewFileId > 0,
-        "PreviewSizeBytes" => value is long previewSize && previewSize >= 0,
-        "PreviewStatus" => value is "Current" or "Rejected" or "Stale"
-            or "Unchanged",
-        "PublishedPreviewPdfFileId" => value is null || value is int pdfFileId
-            && pdfFileId > 0,
-        "PublishedPreviewPdfSizeBytes" => value is long pdfSize && pdfSize >= 0,
-        "PublishStatus" => value is "Draft" or "Published" or "Retired"
-            or "Unchanged",
-        _ => false
-    };
+        if (value.IsNull)
+        {
+            return value.IntegerValue is null && value.LongValue is null
+                && value.StringValue is null
+                && value.FieldCode is ContractTemplateAuditFieldCode.DocumentFileId
+                    or ContractTemplateAuditFieldCode.PreviewFileId
+                    or ContractTemplateAuditFieldCode.PublishedPreviewPdfFileId;
+        }
+
+        return value.FieldCode switch
+        {
+            ContractTemplateAuditFieldCode.DocumentFileId
+                or ContractTemplateAuditFieldCode.PreviewFileId
+                or ContractTemplateAuditFieldCode.PublishedPreviewPdfFileId =>
+                value.IntegerValue is > 0 && value.LongValue is null
+                && value.StringValue is null,
+            ContractTemplateAuditFieldCode.DocumentSizeBytes
+                or ContractTemplateAuditFieldCode.PreviewSizeBytes
+                or ContractTemplateAuditFieldCode.PublishedPreviewPdfSizeBytes =>
+                value.LongValue is >= 0 && value.IntegerValue is null
+                && value.StringValue is null,
+            ContractTemplateAuditFieldCode.RecognizedPlaceholderCount =>
+                value.IntegerValue is >= 0 and <= 10_000
+                && value.LongValue is null && value.StringValue is null,
+            ContractTemplateAuditFieldCode.DocumentExtension =>
+                value.IntegerValue is null && value.LongValue is null
+                && value.StringValue is "doc" or "docx" or "docm" or "dotx"
+                    or "dotm" or "other",
+            ContractTemplateAuditFieldCode.ValidationStatus =>
+                value.IntegerValue is null && value.LongValue is null
+                && value.StringValue is "Valid" or "Invalid" or "Unchanged",
+            ContractTemplateAuditFieldCode.PreviewStatus =>
+                value.IntegerValue is null && value.LongValue is null
+                && value.StringValue is "Current" or "Rejected" or "Stale"
+                    or "Unchanged",
+            ContractTemplateAuditFieldCode.PublishStatus =>
+                value.IntegerValue is null && value.LongValue is null
+                && value.StringValue is "Draft" or "Published" or "Retired"
+                    or "Unchanged",
+            _ => false
+        };
+    }
 
     private static string? NormalizeFailureCode(string? value)
     {

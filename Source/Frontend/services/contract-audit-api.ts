@@ -60,6 +60,7 @@ export const CONTRACT_AUDIT_ACTION_TYPES = [
   "CustomerCommentReplyCreated",
   "PublicAccessDenied",
   "ConcurrencyConflict",
+  "PaymentMilestoneStatusChanged",
 ] as const;
 
 export const CONTRACT_AUDIT_SUBJECT_TYPES = [
@@ -145,13 +146,14 @@ export const CONTRACT_AUDIT_ACTOR_LABELS: Record<
   System: "Hệ thống",
 };
 
-export const CONTRACT_AUDIT_RESULT_LABELS: Record<ContractAuditResult, string> = {
-  Succeeded: "Thành công",
-  Failed: "Thất bại",
-  Denied: "Bị từ chối",
-  RateLimited: "Vượt giới hạn",
-  ConcurrencyConflict: "Xung đột dữ liệu",
-};
+export const CONTRACT_AUDIT_RESULT_LABELS: Record<ContractAuditResult, string> =
+  {
+    Succeeded: "Thành công",
+    Failed: "Thất bại",
+    Denied: "Bị từ chối",
+    RateLimited: "Vượt giới hạn",
+    ConcurrencyConflict: "Xung đột dữ liệu",
+  };
 
 export const CONTRACT_AUDIT_SUBJECT_LABELS: Record<
   ContractAuditSubjectType,
@@ -216,6 +218,7 @@ export const CONTRACT_AUDIT_ACTION_LABELS: Record<
   CustomerCommentReplyCreated: "Khách hàng trả lời bình luận",
   PublicAccessDenied: "Từ chối truy cập công khai",
   ConcurrencyConflict: "Xung đột khi cập nhật",
+  PaymentMilestoneStatusChanged: "Thay đổi trạng thái thanh toán",
 };
 
 export const contractAuditApi = {

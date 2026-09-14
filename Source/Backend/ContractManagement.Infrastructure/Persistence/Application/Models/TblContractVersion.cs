@@ -35,7 +35,7 @@ public partial class TblContractVersion
     /// Phiên bản template được dùng để tạo version hợp đồng này.
     /// Phải lưu tại đây để lịch sử không thay đổi khi contract dùng template mới.
     /// </summary>
-    public int? TemplateVersionId { get; set; }
+    public int TemplateVersionId { get; set; }
 
     /// <summary>
     /// Lý do tạo phiên bản mới, ví dụ:
@@ -54,17 +54,8 @@ public partial class TblContractVersion
     public decimal TotalAmount { get; set; }
 
     /// <summary>
-    /// Snapshot chuẩn hóa của toàn bộ nội dung pháp lý tại thời điểm khóa version.
-    ///
-    /// Dữ liệu dạng row như term/item vẫn được lưu ở các bảng riêng để sử dụng
-    /// trên website. SnapshotJson là bản đóng băng phục vụ khôi phục, đối chiếu
-    /// và chứng minh nội dung đã được duyệt/ký.
-    /// </summary>
-    public string? SnapshotJson { get; set; }
-
-    /// <summary>
-    /// SHA-256 dạng hexadecimal, gồm 64 ký tự, được tính từ SnapshotJson.
-    /// Dùng để phát hiện nội dung của version bị thay đổi.
+    /// SHA-256 dạng hexadecimal của canonical relational snapshot aggregate.
+    /// Dùng để phát hiện nội dung pháp lý của version bị thay đổi.
     /// </summary>
     public string? SnapshotHash { get; set; }
 
@@ -98,4 +89,6 @@ public partial class TblContractVersion
     /// Concurrency token do SQL Server tự sinh.
     /// </summary>
     public byte[] RowVersion { get; set; } = null!;
+
+    public TblContractVersionLegalSnapshot? LegalSnapshot { get; set; }
 }

@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 
@@ -34,52 +33,39 @@ public sealed class CustomerAccessCryptography
     public string CreateOtp() =>
         RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
 
-    public string EncryptDeliveryPayload(CustomerOtpDeliveryMessage message)
+    public byte[] EncryptScalar(string value)
     {
+        ArgumentNullException.ThrowIfNull(value);
         var nonce = RandomNumberGenerator.GetBytes(12);
-        var plaintext = JsonSerializer.SerializeToUtf8Bytes(message);
+        var plaintext = Encoding.UTF8.GetBytes(value);
         var ciphertext = new byte[plaintext.Length];
         var tag = new byte[16];
 
         using var algorithm = new AesGcm(_encryptionKey, tagSizeInBytes: 16);
         algorithm.Encrypt(nonce, plaintext, ciphertext, tag);
 
-        return Convert.ToBase64String(nonce
+        return nonce
             .Concat(tag)
             .Concat(ciphertext)
-            .ToArray());
+            .ToArray();
     }
 
-    public CustomerOtpDeliveryMessage DecryptDeliveryPayload(string payload)
+    public string DecryptScalar(byte[] envelope)
     {
-        var bytes = Convert.FromBase64String(payload);
-        if (bytes.Length < 29)
+        ArgumentNullException.ThrowIfNull(envelope);
+        if (envelope.Length < 28)
         {
-            throw new CryptographicException("OTP delivery payload is invalid.");
+            throw new CryptographicException("Encrypted scalar envelope is invalid.");
         }
 
-        var nonce = bytes[..12];
-        var tag = bytes[12..28];
-        var ciphertext = bytes[28..];
+        var nonce = envelope[..12];
+        var tag = envelope[12..28];
+        var ciphertext = envelope[28..];
         var plaintext = new byte[ciphertext.Length];
 
         using var algorithm = new AesGcm(_encryptionKey, tagSizeInBytes: 16);
         algorithm.Decrypt(nonce, ciphertext, tag, plaintext);
-        var decoded = Encoding.UTF8.GetString(plaintext);
-        if (decoded.StartsWith('{'))
-        {
-            return JsonSerializer.Deserialize<CustomerOtpDeliveryMessage>(decoded)
-                ?? throw new CryptographicException("OTP delivery payload is invalid.");
-        }
-
-        // Drain pre-SMTP outbox rows using the legacy phone/OTP payload format.
-        var parts = decoded.Split('\n', 2);
-        if (parts.Length != 2)
-        {
-            throw new CryptographicException("OTP delivery payload is invalid.");
-        }
-
-        return new CustomerOtpDeliveryMessage(parts[0], parts[1]);
+        return Encoding.UTF8.GetString(plaintext);
     }
 
     private static byte[] ReadKey(string? configuredKey, int length)

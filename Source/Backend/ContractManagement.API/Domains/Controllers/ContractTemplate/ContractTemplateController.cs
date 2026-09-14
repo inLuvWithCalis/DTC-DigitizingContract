@@ -227,6 +227,47 @@ public sealed class ContractTemplateController : ControllerBase
     }
 
     /// <summary>
+    /// PUT /api/contract-templates/versions/{versionId}/item-table-layout -
+    /// cập nhật tỷ lệ tám cột bảng sản phẩm/dịch vụ của Draft.
+    /// </summary>
+    [HttpPut("versions/{versionId:int}/item-table-layout")]
+    [ProducesResponseType(
+        typeof(ApiResponse<ContractTemplateVersionDetailResponse>),
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> UpdateItemTableLayout(
+        int versionId,
+        [FromBody] UpdateContractTemplateItemTableLayoutRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetEmployeeId(out var employeeId, out var unauthorized))
+        {
+            return unauthorized!;
+        }
+
+        try
+        {
+            var result = await _service.UpdateItemTableLayoutAsync(
+                versionId, request, employeeId, cancellationToken);
+            return Ok(ApiResponse<ContractTemplateVersionDetailResponse>.Ok(
+                result,
+                "Đã cập nhật bố cục bảng sản phẩm/dịch vụ."));
+        }
+        catch (ContractTemplatePreviewException exception)
+        {
+            return BadRequest(ApiResponse<object>.Fail(
+                exception.Message,
+                [exception.FailureCode]));
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            return Forbidden(exception);
+        }
+    }
+
+    /// <summary>
     /// POST /api/contract-templates/versions/{sourceVersionId}/copy - tạo Draft mới từ version bất biến.
     /// </summary>
     /// <remarks>
@@ -472,11 +513,11 @@ public sealed class ContractTemplateController : ControllerBase
 
     /// <summary>
     /// GET /api/contract-templates/versions/{versionId}/preview/pdf - tải PDF
-    /// preview bất biến của version Published hoặc Retired.
+    /// preview hiện hành của Draft hoặc preview bất biến của Published/Retired.
     /// </summary>
     [HttpGet("versions/{versionId:int}/preview/pdf")]
     [Produces("application/pdf")]
-    public async Task<IActionResult> DownloadPublishedPreviewPdf(
+    public async Task<IActionResult> DownloadPreviewPdf(
         int versionId,
         CancellationToken cancellationToken)
     {
@@ -487,9 +528,15 @@ public sealed class ContractTemplateController : ControllerBase
 
         try
         {
-            var result = await _service.DownloadPublishedPreviewPdfAsync(
+            var result = await _service.DownloadPreviewPdfAsync(
                 versionId, employeeId, cancellationToken);
             return File(result.Stream, "application/pdf", result.FileName);
+        }
+        catch (ContractTemplatePdfRenderingException exception)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                ApiResponse<object>.Fail(exception.Message,
+                    [exception.FailureCode]));
         }
         catch (ContractTemplatePreviewException exception)
         {

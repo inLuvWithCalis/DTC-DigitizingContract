@@ -30,6 +30,7 @@ import {
 } from "@/components/contract-templates/contract-template-status";
 import { ContractTemplateTermsEditor } from "@/components/contract-templates/contract-template-terms-editor";
 import { ContractTemplateLegalBasesEditor } from "@/components/contract-templates/contract-template-legal-bases-editor";
+import { ContractTemplateItemTableLayoutEditor } from "@/components/contract-templates/contract-template-item-table-layout-editor";
 import {
   downloadBlob,
   getContractTemplateErrorMessage,
@@ -50,6 +51,7 @@ import { formatDateTime } from "@/lib/format-date-time";
 import { ContractLanguageMode } from "@/services/contract-api";
 import {
   contractTemplateApi,
+  ContractTermKind,
   TemplateValidationStatus,
   TemplateVersionStatus,
   type ContractTemplateDetailResponse,
@@ -269,7 +271,7 @@ export default function ContractTemplateVersionWorkspacePage() {
     }
   };
 
-  const openPublishedPdf = async () => {
+  const openPreviewPdf = async () => {
     if (!version || isOpeningPdf) return;
 
     const previewWindow = window.open("about:blank", "_blank");
@@ -281,12 +283,12 @@ export default function ContractTemplateVersionWorkspacePage() {
     }
 
     previewWindow.opener = null;
-    previewWindow.document.title = "Đang tải PDF phát hành...";
-    previewWindow.document.body.textContent = "Đang tải bản PDF phát hành...";
+    previewWindow.document.title = "Đang tải PDF preview...";
+    previewWindow.document.body.textContent = "Đang tải bản PDF preview...";
 
     try {
       setIsOpeningPdf(true);
-      const blob = await contractTemplateApi.downloadPublishedPreviewPdf(
+      const blob = await contractTemplateApi.downloadPreviewPdf(
         version.templateVersionId,
       );
       const pdfUrl = URL.createObjectURL(
@@ -299,10 +301,7 @@ export default function ContractTemplateVersionWorkspacePage() {
     } catch (error) {
       previewWindow.close();
       toast.error(
-        getContractTemplateErrorMessage(
-          error,
-          "Không thể mở bản PDF phát hành.",
-        ),
+        getContractTemplateErrorMessage(error, "Không thể mở bản PDF preview."),
       );
     } finally {
       setIsOpeningPdf(false);
@@ -369,8 +368,25 @@ export default function ContractTemplateVersionWorkspacePage() {
     version?.validationStatus === TemplateValidationStatus.Valid;
   const hasPreview = Boolean(version?.previewFileId);
   const hasTerms = Boolean(version?.terms.length);
+  const paymentTerms =
+    version?.terms.filter(
+      (term) => term.termKind === ContractTermKind.Payment,
+    ) ?? [];
+  const paymentPercentTotal =
+    Math.round(
+      paymentTerms
+        .flatMap((term) => term.paymentMilestones)
+        .reduce((sum, milestone) => sum + milestone.paymentPercent, 0) * 10_000,
+    ) / 10_000;
+  const hasValidPaymentMilestones =
+    paymentTerms.length === 0 ||
+    (paymentTerms.length === 1 &&
+      paymentTerms[0].paymentMilestones.length > 0 &&
+      paymentPercentTotal === 100);
   const canGeneratePreview = Boolean(isDraft && hasDocument && isDocumentValid);
-  const canPublish = Boolean(canGeneratePreview && hasPreview && hasTerms);
+  const canPublish = Boolean(
+    canGeneratePreview && hasPreview && hasTerms && hasValidPaymentMilestones,
+  );
   const templateHasDraft = Boolean(
     template?.versions.some(
       (candidate) => candidate.status === TemplateVersionStatus.Draft,
@@ -489,11 +505,11 @@ export default function ContractTemplateVersionWorkspacePage() {
                     <TabsTrigger value="legal-bases">
                       <Scale /> Căn cứ
                     </TabsTrigger>
-                    <TabsTrigger value="document">
-                      <FileText /> Tài liệu DOCX
-                    </TabsTrigger>
                     <TabsTrigger value="placeholders">
                       <Braces /> Placeholder
+                    </TabsTrigger>
+                    <TabsTrigger value="document">
+                      <FileText /> Tài liệu DOCX
                     </TabsTrigger>
                     <TabsTrigger value="preview">
                       <Eye /> Preview & phát hành
@@ -556,6 +572,14 @@ export default function ContractTemplateVersionWorkspacePage() {
                       </CardContent>
                     </Card>
                   </div>
+                  <ContractTemplateItemTableLayoutEditor
+                    key={`${version.templateVersionId}-${version.rowVersion}-item-layout`}
+                    versionId={version.templateVersionId}
+                    versionRowVersion={version.rowVersion}
+                    layout={version.itemTableLayout}
+                    editable={isDraft}
+                    onSaved={setVersion}
+                  />
                   <Alert>
                     <Info />
                     <AlertTitle>Quy trình đề xuất</AlertTitle>
@@ -657,7 +681,7 @@ export default function ContractTemplateVersionWorkspacePage() {
                         />
                         <span className="text-sm text-muted-foreground">
                           {hasDocument
-                            ? `Document file #${version.documentFileId}`
+                            ? `Document file`
                             : "Chưa upload tài liệu"}
                         </span>
                       </div>
@@ -693,7 +717,7 @@ export default function ContractTemplateVersionWorkspacePage() {
 
                 <TabsContent
                   value="preview"
-                  className="grid gap-4 lg:grid-cols-[1fr_360px]"
+                  className="grid gap-4 lg:grid-cols-[2fr_1fr]"
                 >
                   <Card>
                     <CardHeader>
@@ -731,10 +755,10 @@ export default function ContractTemplateVersionWorkspacePage() {
                             Tải preview DOCX
                           </Button>
                         )}
-                        {version.publishedPreviewPdfFileId && (
+                        {(hasPreview || version.publishedPreviewPdfFileId) && (
                           <Button
                             variant="outline"
-                            onClick={openPublishedPdf}
+                            onClick={openPreviewPdf}
                             disabled={isOpeningPdf}
                           >
                             {isOpeningPdf ? (
@@ -742,7 +766,7 @@ export default function ContractTemplateVersionWorkspacePage() {
                             ) : (
                               <Eye className="size-4" />
                             )}{" "}
-                            Xem PDF phát hành
+                            {isDraft ? "Xem preview PDF" : "Xem PDF phát hành"}
                           </Button>
                         )}
                       </div>
@@ -794,6 +818,11 @@ export default function ContractTemplateVersionWorkspacePage() {
                         </RequirementRow>
                         <RequirementRow met={isDocumentValid}>
                           DOCX hợp lệ
+                        </RequirementRow>
+                        <RequirementRow met={hasValidPaymentMilestones}>
+                          {paymentTerms.length === 0
+                            ? "Không có điều khoản thanh toán"
+                            : `Tổng tỷ lệ các đợt thanh toán đúng 100% (hiện tại ${paymentPercentTotal}%)`}
                         </RequirementRow>
                         <RequirementRow met={hasPreview}>
                           Đã tạo preview hiện hành

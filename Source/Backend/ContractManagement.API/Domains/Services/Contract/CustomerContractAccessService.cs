@@ -245,9 +245,12 @@ public sealed class CustomerContractAccessService : ICustomerContractAccessServi
                     new TblContractCustomerOtpDeliveryOutbox
                     {
                         ChallengeId = challengeToCreate.CustomerOtpChallengeId,
-                        EncryptedPayload = _cryptography.EncryptDeliveryPayload(
-                            new CustomerOtpDeliveryMessage(normalizedPhone, otp,
-                                recipientEmail, challengeToCreate.ExpiresAt)),
+                        PhoneCiphertext = _cryptography.EncryptScalar(normalizedPhone),
+                        OtpCiphertext = _cryptography.EncryptScalar(otp),
+                        EmailCiphertext = recipientEmail is null
+                            ? null
+                            : _cryptography.EncryptScalar(recipientEmail),
+                        DeliveryExpiresAt = challengeToCreate.ExpiresAt,
                         Status = "Pending",
                         AttemptCount = 0,
                         NextAttemptAt = now,
@@ -752,8 +755,8 @@ public sealed class CustomerContractAccessService : ICustomerContractAccessServi
         string? failureCode = null,
         string? subjectType = null,
         int? subjectId = null,
-        IReadOnlyDictionary<string, object?>? previousValues = null,
-        IReadOnlyDictionary<string, object?>? newValues = null)
+        IReadOnlyCollection<ContractAuditValueInput>? previousValues = null,
+        IReadOnlyCollection<ContractAuditValueInput>? newValues = null)
     {
         _auditWriter.StageAudits(
         [

@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 namespace ContractManagement.API.Domains.DTOs.Responses.Contract;
 
 /// <summary>
@@ -47,9 +45,9 @@ public sealed class ContractAuditResponse
 
     public string? FailureCode { get; set; }
 
-    public Dictionary<string, JsonElement>? PreviousValues { get; set; }
+    public Dictionary<string, object?>? PreviousValues { get; set; }
 
-    public Dictionary<string, JsonElement>? NewValues { get; set; }
+    public Dictionary<string, object?>? NewValues { get; set; }
 
     public string? Reason { get; set; }
 

@@ -34,6 +34,7 @@ import {
   getBlobApiErrorMessage,
   isStaleRowVersion,
 } from "@/lib/api-error";
+import { createNegotiationRoundAfterApproval } from "@/lib/create-negotiation-round-after-approval";
 import { formatDateTime } from "@/lib/format-date-time";
 import { cn } from "@/lib/utils";
 import {
@@ -86,6 +87,7 @@ export function ContractApprovalPanel({
   const [error, setError] = useState<string | null>(null);
   const [withdrawReason, setWithdrawReason] = useState("");
   const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [isCreatingRound, setIsCreatingRound] = useState(false);
   const [artifactDetail, setArtifactDetail] =
     useState<ContractApprovalDetailResponse | null>(null);
   const [isLoadingArtifacts, setIsLoadingArtifacts] = useState(false);
@@ -128,21 +130,34 @@ export function ContractApprovalPanel({
       return;
     }
 
+    let withdrawCompleted = false;
     try {
       setIsWithdrawing(true);
       await contractApprovalApi.withdraw(pendingRequest.approvalRequestId, {
         rowVersion: pendingRequest.rowVersion,
         reason,
       });
-      toast.success("Đã rút yêu cầu duyệt. Hãy tạo version mới để chỉnh sửa.");
+      withdrawCompleted = true;
       setWithdrawReason("");
-      await Promise.all([loadHistory(), Promise.resolve(onContractRefetch())]);
+      setIsCreatingRound(true);
+      const round = await createNegotiationRoundAfterApproval({
+        contractId: contract.contractId,
+        sourceVersionId: pendingRequest.versionId,
+        changeNote: reason,
+      });
+      toast.success(
+        `Đã rút hồ sơ và tạo Version ${round.versionNo} để tiếp tục chỉnh sửa.`,
+      );
     } catch (withdrawError) {
-      if (isStaleRowVersion(withdrawError)) {
-        await Promise.all([
-          loadHistory(),
-          Promise.resolve(onContractRefetch()),
-        ]);
+      if (withdrawCompleted) {
+        const cause = getApiErrorMessage(
+          withdrawError,
+          "Không thể tạo phiên bản chỉnh sửa.",
+        );
+        toast.error(
+          `Đã rút hồ sơ nhưng chưa thể tạo phiên bản chỉnh sửa: ${cause} Hãy thử lại tại tab Đàm phán.`,
+        );
+      } else if (isStaleRowVersion(withdrawError)) {
         toast.error("Yêu cầu đã thay đổi. Dữ liệu mới nhất đã được tải lại.");
       } else {
         toast.error(
@@ -150,7 +165,12 @@ export function ContractApprovalPanel({
         );
       }
     } finally {
+      setIsCreatingRound(false);
       setIsWithdrawing(false);
+      await Promise.allSettled([
+        loadHistory(),
+        Promise.resolve(onContractRefetch()),
+      ]);
     }
   };
 
@@ -205,8 +225,8 @@ export function ContractApprovalPanel({
           <AlertTitle>Hợp đồng đang chờ duyệt</AlertTitle>
           <AlertDescription className="mt-3 space-y-3">
             <p>
-              Bạn có thể rút hồ sơ trước khi Manager xử lý. Version đã gửi vẫn
-              khóa; sau khi rút cần tạo version mới để chỉnh sửa.
+              Bạn có thể rút hồ sơ trước khi Manager xử lý. Hệ thống sẽ tự tạo
+              version mới từ bản đã gửi để bạn tiếp tục chỉnh sửa.
             </p>
             <div className="space-y-2">
               <Label htmlFor="withdraw-reason">Lý do rút hồ sơ *</Label>
@@ -221,15 +241,19 @@ export function ContractApprovalPanel({
             </div>
             <Button
               variant="outline"
-              disabled={isWithdrawing}
+              disabled={isWithdrawing || isCreatingRound}
               onClick={() => void withdraw()}
             >
-              {isWithdrawing ? (
+              {isWithdrawing || isCreatingRound ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <Undo2 className="size-4" />
               )}
-              Rút yêu cầu duyệt
+              {isCreatingRound
+                ? "Đang tạo phiên bản chỉnh sửa..."
+                : isWithdrawing
+                  ? "Đang rút hồ sơ..."
+                  : "Rút yêu cầu duyệt"}
             </Button>
           </AlertDescription>
         </Alert>

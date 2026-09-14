@@ -17,8 +17,6 @@ using ContractManagement.Infrastructure.Persistence.Application.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Data;
 using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using ContractManagement.API.Domains.CustomerAccess;
 using ContractManagement.Infrastructure.MultiTenancy.Interfaces;
 
@@ -554,9 +552,6 @@ namespace ContractManagement.Domains.Services.Contract
 
                         LanguageMode = (byte)request.LanguageMode,
 
-                        // API này chỉ tạo hợp đồng mới, không tạo legacy.
-                        IsLegacy = false,
-
                         CreatedDate = now
                     };
 
@@ -569,7 +564,7 @@ namespace ContractManagement.Domains.Services.Contract
 
                     /*
                      * Bước 2: Tạo Version 1.
-                     * Version Draft chưa khóa nên SnapshotJson/Hash để null.
+                     * Version Draft chưa khóa nên SnapshotHash để null.
                      */
                     var contractVersion = new TblContractVersion
                     {
@@ -584,7 +579,6 @@ namespace ContractManagement.Domains.Services.Contract
                         TotalVat = 0m,
                         TotalAmount = 0m,
 
-                        SnapshotJson = null,
                         SnapshotHash = null,
 
                         IsLocked = false,
@@ -722,9 +716,9 @@ namespace ContractManagement.Domains.Services.Contract
                                     TermTitle = requestTerm.TermTitle.Trim(),
                                     TermTitleEn = NormalizeOptional(
                                         requestTerm.TermTitleEn),
-                                    TermContent = NormalizeOptional(
+                                    TermContent = NormalizeRichText(
                                         requestTerm.TermContent),
-                                    TermContentEn = NormalizeOptional(
+                                    TermContentEn = NormalizeRichText(
                                         requestTerm.TermContentEn),
                                     TermKind = requestTerm.SourceTemplateTermId is { } sourceId
                                         ? templateTerms.Single(item => item.TemplateTermId == sourceId).TermKind
@@ -1493,7 +1487,6 @@ namespace ContractManagement.Domains.Services.Contract
                 LanguageMode =
                     (ContractLanguageMode)contract.LanguageMode,
 
-                IsLegacy = contract.IsLegacy,
                 CreatedEmployeeId = contract.CreatedEmployeeId,
                 CreatedDate = contract.CreatedDate,
                 UpdatedDate = contract.UpdateDate,
@@ -1674,12 +1667,6 @@ namespace ContractManagement.Domains.Services.Contract
                         {
                             throw new InvalidOperationException(
                                 "Hợp đồng ở trạng thái hiện tại không được sửa nội dung.");
-                        }
-
-                        if (contract.IsLegacy)
-                        {
-                            throw new InvalidOperationException(
-                                "Hợp đồng legacy không được chỉnh sửa bằng API này.");
                         }
 
                         if (!contract.CurrentVersionId.HasValue)
@@ -2086,10 +2073,10 @@ namespace ContractManagement.Domains.Services.Contract
                                 NormalizeOptional(requestTerm.TermTitleEn);
 
                             term.TermContent =
-                                NormalizeOptional(requestTerm.TermContent);
+                                NormalizeRichText(requestTerm.TermContent);
 
                             term.TermContentEn =
-                                NormalizeOptional(requestTerm.TermContentEn);
+                                NormalizeRichText(requestTerm.TermContentEn);
 
                             term.IsNegotiable = requestTerm.IsNegotiable;
 
@@ -2175,15 +2162,10 @@ namespace ContractManagement.Domains.Services.Contract
                         contract.UpdateDate = now;
 
                         var previousAuditValuesWithRemovedEntries =
-                            previousAuditValues.ToDictionary(
-                                entry => entry.Key,
-                                entry => entry.Value,
-                                StringComparer.Ordinal);
-
-                        previousAuditValuesWithRemovedEntries["RemovedItems"] =
-                            BuildAuditSummary(removedItemAudits);
-                        previousAuditValuesWithRemovedEntries["RemovedTerms"] =
-                            BuildAuditSummary(removedTermAudits);
+                            previousAuditValues.Concat(ContractAuditValues.Create(
+                                ("RemovedItems", BuildAuditSummary(removedItemAudits)),
+                                ("RemovedTerms", BuildAuditSummary(removedTermAudits))))
+                            .ToList();
 
                         _contractAuditWriter.StageEmployeeAudits(
                         [
@@ -2304,12 +2286,6 @@ namespace ContractManagement.Domains.Services.Contract
                 {
                     throw new KeyNotFoundException(
                         "Không tìm thấy hợp đồng.");
-                }
-
-                if (contract.IsLegacy)
-                {
-                    throw new InvalidOperationException(
-                        "Hợp đồng legacy không hỗ trợ quy trình này.");
                 }
 
                 var currentStatus =
@@ -2477,12 +2453,6 @@ namespace ContractManagement.Domains.Services.Contract
                                 "Không tìm thấy hợp đồng.");
                         }
 
-                        if (contract.IsLegacy)
-                        {
-                            throw new InvalidOperationException(
-                                "Hợp đồng legacy không hỗ trợ tạo vòng đàm phán.");
-                        }
-
                         var previousContractStatus =
                             (ContractStatus)contract.Status;
                         if (previousContractStatus is not (
@@ -2637,31 +2607,31 @@ namespace ContractManagement.Domains.Services.Contract
                                     "Hồ sơ pháp lý doanh nghiệp chưa được cấu hình.");
                             var placeholderValues = await PlaceholderValues
                                 .CaptureAsync(contract, sourceVersion);
-                            var snapshotJson =
-                                SoftwareSupplyContractSnapshotFactory.Serialize(
-                                    SoftwareSupplyContractSnapshotFactory.Create(
-                                        tenantLegalProfile,
-                                        customer,
-                                        contract,
-                                        sourceVersion,
-                                        sourceItems,
-                                        sourceTerms,
-                                        sourcePaymentMilestones) with
-                                    {
-                                        PlaceholderValues = placeholderValues.Count == 0 ? null : placeholderValues,
-                                        LegalBases = sourceLegalBases.Select(item =>
-                                            new ContractLegalBasisSnapshot(
-                                                item.LegalBasisId, item.BasisCode,
-                                                item.ContentVi, item.ContentEn,
-                                                item.DisplayOrder)).ToArray()
-                                    });
+                            var snapshot = SoftwareSupplyContractSnapshotFactory.Create(
+                                tenantLegalProfile,
+                                customer,
+                                contract,
+                                sourceVersion,
+                                sourceItems,
+                                sourceTerms,
+                                sourcePaymentMilestones) with
+                            {
+                                PlaceholderValues = placeholderValues.Count == 0 ? null : placeholderValues,
+                                LegalBases = sourceLegalBases.Select(item =>
+                                    new ContractLegalBasisSnapshot(
+                                        item.LegalBasisId, item.BasisCode,
+                                        item.ContentVi, item.ContentEn,
+                                        item.DisplayOrder)).ToArray()
+                            };
 
-                            sourceVersion.SnapshotJson = snapshotJson;
                             sourceVersion.SnapshotHash =
-                                CalculateSnapshotHash(snapshotJson);
+                                SoftwareSupplyContractSnapshotFactory.CalculateHash(snapshot);
                             sourceVersion.IsLocked = true;
                             sourceVersion.LockedDate = now;
                             sourceVersion.LockedByEmployeeId = employeeId;
+                            _dbContext.TblContractVersionLegalSnapshots.Add(
+                                SoftwareSupplyContractSnapshotFactory.CreatePersistenceGraph(
+                                    snapshot, employeeId, now));
                         }
 
                         var newVersion = new TblContractVersion
@@ -2678,7 +2648,6 @@ namespace ContractManagement.Domains.Services.Contract
                                 sourceVersion.TotalDiscount,
                             TotalVat = sourceVersion.TotalVat,
                             TotalAmount = sourceVersion.TotalAmount,
-                            SnapshotJson = null,
                             SnapshotHash = null,
                             IsLocked = false,
                             LockedDate = null,
@@ -4406,7 +4375,7 @@ namespace ContractManagement.Domains.Services.Contract
         /// Khi gửi thành công:
         /// - Contract chuyển sang PendingApproval.
         /// - Version được khóa.
-        /// - SnapshotJson và SnapshotHash được tạo.
+        /// - Relational snapshot và SnapshotHash được tạo.
         /// - Approval request ở trạng thái Pending được tạo.
         /// </summary>
         public async Task<SubmitContractForApprovalResponse>
@@ -4466,12 +4435,6 @@ namespace ContractManagement.Domains.Services.Contract
                         {
                             throw new KeyNotFoundException(
                                 "Không tìm thấy hợp đồng.");
-                        }
-
-                        if (contract.IsLegacy)
-                        {
-                            throw new InvalidOperationException(
-                                "Hợp đồng legacy không hỗ trợ gửi duyệt.");
                         }
 
                         if (contract.ContractType !=
@@ -4616,16 +4579,14 @@ namespace ContractManagement.Domains.Services.Contract
                         var rendered = await artifactRenderer.RenderAsync(
                             contract.ContractId,
                             employeeId);
-                        if (rendered.SnapshotSchemaVersion !=
-                            SoftwareSupplyContractSnapshotFactory.CurrentSchemaVersion)
+                        if (rendered.Snapshot.Version.VersionId != version.VersionId
+                            || rendered.Snapshot.Contract.ContractId != contract.ContractId)
                         {
                             throw new InvalidOperationException(
-                                $"Renderer không trả snapshot SoftwareSupply schema v{SoftwareSupplyContractSnapshotFactory.CurrentSchemaVersion}.");
+                                "Renderer trả snapshot không thuộc contract/version đang gửi duyệt.");
                         }
 
-                        if (version.TemplateVersionId.HasValue
-                            && version.TemplateVersionId.Value !=
-                            rendered.TemplateVersionId)
+                        if (version.TemplateVersionId != rendered.TemplateVersionId)
                         {
                             throw new DbUpdateConcurrencyException(
                                 "TemplateVersion của version đã thay đổi trong lúc gửi duyệt.");
@@ -4696,17 +4657,20 @@ namespace ContractManagement.Domains.Services.Contract
                             docxMetadata,
                             pdfMetadata);
 
-                        var snapshotJson = rendered.SnapshotJson;
-                        var snapshotHash = CalculateSnapshotHash(snapshotJson);
+                        var snapshotHash =
+                            SoftwareSupplyContractSnapshotFactory.CalculateHash(
+                                rendered.Snapshot);
 
                         var now = DateTime.UtcNow;
 
                         version.TemplateVersionId = rendered.TemplateVersionId;
-                        version.SnapshotJson = snapshotJson;
                         version.SnapshotHash = snapshotHash;
                         version.IsLocked = true;
                         version.LockedDate = now;
                         version.LockedByEmployeeId = employeeId;
+                        _dbContext.TblContractVersionLegalSnapshots.Add(
+                            SoftwareSupplyContractSnapshotFactory.CreatePersistenceGraph(
+                                rendered.Snapshot, employeeId, now));
 
                         var invalidatedAccess =
                             await InvalidateNegotiationAccessAsync(
@@ -4770,8 +4734,6 @@ namespace ContractManagement.Domains.Services.Contract
                                     approvalRequest.ApprovalRequestId),
                                 ("ApprovalStatus", approvalRequest.Status),
                                 ("WorkflowId", approvalRequest.WorkflowId),
-                                ("SnapshotSchemaVersion",
-                                    rendered.SnapshotSchemaVersion),
                                 ("TemplateVersionId",
                                     rendered.TemplateVersionId),
                                 ("SnapshotHash", snapshotHash),
@@ -5603,6 +5565,23 @@ namespace ContractManagement.Domains.Services.Contract
                 : value.Trim();
         }
 
+        private static string? NormalizeRichText(string? value)
+        {
+            var normalized = NormalizeOptional(value);
+            if (normalized is null)
+            {
+                return null;
+            }
+
+            if (!ContractTermRichText.TryParse(normalized, out _))
+            {
+                throw new ArgumentException(
+                    "Nội dung điều khoản phải dùng định dạng rich text v4 hợp lệ.");
+            }
+
+            return normalized;
+        }
+
         private static string BuildCustomerAuditDisplayName(
             int customerId,
             string? customerCode,
@@ -5747,10 +5726,10 @@ namespace ContractManagement.Domains.Services.Contract
             AddChangedField(fields, "Tiêu đề tiếng Anh", current.TermTitleEn,
                 NormalizeOptional(requested.TermTitleEn));
             AddChangedField(fields, "Nội dung", current.TermContent,
-                NormalizeOptional(requested.TermContent));
+                NormalizeRichText(requested.TermContent));
             AddChangedField(fields, "Nội dung tiếng Anh",
                 current.TermContentEn,
-                NormalizeOptional(requested.TermContentEn));
+                NormalizeRichText(requested.TermContentEn));
             AddChangedField(fields, "Cho phép đàm phán",
                 current.IsNegotiable,
                 requested.IsNegotiable);
@@ -6503,21 +6482,5 @@ namespace ContractManagement.Domains.Services.Contract
             }
         }
 
-        private static string CalculateSnapshotHash(
-            string snapshotJson)
-        {
-            var contentBytes =
-                Encoding.UTF8.GetBytes(snapshotJson);
-
-            var hashBytes =
-                SHA256.HashData(contentBytes);
-
-            /*
-             * SHA-256 luôn tạo 64 ký tự hexadecimal.
-             */
-            return Convert
-                .ToHexString(hashBytes)
-                .ToLowerInvariant();
-        }
     }
 }

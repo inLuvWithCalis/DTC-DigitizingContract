@@ -40,11 +40,31 @@ public partial class DbDtctechContext
         });
         modelBuilder.Entity<TblContractPlaceholderAudit>(e =>
         {
-            e.ToTable("tbl_ContractPlaceholderAudit");
+            e.ToTable("tbl_ContractPlaceholderAudit", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractPlaceholderAudit_ActorEmployeeId",
+                    "[ActorEmployeeId] > 0");
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractPlaceholderAudit_ActionType",
+                    "[ActionType] IN ('PlaceholderDefinitionCreated', 'PlaceholderDefinitionUpdated', 'PlaceholderDefinitionActivated', 'PlaceholderDefinitionDeactivated', 'PlaceholderDefinitionDeleted')");
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractPlaceholderAudit_NewSourceFieldKey",
+                    "LEN(LTRIM(RTRIM([NewSourceFieldKey]))) > 0");
+                table.HasCheckConstraint(
+                    "CK_tbl_ContractPlaceholderAudit_Snapshot",
+                    "([ActionType] = 'PlaceholderDefinitionCreated' AND [PreviousSourceFieldKey] IS NULL AND [PreviousFormatString] IS NULL AND [PreviousIsActive] IS NULL) OR " +
+                    "([ActionType] <> 'PlaceholderDefinitionCreated' AND LEN(LTRIM(RTRIM([PreviousSourceFieldKey]))) > 0)");
+            });
             e.HasKey(x => x.PlaceholderAuditId);
             e.HasIndex(x => new { x.PlaceholderKey, x.OccurredAt });
             e.Property(x => x.PlaceholderKey).HasMaxLength(100).IsUnicode(false);
             e.Property(x => x.ActionType).HasMaxLength(64).IsUnicode(false);
+            e.Property(x => x.PreviousSourceFieldKey).HasMaxLength(200).IsUnicode(false);
+            e.Property(x => x.PreviousFormatString).HasMaxLength(100).IsUnicode(false);
+            e.Property(x => x.NewSourceFieldKey).HasMaxLength(200).IsUnicode(false);
+            e.Property(x => x.NewFormatString).HasMaxLength(100).IsUnicode(false);
+            e.Property(x => x.OccurredAt).HasColumnType("datetime2");
         });
     }
 }

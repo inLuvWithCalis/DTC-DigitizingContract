@@ -12,7 +12,7 @@ public partial class TblContractTemplateField
 {
     public int TemplateFieldId { get; set; }
 
-    public string? SourceFieldKey { get; set; }
+    public string SourceFieldKey { get; set; } = null!;
     public byte DataKind { get; set; } = 1;
     public byte Multiplicity { get; set; } = 2;
     public bool IsSystem { get; set; } = true;

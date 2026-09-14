@@ -69,7 +69,20 @@ public sealed class ContractPaymentMilestoneResponse
     public bool IsOverdue { get; set; }
     public DateTime? PaidAt { get; set; }
     public int? PaidByEmployeeId { get; set; }
+    public ContractPaymentResponse? ActivePayment { get; set; }
     public string RowVersion { get; set; } = string.Empty;
+}
+
+public sealed class CompletePaymentMilestoneResponse
+{
+    public ContractPaymentMilestoneResponse Milestone { get; set; } = new();
+    public ContractPaymentResponse Payment { get; set; } = new();
+}
+
+public sealed class ReopenPaymentMilestoneResponse
+{
+    public ContractPaymentMilestoneResponse Milestone { get; set; } = new();
+    public ContractPaymentResponse Payment { get; set; } = new();
 }
 
 public sealed class ContractCompletionBlockerResponse

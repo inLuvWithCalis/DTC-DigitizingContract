@@ -44,7 +44,6 @@ public sealed class ContractPlaceholderSourceProvider : ContractPlaceholderSourc
         Add("contract.effective-date", "contract", "Hợp đồng", "Ngày hiệu lực", PlaceholderValueType.Date, c => c.Contract.EffectiveDate);
         Add("contract.expire-date", "contract", "Hợp đồng", "Ngày hết hạn", PlaceholderValueType.Date, c => c.Contract.ExpireDate);
         Add("contract.sign-date", "contract", "Hợp đồng", "Ngày ký", PlaceholderValueType.Date, c => c.Contract.SignDate);
-        Add("contract.is-legacy", "contract", "Hợp đồng", "Hợp đồng cũ", PlaceholderValueType.Boolean, c => c.Contract.IsLegacy);
     }
 }
 

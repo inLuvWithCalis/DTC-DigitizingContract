@@ -17,7 +17,8 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Security.Cryptography;
-using System.Text.Json;
+using static ContractManagement.Tests.ContractRichTextTestData;
+using static ContractManagement.Tests.AuditValueTestData;
 
 namespace ContractManagement.Tests.Domains.Services.Contract;
 
@@ -546,43 +547,46 @@ public class ContractServiceResponsibilityTransferTests
         var audit = await context.TblContractAudits
             .SingleAsync(x =>
                 x.ActionType == ContractAuditActionTypes.DraftUpdated);
-        using var previousDocument = JsonDocument.Parse(
-            audit.PreviousValuesJson!);
-        using var newDocument = JsonDocument.Parse(
-            audit.NewValuesJson!);
-        var previousValues = previousDocument.RootElement;
-        var newValues = newDocument.RootElement;
-
         Assert.Equal(
             CustomerId,
-            previousValues.GetProperty("CustomerId").GetInt32());
+            ContractValue(audit, AuditValueSide.Previous,
+                ContractAuditFieldCode.CustomerId).IntegerValue);
         Assert.Equal(
             "Khách hàng kiểm thử",
-            previousValues.GetProperty("CustomerName").GetString());
+            ContractValue(audit, AuditValueSide.Previous,
+                ContractAuditFieldCode.CustomerName).StringValue);
         Assert.Equal(
             NewCustomerId,
-            newValues.GetProperty("CustomerId").GetInt32());
+            ContractValue(audit, AuditValueSide.New,
+                ContractAuditFieldCode.CustomerId).IntegerValue);
         Assert.Equal(
             "Công ty khách hàng mới",
-            newValues.GetProperty("CustomerName").GetString());
+            ContractValue(audit, AuditValueSide.New,
+                ContractAuditFieldCode.CustomerName).StringValue);
         Assert.Equal(
             "Updated contract",
-            newValues.GetProperty("ContractNameEn").GetString());
+            ContractValue(audit, AuditValueSide.New,
+                ContractAuditFieldCode.ContractNameEn).StringValue);
         Assert.Equal(
             100m,
-            newValues.GetProperty("Subtotal").GetDecimal());
+            ContractValue(audit, AuditValueSide.New,
+                ContractAuditFieldCode.Subtotal).DecimalValue);
         Assert.Equal(
             10m,
-            newValues.GetProperty("TotalDiscount").GetDecimal());
+            ContractValue(audit, AuditValueSide.New,
+                ContractAuditFieldCode.TotalDiscount).DecimalValue);
         Assert.Equal(
             9m,
-            newValues.GetProperty("TotalVat").GetDecimal());
+            ContractValue(audit, AuditValueSide.New,
+                ContractAuditFieldCode.TotalVat).DecimalValue);
         Assert.Contains(
             "SP-NEW",
-            newValues.GetProperty("AddedItems").GetString());
+            ContractValue(audit, AuditValueSide.New,
+                ContractAuditFieldCode.AddedItems).StringValue);
         Assert.Contains(
             "GENERAL",
-            newValues.GetProperty("AddedTerms").GetString());
+            ContractValue(audit, AuditValueSide.New,
+                ContractAuditFieldCode.AddedTerms).StringValue);
     }
 
     [Fact]
@@ -633,7 +637,7 @@ public class ContractServiceResponsibilityTransferTests
                 VersionId = VersionId,
                 TermCode = "GENERAL",
                 TermTitle = "Điều khoản cũ",
-                TermContent = "Nội dung cũ",
+                TermContent = RichText("Nội dung cũ"),
                 IsNegotiable = true,
                 DisplayOrder = 1,
                 CreatedEmployeeId = CreatorEmployeeId,
@@ -666,7 +670,7 @@ public class ContractServiceResponsibilityTransferTests
         request.Terms[0].RowVersion =
             Convert.ToBase64String(InitialRowVersion());
         request.Terms[0].TermTitle = "Điều khoản đã sửa";
-        request.Terms[0].TermContent = "Nội dung mới";
+        request.Terms[0].TermContent = RichText("Nội dung mới");
 
         await CreateService(context).UpdateDraftAsync(
             ContractId,
@@ -676,31 +680,30 @@ public class ContractServiceResponsibilityTransferTests
         var audit = await context.TblContractAudits
             .SingleAsync(x =>
                 x.ActionType == ContractAuditActionTypes.DraftUpdated);
-        using var previousDocument = JsonDocument.Parse(
-            audit.PreviousValuesJson!);
-        using var newDocument = JsonDocument.Parse(
-            audit.NewValuesJson!);
-        var previousValues = previousDocument.RootElement;
-        var newValues = newDocument.RootElement;
-
         Assert.Contains(
             "DV-REMOVE",
-            previousValues.GetProperty("RemovedItems").GetString());
+            ContractValue(audit, AuditValueSide.Previous,
+                ContractAuditFieldCode.RemovedItems).StringValue);
         Assert.Contains(
             "REMOVE",
-            previousValues.GetProperty("RemovedTerms").GetString());
+            ContractValue(audit, AuditValueSide.Previous,
+                ContractAuditFieldCode.RemovedTerms).StringValue);
         Assert.Contains(
             "SP-UPDATED",
-            newValues.GetProperty("UpdatedItems").GetString());
+            ContractValue(audit, AuditValueSide.New,
+                ContractAuditFieldCode.UpdatedItems).StringValue);
         Assert.Contains(
             "Số lượng",
-            newValues.GetProperty("UpdatedItems").GetString());
+            ContractValue(audit, AuditValueSide.New,
+                ContractAuditFieldCode.UpdatedItems).StringValue);
         Assert.Contains(
             "GENERAL",
-            newValues.GetProperty("UpdatedTerms").GetString());
+            ContractValue(audit, AuditValueSide.New,
+                ContractAuditFieldCode.UpdatedTerms).StringValue);
         Assert.Contains(
             "Nội dung",
-            newValues.GetProperty("UpdatedTerms").GetString());
+            ContractValue(audit, AuditValueSide.New,
+                ContractAuditFieldCode.UpdatedTerms).StringValue);
     }
 
     [Fact]
@@ -826,26 +829,22 @@ public class ContractServiceResponsibilityTransferTests
             (byte)ContractStatus.PendingApproval,
             audit.NewContractStatus);
 
-        using var previousDocument = JsonDocument.Parse(
-            audit.PreviousValuesJson!);
-        using var newDocument = JsonDocument.Parse(
-            audit.NewValuesJson!);
-        Assert.False(previousDocument.RootElement
-            .GetProperty("VersionLocked").GetBoolean());
-        Assert.True(newDocument.RootElement
-            .GetProperty("VersionLocked").GetBoolean());
+        Assert.False(ContractValue(audit, AuditValueSide.Previous,
+            ContractAuditFieldCode.VersionLocked).BooleanValue);
+        Assert.True(ContractValue(audit, AuditValueSide.New,
+            ContractAuditFieldCode.VersionLocked).BooleanValue);
         Assert.Equal(
             response.ApprovalRequestId,
-            newDocument.RootElement
-                .GetProperty("ApprovalRequestId").GetInt32());
+            ContractValue(audit, AuditValueSide.New,
+                ContractAuditFieldCode.ApprovalRequestId).IntegerValue);
         Assert.Equal(
             (byte)ApprovalRequestStatus.Pending,
-            newDocument.RootElement
-                .GetProperty("ApprovalStatus").GetByte());
+            ContractValue(audit, AuditValueSide.New,
+                ContractAuditFieldCode.ApprovalStatus).IntegerValue);
         Assert.Equal(
             response.SnapshotHash,
-            newDocument.RootElement
-                .GetProperty("SnapshotHash").GetString());
+            ContractValue(audit, AuditValueSide.New,
+                ContractAuditFieldCode.SnapshotHash).StringValue);
     }
 
     private static DbDtctechContext CreateContext()
@@ -934,12 +933,12 @@ public class ContractServiceResponsibilityTransferTests
             CurrentVersionId = VersionId,
             ContractCode = "HD-TEST-11",
             ContractName = "Hợp đồng kiểm thử",
+            TemplateVersionId = 1,
             Status = (byte)ContractStatus.Draft,
             TotalAmount = 100m,
             CurrencyCode = "VND",
             LanguageMode =
                 (byte)ContractLanguageMode.Vietnamese,
-            IsLegacy = false,
             CreatedEmployeeId = CreatorEmployeeId,
             CreatedDate = DateTime.UtcNow,
             RowVersion = rowVersion ?? InitialRowVersion()
@@ -951,6 +950,7 @@ public class ContractServiceResponsibilityTransferTests
                 VersionId = VersionId,
                 ContractId = ContractId,
                 VersionNo = 1,
+                TemplateVersionId = 1,
                 IsLocked = false,
                 CreatedEmployeeId = CreatorEmployeeId,
                 CreatedDate = DateTime.UtcNow,
@@ -988,9 +988,8 @@ public class ContractServiceResponsibilityTransferTests
             int employeeId,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(new ContractSubmissionArtifactRenderResult(
-                "{\"schemaVersion\":6}",
-                6,
-                7001,
+                ContractSnapshotTestData.Create(ContractId, VersionId),
+                1,
                 [0x50, 0x4B, 0x03, 0x04, 0x01],
                 "contract-submitted.docx",
                 "%PDF-test"u8.ToArray(),
@@ -1075,7 +1074,7 @@ public class ContractServiceResponsibilityTransferTests
                 {
                     TermCode = "GENERAL",
                     TermTitle = "Điều khoản chung",
-                    TermContent = "Nội dung kiểm thử",
+                    TermContent = RichText("Nội dung kiểm thử"),
                     IsNegotiable = true,
                     DisplayOrder = 1
                 }

@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Net.Mime;
-using System.Text;
 using ContractManagement.API.Domains.CustomerAccess;
 using Microsoft.Extensions.Options;
 
@@ -66,31 +65,28 @@ public sealed class CustomerOtpSmtpTests
     }
 
     [Fact]
-    public void EncryptedPayload_RoundTripsRecipientSnapshotAndExpiry()
+    public void EncryptedScalars_RoundTripIndependently()
     {
         var crypto = new CustomerAccessCryptography(Options.Create(CreateOptions()));
-        var message = new CustomerOtpDeliveryMessage("+84912345678", "012345",
-            "customer@example.test", DateTime.UtcNow.AddMinutes(5));
-        var encrypted = crypto.EncryptDeliveryPayload(message);
-        Assert.Equal(message, crypto.DecryptDeliveryPayload(encrypted));
-        Assert.DoesNotContain(message.EmailAddress!, encrypted);
-        Assert.DoesNotContain(message.Otp, encrypted);
+        var phone = crypto.EncryptScalar("+84912345678");
+        var otp = crypto.EncryptScalar("012345");
+        var email = crypto.EncryptScalar("customer@example.test");
+
+        Assert.Equal("+84912345678", crypto.DecryptScalar(phone));
+        Assert.Equal("012345", crypto.DecryptScalar(otp));
+        Assert.Equal("customer@example.test", crypto.DecryptScalar(email));
+        Assert.NotEqual(phone, otp);
     }
 
     [Fact]
-    public void LegacyEncryptedPayload_RemainsReadableWithoutInventingRecipient()
+    public void EncryptedScalar_RejectsTamperedEnvelope()
     {
-        var options = CreateOptions();
-        var nonce = RandomNumberGenerator.GetBytes(12);
-        var plaintext = Encoding.UTF8.GetBytes("+84912345678\n012345");
-        var ciphertext = new byte[plaintext.Length];
-        var tag = new byte[16];
-        using var aes = new AesGcm(Convert.FromBase64String(options.EncryptionKey!), 16);
-        aes.Encrypt(nonce, plaintext, ciphertext, tag);
-        var payload = Convert.ToBase64String(nonce.Concat(tag).Concat(ciphertext).ToArray());
-        var crypto = new CustomerAccessCryptography(Options.Create(options));
-        Assert.Equal(new CustomerOtpDeliveryMessage("+84912345678", "012345"),
-            crypto.DecryptDeliveryPayload(payload));
+        var crypto = new CustomerAccessCryptography(Options.Create(CreateOptions()));
+        var envelope = crypto.EncryptScalar("012345");
+        envelope[^1] ^= 0xff;
+
+        Assert.Throws<AuthenticationTagMismatchException>(() =>
+            crypto.DecryptScalar(envelope));
     }
 
     [Theory]

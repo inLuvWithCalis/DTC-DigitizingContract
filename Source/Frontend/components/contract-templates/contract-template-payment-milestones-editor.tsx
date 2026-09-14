@@ -95,10 +95,12 @@ function Fields({
   value,
   onChange,
   isBilingual,
+  disabled = false,
 }: {
   value: Draft;
   onChange: (next: Draft) => void;
   isBilingual: boolean;
+  disabled?: boolean;
 }) {
   const set = <K extends keyof Draft>(key: K, next: Draft[K]) =>
     onChange({ ...value, [key]: next });
@@ -108,6 +110,7 @@ function Fields({
         <Label>Mã đợt</Label>
         <Input
           value={value.milestoneCode}
+          disabled={disabled}
           onChange={(e) => set("milestoneCode", e.target.value.toUpperCase())}
         />
       </div>
@@ -115,6 +118,7 @@ function Fields({
         <Label>Tên đợt</Label>
         <Input
           value={value.titleVi}
+          disabled={disabled}
           onChange={(e) => set("titleVi", e.target.value)}
         />
       </div>
@@ -126,6 +130,7 @@ function Fields({
           max={100}
           step="0.0001"
           value={value.paymentPercent}
+          disabled={disabled}
           onChange={(e) => set("paymentPercent", Number(e.target.value))}
         />
       </div>
@@ -137,6 +142,7 @@ function Fields({
         <Label>Mốc bắt đầu tính hạn</Label>
         <Select
           value={String(value.dueAnchor)}
+          disabled={disabled}
           onValueChange={(val) =>
             set("dueAnchor", Number(val) as PaymentDueAnchor)
           }
@@ -170,6 +176,7 @@ function Fields({
             type="number"
             min={0}
             value={value.dueOffsetDays}
+            disabled={disabled}
             onChange={(e) => set("dueOffsetDays", Number(e.target.value))}
           />
         </div>
@@ -177,6 +184,7 @@ function Fields({
           <Label>Cách đếm</Label>
           <Select
             value={String(value.dayCountMode)}
+            disabled={disabled}
             onValueChange={(val) =>
               set("dayCountMode", Number(val) as PaymentDayCountMode)
             }
@@ -199,6 +207,7 @@ function Fields({
         <Label>Điều kiện bổ sung</Label>
         <Textarea
           value={value.conditionVi ?? ""}
+          disabled={disabled}
           onChange={(e) => set("conditionVi", e.target.value)}
         />
       </div>
@@ -208,6 +217,7 @@ function Fields({
             <Label>Tên đợt tiếng Anh</Label>
             <Input
               value={value.titleEn ?? ""}
+              disabled={disabled}
               onChange={(e) => set("titleEn", e.target.value)}
             />
           </div>
@@ -215,6 +225,7 @@ function Fields({
             <Label>Điều kiện tiếng Anh</Label>
             <Input
               value={value.conditionEn ?? ""}
+              disabled={disabled}
               onChange={(e) => set("conditionEn", e.target.value)}
             />
           </div>
@@ -417,6 +428,7 @@ export function ContractTemplatePaymentMilestonesEditor({
               }))
             }
             isBilingual={isBilingual}
+            disabled={!editable}
           />
           <div className="flex justify-end gap-2">
             {editable && (

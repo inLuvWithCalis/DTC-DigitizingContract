@@ -494,9 +494,17 @@ public sealed class ContractApprovalService : IContractApprovalService
 
                 if (decision == ApprovalRequestStatus.Approved)
                 {
+                    var hasCompleteSnapshot = await _dbContext
+                        .TblContractVersionLegalSnapshots
+                        .AsNoTracking()
+                        .Where(snapshot => snapshot.VersionId == version.VersionId)
+                        .AnyAsync(snapshot => snapshot.Parties.Count == 2
+                            && snapshot.Parties.Any(party => party.PartyRole == 1)
+                            && snapshot.Parties.Any(party => party.PartyRole == 2),
+                            cancellationToken);
                     if (!version.IsLocked
-                        || string.IsNullOrWhiteSpace(version.SnapshotJson)
-                        || string.IsNullOrWhiteSpace(version.SnapshotHash))
+                        || string.IsNullOrWhiteSpace(version.SnapshotHash)
+                        || !hasCompleteSnapshot)
                     {
                         throw ArtifactMissing();
                     }

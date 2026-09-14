@@ -69,7 +69,24 @@ public sealed class ContractAuditQueryServiceTests
             Assert.Equal(1, audit.VersionNo);
             Assert.NotNull(audit.NewValues);
             Assert.DoesNotContain("PhoneNumber", audit.NewValues!.Keys);
+            Assert.Equal((byte)ContractStatus.Draft,
+                Convert.ToByte(audit.NewValues["Status"]));
+            Assert.Equal(ResponsibleId,
+                Convert.ToInt32(audit.NewValues["ResponsibleEmployeeId"]));
+            Assert.True(audit.NewValues.ContainsKey("ContractNameEn"));
+            Assert.Null(audit.NewValues["ContractNameEn"]);
         });
+
+        Assert.DoesNotContain(context.TblContractAuditValues,
+            value => value.FieldCode is
+                (short)ContractAuditFieldCode.Status
+                or (short)ContractAuditFieldCode.ResponsibleEmployeeId);
+
+        var storedValue = await context.TblContractAuditValues
+            .FirstAsync(value => value.StringValue != null);
+        storedValue.StringValue = "mutated";
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            context.SaveChangesAsync());
     }
 
     [Fact]
@@ -289,6 +306,33 @@ public sealed class ContractAuditQueryServiceTests
         Assert.DoesNotContain("example.test", audit.Reason);
     }
 
+    [Fact]
+    public async Task Writer_RejectsValueStoredInWrongTypedColumn()
+    {
+        await using var context = CreateContext();
+        await SeedAsync(context);
+        var writer = CreateWriter(context, CreateTenant());
+
+        Assert.Throws<InvalidOperationException>(() => writer.StageEmployeeAudits(
+        [
+            new EmployeeContractAuditWriteRequest(
+                ContractId,
+                1,
+                ManagerId,
+                ContractAuditActionTypes.DraftUpdated,
+                ContractAuditResults.Succeeded,
+                DateTime.UtcNow,
+                NewValues:
+                [
+                    new ContractAuditValueInput(
+                        ContractAuditFieldCode.ContractName,
+                        AuditScalarValueKind.Integer,
+                        false,
+                        IntegerValue: 1)
+                ])
+        ]));
+    }
+
     private static DbDtctechContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<DbDtctechContext>()
@@ -395,6 +439,7 @@ public sealed class ContractAuditQueryServiceTests
             ("ResponsibleEmployeeId", ResponsibleId),
             ("CurrentVersionId", 1),
             ("ContractName", contractName),
+            ("ContractNameEn", null),
             ("ItemCount", 1),
             ("TermCount", 1)));
 }

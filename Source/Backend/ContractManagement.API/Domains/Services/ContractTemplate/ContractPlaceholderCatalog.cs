@@ -44,24 +44,22 @@ public sealed class ContractPlaceholderCatalog(
         };
     }
 
-    // Compatibility adapter preserves established system semantics, including money-in-words.
     public static IReadOnlyList<SoftwareSupplyPlaceholderDefinition> SystemDefinitions =>
         SoftwareSupplyPlaceholderCatalog.All.Select(x => x with { SourceFieldKey = "system." + x.Key }).ToArray();
 
-    public static SoftwareSupplyPlaceholderDefinition FromSnapshot(TblContractTemplateField f)
-    {
-        if (f.SourceFieldKey is null) ContractPlaceholderMetrics.LegacyFallback.Add(1);
-        return f.SourceFieldKey is null
-            ? SystemDefinitions.SingleOrDefault(x => x.Key == f.PlaceholderKey && x.DataSource == f.DataSource)
-              ?? throw new PlaceholderOperationException("PlaceholderSourceUnsupported", "Mapping template cũ không được hỗ trợ.")
-            : new(f.PlaceholderKey, f.FieldLabel, f.IsRequired, (TemplatePlaceholderDataKind)f.DataKind,
-                (TemplatePlaceholderMultiplicity)f.Multiplicity, f.DataSource)
-            {
-                IsSystem = f.IsSystem, SourceFieldKey = f.SourceFieldKey,
-                DefaultValue = f.DefaultValue, FormatString = f.FormatString,
-                RowVersion = f.DefinitionRowVersion is null ? null : Convert.ToBase64String(f.DefinitionRowVersion)
-            };
-    }
+    public static SoftwareSupplyPlaceholderDefinition FromSnapshot(TblContractTemplateField f) =>
+        new(f.PlaceholderKey, f.FieldLabel, f.IsRequired,
+            (TemplatePlaceholderDataKind)f.DataKind,
+            (TemplatePlaceholderMultiplicity)f.Multiplicity, f.DataSource)
+        {
+            IsSystem = f.IsSystem,
+            SourceFieldKey = f.SourceFieldKey,
+            DefaultValue = f.DefaultValue,
+            FormatString = f.FormatString,
+            RowVersion = f.DefinitionRowVersion is null
+                ? null
+                : Convert.ToBase64String(f.DefinitionRowVersion)
+        };
 
     public static string Fingerprint(IEnumerable<SoftwareSupplyPlaceholderDefinition> definitions) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(

@@ -14,7 +14,7 @@ using Microsoft.EntityFrameworkCore;
 namespace ContractManagement.Domains.Services.Contract;
 
 /// <summary>
-/// Renders SoftwareSupply DOCX/PDF from one schema-v5 snapshot. Preview results
+/// Renders SoftwareSupply DOCX/PDF from one typed snapshot. Preview results
 /// remain ephemeral; the submit pipeline persists the separate submission result
 /// only after both formats have been generated successfully.
 /// </summary>
@@ -102,8 +102,7 @@ public sealed class ContractDocumentPreviewService :
             cancellationToken);
 
         return new ContractSubmissionArtifactRenderResult(
-            SoftwareSupplyContractSnapshotFactory.Serialize(rendered.Snapshot),
-            rendered.Snapshot.SchemaVersion,
+            rendered.Snapshot,
             rendered.TemplateVersionId,
             rendered.Content,
             $"{rendered.SafeContractCode}-submitted.docx",
@@ -148,10 +147,7 @@ public sealed class ContractDocumentPreviewService :
             ?? throw new InvalidOperationException(
                 "Phiên bản hiện hành của hợp đồng không còn khả dụng.");
 
-        var templateVersionId = version.TemplateVersionId
-            ?? contract.TemplateVersionId
-            ?? throw new InvalidOperationException(
-                "Hợp đồng không có template để tạo preview.");
+        var templateVersionId = version.TemplateVersionId;
 
         var template = await (
                 from templateVersion in _dbContext.TblContractTemplateVersions
@@ -200,12 +196,6 @@ public sealed class ContractDocumentPreviewService :
             .OrderBy(item => item.DisplayOrder)
             .ThenBy(item => item.LegalBasisId)
             .ToListAsync(cancellationToken);
-        var payments = await _dbContext.TblPaymentSchedules
-            .AsNoTracking()
-            .Where(schedule => schedule.ContractId == contractId)
-            .OrderBy(schedule => schedule.DueDate)
-            .ThenBy(schedule => schedule.ScheduleId)
-            .ToListAsync(cancellationToken);
         var paymentMilestones = await _dbContext.TblContractPaymentMilestones
             .AsNoTracking()
             .Where(item => item.ContractId == contractId && item.VersionId == versionId)
@@ -227,7 +217,27 @@ public sealed class ContractDocumentPreviewService :
                 item.LegalBasisId, item.BasisCode, item.ContentVi,
                 item.ContentEn, item.DisplayOrder)).ToArray()
         };
-        var renderData = CreateRenderData(snapshot, customer, payments);
+        var itemLayoutRows = await _dbContext
+            .TblContractTemplateItemTableColumnLayouts
+            .AsNoTracking()
+            .Where(item => item.TemplateVersionId == templateVersionId)
+            .OrderBy(item => item.DisplayOrder)
+            .Select(item => new
+            {
+                item.ColumnKey,
+                item.DisplayOrder,
+                item.WidthBps
+            })
+            .ToListAsync(cancellationToken);
+        var itemTableWidths = ContractTableLayoutPolicy.RequireItemColumnWidths(
+            itemLayoutRows.Select(item => (
+                item.ColumnKey,
+                (int)item.DisplayOrder,
+                (int)item.WidthBps)));
+        var renderData = CreateRenderData(snapshot, customer) with
+        {
+            ItemTableColumnWidthsBps = itemTableWidths
+        };
         var fields = await _dbContext.TblContractTemplateFields.AsNoTracking()
             .Where(x => x.TemplateVersionId == templateVersionId).ToListAsync(cancellationToken);
         var definitions = fields.Select(ContractPlaceholderCatalog.FromSnapshot).ToArray();
@@ -242,9 +252,9 @@ public sealed class ContractDocumentPreviewService :
         renderData = renderData with
         {
             ScalarValues = scalars,
-            Definitions = definitions.Length == 0 ? ContractPlaceholderCatalog.SystemDefinitions : definitions
+            Definitions = definitions
         };
-        // Included in the canonical submitted JSON/hash alongside the generated artifact.
+        // Included in the canonical relational aggregate/hash alongside the artifact.
         snapshot = snapshot with { PlaceholderValues = scalars };
         var source = await ReadTemplateSourceAsync(
             template.Version,
@@ -276,11 +286,6 @@ public sealed class ContractDocumentPreviewService :
                 "Phase 8B chỉ hỗ trợ renderer cho hợp đồng cung cấp phần mềm.");
         }
 
-        if (contract.IsLegacy)
-        {
-            throw new InvalidOperationException(
-                "Hợp đồng legacy không có dữ liệu template để tạo preview động.");
-        }
     }
 
     private static void EnsureTemplatePolicy(
@@ -362,8 +367,7 @@ public sealed class ContractDocumentPreviewService :
 
     private static ContractTemplateRenderData CreateRenderData(
         SoftwareSupplyContractSnapshot snapshot,
-        TblCustomer customer,
-        IReadOnlyList<TblPaymentSchedule> paymentSchedules)
+        TblCustomer customer)
     {
         var contract = snapshot.Contract;
         var version = snapshot.Version;
@@ -456,27 +460,9 @@ public sealed class ContractDocumentPreviewService :
             })
             .ToArray();
 
-        var payments = paymentSchedules.Select((payment, index) =>
-        {
-            var amount = Convert.ToDecimal(payment.Amount);
-            var percent = version.TotalAmount > 0
-                ? amount / version.TotalAmount * 100m
-                : 0m;
-            var dueCondition = string.IsNullOrWhiteSpace(payment.Note)
-                ? $"Hạn thanh toán {payment.DueDate:dd/MM/yyyy}"
-                : $"Hạn {payment.DueDate:dd/MM/yyyy} — {payment.Note.Trim()}";
-            return new ContractTemplateRenderPayment(
-                index + 1,
-                $"Đợt {index + 1}",
-                $"{percent:0.##}%",
-                amount,
-                dueCondition);
-        }).ToArray();
-
         return new ContractTemplateRenderData(
             scalarValues,
             items,
-            payments,
             terms,
             new ContractTemplateRenderSignature(
                 "ĐẠI DIỆN BÊN CUNG CẤP",

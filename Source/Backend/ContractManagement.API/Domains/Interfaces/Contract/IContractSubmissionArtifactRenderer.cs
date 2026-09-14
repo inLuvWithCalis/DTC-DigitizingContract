@@ -1,3 +1,5 @@
+using ContractManagement.API.Domains.Models.Contract;
+
 namespace ContractManagement.Domains.Interfaces.Contract;
 
 /// <summary>
@@ -14,8 +16,7 @@ public interface IContractSubmissionArtifactRenderer
 }
 
 public sealed record ContractSubmissionArtifactRenderResult(
-    string SnapshotJson,
-    int SnapshotSchemaVersion,
+    SoftwareSupplyContractSnapshot Snapshot,
     int TemplateVersionId,
     byte[] DocxContent,
     string DocxFileName,

@@ -1,5 +1,6 @@
 import { toast } from "@/components/ui/sonner";
 import { useEffect, useRef, useState } from "react";
+import { Loader2 } from "lucide-react";
 
 interface ConfirmToastProps {
   title?: string;
@@ -85,8 +86,11 @@ const ConfirmToast = ({
         <button
           onClick={handleConfirm}
           disabled={isActionPending}
-          className="text-xs font-medium px-3 py-2 rounded-md bg-primary text-white hover:bg-indigo-500 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="inline-flex items-center justify-center text-xs font-medium px-3 py-2 rounded-md bg-primary text-white hover:bg-indigo-500 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
+          {isActionPending && (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          )}
           {confirmLabel || "Xác nhận"}
         </button>
       </div>

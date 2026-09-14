@@ -9,7 +9,6 @@ namespace ContractManagement.Domains.Policies.ContractTemplate;
 public sealed record ContractTemplateRenderData(
     IReadOnlyDictionary<string, string> ScalarValues,
     IReadOnlyList<ContractTemplateRenderItem> Items,
-    IReadOnlyList<ContractTemplateRenderPayment> Payments,
     IReadOnlyList<ContractTemplateRenderTerm> Terms,
     ContractTemplateRenderSignature ProviderSignature,
     ContractTemplateRenderSignature CustomerSignature,
@@ -19,6 +18,8 @@ public sealed record ContractTemplateRenderData(
     public IReadOnlyList<SoftwareSupplyPlaceholderDefinition>? Definitions { get; init; }
 
     public IReadOnlyList<ContractTemplateRenderLegalBasis> LegalBases { get; init; } = [];
+
+    public IReadOnlyList<int> ItemTableColumnWidthsBps { get; init; } = [];
 }
 
 public sealed record ContractTemplateRenderItem(
@@ -30,13 +31,6 @@ public sealed record ContractTemplateRenderItem(
     string Discount,
     string Vat,
     decimal TotalAmount);
-
-public sealed record ContractTemplateRenderPayment(
-    int No,
-    string Description,
-    string Percent,
-    decimal Amount,
-    string DueCondition);
 
 public sealed record ContractTemplateRenderTerm(
     int No,
@@ -73,6 +67,7 @@ public sealed record ContractTemplateRenderLegalBasis(
 /// </summary>
 public sealed record ContractTemplateAuthoringPreviewData
 {
+    public IReadOnlyList<int> ItemTableColumnWidthsBps { get; init; } = [];
     public IReadOnlyList<ContractTemplateRenderLegalBasis> LegalBases { get; init; } = [];
     public IReadOnlyList<ContractTemplateRenderTerm> Terms { get; init; } = [];
 }

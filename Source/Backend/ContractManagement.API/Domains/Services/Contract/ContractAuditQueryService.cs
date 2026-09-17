@@ -720,6 +720,7 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
 
     private static HashSet<string> SubjectTypes() =>
         [ContractAuditSubjectTypes.Contract, ContractAuditSubjectTypes.ContractVersion,
+            ContractAuditSubjectTypes.ContractAppendix,
             ContractAuditSubjectTypes.NegotiationComment,
             ContractAuditSubjectTypes.CustomerAccessLink,
             ContractAuditSubjectTypes.CustomerOtpChallenge,
@@ -757,6 +758,12 @@ public sealed class ContractAuditQueryService : IContractAuditQueryService
         ContractAuditActionTypes.ContractAttachmentDeleted,
         ContractAuditActionTypes.NegotiationStarted,
         ContractAuditActionTypes.NegotiationRoundCreated,
+        ContractAuditActionTypes.ContractAppendixSelected,
+        ContractAuditActionTypes.ContractAppendixRemoved,
+        ContractAuditActionTypes.ContractAppendixTermCreated,
+        ContractAuditActionTypes.ContractAppendixTermUpdated,
+        ContractAuditActionTypes.ContractAppendixTermDeleted,
+        ContractAuditActionTypes.ContractAppendixTermsReordered,
         ContractAuditActionTypes.ExternalFeedbackCreated,
         ContractAuditActionTypes.NegotiationReplyCreated,
         ContractAuditActionTypes.NegotiationCommentResolved,

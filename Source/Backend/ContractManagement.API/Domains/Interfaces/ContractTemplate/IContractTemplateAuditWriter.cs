@@ -17,6 +17,14 @@ public static class ContractTemplateAuditActionTypes
     public const string TemplateVersionRetired = "TemplateVersionRetired";
     public const string PdfRenderFailed = "PdfRenderFailed";
     public const string PublishConcurrencyConflict = "PublishConcurrencyConflict";
+    public const string TemplateAppendixCreated = "TemplateAppendixCreated";
+    public const string TemplateAppendixUpdated = "TemplateAppendixUpdated";
+    public const string TemplateAppendixDeleted = "TemplateAppendixDeleted";
+    public const string TemplateAppendicesReordered = "TemplateAppendicesReordered";
+    public const string TemplateAppendixTermCreated = "TemplateAppendixTermCreated";
+    public const string TemplateAppendixTermUpdated = "TemplateAppendixTermUpdated";
+    public const string TemplateAppendixTermDeleted = "TemplateAppendixTermDeleted";
+    public const string TemplateAppendixTermsReordered = "TemplateAppendixTermsReordered";
 }
 
 public static class ContractTemplateAuditResults
@@ -39,7 +47,11 @@ public enum ContractTemplateAuditFieldCode : byte
     PreviewStatus,
     PublishedPreviewPdfFileId,
     PublishedPreviewPdfSizeBytes,
-    PublishStatus
+    PublishStatus,
+    TemplateAppendixId,
+    TemplateAppendixTermId,
+    AppendixCount,
+    AppendixTermCount
 }
 
 public sealed record ContractTemplateAuditValueInput(
@@ -74,7 +86,11 @@ public sealed record ContractTemplateAuditValueInput(
             ContractTemplateAuditFieldCode.DocumentFileId
                 or ContractTemplateAuditFieldCode.RecognizedPlaceholderCount
                 or ContractTemplateAuditFieldCode.PreviewFileId
-                or ContractTemplateAuditFieldCode.PublishedPreviewPdfFileId =>
+                or ContractTemplateAuditFieldCode.PublishedPreviewPdfFileId
+                or ContractTemplateAuditFieldCode.TemplateAppendixId
+                or ContractTemplateAuditFieldCode.TemplateAppendixTermId
+                or ContractTemplateAuditFieldCode.AppendixCount
+                or ContractTemplateAuditFieldCode.AppendixTermCount =>
                 new(fieldCode, false, IntegerValue:
                     Convert.ToInt32(value, CultureInfo.InvariantCulture)),
             _ => throw new InvalidOperationException(

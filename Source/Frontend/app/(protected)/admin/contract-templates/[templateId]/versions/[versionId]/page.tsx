@@ -11,6 +11,7 @@ import {
   Download,
   Eye,
   FileText,
+  Files,
   Info,
   ListChecks,
   Loader2,
@@ -31,6 +32,7 @@ import {
 import { ContractTemplateTermsEditor } from "@/components/contract-templates/contract-template-terms-editor";
 import { ContractTemplateLegalBasesEditor } from "@/components/contract-templates/contract-template-legal-bases-editor";
 import { ContractTemplateItemTableLayoutEditor } from "@/components/contract-templates/contract-template-item-table-layout-editor";
+import { ContractTemplateAppendicesEditor } from "@/components/contract-templates/contract-template-appendices-editor";
 import {
   downloadBlob,
   getContractTemplateErrorMessage,
@@ -64,12 +66,30 @@ const DOCX_MIME =
 const TAB_VALUES = [
   "overview",
   "legal-bases",
+  "appendices",
   "terms",
   "document",
   "placeholders",
   "preview",
 ] as const;
 type WorkspaceTab = (typeof TAB_VALUES)[number];
+
+const APPENDIX_PUBLISH_ERROR_CODES = new Set([
+  "AppendixMarkerMissing",
+  "AppendixMarkerPositionInvalid",
+  "AppendixFlagsInvalid",
+  "AppendixTermsInvalid",
+]);
+
+const isAppendixPublishError = (error: unknown) => {
+  const data = (error as {
+    response?: { data?: { code?: string; errors?: string[] } };
+  }).response?.data;
+  return Boolean(
+    (data?.code && APPENDIX_PUBLISH_ERROR_CODES.has(data.code)) ||
+      data?.errors?.some((code) => APPENDIX_PUBLISH_ERROR_CODES.has(code)),
+  );
+};
 
 const isWorkspaceTab = (value: string): value is WorkspaceTab =>
   TAB_VALUES.includes(value as WorkspaceTab);
@@ -115,6 +135,9 @@ export default function ContractTemplateVersionWorkspacePage() {
   const [isOpeningPdf, setIsOpeningPdf] = useState(false);
   const [isPublishOpen, setIsPublishOpen] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [appendixPublishError, setAppendixPublishError] = useState<
+    string | null
+  >(null);
   const [isRetireOpen, setIsRetireOpen] = useState(false);
   const [isRetiring, setIsRetiring] = useState(false);
 
@@ -157,8 +180,11 @@ export default function ContractTemplateVersionWorkspacePage() {
 
   useEffect(() => {
     const hash = window.location.hash.replace("#", "");
-    if (isWorkspaceTab(hash)) setActiveTab(hash);
-    void fetchWorkspace();
+    const loadTimer = window.setTimeout(() => {
+      if (isWorkspaceTab(hash)) setActiveTab(hash);
+      void fetchWorkspace();
+    }, 0);
+    return () => window.clearTimeout(loadTimer);
   }, [fetchWorkspace]);
 
   const changeTab = (value: string) => {
@@ -202,6 +228,7 @@ export default function ContractTemplateVersionWorkspacePage() {
         version.rowVersion,
       );
       setVersion(result);
+      setAppendixPublishError(null);
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
       if (result.validationStatus === TemplateValidationStatus.Valid) {
@@ -319,16 +346,21 @@ export default function ContractTemplateVersionWorkspacePage() {
         },
       );
       setVersion(result);
+      setAppendixPublishError(null);
       setIsPublishOpen(false);
       toast.success(`Đã phát hành Version ${result.versionNo}.`);
       await fetchWorkspace(false);
     } catch (error) {
-      toast.error(
-        getContractTemplateErrorMessage(
-          error,
-          "Không thể phát hành phiên bản.",
-        ),
+      const message = getContractTemplateErrorMessage(
+        error,
+        "Không thể phát hành phiên bản.",
       );
+      toast.error(message);
+      if (isAppendixPublishError(error)) {
+        setAppendixPublishError(message);
+        setIsPublishOpen(false);
+        changeTab("appendices");
+      }
       await fetchWorkspace(false);
     } finally {
       setIsPublishing(false);
@@ -505,6 +537,9 @@ export default function ContractTemplateVersionWorkspacePage() {
                     <TabsTrigger value="legal-bases">
                       <Scale /> Căn cứ
                     </TabsTrigger>
+                    <TabsTrigger value="appendices">
+                      <Files /> Phụ lục đính kèm
+                    </TabsTrigger>
                     <TabsTrigger value="placeholders">
                       <Braces /> Placeholder
                     </TabsTrigger>
@@ -518,7 +553,7 @@ export default function ContractTemplateVersionWorkspacePage() {
                 </div>
 
                 <TabsContent value="overview" className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
                     <Card>
                       <CardHeader className="pb-2">
                         <CardTitle className="text-sm text-muted-foreground">
@@ -527,6 +562,16 @@ export default function ContractTemplateVersionWorkspacePage() {
                       </CardHeader>
                       <CardContent className="text-2xl font-bold">
                         {version.terms.length}
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm text-muted-foreground">
+                          Phụ lục đính kèm
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="text-2xl font-bold">
+                        {version.appendices?.length ?? 0}
                       </CardContent>
                     </Card>
                     <Card>
@@ -609,6 +654,18 @@ export default function ContractTemplateVersionWorkspacePage() {
                     isBilingual={
                       template.languageMode === ContractLanguageMode.Bilingual
                     }
+                    onRefresh={() => fetchWorkspace(false)}
+                  />
+                </TabsContent>
+
+                <TabsContent value="appendices">
+                  <ContractTemplateAppendicesEditor
+                    key={`${version.templateVersionId}-${version.status}-${version.rowVersion}-appendices`}
+                    version={version}
+                    isBilingual={
+                      template.languageMode === ContractLanguageMode.Bilingual
+                    }
+                    publishError={appendixPublishError}
                     onRefresh={() => fetchWorkspace(false)}
                   />
                 </TabsContent>

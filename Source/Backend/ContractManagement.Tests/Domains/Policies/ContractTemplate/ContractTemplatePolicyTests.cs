@@ -13,9 +13,9 @@ public class ContractTemplatePolicyTests
         var catalog = SoftwareSupplyPlaceholderCatalog.All;
 
         Assert.Equal("V4", SoftwareSupplyPlaceholderCatalog.Version);
-        Assert.Equal(36, catalog.Count);
+        Assert.Equal(37, catalog.Count);
         Assert.DoesNotContain(catalog, item => item.IsRequired);
-        Assert.Equal(36, catalog.Count(item => !item.IsRequired));
+        Assert.Equal(37, catalog.Count(item => !item.IsRequired));
         Assert.All(catalog, item =>
             Assert.Equal(TemplatePlaceholderMultiplicity.ZeroOrOne, item.Multiplicity));
         Assert.Equal(

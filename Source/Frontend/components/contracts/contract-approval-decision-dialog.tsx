@@ -189,6 +189,23 @@ export function ContractApprovalDecisionDialog({
                 </div>
 
                 <div className="rounded-lg border bg-muted/20 p-4 text-sm">
+                  <p className="font-medium">
+                    Phụ lục trong package ({detail.appendices?.length ?? 0})
+                  </p>
+                  {(detail.appendices?.length ?? 0) > 0 ? (
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">
+                      {detail.appendices.map((appendix) => (
+                        <li key={appendix.appendixId}>
+                          {appendix.appendixCode} — {appendix.appendixName}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-1 text-muted-foreground">Không có phụ lục.</p>
+                  )}
+                </div>
+
+                <div className="rounded-lg border bg-muted/20 p-4 text-sm">
                   <Link
                     href={`/contracts/${detail.contractId}#approval`}
                     target="_blank"

@@ -516,6 +516,7 @@ public partial class DbDtctechContext
                     || audit.SubjectType is not (
                         "Contract"
                         or "ContractVersion"
+                        or "ContractAppendix"
                         or "NegotiationComment"
                         or "CustomerAccessLink"
                         or "CustomerOtpChallenge"

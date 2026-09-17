@@ -51,7 +51,7 @@ public sealed class ContractSigningServicePhase9Tests
                 "SignedEvidenceUploaded");
 
         Assert.Equal((byte)ContractStatus.Signed, contract.Status);
-        Assert.Null(contract.SignDate);
+        Assert.Equal(new DateTime(2026, 9, 1), contract.SignDate);
         Assert.Equal(SignedEvidenceStatus.Active, response.Status);
         Assert.Equal((byte)SignedEvidenceStatus.Active, evidence.Status);
         Assert.Equal("ContractSignedEvidence", file.ObjectType);
@@ -61,6 +61,26 @@ public sealed class ContractSigningServicePhase9Tests
         Assert.Equal(TechnicalId, audit.ActorEmployeeId);
         Assert.Single(storage.SavedKeys);
         Assert.Empty(storage.DeletedKeys);
+    }
+
+    [Theory]
+    [InlineData(0, 0, 0)]
+    [InlineData(2099, 1, 1)]
+    public async Task Upload_InvalidBusinessSignDate_IsRejectedBeforeStorage(
+        int year, int month, int day)
+    {
+        await using var context = CreateContext();
+        await SeedAsync(context, ContractStatus.PendingSignature);
+        var storage = new TrackingPrivateStorage();
+        var request = CreateUploadRequest("signed.pdf", "application/pdf");
+        request.SignDate = year == 0 ? default : new DateTime(year, month, day);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            CreateService(context, storage).UploadAsync(
+                ContractId, request, TechnicalId));
+
+        Assert.Empty(storage.SavedKeys);
+        Assert.Empty(context.TblContractSignedEvidences);
     }
 
     [Fact]
@@ -77,6 +97,7 @@ public sealed class ContractSigningServicePhase9Tests
         var request = new SupersedeContractSignedEvidenceRequest
         {
             File = CreateFile("replacement.png", "image/png"),
+            SignDate = new DateTime(2026, 9, 1),
             CurrentVersionId = VersionId,
             ContractRowVersion = Encode(InitialRowVersion),
             VersionRowVersion = Encode(InitialRowVersion),
@@ -126,6 +147,7 @@ public sealed class ContractSigningServicePhase9Tests
         var request = new SupersedeContractSignedEvidenceRequest
         {
             File = CreateFile("replacement.pdf", "application/pdf"),
+            SignDate = new DateTime(2026, 9, 1),
             CurrentVersionId = VersionId,
             ContractRowVersion = Encode(InitialRowVersion),
             VersionRowVersion = Encode(InitialRowVersion),
@@ -240,6 +262,9 @@ public sealed class ContractSigningServicePhase9Tests
             ContractCode = "HD-PHASE9",
             ContractName = "Phase 9 Contract",
             Status = (byte)status,
+            SignDate = status is ContractStatus.Signed or ContractStatus.Completed
+                ? new DateTime(2026, 9, 1)
+                : null,
             CurrencyCode = "VND",
             LanguageMode = (byte)ContractLanguageMode.Vietnamese,
             CreatedEmployeeId = OwnerId,
@@ -347,6 +372,7 @@ public sealed class ContractSigningServicePhase9Tests
         string contentType) => new()
         {
             File = CreateFile(fileName, contentType),
+            SignDate = new DateTime(2026, 9, 1),
             CurrentVersionId = VersionId,
             ContractRowVersion = Encode(InitialRowVersion),
             VersionRowVersion = Encode(InitialRowVersion)

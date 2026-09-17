@@ -179,6 +179,20 @@ public sealed class ContractApprovalService : IContractApprovalService
         response.Artifacts = await LoadArtifactsAsync(
             row.Version.VersionId,
             cancellationToken);
+        response.Appendices = await _dbContext.TblContractAppendices
+            .AsNoTracking()
+            .Where(appendix => appendix.ContractId == row.Contract.ContractId
+                && appendix.VersionId == row.Version.VersionId)
+            .OrderBy(appendix => appendix.DisplayOrder)
+            .ThenBy(appendix => appendix.AppendixId)
+            .Select(appendix => new ContractApprovalAppendixSummaryResponse
+            {
+                AppendixId = appendix.AppendixId,
+                AppendixCode = appendix.AppendixCode,
+                AppendixName = appendix.AppendixName,
+                DisplayOrder = appendix.DisplayOrder
+            })
+            .ToListAsync(cancellationToken);
         return response;
     }
 

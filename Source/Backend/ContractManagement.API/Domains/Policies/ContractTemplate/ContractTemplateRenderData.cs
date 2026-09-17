@@ -20,7 +20,25 @@ public sealed record ContractTemplateRenderData(
     public IReadOnlyList<ContractTemplateRenderLegalBasis> LegalBases { get; init; } = [];
 
     public IReadOnlyList<int> ItemTableColumnWidthsBps { get; init; } = [];
+
+    public IReadOnlyList<ContractTemplateRenderAppendix> Appendices { get; init; } = [];
 }
+
+public sealed record ContractTemplateRenderAppendix(
+    int No,
+    string Code,
+    string NameVi,
+    string? NameEn,
+    string ReferenceVi,
+    string? ReferenceEn,
+    IReadOnlyList<ContractTemplateRenderAppendixTerm> Terms);
+
+public sealed record ContractTemplateRenderAppendixTerm(
+    int No,
+    string TitleVi,
+    string? TitleEn,
+    string? ContentVi,
+    string? ContentEn);
 
 public sealed record ContractTemplateRenderItem(
     int No,
@@ -70,6 +88,7 @@ public sealed record ContractTemplateAuthoringPreviewData
     public IReadOnlyList<int> ItemTableColumnWidthsBps { get; init; } = [];
     public IReadOnlyList<ContractTemplateRenderLegalBasis> LegalBases { get; init; } = [];
     public IReadOnlyList<ContractTemplateRenderTerm> Terms { get; init; } = [];
+    public IReadOnlyList<ContractTemplateRenderAppendix> Appendices { get; init; } = [];
 }
 
 public sealed record ContractTemplateRenderSignature(

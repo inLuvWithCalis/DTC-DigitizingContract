@@ -466,6 +466,63 @@ namespace ContractManagement.Domains.Services.Contract
                         .OrderBy(x => x.DisplayOrder)
                         .ThenBy(x => x.TemplatePaymentMilestoneId)
                         .ToListAsync();
+                    var templateAppendices = await _dbContext
+                        .TblContractTemplateAppendices
+                        .AsNoTracking()
+                        .Where(x => x.TemplateVersionId == request.TemplateVersionId)
+                        .OrderBy(x => x.DisplayOrder)
+                        .ThenBy(x => x.TemplateAppendixId)
+                        .ToListAsync();
+                    var templateAppendixIds = templateAppendices
+                        .Select(x => x.TemplateAppendixId)
+                        .ToList();
+                    var templateAppendixTerms = await _dbContext
+                        .TblContractTemplateAppendixTerms
+                        .AsNoTracking()
+                        .Where(x => templateAppendixIds.Contains(x.TemplateAppendixId))
+                        .OrderBy(x => x.DisplayOrder)
+                        .ThenBy(x => x.TemplateAppendixTermId)
+                        .ToListAsync();
+                    var requestedAppendixIds = request
+                        .SelectedOptionalTemplateAppendixIds
+                        .ToHashSet();
+                    if (requestedAppendixIds.Count != request
+                            .SelectedOptionalTemplateAppendixIds.Count)
+                    {
+                        throw new ArgumentException(
+                            "Danh sách phụ lục tùy chọn không được chứa ID trùng.",
+                            nameof(request.SelectedOptionalTemplateAppendixIds));
+                    }
+                    if (requestedAppendixIds.Any(id =>
+                            templateAppendices.All(x => x.TemplateAppendixId != id)))
+                    {
+                        throw new ArgumentException(
+                            "Phụ lục được chọn không thuộc template version hiện hành.",
+                            nameof(request.SelectedOptionalTemplateAppendixIds));
+                    }
+                    if (requestedAppendixIds.Any(id => templateAppendices.Any(x =>
+                            x.TemplateAppendixId == id && x.IsRequired)))
+                    {
+                        throw new ArgumentException(
+                            "Payload chỉ được gửi ID phụ lục tùy chọn; phụ lục bắt buộc do backend tự thêm.",
+                            nameof(request.SelectedOptionalTemplateAppendixIds));
+                    }
+
+                    var selectedTemplateAppendices = templateAppendices
+                        .Where(x => x.IsRequired
+                            || requestedAppendixIds.Contains(x.TemplateAppendixId))
+                        .ToList();
+                    foreach (var appendix in selectedTemplateAppendices)
+                    {
+                        var appendixTerms = templateAppendixTerms
+                            .Where(x => x.TemplateAppendixId == appendix.TemplateAppendixId)
+                            .ToList();
+                        if (appendixTerms.Count == 0)
+                        {
+                            throw new InvalidOperationException(
+                                $"Phụ lục {appendix.AppendixCode} chưa có điều khoản.");
+                        }
+                    }
 
                     var templatePaymentTerms = templateTerms
                         .Where(term => term.TermKind == (byte)ContractTermKind.Payment)
@@ -746,10 +803,50 @@ namespace ContractManagement.Domains.Services.Contract
                             CreatedDate = now
                         }).ToList();
 
+                    var contractAppendices = selectedTemplateAppendices.Select(source =>
+                        new TblContractAppendix
+                        {
+                            ContractId = contract.ContractId,
+                            VersionId = contractVersion.VersionId,
+                            SourceTemplateAppendixId = source.TemplateAppendixId,
+                            AppendixCode = source.AppendixCode,
+                            AppendixName = source.AppendixName,
+                            AppendixNameEn = source.AppendixNameEn,
+                            AppendixDescription = source.AppendixDescription,
+                            IsRequired = source.IsRequired,
+                            DisplayOrder = source.DisplayOrder,
+                            CreatedEmployeeId = createdEmployeeId,
+                            CreatedDate = now
+                        }).ToList();
+
                     _dbContext.TblContractItems.AddRange(contractItems);
                     _dbContext.TblContractTerms.AddRange(contractTerms);
                     _dbContext.TblContractLegalBases.AddRange(contractLegalBases);
+                    _dbContext.TblContractAppendices.AddRange(contractAppendices);
                     await _dbContext.SaveChangesAsync();
+
+                    var contractAppendicesBySource = contractAppendices
+                        .ToDictionary(x => x.SourceTemplateAppendixId);
+                    var contractAppendixTerms = templateAppendixTerms
+                        .Where(source => contractAppendicesBySource.ContainsKey(
+                            source.TemplateAppendixId))
+                        .Select(source => new TblContractAppendixTerm
+                        {
+                            AppendixId = contractAppendicesBySource[
+                                source.TemplateAppendixId].AppendixId,
+                            SourceTemplateAppendixTermId =
+                                source.TemplateAppendixTermId,
+                            TermCode = source.TermCode,
+                            TermTitle = source.TermTitle,
+                            TermTitleEn = source.TermTitleEn,
+                            TermContent = source.TermContent,
+                            TermContentEn = source.TermContentEn,
+                            DisplayOrder = source.DisplayOrder,
+                            CreatedEmployeeId = createdEmployeeId,
+                            CreatedDate = now
+                        }).ToList();
+                    _dbContext.TblContractAppendixTerms.AddRange(
+                        contractAppendixTerms);
 
                     var contractTermsBySource = contractTerms
                         .Where(item => item.SourceTemplateTermId.HasValue)
@@ -861,6 +958,7 @@ namespace ContractManagement.Domains.Services.Contract
                                 ("TotalAmount", contract.TotalAmount),
                                 ("ItemCount", contractItems.Count),
                                 ("TermCount", contractTerms.Count),
+                                ("AppendixCount", contractAppendices.Count),
                                 ("AddedItems", createdItemsAudit),
                                 ("AddedTerms", createdTermsAudit))),
 
@@ -936,6 +1034,7 @@ namespace ContractManagement.Domains.Services.Contract
 
                         ItemCount = contractItems.Count,
                         TermCount = contractTerms.Count,
+                        AppendixCount = contractAppendices.Count,
 
                         // Trả RowVersion để Frontend có thể cập nhật Draft ngay.
                         RowVersion = EncodeRowVersion(contract.RowVersion),
@@ -1449,6 +1548,9 @@ namespace ContractManagement.Domains.Services.Contract
                 .ThenBy(x => x.PaymentMilestoneId)
                 .ToListAsync();
 
+            var appendices = await LoadContractAppendicesAsync(
+                contract.ContractId, version.VersionId);
+
             var comments = await LoadCommentResponsesAsync(
                 contract.ContractId,
                 version.VersionId);
@@ -1613,6 +1715,12 @@ namespace ContractManagement.Domains.Services.Contract
                     PaymentMilestones = paymentMilestones
                         .Select(MapPaymentMilestoneDetail)
                         .ToList(),
+
+                    Appendices = appendices,
+
+                    AvailableOptionalAppendices =
+                        await LoadAvailableOptionalAppendicesAsync(
+                            version.TemplateVersionId, appendices),
 
                     Comments = comments
                 },
@@ -2562,6 +2670,23 @@ namespace ContractManagement.Domains.Services.Contract
                             .OrderBy(x => x.DisplayOrder)
                             .ThenBy(x => x.PaymentMilestoneId)
                             .ToListAsync();
+                        var sourceAppendices = await _dbContext.TblContractAppendices
+                            .AsNoTracking()
+                            .Where(x => x.ContractId == contract.ContractId
+                                && x.VersionId == sourceVersion.VersionId)
+                            .OrderBy(x => x.DisplayOrder)
+                            .ThenBy(x => x.AppendixId)
+                            .ToListAsync();
+                        var sourceAppendixIds = sourceAppendices
+                            .Select(x => x.AppendixId)
+                            .ToList();
+                        var sourceAppendixTerms = await _dbContext
+                            .TblContractAppendixTerms
+                            .AsNoTracking()
+                            .Where(x => sourceAppendixIds.Contains(x.AppendixId))
+                            .OrderBy(x => x.DisplayOrder)
+                            .ThenBy(x => x.AppendixTermId)
+                            .ToListAsync();
                         var paymentBlocksNegotiation = sourcePaymentMilestones.Count > 0
                             ? sourcePaymentMilestones.Any(x => x.PaymentStatus ==
                                 (byte)ContractPaymentMilestoneStatus.Paid)
@@ -2614,7 +2739,9 @@ namespace ContractManagement.Domains.Services.Contract
                                 sourceVersion,
                                 sourceItems,
                                 sourceTerms,
-                                sourcePaymentMilestones) with
+                                sourcePaymentMilestones,
+                                sourceAppendices,
+                                sourceAppendixTerms) with
                             {
                                 PlaceholderValues = placeholderValues.Count == 0 ? null : placeholderValues,
                                 LegalBases = sourceLegalBases.Select(item =>
@@ -2726,16 +2853,59 @@ namespace ContractManagement.Domains.Services.Contract
                                 CreatedEmployeeId = employeeId,
                                 CreatedDate = now
                             }).ToList();
+                        var copiedAppendices = sourceAppendices.Select(source =>
+                            new TblContractAppendix
+                            {
+                                ContractId = contract.ContractId,
+                                VersionId = newVersion.VersionId,
+                                SourceTemplateAppendixId = source.SourceTemplateAppendixId,
+                                AppendixCode = source.AppendixCode,
+                                AppendixName = source.AppendixName,
+                                AppendixNameEn = source.AppendixNameEn,
+                                AppendixDescription = source.AppendixDescription,
+                                IsRequired = source.IsRequired,
+                                DisplayOrder = source.DisplayOrder,
+                                CreatedEmployeeId = employeeId,
+                                CreatedDate = now
+                            }).ToList();
 
                         _dbContext.TblContractItems.AddRange(copiedItems);
                         _dbContext.TblContractTerms.AddRange(copiedTerms);
                         _dbContext.TblContractLegalBases.AddRange(copiedLegalBases);
+                        _dbContext.TblContractAppendices.AddRange(copiedAppendices);
                         await PlaceholderValues
                             .CaptureAsync(contract, newVersion, refresh: true);
 
                         // TermId của comment phải trỏ sang term thuộc version mới.
                         // Lưu item/term trước để nhận identity trong cùng transaction.
                         await _dbContext.SaveChangesAsync();
+
+                        var copiedAppendicesBySourceId = sourceAppendices
+                            .Zip(copiedAppendices, (source, copy) => new
+                            {
+                                SourceAppendixId = source.AppendixId,
+                                TargetAppendixId = copy.AppendixId
+                            })
+                            .ToDictionary(
+                                x => x.SourceAppendixId,
+                                x => x.TargetAppendixId);
+                        var copiedAppendixTerms = sourceAppendixTerms.Select(source =>
+                            new TblContractAppendixTerm
+                            {
+                                AppendixId = copiedAppendicesBySourceId[source.AppendixId],
+                                SourceTemplateAppendixTermId =
+                                    source.SourceTemplateAppendixTermId,
+                                TermCode = source.TermCode,
+                                TermTitle = source.TermTitle,
+                                TermTitleEn = source.TermTitleEn,
+                                TermContent = source.TermContent,
+                                TermContentEn = source.TermContentEn,
+                                DisplayOrder = source.DisplayOrder,
+                                CreatedEmployeeId = employeeId,
+                                CreatedDate = now
+                            }).ToList();
+                        _dbContext.TblContractAppendixTerms.AddRange(
+                            copiedAppendixTerms);
 
                         var copiedTermIdsBySourceTermId = sourceTerms
                             .Zip(
@@ -2862,6 +3032,7 @@ namespace ContractManagement.Domains.Services.Contract
                                 ("SourceVersionLocked", sourceWasLocked),
                                 ("ItemCount", sourceItems.Count),
                                 ("TermCount", sourceTerms.Count),
+                                ("AppendixCount", sourceAppendices.Count),
                                 ("CarriedForwardThreadCount", 0),
                                 ("CarriedForwardCommentCount", 0),
                                 ("TotalAmount", sourceVersion.TotalAmount)),
@@ -2872,6 +3043,7 @@ namespace ContractManagement.Domains.Services.Contract
                                 ("SourceVersionLocked", true),
                                 ("ItemCount", copiedItems.Count),
                                 ("TermCount", copiedTerms.Count),
+                                ("AppendixCount", copiedAppendices.Count),
                                 ("CarriedForwardThreadCount",
                                     carryForwardResult.ThreadCount),
                                 ("CarriedForwardCommentCount",
@@ -3409,6 +3581,9 @@ namespace ContractManagement.Domains.Services.Contract
                 .ThenBy(x => x.PaymentMilestoneId)
                 .ToListAsync();
 
+            var appendices = await LoadContractAppendicesAsync(
+                contractId, versionId);
+
             return new ContractVersionDetailResponse
             {
                 VersionId = version.VersionId,
@@ -3432,6 +3607,10 @@ namespace ContractManagement.Domains.Services.Contract
                 Terms = terms.Select(MapTermDetail).ToList(),
                 PaymentMilestones = paymentMilestones
                     .Select(MapPaymentMilestoneDetail).ToList(),
+                Appendices = appendices,
+                AvailableOptionalAppendices =
+                    await LoadAvailableOptionalAppendicesAsync(
+                        version.TemplateVersionId, appendices),
                 Comments = await LoadCommentResponsesAsync(
                     contractId,
                     versionId)

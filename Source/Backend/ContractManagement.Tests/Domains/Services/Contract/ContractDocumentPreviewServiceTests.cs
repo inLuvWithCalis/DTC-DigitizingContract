@@ -154,6 +154,58 @@ public sealed class ContractDocumentPreviewServiceTests
     }
 
     [Fact]
+    public async Task PackagePreview_RendersAppendixIntoSameDocxPassedToPdfConverter()
+    {
+        await using var context = CreateContext();
+        var source = CreateSourceDocument();
+        await SeedAsync(context, source);
+        context.TblContractAppendices.Add(new TblContractAppendix
+        {
+            AppendixId = 8501,
+            ContractId = ContractId,
+            VersionId = VersionId,
+            SourceTemplateAppendixId = 8601,
+            AppendixCode = "PL-01",
+            AppendixName = "Phạm vi triển khai",
+            AppendixNameEn = "Implementation scope",
+            IsRequired = true,
+            DisplayOrder = 1,
+            CreatedEmployeeId = OwnerId,
+            CreatedDate = DateTime.UtcNow,
+            RowVersion = [1]
+        });
+        context.TblContractAppendixTerms.Add(new TblContractAppendixTerm
+        {
+            AppendixTermId = 8502,
+            AppendixId = 8501,
+            SourceTemplateAppendixTermId = 8602,
+            TermCode = "PL-SCOPE",
+            TermTitle = "Nội dung triển khai",
+            TermTitleEn = "Implementation details",
+            TermContent = RichText("Nội dung package phụ lục"),
+            TermContentEn = RichText("Appendix package content"),
+            DisplayOrder = 1,
+            CreatedEmployeeId = OwnerId,
+            CreatedDate = DateTime.UtcNow,
+            RowVersion = [1]
+        });
+        await context.SaveChangesAsync();
+        var pdfRenderer = new CapturingPdfRenderer();
+        var service = CreateService(context, source, pdfRenderer);
+
+        var submission = await service.RenderAsync(ContractId, OwnerId);
+
+        Assert.Single(submission.Snapshot.Appendices!);
+        Assert.Equal(submission.DocxContent, pdfRenderer.InputDocx);
+        using var document = WordprocessingDocument.Open(
+            new MemoryStream(submission.DocxContent), false);
+        var text = document.MainDocumentPart!.Document!.Body!.InnerText;
+        Assert.Contains("PHỤ LỤC PL-01: Phạm vi triển khai", text);
+        Assert.Contains("Nội dung package phụ lục", text);
+        Assert.DoesNotContain("ký ngày", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Submission_RendersDocxAndPdfFromTheSameTypedSnapshot()
     {
         await using var context = CreateContext();

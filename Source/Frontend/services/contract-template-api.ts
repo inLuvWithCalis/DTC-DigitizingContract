@@ -178,6 +178,38 @@ export interface ReorderContractTemplateTermsRequest {
   terms: ReorderContractTemplateTermItem[];
 }
 
+export interface CreateContractTemplateAppendixRequest {
+  appendixCode: string;
+  appendixName: string;
+  appendixNameEn?: string | null;
+  appendixDescription?: string | null;
+  isRequired: boolean;
+  isSelectedByDefault: boolean;
+  displayOrder: number;
+  versionRowVersion: string;
+}
+
+export interface UpdateContractTemplateAppendixRequest
+  extends CreateContractTemplateAppendixRequest {
+  rowVersion: string;
+}
+
+export interface CreateContractTemplateAppendixTermRequest {
+  termCode: string;
+  termTitle: string;
+  termTitleEn?: string | null;
+  termContent?: string | null;
+  termContentEn?: string | null;
+  displayOrder: number;
+  versionRowVersion: string;
+  appendixRowVersion: string;
+}
+
+export interface UpdateContractTemplateAppendixTermRequest
+  extends CreateContractTemplateAppendixTermRequest {
+  rowVersion: string;
+}
+
 export interface SoftwareSupplyPlaceholderDefinition {
   id?: number | null;
   isSystem: boolean;
@@ -297,6 +329,7 @@ export interface AvailableContractTemplateTermResponse {
 export interface AvailableContractTemplateVersionDetailResponse
   extends AvailableContractTemplateVersionResponse {
   terms: AvailableContractTemplateTermResponse[];
+  appendices: ContractTemplateAppendixResponse[];
 }
 
 export interface AvailableContractTemplateFilterRequest {
@@ -356,6 +389,40 @@ export interface ContractTemplateLegalBasisResponse {
   updatedEmployeeId?: number | null;
   updatedDate?: string | null;
   rowVersion: string;
+}
+
+export interface ContractTemplateAppendixTermResponse {
+  templateAppendixTermId: number;
+  templateAppendixId: number;
+  termCode: string;
+  termTitle: string;
+  termTitleEn?: string | null;
+  termContent?: string | null;
+  termContentEn?: string | null;
+  displayOrder: number;
+  createdEmployeeId: number;
+  createdDate: string;
+  updatedEmployeeId?: number | null;
+  updatedDate?: string | null;
+  rowVersion: string;
+}
+
+export interface ContractTemplateAppendixResponse {
+  templateAppendixId: number;
+  templateVersionId: number;
+  appendixCode: string;
+  appendixName: string;
+  appendixNameEn?: string | null;
+  appendixDescription?: string | null;
+  isRequired: boolean;
+  isSelectedByDefault: boolean;
+  displayOrder: number;
+  createdEmployeeId: number;
+  createdDate: string;
+  updatedEmployeeId?: number | null;
+  updatedDate?: string | null;
+  rowVersion: string;
+  terms: ContractTemplateAppendixTermResponse[];
 }
 
 export interface ContractTemplatePaymentMilestoneResponse {
@@ -419,6 +486,7 @@ export interface ContractTemplateVersionDetailResponse {
   terms: ContractTemplateTermResponse[];
   legalBases: ContractTemplateLegalBasisResponse[];
   itemTableLayout: ContractTemplateItemTableColumnLayoutResponse[];
+  appendices: ContractTemplateAppendixResponse[];
 }
 
 export interface ContractTemplatePreviewResponse {
@@ -693,5 +761,99 @@ export const contractTemplateApi = {
     axiosClient.delete<unknown, { versionId: number; legalBasisId: number }>(
       `${BASE_URL}/versions/${versionId}/legal-bases/${legalBasisId}`,
       { data: { rowVersion, versionRowVersion } },
+    ),
+
+  addAppendix: (
+    versionId: number,
+    data: CreateContractTemplateAppendixRequest,
+  ) =>
+    axiosClient.post<unknown, ContractTemplateAppendixResponse>(
+      `${BASE_URL}/versions/${versionId}/appendices`,
+      data,
+    ),
+
+  updateAppendix: (
+    versionId: number,
+    appendixId: number,
+    data: UpdateContractTemplateAppendixRequest,
+  ) =>
+    axiosClient.put<unknown, ContractTemplateAppendixResponse>(
+      `${BASE_URL}/versions/${versionId}/appendices/${appendixId}`,
+      data,
+    ),
+
+  deleteAppendix: (
+    versionId: number,
+    appendixId: number,
+    rowVersion: string,
+    versionRowVersion: string,
+  ) =>
+    axiosClient.delete<unknown, { versionId: number; appendixId: number }>(
+      `${BASE_URL}/versions/${versionId}/appendices/${appendixId}`,
+      { data: { rowVersion, versionRowVersion } },
+    ),
+
+  reorderAppendices: (
+    versionId: number,
+    versionRowVersion: string,
+    appendices: Array<{
+      templateAppendixId: number;
+      rowVersion: string;
+      displayOrder: number;
+    }>,
+  ) =>
+    axiosClient.put<unknown, ContractTemplateVersionDetailResponse>(
+      `${BASE_URL}/versions/${versionId}/appendices/order`,
+      { versionRowVersion, appendices },
+    ),
+
+  addAppendixTerm: (
+    versionId: number,
+    appendixId: number,
+    data: CreateContractTemplateAppendixTermRequest,
+  ) =>
+    axiosClient.post<unknown, ContractTemplateAppendixTermResponse>(
+      `${BASE_URL}/versions/${versionId}/appendices/${appendixId}/terms`,
+      data,
+    ),
+
+  updateAppendixTerm: (
+    versionId: number,
+    appendixId: number,
+    termId: number,
+    data: UpdateContractTemplateAppendixTermRequest,
+  ) =>
+    axiosClient.put<unknown, ContractTemplateAppendixTermResponse>(
+      `${BASE_URL}/versions/${versionId}/appendices/${appendixId}/terms/${termId}`,
+      data,
+    ),
+
+  deleteAppendixTerm: (
+    versionId: number,
+    appendixId: number,
+    termId: number,
+    rowVersion: string,
+    appendixRowVersion: string,
+    versionRowVersion: string,
+  ) =>
+    axiosClient.delete<unknown, { versionId: number; appendixId: number; termId: number }>(
+      `${BASE_URL}/versions/${versionId}/appendices/${appendixId}/terms/${termId}`,
+      { data: { rowVersion, appendixRowVersion, versionRowVersion } },
+    ),
+
+  reorderAppendixTerms: (
+    versionId: number,
+    appendixId: number,
+    versionRowVersion: string,
+    appendixRowVersion: string,
+    terms: Array<{
+      templateAppendixTermId: number;
+      rowVersion: string;
+      displayOrder: number;
+    }>,
+  ) =>
+    axiosClient.put<unknown, ContractTemplateAppendixResponse>(
+      `${BASE_URL}/versions/${versionId}/appendices/${appendixId}/terms/order`,
+      { versionRowVersion, appendixRowVersion, terms },
     ),
 };

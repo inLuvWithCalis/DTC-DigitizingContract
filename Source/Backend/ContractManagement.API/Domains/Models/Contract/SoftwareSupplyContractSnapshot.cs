@@ -21,7 +21,30 @@ public sealed record SoftwareSupplyContractSnapshot(
     public IReadOnlyList<ContractLegalBasisSnapshot>? LegalBases { get; init; }
 
     public IReadOnlyList<ContractPaymentMilestoneSnapshot>? PaymentMilestones { get; init; }
+
+    public IReadOnlyList<ContractAppendixLegalSnapshot>? Appendices { get; init; }
 }
+
+public sealed record ContractAppendixLegalSnapshot(
+    int AppendixId,
+    int SourceTemplateAppendixId,
+    string AppendixCode,
+    string AppendixName,
+    string? AppendixNameEn,
+    string? AppendixDescription,
+    bool IsRequired,
+    int DisplayOrder,
+    IReadOnlyList<ContractAppendixTermLegalSnapshot> Terms);
+
+public sealed record ContractAppendixTermLegalSnapshot(
+    int AppendixTermId,
+    int? SourceTemplateAppendixTermId,
+    string TermCode,
+    string TermTitle,
+    string? TermTitleEn,
+    string? TermContent,
+    string? TermContentEn,
+    int DisplayOrder);
 
 public sealed record TenantLegalSnapshot(
     string LegalEntityName,
@@ -148,7 +171,9 @@ public static class SoftwareSupplyContractSnapshotFactory
         TblContractVersion version,
         IEnumerable<TblContractItem> items,
         IEnumerable<TblContractTerm> terms,
-        IEnumerable<TblContractPaymentMilestone>? paymentMilestones = null)
+        IEnumerable<TblContractPaymentMilestone>? paymentMilestones = null,
+        IEnumerable<TblContractAppendix>? appendices = null,
+        IEnumerable<TblContractAppendixTerm>? appendixTerms = null)
     {
         ArgumentNullException.ThrowIfNull(tenant);
         ArgumentNullException.ThrowIfNull(customer);
@@ -266,7 +291,23 @@ public static class SoftwareSupplyContractSnapshotFactory
                     x.DueOffsetDays, x.DayCountMode, x.ConditionVi,
                     x.ConditionEn, x.DisplayOrder, x.Amount,
                     x.AnchorDate, x.DueDate, x.PaymentStatus,
-                    x.PaidAt, x.PaidByEmployeeId)).ToArray()
+                    x.PaidAt, x.PaidByEmployeeId)).ToArray(),
+            Appendices = appendices?.OrderBy(x => x.DisplayOrder)
+                .ThenBy(x => x.AppendixId)
+                .Select(x => new ContractAppendixLegalSnapshot(
+                    x.AppendixId, x.SourceTemplateAppendixId,
+                    x.AppendixCode, x.AppendixName, x.AppendixNameEn,
+                    x.AppendixDescription, x.IsRequired, x.DisplayOrder,
+                    (appendixTerms ?? []).Where(term =>
+                            term.AppendixId == x.AppendixId)
+                        .OrderBy(term => term.DisplayOrder)
+                        .ThenBy(term => term.AppendixTermId)
+                        .Select(term => new ContractAppendixTermLegalSnapshot(
+                            term.AppendixTermId,
+                            term.SourceTemplateAppendixTermId,
+                            term.TermCode, term.TermTitle, term.TermTitleEn,
+                            term.TermContent, term.TermContentEn,
+                            term.DisplayOrder)).ToArray())).ToArray()
         };
     }
 
@@ -421,6 +462,35 @@ public static class SoftwareSupplyContractSnapshotFactory
             writer.Write(x.DisplayOrder); WriteDecimal(writer, x.Amount); WriteDate(writer, x.AnchorDate);
             WriteDate(writer, x.DueDate); writer.Write(x.PaymentStatus); WriteDate(writer, x.PaidAt);
             WriteNullableInt(writer, x.PaidByEmployeeId);
+        }
+
+        var appendices = (snapshot.Appendices ?? [])
+            .OrderBy(x => x.DisplayOrder).ThenBy(x => x.AppendixId).ToArray();
+        writer.Write(appendices.Length);
+        foreach (var appendix in appendices)
+        {
+            writer.Write(appendix.AppendixId);
+            writer.Write(appendix.SourceTemplateAppendixId);
+            WriteString(writer, appendix.AppendixCode);
+            WriteString(writer, appendix.AppendixName);
+            WriteString(writer, appendix.AppendixNameEn);
+            WriteString(writer, appendix.AppendixDescription);
+            writer.Write(appendix.IsRequired);
+            writer.Write(appendix.DisplayOrder);
+            var appendixTerms = appendix.Terms.OrderBy(x => x.DisplayOrder)
+                .ThenBy(x => x.AppendixTermId).ToArray();
+            writer.Write(appendixTerms.Length);
+            foreach (var term in appendixTerms)
+            {
+                writer.Write(term.AppendixTermId);
+                WriteNullableInt(writer, term.SourceTemplateAppendixTermId);
+                WriteString(writer, term.TermCode);
+                WriteString(writer, term.TermTitle);
+                WriteString(writer, term.TermTitleEn);
+                WriteString(writer, term.TermContent);
+                WriteString(writer, term.TermContentEn);
+                writer.Write(term.DisplayOrder);
+            }
         }
 
         writer.Flush();

@@ -40,6 +40,7 @@ public sealed class AvailableContractTemplateVersionDetailResponse
 {
     public IReadOnlyList<AvailableContractTemplateTermResponse> Terms { get; set; }
         = [];
+    public IReadOnlyList<ContractTemplateAppendixResponse> Appendices { get; set; } = [];
 }
 
 public sealed class AvailableContractTemplateTermResponse
@@ -158,6 +159,44 @@ public sealed class ContractTemplateVersionDetailResponse
     public List<ContractTemplateLegalBasisResponse> LegalBases { get; set; } = [];
 
     public List<ContractTemplateItemTableColumnLayoutResponse> ItemTableLayout { get; set; } = [];
+
+    public List<ContractTemplateAppendixResponse> Appendices { get; set; } = [];
+}
+
+public sealed class ContractTemplateAppendixResponse
+{
+    public int TemplateAppendixId { get; set; }
+    public int TemplateVersionId { get; set; }
+    public string AppendixCode { get; set; } = string.Empty;
+    public string AppendixName { get; set; } = string.Empty;
+    public string? AppendixNameEn { get; set; }
+    public string? AppendixDescription { get; set; }
+    public bool IsRequired { get; set; }
+    public bool IsSelectedByDefault { get; set; }
+    public int DisplayOrder { get; set; }
+    public int CreatedEmployeeId { get; set; }
+    public DateTime CreatedDate { get; set; }
+    public int? UpdatedEmployeeId { get; set; }
+    public DateTime? UpdatedDate { get; set; }
+    public string RowVersion { get; set; } = string.Empty;
+    public List<ContractTemplateAppendixTermResponse> Terms { get; set; } = [];
+}
+
+public sealed class ContractTemplateAppendixTermResponse
+{
+    public int TemplateAppendixTermId { get; set; }
+    public int TemplateAppendixId { get; set; }
+    public string TermCode { get; set; } = string.Empty;
+    public string TermTitle { get; set; } = string.Empty;
+    public string? TermTitleEn { get; set; }
+    public string? TermContent { get; set; }
+    public string? TermContentEn { get; set; }
+    public int DisplayOrder { get; set; }
+    public int CreatedEmployeeId { get; set; }
+    public DateTime CreatedDate { get; set; }
+    public int? UpdatedEmployeeId { get; set; }
+    public DateTime? UpdatedDate { get; set; }
+    public string RowVersion { get; set; } = string.Empty;
 }
 
 public sealed class ContractTemplateItemTableColumnLayoutResponse

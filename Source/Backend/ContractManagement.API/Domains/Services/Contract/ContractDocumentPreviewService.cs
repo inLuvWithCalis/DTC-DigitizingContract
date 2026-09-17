@@ -202,6 +202,20 @@ public sealed class ContractDocumentPreviewService :
             .OrderBy(item => item.DisplayOrder)
             .ThenBy(item => item.PaymentMilestoneId)
             .ToListAsync(cancellationToken);
+        var appendices = await _dbContext.TblContractAppendices
+            .AsNoTracking()
+            .Where(item => item.ContractId == contractId
+                && item.VersionId == versionId)
+            .OrderBy(item => item.DisplayOrder)
+            .ThenBy(item => item.AppendixId)
+            .ToListAsync(cancellationToken);
+        var appendixIds = appendices.Select(item => item.AppendixId).ToList();
+        var appendixTerms = await _dbContext.TblContractAppendixTerms
+            .AsNoTracking()
+            .Where(item => appendixIds.Contains(item.AppendixId))
+            .OrderBy(item => item.DisplayOrder)
+            .ThenBy(item => item.AppendixTermId)
+            .ToListAsync(cancellationToken);
 
         var snapshot = SoftwareSupplyContractSnapshotFactory.Create(
             tenant,
@@ -210,7 +224,9 @@ public sealed class ContractDocumentPreviewService :
             version,
             items,
             terms,
-            paymentMilestones);
+            paymentMilestones,
+            appendices,
+            appendixTerms);
         snapshot = snapshot with
         {
             LegalBases = legalBases.Select(item => new ContractLegalBasisSnapshot(
@@ -483,9 +499,47 @@ public sealed class ContractDocumentPreviewService :
                 .ThenBy(item => item.LegalBasisId)
                 .Select((item, index) => new ContractTemplateRenderLegalBasis(
                     index + 1, item.ContentVi, item.ContentEn))
+                .ToArray(),
+            Appendices = (snapshot.Appendices ?? [])
+                .OrderBy(item => item.DisplayOrder)
+                .ThenBy(item => item.AppendixId)
+                .Select((appendix, appendixIndex) =>
+                    new ContractTemplateRenderAppendix(
+                        appendixIndex + 1,
+                        appendix.AppendixCode,
+                        appendix.AppendixName,
+                        appendix.AppendixNameEn,
+                        BuildAppendixReferenceVi(snapshot),
+                        (ContractLanguageMode)contract.LanguageMode ==
+                            ContractLanguageMode.Bilingual
+                            ? BuildAppendixReferenceEn(snapshot)
+                            : null,
+                        appendix.Terms
+                            .OrderBy(term => term.DisplayOrder)
+                            .ThenBy(term => term.AppendixTermId)
+                            .Select((term, termIndex) =>
+                                new ContractTemplateRenderAppendixTerm(
+                                    termIndex + 1,
+                                    term.TermTitle,
+                                    term.TermTitleEn,
+                                    term.TermContent,
+                                    term.TermContentEn))
+                            .ToArray()))
                 .ToArray()
         };
     }
+
+    private static string BuildAppendixReferenceVi(
+        SoftwareSupplyContractSnapshot snapshot) =>
+        $"Căn cứ Hợp đồng số {snapshot.Contract.ContractCode} giữa "
+        + $"{snapshot.Tenant.LegalEntityName} và {snapshot.Customer.LegalName} "
+        + $"về việc {snapshot.Contract.ContractName}.";
+
+    private static string BuildAppendixReferenceEn(
+        SoftwareSupplyContractSnapshot snapshot) =>
+        $"Pursuant to Contract No. {snapshot.Contract.ContractCode} between "
+        + $"{snapshot.Tenant.LegalEntityName} and {snapshot.Customer.LegalName} "
+        + $"regarding {snapshot.Contract.ContractNameEn ?? snapshot.Contract.ContractName}.";
 
     private static string BuildItemDescription(
         ContractItemLegalSnapshot item,

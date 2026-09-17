@@ -78,6 +78,12 @@ namespace ContractManagement.API.Domains.DTOs.Requests.Contract
         /// </summary>
         public List<CreateContractTermRequest>? Terms { get; set; }
 
+        /// <summary>
+        /// Các Appendix tùy chọn được người dùng chọn từ đúng template version.
+        /// Backend luôn tự thêm Appendix bắt buộc; không nhận dữ liệu Appendix tự do.
+        /// </summary>
+        public List<int> SelectedOptionalTemplateAppendixIds { get; set; } = [];
+
         public List<ContractPaymentMilestoneDateRequest> PaymentMilestoneDates { get; set; } = [];
 
         /// <summary>
@@ -171,6 +177,21 @@ namespace ContractManagement.API.Domains.DTOs.Requests.Contract
                 yield return new ValidationResult(
                     "Mỗi đợt thanh toán chỉ được nhập một ngày bắt đầu tính hạn.",
                     new[] { nameof(PaymentMilestoneDates) });
+            }
+
+            if (SelectedOptionalTemplateAppendixIds.Any(id => id <= 0))
+            {
+                yield return new ValidationResult(
+                    "ID phụ lục tùy chọn phải lớn hơn 0.",
+                    new[] { nameof(SelectedOptionalTemplateAppendixIds) });
+            }
+
+            if (SelectedOptionalTemplateAppendixIds.Count !=
+                SelectedOptionalTemplateAppendixIds.Distinct().Count())
+            {
+                yield return new ValidationResult(
+                    "Danh sách phụ lục tùy chọn không được chứa ID trùng.",
+                    new[] { nameof(SelectedOptionalTemplateAppendixIds) });
             }
 
             // Hợp đồng cung cấp phần mềm là hợp đồng gốc.

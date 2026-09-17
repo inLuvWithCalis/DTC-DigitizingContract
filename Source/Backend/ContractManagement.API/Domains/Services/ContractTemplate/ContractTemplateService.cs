@@ -22,7 +22,7 @@ namespace ContractManagement.Domains.Services.ContractTemplate;
 /// Quản trị metadata, draft version và soft terms của SoftwareSupply template.
 /// DOCX, validation, publish và retire thuộc các slice sau.
 /// </summary>
-public sealed class ContractTemplateService : IContractTemplateService
+public sealed partial class ContractTemplateService : IContractTemplateService
 {
     private static readonly Regex TemplateCodePattern = new(
         "^[A-Z0-9]+(?:[-_][A-Z0-9]+)*$",
@@ -244,6 +244,9 @@ public sealed class ContractTemplateService : IContractTemplateService
                 .Select(MapPaymentMilestone)
                 .ToList();
         }
+
+        detail.Appendices = await LoadAppendicesAsync(templateVersionId,
+            cancellationToken);
 
         return detail;
     }
@@ -715,6 +718,61 @@ public sealed class ContractTemplateService : IContractTemplateService
                 };
                 SetSyntheticRowVersionIfNeeded(copiedBasis);
                 _dbContext.TblContractTemplateLegalBases.Add(copiedBasis);
+            }
+
+            var sourceAppendices = await _dbContext.TblContractTemplateAppendices
+                .AsNoTracking()
+                .Where(item => item.TemplateVersionId == source.TemplateVersionId)
+                .OrderBy(item => item.DisplayOrder)
+                .ThenBy(item => item.TemplateAppendixId)
+                .ToListAsync(cancellationToken);
+            var sourceAppendixIds = sourceAppendices
+                .Select(item => item.TemplateAppendixId).ToList();
+            var sourceAppendixTerms = await _dbContext
+                .TblContractTemplateAppendixTerms.AsNoTracking()
+                .Where(item => sourceAppendixIds.Contains(item.TemplateAppendixId))
+                .OrderBy(item => item.DisplayOrder)
+                .ThenBy(item => item.TemplateAppendixTermId)
+                .ToListAsync(cancellationToken);
+            var copiedAppendices = new Dictionary<int, TblContractTemplateAppendix>();
+            foreach (var sourceAppendix in sourceAppendices)
+            {
+                var copiedAppendix = new TblContractTemplateAppendix
+                {
+                    TemplateVersionId = copy.TemplateVersionId,
+                    AppendixCode = sourceAppendix.AppendixCode,
+                    AppendixName = sourceAppendix.AppendixName,
+                    AppendixNameEn = sourceAppendix.AppendixNameEn,
+                    AppendixDescription = sourceAppendix.AppendixDescription,
+                    IsRequired = sourceAppendix.IsRequired,
+                    IsSelectedByDefault = sourceAppendix.IsSelectedByDefault,
+                    DisplayOrder = sourceAppendix.DisplayOrder,
+                    CreatedEmployeeId = employeeId,
+                    CreatedDate = now
+                };
+                SetSyntheticRowVersionIfNeeded(copiedAppendix);
+                copiedAppendices[sourceAppendix.TemplateAppendixId] = copiedAppendix;
+                _dbContext.TblContractTemplateAppendices.Add(copiedAppendix);
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            foreach (var sourceAppendixTerm in sourceAppendixTerms)
+            {
+                var copiedTerm = new TblContractTemplateAppendixTerm
+                {
+                    TemplateAppendixId = copiedAppendices[
+                        sourceAppendixTerm.TemplateAppendixId].TemplateAppendixId,
+                    TermCode = sourceAppendixTerm.TermCode,
+                    TermTitle = sourceAppendixTerm.TermTitle,
+                    TermTitleEn = sourceAppendixTerm.TermTitleEn,
+                    TermContent = sourceAppendixTerm.TermContent,
+                    TermContentEn = sourceAppendixTerm.TermContentEn,
+                    DisplayOrder = sourceAppendixTerm.DisplayOrder,
+                    CreatedEmployeeId = employeeId,
+                    CreatedDate = now
+                };
+                SetSyntheticRowVersionIfNeeded(copiedTerm);
+                _dbContext.TblContractTemplateAppendixTerms.Add(copiedTerm);
             }
 
             await _dbContext.SaveChangesAsync(cancellationToken);
@@ -1210,6 +1268,9 @@ public sealed class ContractTemplateService : IContractTemplateService
                 "Template version");
             EnsurePublishEligible(preflightVersion);
             await ValidatePaymentTermsForPublishAsync(versionId, cancellationToken);
+            await ValidateAppendicesForPublishAsync(versionId,
+                (ContractLanguageMode)preflightTemplate.LanguageMode,
+                cancellationToken);
             fingerprint = CreatePreviewSourceHash(preflightVersion.DocumentHash!,
                 (ContractLanguageMode)preflightTemplate.LanguageMode,
                 preflightVersion.PlaceholderBindingHash!,
@@ -1251,6 +1312,9 @@ public sealed class ContractTemplateService : IContractTemplateService
                     "Template version");
                 EnsurePublishEligible(version);
                 await ValidatePaymentTermsForPublishAsync(versionId, cancellationToken);
+                await ValidateAppendicesForPublishAsync(versionId,
+                    (ContractLanguageMode)template.LanguageMode,
+                    cancellationToken);
                 var currentInput = await LoadTemplatePreviewInputAsync(
                     versionId, cancellationToken);
                 var currentFingerprint = CreatePreviewSourceHash(version.DocumentHash!,
@@ -2851,6 +2915,15 @@ public sealed class ContractTemplateService : IContractTemplateService
             .Where(item => item.TemplateVersionId == versionId)
             .OrderBy(item => item.DisplayOrder).ThenBy(item => item.TemplatePaymentMilestoneId)
             .ToListAsync(cancellationToken);
+        var appendices = await _dbContext.TblContractTemplateAppendices.AsNoTracking()
+            .Where(item => item.TemplateVersionId == versionId)
+            .OrderBy(item => item.DisplayOrder).ThenBy(item => item.TemplateAppendixId)
+            .ToListAsync(cancellationToken);
+        var appendixIds = appendices.Select(item => item.TemplateAppendixId).ToList();
+        var appendixTerms = await _dbContext.TblContractTemplateAppendixTerms.AsNoTracking()
+            .Where(item => appendixIds.Contains(item.TemplateAppendixId))
+            .OrderBy(item => item.DisplayOrder).ThenBy(item => item.TemplateAppendixTermId)
+            .ToListAsync(cancellationToken);
         var itemTableLayout = await LoadItemTableLayoutRowsAsync(
             versionId,
             tracking: false,
@@ -2886,11 +2959,26 @@ public sealed class ContractTemplateService : IContractTemplateService
         }));
         var itemLayoutCanonical = string.Join(',', itemTableLayout.Select(item =>
             $"{EscapeCanonical(item.ColumnKey)}:{item.DisplayOrder}:{item.WidthBps}"));
+        var appendixCanonical = string.Join('\n', appendices.Select(appendix =>
+            string.Join('|', EscapeCanonical(appendix.AppendixCode),
+                EscapeCanonical(appendix.AppendixName),
+                EscapeCanonical(appendix.AppendixNameEn),
+                EscapeCanonical(appendix.AppendixDescription),
+                appendix.IsRequired ? "1" : "0",
+                appendix.IsSelectedByDefault ? "1" : "0",
+                appendix.DisplayOrder.ToString(invariant),
+                string.Join('~', appendixTerms
+                    .Where(term => term.TemplateAppendixId == appendix.TemplateAppendixId)
+                    .Select(term => string.Join(',', EscapeCanonical(term.TermCode),
+                        EscapeCanonical(term.TermTitle), EscapeCanonical(term.TermTitleEn),
+                        EscapeCanonical(term.TermContent), EscapeCanonical(term.TermContentEn),
+                        term.DisplayOrder.ToString(invariant)))))));
         var canonical = string.Join("\n", new[]
         {
             "ITEM_LAYOUT", itemLayoutCanonical,
             "LEGAL", basisCanonical,
-            "TERMS", paymentCanonical
+            "TERMS", paymentCanonical,
+            "APPENDICES", appendixCanonical
         });
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)))
             .ToLowerInvariant();
@@ -2935,7 +3023,27 @@ public sealed class ContractTemplateService : IContractTemplateService
                         Kind = (ContractTermKind)term.TermKind,
                         PaymentMilestones = renderMilestones
                     };
-                }).ToList()
+                }).ToList(),
+                Appendices = appendices.Select((appendix, appendixIndex) =>
+                    new ContractTemplateRenderAppendix(
+                        appendixIndex + 1,
+                        appendix.AppendixCode,
+                        appendix.AppendixName,
+                        appendix.AppendixNameEn,
+                        "Căn cứ Hợp đồng số HD-MAU giữa Công ty mẫu bên cung cấp và Công ty mẫu khách hàng về việc Hợp đồng mẫu.",
+                        "Pursuant to Contract No. HD-MAU between the sample provider and the sample customer regarding the sample contract.",
+                        appendixTerms
+                            .Where(term => term.TemplateAppendixId ==
+                                appendix.TemplateAppendixId)
+                            .OrderBy(term => term.DisplayOrder)
+                            .Select((term, termIndex) =>
+                                new ContractTemplateRenderAppendixTerm(
+                                    termIndex + 1,
+                                    term.TermTitle,
+                                    term.TermTitleEn,
+                                    term.TermContent,
+                                    term.TermContentEn))
+                            .ToArray())).ToList()
             },
             hash);
     }
@@ -3116,6 +3224,8 @@ public sealed class ContractTemplateService : IContractTemplateService
         response.ItemTableLayout = itemTableLayout
             .Select(MapItemTableLayout)
             .ToList();
+        response.Appendices = (await LoadAppendicesAsync(versionId,
+            cancellationToken)).ToList();
         return response;
     }
 

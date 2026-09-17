@@ -129,4 +129,36 @@ public sealed class SoftwareSupplyContractSnapshotTests
             SoftwareSupplyContractSnapshotFactory.CalculateHash(changed));
     }
 
+    [Fact]
+    public void CalculateHash_ChangesWhenAppendixTermChanges()
+    {
+        var source = ContractSnapshotTestData.Create(1, 2);
+        var term = new ContractAppendixTermLegalSnapshot(
+            11, 21, "PL-TERM", "Phạm vi", null,
+            RichText("Nội dung ban đầu"), null, 1);
+        var snapshot = source with
+        {
+            Appendices =
+            [
+                new ContractAppendixLegalSnapshot(
+                    10, 20, "PL-01", "Phụ lục", null, null,
+                    true, 1, [term])
+            ]
+        };
+        var changed = snapshot with
+        {
+            Appendices =
+            [
+                snapshot.Appendices![0] with
+                {
+                    Terms = [term with { TermContent = RichText("Nội dung đã đổi") }]
+                }
+            ]
+        };
+
+        Assert.NotEqual(
+            SoftwareSupplyContractSnapshotFactory.CalculateHash(snapshot),
+            SoftwareSupplyContractSnapshotFactory.CalculateHash(changed));
+    }
+
 }

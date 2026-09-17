@@ -12,6 +12,14 @@ public sealed class ContractApprovalArtifactResponse
     public string Sha256 { get; set; } = string.Empty;
 }
 
+public sealed class ContractApprovalAppendixSummaryResponse
+{
+    public int AppendixId { get; set; }
+    public string AppendixCode { get; set; } = string.Empty;
+    public string AppendixName { get; set; } = string.Empty;
+    public int DisplayOrder { get; set; }
+}
+
 public class ContractApprovalRequestResponse
 {
     public int ApprovalRequestId { get; set; }
@@ -39,6 +47,8 @@ public sealed class ContractApprovalDetailResponse
 {
     public IReadOnlyList<ContractApprovalArtifactResponse> Artifacts { get; set; }
         = Array.Empty<ContractApprovalArtifactResponse>();
+    public IReadOnlyList<ContractApprovalAppendixSummaryResponse> Appendices
+        { get; set; } = Array.Empty<ContractApprovalAppendixSummaryResponse>();
 }
 
 public sealed class ContractApprovalActionResponse

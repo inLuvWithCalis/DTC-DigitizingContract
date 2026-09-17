@@ -77,6 +77,7 @@ public static class SoftwareSupplyPlaceholderCatalog
             new("CONTRACT_ITEM_TABLE", "Bảng sản phẩm/dịch vụ", false, TemplatePlaceholderDataKind.DynamicBlock, TemplatePlaceholderMultiplicity.ZeroOrOne, "Contract.Items"),
             new("SIGNATURE_PROVIDER", "Chữ ký bên cung cấp", false, TemplatePlaceholderDataKind.DynamicBlock, TemplatePlaceholderMultiplicity.ZeroOrOne, "Contract.ProviderSignature"),
             new("SIGNATURE_CUSTOMER", "Chữ ký khách hàng", false, TemplatePlaceholderDataKind.DynamicBlock, TemplatePlaceholderMultiplicity.ZeroOrOne, "Contract.CustomerSignature"),
+            new("CONTRACT_APPENDICES", "Các phụ lục đính kèm", false, TemplatePlaceholderDataKind.DynamicBlock, TemplatePlaceholderMultiplicity.ZeroOrOne, "Contract.Appendices"),
             new("CONTRACT_NAME_EN", "Tên hợp đồng tiếng Anh", false, TemplatePlaceholderDataKind.Scalar, TemplatePlaceholderMultiplicity.ZeroOrOne, "Contract.ContractNameEn"),
             new("CUSTOMER_FAX", "Fax khách hàng", false, TemplatePlaceholderDataKind.Scalar, TemplatePlaceholderMultiplicity.ZeroOrOne, "Customer.CustomerFaxNumber"),
             new("CUSTOMER_BANK_ACCOUNT_NUMBER", "Số tài khoản ngân hàng khách hàng", false, TemplatePlaceholderDataKind.Scalar, TemplatePlaceholderMultiplicity.ZeroOrOne, "Customer.CustomerBankAccountNumber"),

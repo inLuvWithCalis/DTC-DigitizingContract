@@ -49,6 +49,11 @@
 
         public List<ContractPaymentMilestoneResponse> PaymentMilestones { get; set; } = [];
 
+        public List<ContractAppendixResponse> Appendices { get; set; } = [];
+
+        public List<ContractAppendixOptionResponse> AvailableOptionalAppendices
+            { get; set; } = [];
+
         /// <summary>
         /// Comments thuộc đúng version này, theo thứ tự thời gian tạo.
         /// Client tự dựng cây reply bằng ParentCommentId.

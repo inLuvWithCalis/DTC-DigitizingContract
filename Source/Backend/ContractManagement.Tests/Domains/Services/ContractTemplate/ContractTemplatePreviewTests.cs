@@ -27,7 +27,7 @@ namespace ContractManagement.Tests.Domains.Services.ContractTemplate;
 public sealed class ContractTemplatePreviewTests
 {
     [Fact]
-    public void TemplateAuditFieldVocabulary_IsExactlyElevenTypedFields()
+    public void TemplateAuditFieldVocabulary_ContainsDocumentAndAppendixTypedFields()
     {
         Assert.Equal(
         [
@@ -41,7 +41,11 @@ public sealed class ContractTemplatePreviewTests
             ContractTemplateAuditFieldCode.PreviewStatus,
             ContractTemplateAuditFieldCode.PublishedPreviewPdfFileId,
             ContractTemplateAuditFieldCode.PublishedPreviewPdfSizeBytes,
-            ContractTemplateAuditFieldCode.PublishStatus
+            ContractTemplateAuditFieldCode.PublishStatus,
+            ContractTemplateAuditFieldCode.TemplateAppendixId,
+            ContractTemplateAuditFieldCode.TemplateAppendixTermId,
+            ContractTemplateAuditFieldCode.AppendixCount,
+            ContractTemplateAuditFieldCode.AppendixTermCount
         ], Enum.GetValues<ContractTemplateAuditFieldCode>());
 
         var values = ContractTemplateAuditValues.Create(
@@ -291,6 +295,118 @@ public sealed class ContractTemplatePreviewTests
         var text = ReadAllText(document.MainDocumentPart!);
         Assert.Contains("Bảng do người dùng tự nhập", text);
         Assert.DoesNotContain("Đợt không được tự sinh", text);
+    }
+
+    [Fact]
+    public void Renderer_WithAppendices_RendersOrderedPageBreaksWithoutSignatureOrSignDate()
+    {
+        var scalarValues = SoftwareSupplyPlaceholderCatalog.GetAll()
+            .Where(item => item.DataKind == TemplatePlaceholderDataKind.Scalar)
+            .ToDictionary(item => item.Key, _ => string.Empty, StringComparer.Ordinal);
+        var data = new ContractTemplateRenderData(
+            scalarValues, [], [],
+            new ContractTemplateRenderSignature("ĐẠI DIỆN BÊN A", "A"),
+            new ContractTemplateRenderSignature("ĐẠI DIỆN BÊN B", "B"),
+            string.Empty)
+        {
+            Definitions = ContractPlaceholderCatalog.SystemDefinitions,
+            ItemTableColumnWidthsBps = ContractTableLayoutPolicy.DefaultItemColumnWidthsBps,
+            Appendices =
+            [
+                new ContractTemplateRenderAppendix(
+                    1, "PL-01", "Phạm vi triển khai", null,
+                    "Căn cứ Hợp đồng số HD-01 giữa Bên A và Bên B về việc Cung cấp phần mềm.",
+                    null,
+                    [new ContractTemplateRenderAppendixTerm(
+                        1, "Nội dung phụ lục", null,
+                        RichText("Chi tiết phụ lục thứ nhất"), null)]),
+                new ContractTemplateRenderAppendix(
+                    2, "PL-02", "Đào tạo", null,
+                    "Căn cứ Hợp đồng số HD-01 giữa Bên A và Bên B về việc Cung cấp phần mềm.",
+                    null,
+                    [new ContractTemplateRenderAppendixTerm(
+                        1, "Nội dung đào tạo", null,
+                        RichText("Chi tiết phụ lục thứ hai"), null)])
+            ]
+        };
+
+        var rendered = new ContractTemplatePreviewRenderer().Render(
+            CreateSourceDocument(), ContractLanguageMode.Vietnamese, data);
+
+        using var document = WordprocessingDocument.Open(
+            new MemoryStream(rendered), false);
+        var body = document.MainDocumentPart!.Document!.Body!;
+        var text = body.InnerText;
+        Assert.Contains("PHỤ LỤC PL-01: Phạm vi triển khai", text);
+        Assert.Contains("PHỤ LỤC PL-02: Đào tạo", text);
+        Assert.Contains("Chi tiết phụ lục thứ nhất", text);
+        Assert.Contains("Chi tiết phụ lục thứ hai", text);
+        Assert.DoesNotContain("ký ngày", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("CHỮ KÝ PHỤ LỤC", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(2, body.Descendants<W.Break>()
+            .Count(item => item.Type?.Value == W.BreakValues.Page));
+    }
+
+    [Fact]
+    public void Renderer_WithNoAppendix_RemovesMarkerWithoutBlankPage()
+    {
+        var scalarValues = SoftwareSupplyPlaceholderCatalog.GetAll()
+            .Where(item => item.DataKind == TemplatePlaceholderDataKind.Scalar)
+            .ToDictionary(item => item.Key, _ => string.Empty, StringComparer.Ordinal);
+        var data = new ContractTemplateRenderData(
+            scalarValues, [], [],
+            new ContractTemplateRenderSignature("Bên A", "A"),
+            new ContractTemplateRenderSignature("Bên B", "B"),
+            string.Empty)
+        {
+            Definitions = ContractPlaceholderCatalog.SystemDefinitions,
+            ItemTableColumnWidthsBps = ContractTableLayoutPolicy.DefaultItemColumnWidthsBps,
+            Appendices = []
+        };
+
+        var rendered = new ContractTemplatePreviewRenderer().Render(
+            CreateSourceDocument(), ContractLanguageMode.Vietnamese, data);
+
+        using var document = WordprocessingDocument.Open(
+            new MemoryStream(rendered), false);
+        var body = document.MainDocumentPart!.Document!.Body!;
+        Assert.DoesNotContain("CONTRACT_APPENDICES", body.InnerText);
+        Assert.DoesNotContain(body.Descendants<W.Break>(),
+            item => item.Type?.Value == W.BreakValues.Page);
+    }
+
+    [Fact]
+    public void Renderer_AppendixMarkerBeforeContractContent_IsRejected()
+    {
+        var source = CreateSourceDocument();
+        using var stream = new MemoryStream();
+        stream.Write(source);
+        stream.Position = 0;
+        using (var document = WordprocessingDocument.Open(stream, true))
+        {
+            var body = document.MainDocumentPart!.Document!.Body!;
+            var appendixMarker = body.Descendants<W.Paragraph>()
+                .Single(paragraph => paragraph.InnerText ==
+                    "{{CONTRACT_APPENDICES}}");
+            appendixMarker.Remove();
+            body.PrependChild(appendixMarker);
+            document.MainDocumentPart.Document.Save();
+        }
+        var data = new ContractTemplateRenderData(
+            new Dictionary<string, string>(), [], [],
+            new ContractTemplateRenderSignature("A", "A"),
+            new ContractTemplateRenderSignature("B", "B"), string.Empty)
+        {
+            Definitions = ContractPlaceholderCatalog.SystemDefinitions,
+            ItemTableColumnWidthsBps =
+                ContractTableLayoutPolicy.DefaultItemColumnWidthsBps
+        };
+
+        var exception = Assert.Throws<ContractTemplatePreviewException>(() =>
+            new ContractTemplatePreviewRenderer().Render(
+                stream.ToArray(), ContractLanguageMode.Vietnamese, data));
+
+        Assert.Equal("AppendixMarkerPositionInvalid", exception.FailureCode);
     }
 
     [Fact]

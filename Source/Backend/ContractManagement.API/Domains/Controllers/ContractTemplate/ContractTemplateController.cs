@@ -14,7 +14,7 @@ namespace ContractManagement.Domains.Controllers.ContractTemplate;
 [ApiController]
 [Route("api/contract-templates")]
 [SessionAuthorize(RbacPermissions.TemplateManage)]
-public sealed class ContractTemplateController : ControllerBase
+public sealed partial class ContractTemplateController : ControllerBase
 {
     private readonly IContractTemplateService _service;
 

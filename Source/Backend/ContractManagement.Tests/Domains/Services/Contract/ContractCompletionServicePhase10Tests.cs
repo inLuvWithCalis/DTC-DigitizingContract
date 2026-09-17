@@ -873,6 +873,32 @@ public sealed class ContractCompletionServicePhase10Tests
             });
         }
 
+        if (status is ContractStatus.Signed or ContractStatus.Completed)
+        {
+            context.TblContractAcceptanceRecords.Add(
+                new TblContractAcceptanceRecord
+                {
+                    AcceptanceRecordId = 12012,
+                    ContractId = ContractId,
+                    ContractVersionId = VersionId,
+                    TemplateVersionId = 0,
+                    AcceptanceCode = "BBNT-PHASE12",
+                    AcceptanceDate = DateTime.UtcNow.Date,
+                    Location = "Hà Nội",
+                    AcceptanceKind = (byte)AcceptanceKind.Final,
+                    Status = (byte)(includeAcceptance
+                        ? AcceptanceRecordStatus.Signed
+                        : AcceptanceRecordStatus.Finalized),
+                    FinalizedAt = DateTime.UtcNow.AddHours(-1),
+                    FinalizedByEmployeeId = TechnicalId,
+                    SignedAt = includeAcceptance ? DateTime.UtcNow : null,
+                    SignedByEmployeeId = includeAcceptance ? TechnicalId : null,
+                    CreatedEmployeeId = TechnicalId,
+                    CreatedDate = DateTime.UtcNow.AddHours(-2),
+                    RowVersion = InitialRowVersion.ToArray()
+                });
+        }
+
         if (includeAcceptance)
         {
             context.TblFileStorages.Add(FileMetadata(
@@ -883,8 +909,7 @@ public sealed class ContractCompletionServicePhase10Tests
                 new TblContractAcceptanceEvidence
                 {
                     AcceptanceEvidenceId = 12011,
-                    ContractId = ContractId,
-                    VersionId = VersionId,
+                    AcceptanceRecordId = 12012,
                     FileId = 12010,
                     UploadedByEmployeeId = OwnerId,
                     UploadedAt = DateTime.UtcNow,

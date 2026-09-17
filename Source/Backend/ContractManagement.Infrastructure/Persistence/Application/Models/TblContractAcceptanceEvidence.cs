@@ -6,8 +6,7 @@ namespace ContractManagement.Infrastructure.Persistence.Application.Models;
 public sealed class TblContractAcceptanceEvidence
 {
     public int AcceptanceEvidenceId { get; set; }
-    public int ContractId { get; set; }
-    public int VersionId { get; set; }
+    public int AcceptanceRecordId { get; set; }
     public int FileId { get; set; }
     public int UploadedByEmployeeId { get; set; }
     public DateTime UploadedAt { get; set; }

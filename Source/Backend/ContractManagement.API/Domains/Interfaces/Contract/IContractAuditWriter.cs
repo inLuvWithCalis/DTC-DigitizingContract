@@ -13,6 +13,7 @@ public static class ContractAuditSubjectTypes
     public const string CustomerAccessSession = "CustomerAccessSession";
     public const string ApprovalRequest = "ApprovalRequest";
     public const string SignedEvidence = "SignedEvidence";
+    public const string ContractAppendix = "ContractAppendix";
     public const string AcceptanceEvidence = "AcceptanceEvidence";
     public const string Payment = "Payment";
 }
@@ -154,7 +155,9 @@ public enum ContractAuditFieldCode : short
     SessionState,
     IdleExpiresAt,
     HardExpiresAt,
-    RevocationReasonCode
+    RevocationReasonCode,
+    AppendixCount,
+    SignDate
 }
 
 public sealed record ContractAuditValueInput(
@@ -213,6 +216,7 @@ internal static class ContractAuditFieldKinds
             ContractAuditFieldCode.EffectiveDate
                 or ContractAuditFieldCode.ExpireDate
                 or ContractAuditFieldCode.UploadDate
+                or ContractAuditFieldCode.SignDate
                 or ContractAuditFieldCode.PaymentDate
                 or ContractAuditFieldCode.AnchorDate
                 or ContractAuditFieldCode.DueDate
@@ -291,6 +295,12 @@ public static class ContractAuditActionTypes
     public const string NegotiationStarted = "NegotiationStarted";
     public const string NegotiationRoundCreated =
         "NegotiationRoundCreated";
+    public const string ContractAppendixSelected = "ContractAppendixSelected";
+    public const string ContractAppendixRemoved = "ContractAppendixRemoved";
+    public const string ContractAppendixTermCreated = "ContractAppendixTermCreated";
+    public const string ContractAppendixTermUpdated = "ContractAppendixTermUpdated";
+    public const string ContractAppendixTermDeleted = "ContractAppendixTermDeleted";
+    public const string ContractAppendixTermsReordered = "ContractAppendixTermsReordered";
     public const string ExternalFeedbackCreated =
         "ExternalFeedbackCreated";
     public const string ExternalFeedbackRecorded =

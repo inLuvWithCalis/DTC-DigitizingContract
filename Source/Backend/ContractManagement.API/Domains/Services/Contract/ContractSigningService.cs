@@ -166,6 +166,17 @@ public sealed class ContractSigningService : IContractSigningService
             throw new ArgumentException("ContractId và CurrentVersionId phải lớn hơn 0.");
         }
 
+        var signDate = request.SignDate.Date;
+        if (signDate == default)
+        {
+            throw new ArgumentException("Ngày ký hợp đồng là bắt buộc.");
+        }
+
+        if (signDate > DateTime.UtcNow.Date)
+        {
+            throw new ArgumentException("Ngày ký hợp đồng không được nằm trong tương lai.");
+        }
+
         await _authorization.EnsureCanManageSigningAsync(
             contractId,
             employeeId,
@@ -202,6 +213,14 @@ public sealed class ContractSigningService : IContractSigningService
                     contract.RowVersion,
                     expectedContractRowVersion,
                     "Hợp đồng");
+                if (supersededEvidenceId.HasValue
+                    && contract.SignDate?.Date != signDate)
+                {
+                    throw Rule(
+                        StatusCodes.Status409Conflict,
+                        ContractSigningErrorCodes.SigningStateChanged,
+                        "Ngày ký của package đã ký không được thay đổi khi thay bản scan.");
+                }
                 _dbContext.Entry(contract)
                     .Property(candidate => candidate.RowVersion)
                     .OriginalValue = expectedContractRowVersion;
@@ -309,6 +328,7 @@ public sealed class ContractSigningService : IContractSigningService
 
                 var now = DateTime.UtcNow;
                 var previousContractStatus = contract.Status;
+                var previousSignDate = contract.SignDate;
                 var previousEvidenceFileId = activeEvidence?.FileId;
                 var previousEvidenceId = activeEvidence?.SignedEvidenceId;
                 if (activeEvidence is not null)
@@ -338,11 +358,13 @@ public sealed class ContractSigningService : IContractSigningService
                     contract.Status = (byte)ContractStatus.Signed;
                 }
 
+                contract.SignDate = signDate;
+
                 contract.UpdatedEmployeeId = employeeId;
                 contract.UpdateDate = now;
                 await _dbContext.SaveChangesAsync(cancellationToken);
                 await ActivateSignedPaymentMilestonesAsync(version.VersionId,
-                    contract.SignDate?.Date ?? now.Date, employeeId, cancellationToken);
+                    signDate, employeeId, cancellationToken);
 
                 _auditWriter.StageEmployeeAudits(
                 [
@@ -367,6 +389,7 @@ public sealed class ContractSigningService : IContractSigningService
                             : ContractAuditValues.Create(
                                 ("SignedEvidenceId", previousEvidenceId),
                                 ("FileId", previousEvidenceFileId),
+                                ("SignDate", previousSignDate),
                                 ("EvidenceStatus",
                                     (byte)SignedEvidenceStatus.Active)),
                         NewValues: ContractAuditValues.Create(
@@ -376,6 +399,7 @@ public sealed class ContractSigningService : IContractSigningService
                             ("FileId", fileMetadata.FileId),
                             ("FileType", fileMetadata.FileType),
                             ("Sha256", fileMetadata.Sha256),
+                            ("SignDate", signDate),
                             ("EvidenceStatus", evidence.Status),
                             ("SupersedesEvidenceId",
                                 evidence.SupersedesEvidenceId)))

@@ -6,7 +6,6 @@ import {
   Download,
   Eye,
   FileCheck2,
-  FileClock,
   FileUp,
   Loader2,
   RefreshCw,
@@ -41,6 +40,12 @@ import {
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
 const ACCEPTED_EXTENSIONS = ["pdf", "jpg", "jpeg", "png"];
+const todayLocalIso = () => {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 10);
+};
 
 const getExtension = (fileName: string) =>
   fileName.split(".").pop()?.toLowerCase() ?? "";
@@ -67,6 +72,7 @@ export function ContractSigningPanel({
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [signDate, setSignDate] = useState(contract.signDate?.slice(0, 10) ?? "");
   const [supersedeReason, setSupersedeReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [downloadingFileId, setDownloadingFileId] = useState<number | null>(
@@ -116,6 +122,10 @@ export function ContractSigningPanel({
 
   const submit = async () => {
     if (!detail || !selectedFile || !canSubmit) return;
+    if (!signDate) {
+      toast.error("Vui lòng chọn ngày ký hợp đồng.");
+      return;
+    }
     if (isSupersede && !supersedeReason.trim()) {
       toast.error("Vui lòng nhập lý do thay bản scan.");
       return;
@@ -123,6 +133,7 @@ export function ContractSigningPanel({
 
     const filePayload = {
       file: selectedFile,
+      signDate,
       currentVersionId: detail.versionId,
       contractRowVersion: detail.contractRowVersion,
       versionRowVersion: detail.versionRowVersion,
@@ -338,6 +349,23 @@ export function ContractSigningPanel({
             )}
 
             <div className="space-y-2">
+              <Label htmlFor="contract-sign-date">
+                Ngày ký hợp đồng <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="contract-sign-date"
+                type="date"
+                value={signDate}
+                max={todayLocalIso()}
+                disabled={isSubmitting}
+                onChange={(event) => setSignDate(event.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Đây là ngày ký nghiệp vụ in trên hợp đồng, không phải ngày tải file lên.
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="signed-evidence-file">
                 File scan <span className="text-destructive">*</span>
               </Label>
@@ -359,7 +387,7 @@ export function ContractSigningPanel({
             </div>
 
             <Button
-              disabled={isSubmitting || !selectedFile}
+              disabled={isSubmitting || !selectedFile || !signDate}
               onClick={() => void submit()}
             >
               {isSubmitting ? (

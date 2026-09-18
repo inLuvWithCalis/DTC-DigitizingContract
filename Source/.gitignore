@@ -1,6 +1,7 @@
 .agents/
 Docs/
 .codex/
+.env
 
 # Graphify: share only the portable graph, report, and incremental manifest.
 # Everything else is local cache, machine configuration, personal work memory,

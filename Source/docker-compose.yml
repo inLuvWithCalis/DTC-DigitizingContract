@@ -1,0 +1,82 @@
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${SA_PASSWORD}"
+    ports:
+      - "1434:1433"
+    volumes:
+      - sqldata:/var/opt/mssql
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./Backend
+
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: 5005
+      ConnectionStrings__DefaultConnection: "server=db;database=db_dtctech;uid=sa;pwd=${SA_PASSWORD};TrustServerCertificate=True;Encrypt=False;"
+      ConnectionStrings__CentralDatabase: "server=db;database=ContractManagement_Central;uid=sa;pwd=${SA_PASSWORD};TrustServerCertificate=True;Encrypt=False;"
+      ConnectionStrings__TenantDatabaseTemplate: "server=db;database=master;uid=sa;pwd=${SA_PASSWORD};TrustServerCertificate=True;Encrypt=False;"
+      AllowedHosts: "${ALLOWED_HOSTS}"
+      Cors__AllowedOrigins__0: "http://localhost:3000"
+      Cors__AllowedOrigins__1: "http://localhost:3001"
+      Cors__AllowedOrigins__2: "http://localhost:5005"
+      PrivateFileStorage__RootPath: "/var/data/private-storage"
+      CustomerOtp__Provider: Smtp
+      CustomerOtp__Smtp__Host: smtp.gmail.com
+      CustomerOtp__Smtp__Port: 587
+      CustomerOtp__Smtp__Username: "${SMTP_USERNAME}"
+      CustomerOtp__Smtp__AppPassword: "${SMTP_APP_PASSWORD}"
+      CustomerOtp__Smtp__FromAddress: "${SMTP_FROM_ADDRESS}"
+      CustomerOtp__Smtp__FromName: "Contract Management"
+      CustomerOtp__Smtp__TimeoutSeconds: 30
+      CustomerOtp__HashKey: "${OTP_HASH_KEY}"
+      CustomerOtp__EncryptionKey: "${OTP_ENCRYPTION_KEY}"
+
+    ports:
+      - "5005:5005"
+
+    volumes:
+      - private-storage:/var/data/private-storage
+      - dataprotection-keys:/root/.aspnet/DataProtection-Keys
+
+    depends_on:
+      - db
+
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./Frontend
+      args:
+        NEXT_PUBLIC_API_URL: "${API_URL}"
+
+    environment:
+      NEXT_PUBLIC_API_URL: "${API_URL}"
+
+    ports:
+      - "3000:3000"
+
+    restart: unless-stopped
+
+  systemadmin:
+    build:
+      context: ./SystemAdmin
+      args:
+        NEXT_PUBLIC_API_URL: "${API_URL}"
+
+    environment:
+      NEXT_PUBLIC_API_URL: "${API_URL}"
+
+    ports:
+      - "3001:3001"
+
+    restart: unless-stopped
+
+volumes:
+  sqldata:
+  private-storage:
+  dataprotection-keys:

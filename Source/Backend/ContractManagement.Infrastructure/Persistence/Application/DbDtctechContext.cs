@@ -651,15 +651,15 @@ public partial class DbDtctechContext : DbContext
                 table.HasCheckConstraint("CK_tbl_ContractAuditValue_Side",
                     "[ValueSide] IN (1, 2)");
                 table.HasCheckConstraint("CK_tbl_ContractAuditValue_FieldCode",
-                    "[FieldCode] BETWEEN 1 AND 93");
+                    "[FieldCode] BETWEEN 1 AND 95");
                 table.HasCheckConstraint("CK_tbl_ContractAuditValue_ValueKind",
                     "[ValueKind] IN (1, 2, 3, 4, 5)");
                 table.HasCheckConstraint("CK_tbl_ContractAuditValue_FieldKind",
                     "([ValueKind] = 2 AND [FieldCode] IN (11,12,13,14,55,60,61)) OR " +
-                    "([ValueKind] = 4 AND [FieldCode] IN (8,9,45,54,62,63,64,85,91,92)) OR " +
+                    "([ValueKind] = 4 AND [FieldCode] IN (8,9,45,54,62,63,64,85,91,92,95)) OR " +
                     "([ValueKind] = 5 AND [FieldCode] IN (27,68)) OR " +
                     "([ValueKind] = 3 AND [FieldCode] IN (5,6,7,10,17,18,19,20,21,22,32,34,36,43,47,48,56,57,73,74,77,79,80,82,87,90,93)) OR " +
-                    "([ValueKind] = 1 AND [FieldCode] NOT IN (5,6,7,8,9,10,11,12,13,14,17,18,19,20,21,22,27,32,34,36,43,45,47,48,54,55,56,57,60,61,62,63,64,68,73,74,77,79,80,82,85,87,90,91,92,93))");
+                    "([ValueKind] = 1 AND [FieldCode] NOT IN (5,6,7,8,9,10,11,12,13,14,17,18,19,20,21,22,27,32,34,36,43,45,47,48,54,55,56,57,60,61,62,63,64,68,73,74,77,79,80,82,85,87,90,91,92,93,95))");
                 table.HasCheckConstraint("CK_tbl_ContractAuditValue_Value",
                     "([IsNull] = 1 AND [IntegerValue] IS NULL AND [DecimalValue] IS NULL AND [StringValue] IS NULL AND [DateTimeValue] IS NULL AND [BooleanValue] IS NULL) OR " +
                     "([IsNull] = 0 AND (([ValueKind] = 1 AND [IntegerValue] IS NOT NULL AND [DecimalValue] IS NULL AND [StringValue] IS NULL AND [DateTimeValue] IS NULL AND [BooleanValue] IS NULL) OR " +

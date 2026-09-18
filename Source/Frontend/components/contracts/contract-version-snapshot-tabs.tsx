@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
+  FileStack,
   MessageSquareText,
   Package,
   ScrollText,
@@ -126,7 +127,7 @@ export function ContractVersionSnapshotTabs({
   );
   return (
     <Tabs defaultValue="items" className="space-y-4">
-      <TabsList className="grid h-auto w-full grid-cols-3">
+      <TabsList className="grid h-auto w-full grid-cols-2 lg:grid-cols-4">
         <TabsTrigger value="items">
           <Package className="size-4" />
           <span className="hidden sm:inline">Sản phẩm/Dịch vụ</span>
@@ -136,6 +137,11 @@ export function ContractVersionSnapshotTabs({
           <ScrollText className="size-4" />
           <span className="hidden sm:inline">Điều khoản</span>
           <span>({version.terms.length})</span>
+        </TabsTrigger>
+        <TabsTrigger value="appendices">
+          <FileStack className="size-4" />
+          <span className="hidden sm:inline">Phụ lục</span>
+          <span>({version.appendices?.length ?? 0})</span>
         </TabsTrigger>
         <TabsTrigger value="comments">
           <MessageSquareText className="size-4" />
@@ -265,6 +271,49 @@ export function ContractVersionSnapshotTabs({
           label="điều khoản"
           onPageChange={setTermsPage}
         />
+      </TabsContent>
+
+      <TabsContent value="appendices" className="space-y-4">
+        {(version.appendices?.length ?? 0) === 0 ? (
+          <EmptyState icon={<FileStack className="size-8" />}>
+            Snapshot không có phụ lục
+          </EmptyState>
+        ) : (
+          [...version.appendices]
+            .sort((a, b) => a.displayOrder - b.displayOrder)
+            .map((appendix) => (
+              <div key={appendix.appendixId} className="rounded-xl border p-4 sm:p-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-semibold">
+                    {appendix.appendixCode} — {appendix.appendixName}
+                  </h3>
+                  <Badge variant={appendix.isRequired ? "default" : "outline"}>
+                    {appendix.isRequired ? "Bắt buộc" : "Tùy chọn"}
+                  </Badge>
+                </div>
+                {appendix.appendixDescription && (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {appendix.appendixDescription}
+                  </p>
+                )}
+                <div className="mt-4 space-y-3">
+                  {appendix.terms.map((term) => (
+                    <div key={term.appendixTermId} className="rounded-lg bg-muted/30 p-4">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        {term.termCode} · Điều {term.displayOrder}
+                      </p>
+                      <p className="mt-1 font-medium">{term.termTitle}</p>
+                      <ContractRichTextContent
+                        value={term.termContent}
+                        emptyText="Chưa có nội dung."
+                        className="mt-2 text-muted-foreground"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
+        )}
       </TabsContent>
 
       <TabsContent value="comments" className="space-y-3">

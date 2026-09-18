@@ -829,6 +829,123 @@ public sealed class ContractTemplateServiceTests
                 AdminOfficerId)).LegalBases).BasisCode);
     }
 
+    [Fact]
+    public async Task DraftAppendix_CrudTerm_InvalidatesPreview_AndPublishedIsImmutable()
+    {
+        await using var context = CreateContext();
+        await SeedEmployeesAsync(context);
+        var service = CreateService(context);
+        var created = await service.CreateAsync(CreateRequest("APPENDIX-CRUD"),
+            AdminOfficerId);
+        var draft = Assert.Single(created.Versions);
+        var versionEntity = await context.TblContractTemplateVersions.SingleAsync(
+            x => x.TemplateVersionId == draft.TemplateVersionId);
+        versionEntity.PreviewFileId = 99;
+        await context.SaveChangesAsync();
+
+        var appendix = await service.AddAppendixAsync(draft.TemplateVersionId,
+            new CreateContractTemplateAppendixRequest
+            {
+                AppendixCode = "annex-scope", AppendixName = "Phụ lục phạm vi",
+                IsRequired = true, IsSelectedByDefault = true, DisplayOrder = 0,
+                VersionRowVersion = draft.RowVersion
+            }, AdminOfficerId);
+        var afterAppendix = await service.GetVersionAsync(draft.TemplateVersionId,
+            AdminOfficerId);
+        Assert.Null(afterAppendix.PreviewFileId);
+        Assert.Equal("ANNEX-SCOPE", appendix.AppendixCode);
+
+        var term = await service.AddAppendixTermAsync(draft.TemplateVersionId,
+            appendix.TemplateAppendixId,
+            new CreateContractTemplateAppendixTermRequest
+            {
+                TermCode = "scope", TermTitle = "Phạm vi bổ sung",
+                TermContent = RichText("Nội dung phụ lục."), DisplayOrder = 0,
+                AppendixRowVersion = appendix.RowVersion,
+                VersionRowVersion = afterAppendix.RowVersion
+            }, AdminOfficerId);
+        Assert.Equal("SCOPE", term.TermCode);
+        var detail = await service.GetVersionAsync(draft.TemplateVersionId,
+            AdminOfficerId);
+        Assert.Single(Assert.Single(detail.Appendices).Terms);
+
+        versionEntity = await context.TblContractTemplateVersions.SingleAsync(
+            x => x.TemplateVersionId == draft.TemplateVersionId);
+        versionEntity.Status = (byte)TemplateVersionStatus.Published;
+        await context.SaveChangesAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.UpdateAppendixAsync(draft.TemplateVersionId,
+                appendix.TemplateAppendixId,
+                new UpdateContractTemplateAppendixRequest
+                {
+                    AppendixCode = appendix.AppendixCode,
+                    AppendixName = appendix.AppendixName,
+                    IsRequired = true, IsSelectedByDefault = true,
+                    DisplayOrder = 0, RowVersion = detail.Appendices[0].RowVersion,
+                    VersionRowVersion = detail.RowVersion
+                }, AdminOfficerId));
+    }
+
+    [Fact]
+    public async Task CopyVersion_CopiesAppendixDefinitionsAndTermsIntoNewRows()
+    {
+        await using var context = CreateContext();
+        await SeedEmployeesAsync(context);
+        var source = await SeedPublishedTemplateAsync(context);
+        var appendix = new TblContractTemplateAppendix
+        {
+            TemplateAppendixId = 20, TemplateVersionId = source.TemplateVersionId,
+            AppendixCode = "ANNEX_SCOPE", AppendixName = "Phụ lục phạm vi",
+            IsSelectedByDefault = true, DisplayOrder = 0,
+            CreatedEmployeeId = AdminOfficerId, CreatedDate = DateTime.UtcNow,
+            RowVersion = [2, 0, 0, 0, 0, 0, 0, 1]
+        };
+        context.TblContractTemplateAppendices.Add(appendix);
+        context.TblContractTemplateAppendixTerms.Add(
+            new TblContractTemplateAppendixTerm
+            {
+                TemplateAppendixTermId = 21,
+                TemplateAppendixId = appendix.TemplateAppendixId,
+                TermCode = "SCOPE", TermTitle = "Phạm vi",
+                TermContent = RichText("Nội dung phạm vi."), DisplayOrder = 0,
+                CreatedEmployeeId = AdminOfficerId, CreatedDate = DateTime.UtcNow,
+                RowVersion = [2, 0, 0, 0, 0, 0, 0, 2]
+            });
+        await context.SaveChangesAsync();
+
+        var copied = await CreateService(context).CopyVersionAsync(
+            source.TemplateVersionId,
+            new CopyContractTemplateVersionRequest
+            {
+                RowVersion = Encode(source.RowVersion), ChangeNote = "Draft mới"
+            }, AdminOfficerId);
+
+        var copiedAppendix = Assert.Single(copied.Appendices);
+        Assert.NotEqual(appendix.TemplateAppendixId,
+            copiedAppendix.TemplateAppendixId);
+        Assert.Single(copiedAppendix.Terms);
+        Assert.NotEqual(21, copiedAppendix.Terms[0].TemplateAppendixTermId);
+    }
+
+    [Fact]
+    public async Task RequiredAppendix_NotSelectedByDefault_IsRejected()
+    {
+        await using var context = CreateContext();
+        await SeedEmployeesAsync(context);
+        var service = CreateService(context);
+        var created = await service.CreateAsync(CreateRequest("APPENDIX-FLAG"),
+            AdminOfficerId);
+        var draft = Assert.Single(created.Versions);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.AddAppendixAsync(
+            draft.TemplateVersionId, new CreateContractTemplateAppendixRequest
+            {
+                AppendixCode = "ANNEX", AppendixName = "Phụ lục",
+                IsRequired = true, IsSelectedByDefault = false,
+                VersionRowVersion = draft.RowVersion
+            }, AdminOfficerId));
+    }
+
     private static ContractTemplateService CreateService(
         DbDtctechContext context) => new(context);
 

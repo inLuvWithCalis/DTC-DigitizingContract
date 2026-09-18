@@ -24,6 +24,13 @@ export interface ContractApprovalArtifactResponse {
   sha256: string;
 }
 
+export interface ContractApprovalAppendixSummaryResponse {
+  appendixId: number;
+  appendixCode: string;
+  appendixName: string;
+  displayOrder: number;
+}
+
 export interface ContractApprovalRequestResponse {
   approvalRequestId: number;
   contractId: number;
@@ -48,6 +55,7 @@ export interface ContractApprovalRequestResponse {
 export interface ContractApprovalDetailResponse
   extends ContractApprovalRequestResponse {
   artifacts: ContractApprovalArtifactResponse[];
+  appendices: ContractApprovalAppendixSummaryResponse[];
 }
 
 export interface ContractApprovalActionResponse {

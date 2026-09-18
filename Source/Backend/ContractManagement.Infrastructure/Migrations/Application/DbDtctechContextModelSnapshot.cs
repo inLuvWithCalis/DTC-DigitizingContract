@@ -402,7 +402,7 @@ namespace ContractManagement.Infrastructure.Migrations.Application
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("AcceptanceEvidenceId"));
 
-                    b.Property<int>("ContractId")
+                    b.Property<int>("AcceptanceRecordId")
                         .HasColumnType("int");
 
                     b.Property<int>("FileId")
@@ -420,28 +420,309 @@ namespace ContractManagement.Infrastructure.Migrations.Application
                     b.Property<int>("UploadedByEmployeeId")
                         .HasColumnType("int");
 
-                    b.Property<int>("VersionId")
-                        .HasColumnType("int");
-
                     b.HasKey("AcceptanceEvidenceId");
+
+                    b.HasIndex("AcceptanceRecordId")
+                        .IsUnique();
 
                     b.HasIndex("FileId")
                         .IsUnique();
 
                     b.HasIndex("UploadedByEmployeeId");
 
-                    b.HasIndex("VersionId");
-
-                    b.HasIndex("ContractId", "VersionId")
-                        .IsUnique();
-
                     b.ToTable("tbl_ContractAcceptanceEvidence", null, t =>
                         {
-                            t.HasCheckConstraint("CK_tbl_ContractAcceptanceEvidence_ContractId", "[ContractId] > 0");
-
                             t.HasCheckConstraint("CK_tbl_ContractAcceptanceEvidence_FileId", "[FileId] > 0");
 
-                            t.HasCheckConstraint("CK_tbl_ContractAcceptanceEvidence_VersionId", "[VersionId] > 0");
+                            t.HasCheckConstraint("CK_tbl_ContractAcceptanceEvidence_RecordId", "[AcceptanceRecordId] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAcceptanceMilestone", b =>
+                {
+                    b.Property<int>("AcceptanceMilestoneId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("AcceptanceMilestoneId"));
+
+                    b.Property<int>("AcceptanceRecordId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PaymentMilestoneId")
+                        .HasColumnType("int");
+
+                    b.HasKey("AcceptanceMilestoneId");
+
+                    b.HasIndex("PaymentMilestoneId");
+
+                    b.HasIndex("AcceptanceRecordId", "PaymentMilestoneId")
+                        .IsUnique();
+
+                    b.ToTable("tbl_ContractAcceptanceMilestone", (string)null);
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAcceptanceParty", b =>
+                {
+                    b.Property<int>("AcceptancePartyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("AcceptancePartyId"));
+
+                    b.Property<int>("AcceptanceRecordId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Fax")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("LegalName")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<byte>("PartyRole")
+                        .HasColumnType("tinyint");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("RepresentativeName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("RepresentativeTitle")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("TaxCode")
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.HasKey("AcceptancePartyId");
+
+                    b.HasIndex("AcceptanceRecordId", "PartyRole")
+                        .IsUnique();
+
+                    b.ToTable("tbl_ContractAcceptanceParty", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_tbl_ContractAcceptanceParty_Role", "[PartyRole] IN (1, 2)");
+                        });
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAcceptanceRecord", b =>
+                {
+                    b.Property<int>("AcceptanceRecordId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("AcceptanceRecordId"));
+
+                    b.Property<string>("AcceptanceCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<DateTime>("AcceptanceDate")
+                        .HasColumnType("date");
+
+                    b.Property<byte>("AcceptanceKind")
+                        .HasColumnType("tinyint");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CancelledByEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ContractId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ContractVersionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("sysutcdatetime()");
+
+                    b.Property<int>("CreatedEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("FinalizedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("FinalizedByEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Location")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("SignedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("SignedByEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SnapshotHash")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<byte>("Status")
+                        .HasColumnType("tinyint");
+
+                    b.Property<int>("TemplateVersionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedEmployeeId")
+                        .HasColumnType("int");
+
+                    b.HasKey("AcceptanceRecordId");
+
+                    b.HasIndex("CancelledByEmployeeId");
+
+                    b.HasIndex("CreatedEmployeeId");
+
+                    b.HasIndex("FinalizedByEmployeeId");
+
+                    b.HasIndex("SignedByEmployeeId");
+
+                    b.HasIndex("TemplateVersionId");
+
+                    b.HasIndex("UpdatedEmployeeId");
+
+                    b.HasIndex("ContractId", "AcceptanceCode")
+                        .IsUnique();
+
+                    b.HasIndex("ContractVersionId", "Status");
+
+                    b.ToTable("tbl_ContractAcceptanceRecord", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_tbl_ContractAcceptanceRecord_Hash", "[SnapshotHash] IS NULL OR LEN([SnapshotHash]) = 64");
+
+                            t.HasCheckConstraint("CK_tbl_ContractAcceptanceRecord_Kind", "[AcceptanceKind] IN (1, 2)");
+
+                            t.HasCheckConstraint("CK_tbl_ContractAcceptanceRecord_Status", "[Status] IN (0, 1, 2, 3)");
+                        });
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAcceptanceReference", b =>
+                {
+                    b.Property<int>("AcceptanceReferenceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("AcceptanceReferenceId"));
+
+                    b.Property<int>("AcceptanceRecordId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("AppendixId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<byte>("ReferenceType")
+                        .HasColumnType("tinyint");
+
+                    b.HasKey("AcceptanceReferenceId");
+
+                    b.HasIndex("AppendixId");
+
+                    b.HasIndex("AcceptanceRecordId", "DisplayOrder")
+                        .IsUnique();
+
+                    b.HasIndex("AcceptanceRecordId", "ReferenceType", "AppendixId")
+                        .IsUnique()
+                        .HasFilter("[AppendixId] IS NOT NULL");
+
+                    b.ToTable("tbl_ContractAcceptanceReference", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_tbl_ContractAcceptanceReference_Target", "([ReferenceType] = 1 AND [AppendixId] IS NULL) OR ([ReferenceType] = 2 AND [AppendixId] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_tbl_ContractAcceptanceReference_Type", "[ReferenceType] IN (1, 2)");
+                        });
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAcceptanceSection", b =>
+                {
+                    b.Property<int>("AcceptanceSectionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("AcceptanceSectionId"));
+
+                    b.Property<int>("AcceptanceRecordId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ContentEn")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ContentVi")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SectionCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("TitleEn")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("TitleVi")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("AcceptanceSectionId");
+
+                    b.HasIndex("AcceptanceRecordId", "DisplayOrder")
+                        .IsUnique();
+
+                    b.HasIndex("AcceptanceRecordId", "SectionCode")
+                        .IsUnique();
+
+                    b.ToTable("tbl_ContractAcceptanceSection", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_tbl_ContractAcceptanceSection_Order", "[DisplayOrder] >= 0");
                         });
                 });
 
@@ -454,33 +735,157 @@ namespace ContractManagement.Infrastructure.Migrations.Application
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("AppendixId"));
 
                     b.Property<string>("AppendixCode")
+                        .IsRequired()
                         .HasMaxLength(50)
                         .IsUnicode(false)
                         .HasColumnType("varchar(50)");
-
-                    b.Property<DateTime?>("AppendixDate")
-                        .HasColumnType("datetime");
 
                     b.Property<string>("AppendixDescription")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
                     b.Property<string>("AppendixName")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("AppendixNameEn")
                         .HasMaxLength(500)
-                        .IsUnicode(false)
-                        .HasColumnType("varchar(500)");
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<int>("ContractId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("sysutcdatetime()");
+
+                    b.Property<int>("CreatedEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsRequired")
+                        .HasColumnType("bit");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SourceTemplateAppendixId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("VersionId")
                         .HasColumnType("int");
 
                     b.HasKey("AppendixId")
                         .HasName("PK__tbl_Cont__44B149C44BC57074");
 
-                    b.ToTable("tbl_ContractAppendix", (string)null);
+                    b.HasIndex("CreatedEmployeeId");
+
+                    b.HasIndex("SourceTemplateAppendixId");
+
+                    b.HasIndex("UpdatedEmployeeId");
+
+                    b.HasIndex("VersionId", "AppendixCode")
+                        .IsUnique();
+
+                    b.HasIndex("VersionId", "DisplayOrder")
+                        .IsUnique();
+
+                    b.HasIndex("ContractId", "VersionId", "DisplayOrder");
+
+                    b.ToTable("tbl_ContractAppendix", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_tbl_ContractAppendix_Code", "LEN(LTRIM(RTRIM([AppendixCode]))) > 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractAppendix_Order", "[DisplayOrder] >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAppendixTerm", b =>
+                {
+                    b.Property<int>("AppendixTermId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("AppendixTermId"));
+
+                    b.Property<int>("AppendixId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("sysutcdatetime()");
+
+                    b.Property<int>("CreatedEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int?>("SourceTemplateAppendixTermId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TermCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("TermContent")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TermContentEn")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TermTitle")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("TermTitleEn")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedEmployeeId")
+                        .HasColumnType("int");
+
+                    b.HasKey("AppendixTermId");
+
+                    b.HasIndex("SourceTemplateAppendixTermId");
+
+                    b.HasIndex("AppendixId", "DisplayOrder")
+                        .IsUnique();
+
+                    b.HasIndex("AppendixId", "TermCode")
+                        .IsUnique();
+
+                    b.ToTable("tbl_ContractAppendixTerm", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_tbl_ContractAppendixTerm_Order", "[DisplayOrder] >= 0");
+                        });
                 });
 
             modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractApprovalRequest", b =>
@@ -2212,6 +2617,167 @@ namespace ContractManagement.Infrastructure.Migrations.Application
                         });
                 });
 
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplateAppendix", b =>
+                {
+                    b.Property<int>("TemplateAppendixId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("TemplateAppendixId"));
+
+                    b.Property<string>("AppendixCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<string>("AppendixDescription")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("AppendixName")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("AppendixNameEn")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("sysutcdatetime()");
+
+                    b.Property<int>("CreatedEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsRequired")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSelectedByDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("TemplateVersionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedEmployeeId")
+                        .HasColumnType("int");
+
+                    b.HasKey("TemplateAppendixId");
+
+                    b.HasIndex("CreatedEmployeeId");
+
+                    b.HasIndex("UpdatedEmployeeId");
+
+                    b.HasIndex("TemplateVersionId", "AppendixCode")
+                        .IsUnique();
+
+                    b.HasIndex("TemplateVersionId", "DisplayOrder")
+                        .IsUnique();
+
+                    b.ToTable("tbl_ContractTemplateAppendix", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateAppendix_Code", "LEN(LTRIM(RTRIM([AppendixCode]))) > 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateAppendix_Name", "LEN(LTRIM(RTRIM([AppendixName]))) > 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateAppendix_Order", "[DisplayOrder] >= 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateAppendix_RequiredDefault", "[IsRequired] = 0 OR [IsSelectedByDefault] = 1");
+                        });
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplateAppendixTerm", b =>
+                {
+                    b.Property<int>("TemplateAppendixTermId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("TemplateAppendixTermId"));
+
+                    b.Property<DateTime>("CreatedDate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("sysutcdatetime()");
+
+                    b.Property<int>("CreatedEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("TemplateAppendixId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TermCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("TermContent")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TermContentEn")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TermTitle")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("TermTitleEn")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedEmployeeId")
+                        .HasColumnType("int");
+
+                    b.HasKey("TemplateAppendixTermId");
+
+                    b.HasIndex("CreatedEmployeeId");
+
+                    b.HasIndex("UpdatedEmployeeId");
+
+                    b.HasIndex("TemplateAppendixId", "DisplayOrder")
+                        .IsUnique();
+
+                    b.HasIndex("TemplateAppendixId", "TermCode")
+                        .IsUnique();
+
+                    b.ToTable("tbl_ContractTemplateAppendixTerm", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateAppendixTerm_Code", "LEN(LTRIM(RTRIM([TermCode]))) > 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateAppendixTerm_Order", "[DisplayOrder] >= 0");
+
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateAppendixTerm_Title", "LEN(LTRIM(RTRIM([TermTitle]))) > 0");
+                        });
+                });
+
             modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplateAudit", b =>
                 {
                     b.Property<int>("ContractTemplateAuditId")
@@ -2336,7 +2902,7 @@ namespace ContractManagement.Infrastructure.Migrations.Application
 
                     b.ToTable("tbl_ContractTemplateAuditValue", null, t =>
                         {
-                            t.HasCheckConstraint("CK_tbl_ContractTemplateAuditValue_FieldCode", "[FieldCode] BETWEEN 1 AND 11");
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateAuditValue_FieldCode", "[FieldCode] BETWEEN 1 AND 15");
 
                             t.HasCheckConstraint("CK_tbl_ContractTemplateAuditValue_NullField", "[IsNull] = 0 OR [FieldCode] IN (1, 6, 9)");
 
@@ -2344,7 +2910,7 @@ namespace ContractManagement.Infrastructure.Migrations.Application
 
                             t.HasCheckConstraint("CK_tbl_ContractTemplateAuditValue_Status", "([FieldCode] <> 2 OR [StringValue] IN ('doc','docx','docm','dotx','dotm','other')) AND ([FieldCode] <> 4 OR [StringValue] IN ('Valid','Invalid','Unchanged')) AND ([FieldCode] <> 8 OR [StringValue] IN ('Current','Rejected','Stale','Unchanged')) AND ([FieldCode] <> 11 OR [StringValue] IN ('Draft','Published','Retired','Unchanged'))");
 
-                            t.HasCheckConstraint("CK_tbl_ContractTemplateAuditValue_Value", "([IsNull] = 1 AND [IntegerValue] IS NULL AND [LongValue] IS NULL AND [StringValue] IS NULL) OR ([IsNull] = 0 AND (([FieldCode] IN (1, 5, 6, 9) AND [IntegerValue] IS NOT NULL AND [LongValue] IS NULL AND [StringValue] IS NULL) OR ([FieldCode] IN (3, 7, 10) AND [IntegerValue] IS NULL AND [LongValue] IS NOT NULL AND [StringValue] IS NULL) OR ([FieldCode] IN (2, 4, 8, 11) AND [IntegerValue] IS NULL AND [LongValue] IS NULL AND [StringValue] IS NOT NULL)))");
+                            t.HasCheckConstraint("CK_tbl_ContractTemplateAuditValue_Value", "([IsNull] = 1 AND [IntegerValue] IS NULL AND [LongValue] IS NULL AND [StringValue] IS NULL) OR ([IsNull] = 0 AND (([FieldCode] IN (1, 5, 6, 9, 12, 13, 14, 15) AND [IntegerValue] IS NOT NULL AND [LongValue] IS NULL AND [StringValue] IS NULL) OR ([FieldCode] IN (3, 7, 10) AND [IntegerValue] IS NULL AND [LongValue] IS NOT NULL AND [StringValue] IS NULL) OR ([FieldCode] IN (2, 4, 8, 11) AND [IntegerValue] IS NULL AND [LongValue] IS NULL AND [StringValue] IS NOT NULL)))");
                         });
                 });
 
@@ -4659,9 +5225,9 @@ namespace ContractManagement.Infrastructure.Migrations.Application
 
             modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAcceptanceEvidence", b =>
                 {
-                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContract", null)
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAcceptanceRecord", null)
                         .WithMany()
-                        .HasForeignKey("ContractId")
+                        .HasForeignKey("AcceptanceRecordId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -4676,12 +5242,146 @@ namespace ContractManagement.Infrastructure.Migrations.Application
                         .HasForeignKey("UploadedByEmployeeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAcceptanceMilestone", b =>
+                {
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAcceptanceRecord", null)
+                        .WithMany()
+                        .HasForeignKey("AcceptanceRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractPaymentMilestone", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentMilestoneId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAcceptanceParty", b =>
+                {
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAcceptanceRecord", null)
+                        .WithMany()
+                        .HasForeignKey("AcceptanceRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAcceptanceRecord", b =>
+                {
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblEmployee", null)
+                        .WithMany()
+                        .HasForeignKey("CancelledByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractVersion", null)
+                        .WithMany()
+                        .HasForeignKey("ContractVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblEmployee", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblEmployee", null)
+                        .WithMany()
+                        .HasForeignKey("FinalizedByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblEmployee", null)
+                        .WithMany()
+                        .HasForeignKey("SignedByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplateVersion", null)
+                        .WithMany()
+                        .HasForeignKey("TemplateVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblEmployee", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAcceptanceReference", b =>
+                {
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAcceptanceRecord", null)
+                        .WithMany()
+                        .HasForeignKey("AcceptanceRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAppendix", null)
+                        .WithMany()
+                        .HasForeignKey("AppendixId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAcceptanceSection", b =>
+                {
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAcceptanceRecord", null)
+                        .WithMany()
+                        .HasForeignKey("AcceptanceRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAppendix", b =>
+                {
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblEmployee", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplateAppendix", null)
+                        .WithMany()
+                        .HasForeignKey("SourceTemplateAppendixId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblEmployee", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractVersion", null)
                         .WithMany()
                         .HasForeignKey("VersionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAppendixTerm", b =>
+                {
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAppendix", null)
+                        .WithMany()
+                        .HasForeignKey("AppendixId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplateAppendixTerm", null)
+                        .WithMany()
+                        .HasForeignKey("SourceTemplateAppendixTermId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractAuditValue", b =>
@@ -4792,6 +5492,46 @@ namespace ContractManagement.Infrastructure.Migrations.Application
                         .HasForeignKey("VersionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplateAppendix", b =>
+                {
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblEmployee", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplateVersion", null)
+                        .WithMany()
+                        .HasForeignKey("TemplateVersionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblEmployee", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplateAppendixTerm", b =>
+                {
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblEmployee", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplateAppendix", null)
+                        .WithMany()
+                        .HasForeignKey("TemplateAppendixId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ContractManagement.Infrastructure.Persistence.Application.Models.TblEmployee", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("ContractManagement.Infrastructure.Persistence.Application.Models.TblContractTemplateAuditValue", b =>

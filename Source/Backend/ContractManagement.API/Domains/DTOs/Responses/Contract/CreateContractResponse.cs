@@ -74,6 +74,8 @@ namespace ContractManagement.API.Domains.DTOs.Responses.Contract
         /// </summary>
         public int TermCount { get; set; }
 
+        public int AppendixCount { get; set; }
+
         /// <summary>
         /// RowVersion của Contract.
         /// Frontend gửi lại giá trị này khi cập nhật Draft.

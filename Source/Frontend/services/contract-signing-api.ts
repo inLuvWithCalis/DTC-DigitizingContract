@@ -55,6 +55,7 @@ export interface ContractSigningDetailResponse {
 
 interface ContractSignedEvidenceFileRequest {
   file: File;
+  signDate: string;
   currentVersionId: number;
   contractRowVersion: string;
   versionRowVersion: string;

@@ -364,6 +364,22 @@ export function ContractApprovalPanel({
                   Đây là bản bất biến được tạo tại thời điểm gửi duyệt.
                 </DialogDescription>
               </DialogHeader>
+              <div className="rounded-xl border bg-muted/20 p-3 text-sm">
+                <p className="font-medium">
+                  Phụ lục trong package ({artifactDetail.appendices?.length ?? 0})
+                </p>
+                {(artifactDetail.appendices?.length ?? 0) > 0 ? (
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">
+                    {artifactDetail.appendices.map((appendix) => (
+                      <li key={appendix.appendixId}>
+                        {appendix.appendixCode} — {appendix.appendixName}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-1 text-muted-foreground">Không có phụ lục.</p>
+                )}
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 {artifactDetail.artifacts.map((artifact) => {
                   const isPdf = artifact.fileType.toLowerCase() === "pdf";

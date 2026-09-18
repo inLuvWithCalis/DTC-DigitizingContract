@@ -291,6 +291,70 @@ public sealed class ContractServiceSlice04Tests
     }
 
     [Fact]
+    public async Task Create_ShouldCopyRequiredAndSelectedOptionalAppendicesWithTerms()
+    {
+        await using var context = CreateContext();
+        await SeedCreateDependenciesAsync(context);
+        await SeedTemplateAppendicesAsync(context);
+        var request = CreateRequest("VND",
+            [CreateItem(ContractItemType.Product, 1m, 100m,
+                sourceProductId: ProductId)]);
+        request.SelectedOptionalTemplateAppendixIds = [66];
+
+        var response = await CreateService(context).CreateAsync(request, EmployeeId);
+
+        var appendices = await context.TblContractAppendices.AsNoTracking()
+            .OrderBy(item => item.DisplayOrder).ToListAsync();
+        var terms = await context.TblContractAppendixTerms.AsNoTracking()
+            .OrderBy(item => item.AppendixId).ToListAsync();
+        Assert.Equal(2, response.AppendixCount);
+        Assert.Equal([65, 66], appendices.Select(item => item.SourceTemplateAppendixId));
+        Assert.Equal(2, terms.Count);
+        Assert.All(appendices, item =>
+            Assert.Equal(response.CurrentVersionId, item.VersionId));
+    }
+
+    [Theory]
+    [InlineData(99999)]
+    [InlineData(65)]
+    public async Task Create_InvalidOptionalAppendixSelection_DoesNotPersistPartialContract(
+        int selectedId)
+    {
+        await using var context = CreateContext();
+        await SeedCreateDependenciesAsync(context);
+        await SeedTemplateAppendicesAsync(context);
+        var request = CreateRequest("VND",
+            [CreateItem(ContractItemType.Product, 1m, 100m,
+                sourceProductId: ProductId)]);
+        request.SelectedOptionalTemplateAppendixIds = [selectedId];
+
+        await Assert.ThrowsAnyAsync<ArgumentException>(() =>
+            CreateService(context).CreateAsync(request, EmployeeId));
+
+        Assert.Empty(context.TblContracts);
+        Assert.Empty(context.TblContractAppendices);
+        Assert.Empty(context.TblContractAppendixTerms);
+    }
+
+    [Fact]
+    public async Task Create_DuplicateOptionalAppendixSelection_IsRejected()
+    {
+        await using var context = CreateContext();
+        await SeedCreateDependenciesAsync(context);
+        await SeedTemplateAppendicesAsync(context);
+        var request = CreateRequest("VND",
+            [CreateItem(ContractItemType.Product, 1m, 100m,
+                sourceProductId: ProductId)]);
+        request.SelectedOptionalTemplateAppendixIds = [66, 66];
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            CreateService(context).CreateAsync(request, EmployeeId));
+
+        Assert.Empty(context.TblContracts);
+        Assert.Empty(context.TblContractAppendices);
+    }
+
+    [Fact]
     public async Task Create_ShouldRejectMixedDiscountModes()
     {
         await using var context = CreateContext();
@@ -340,6 +404,33 @@ public sealed class ContractServiceSlice04Tests
             CreatedDate = DateTime.UtcNow,
             RowVersion = InitialRowVersion()
         });
+        context.TblContractAppendices.Add(new TblContractAppendix
+        {
+            AppendixId = 105,
+            ContractId = 100,
+            VersionId = sourceVersionId,
+            SourceTemplateAppendixId = 65,
+            AppendixCode = "PL-01",
+            AppendixName = "Phụ lục nguồn",
+            IsRequired = true,
+            DisplayOrder = 1,
+            CreatedEmployeeId = EmployeeId,
+            CreatedDate = DateTime.UtcNow,
+            RowVersion = InitialRowVersion()
+        });
+        context.TblContractAppendixTerms.Add(new TblContractAppendixTerm
+        {
+            AppendixTermId = 106,
+            AppendixId = 105,
+            SourceTemplateAppendixTermId = 67,
+            TermCode = "PL_TERM",
+            TermTitle = "Điều khoản phụ lục nguồn",
+            TermContent = RichText("Nội dung nguồn"),
+            DisplayOrder = 1,
+            CreatedEmployeeId = EmployeeId,
+            CreatedDate = DateTime.UtcNow,
+            RowVersion = InitialRowVersion()
+        });
 
         context.TblProducts.Add(new TblProduct
         {
@@ -375,6 +466,11 @@ public sealed class ContractServiceSlice04Tests
         var copiedMilestone = await context.TblContractPaymentMilestones
             .AsNoTracking()
             .SingleAsync(x => x.VersionId == response.CurrentVersion.VersionId);
+        var copiedAppendix = await context.TblContractAppendices.AsNoTracking()
+            .SingleAsync(x => x.VersionId == response.CurrentVersion.VersionId);
+        var copiedAppendixTerm = await context.TblContractAppendixTerms
+            .AsNoTracking()
+            .SingleAsync(x => x.AppendixId == copiedAppendix.AppendixId);
         var contract = await context.TblContracts
             .AsNoTracking()
             .SingleAsync();
@@ -398,6 +494,11 @@ public sealed class ContractServiceSlice04Tests
         Assert.Equal(100m, copiedItem.LineTotal);
         Assert.Equal("GENERAL", copiedTerm.TermCode);
         Assert.Equal("CIVIL_CODE", copiedLegalBasis.BasisCode);
+        Assert.NotEqual(105, copiedAppendix.AppendixId);
+        Assert.Equal(65, copiedAppendix.SourceTemplateAppendixId);
+        Assert.NotEqual(106, copiedAppendixTerm.AppendixTermId);
+        Assert.Equal(RichText("Nội dung nguồn"),
+            copiedAppendixTerm.TermContent);
         Assert.Null(copiedMilestone.AnchorDate);
         Assert.Null(copiedMilestone.DueDate);
         Assert.Equal((byte)ContractPaymentMilestoneStatus.Unpaid,
@@ -446,6 +547,151 @@ public sealed class ContractServiceSlice04Tests
 
         Assert.Contains("đã ghi nhận thanh toán", exception.Message);
         Assert.Single(await context.TblContractVersions.AsNoTracking().ToListAsync());
+    }
+
+    [Fact]
+    public async Task AppendixMutation_LockedVersion_IsRejectedBeforeWriting()
+    {
+        await using var context = CreateContext();
+        var versionId = await SeedNegotiatingContractAsync(context);
+        var version = await context.TblContractVersions.SingleAsync();
+        context.Entry(version).State = EntityState.Unchanged;
+        version.IsLocked = true;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CreateService(context).AddAppendixAsync(
+                100,
+                versionId,
+                new AddContractAppendixRequest
+                {
+                    TemplateAppendixId = 66,
+                    VersionRowVersion = Convert.ToBase64String(
+                        InitialRowVersion())
+                },
+                EmployeeId));
+
+        Assert.Empty(context.TblContractAppendices);
+        Assert.Empty(context.TblContractAppendixTerms);
+    }
+
+    [Fact]
+    public async Task AppendixTerms_EditableVersion_SupportsCrudAndReorder()
+    {
+        await using var context = CreateContext();
+        var versionId = await SeedNegotiatingContractAsync(context);
+        context.TblContractAppendices.Add(new TblContractAppendix
+        {
+            AppendixId = 105,
+            ContractId = 100,
+            VersionId = versionId,
+            SourceTemplateAppendixId = 65,
+            AppendixCode = "PL-01",
+            AppendixName = "Phụ lục runtime",
+            IsRequired = true,
+            DisplayOrder = 1,
+            CreatedEmployeeId = EmployeeId,
+            CreatedDate = DateTime.UtcNow,
+            RowVersion = InitialRowVersion()
+        });
+        context.TblContractAppendixTerms.AddRange(
+            new TblContractAppendixTerm
+            {
+                AppendixTermId = 106,
+                AppendixId = 105,
+                TermCode = "TERM-1",
+                TermTitle = "Điều một",
+                DisplayOrder = 1,
+                CreatedEmployeeId = EmployeeId,
+                CreatedDate = DateTime.UtcNow,
+                RowVersion = InitialRowVersion()
+            },
+            new TblContractAppendixTerm
+            {
+                AppendixTermId = 107,
+                AppendixId = 105,
+                TermCode = "TERM-2",
+                TermTitle = "Điều hai",
+                DisplayOrder = 2,
+                CreatedEmployeeId = EmployeeId,
+                CreatedDate = DateTime.UtcNow,
+                RowVersion = InitialRowVersion()
+            });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var rowVersion = Convert.ToBase64String(InitialRowVersion());
+        var service = CreateService(context);
+
+        var updated = await service.UpdateAppendixTermAsync(
+            100, versionId, 105, 106,
+            new UpdateContractAppendixTermRequest
+            {
+                TermCode = "TERM-1",
+                TermTitle = "Điều một đã sửa",
+                TermContent = RichText("Nội dung đã sửa"),
+                DisplayOrder = 1,
+                RowVersion = rowVersion,
+                AppendixRowVersion = rowVersion,
+                VersionRowVersion = rowVersion
+            }, EmployeeId);
+        Assert.Equal("Điều một đã sửa", updated.TermTitle);
+
+        var reordered = await service.ReorderAppendixTermsAsync(
+            100, versionId, 105,
+            new ReorderContractAppendixTermsRequest
+            {
+                AppendixRowVersion = rowVersion,
+                VersionRowVersion = rowVersion,
+                Terms =
+                [
+                    new ReorderContractAppendixTermItem
+                    {
+                        AppendixTermId = 107,
+                        RowVersion = rowVersion,
+                        DisplayOrder = 1
+                    },
+                    new ReorderContractAppendixTermItem
+                    {
+                        AppendixTermId = 106,
+                        RowVersion = rowVersion,
+                        DisplayOrder = 2
+                    }
+                ]
+            }, EmployeeId);
+        Assert.Equal([107, 106],
+            reordered.Terms.Select(item => item.AppendixTermId));
+
+        await service.DeleteAppendixTermAsync(
+            100, versionId, 105, 107,
+            new DeleteContractAppendixTermRequest
+            {
+                RowVersion = rowVersion,
+                AppendixRowVersion = rowVersion,
+                VersionRowVersion = rowVersion
+            }, EmployeeId);
+
+        var added = await service.AddAppendixTermAsync(
+            100, versionId, 105,
+            new CreateContractAppendixTermRequest
+            {
+                TermCode = "TERM-3",
+                TermTitle = "Điều ba",
+                DisplayOrder = 3,
+                AppendixRowVersion = rowVersion,
+                VersionRowVersion = rowVersion
+            }, EmployeeId);
+
+        Assert.Equal("TERM-3", added.TermCode);
+        Assert.Equal(2, await context.TblContractAppendixTerms.CountAsync());
+        var actions = await context.TblContractAudits.AsNoTracking()
+            .Select(item => item.ActionType).ToListAsync();
+        Assert.Contains(ContractAuditActionTypes.ContractAppendixTermUpdated,
+            actions);
+        Assert.Contains(ContractAuditActionTypes.ContractAppendixTermsReordered,
+            actions);
+        Assert.Contains(ContractAuditActionTypes.ContractAppendixTermDeleted,
+            actions);
+        Assert.Contains(ContractAuditActionTypes.ContractAppendixTermCreated,
+            actions);
     }
 
     [Fact]
@@ -696,6 +942,65 @@ public sealed class ContractServiceSlice04Tests
                 RowVersion = []
             });
 
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+    }
+
+    private static async Task SeedTemplateAppendicesAsync(
+        DbDtctechContext context)
+    {
+        context.TblContractTemplateAppendices.AddRange(
+            new TblContractTemplateAppendix
+            {
+                TemplateAppendixId = 65,
+                TemplateVersionId = TemplateVersionId,
+                AppendixCode = "PL-REQ",
+                AppendixName = "Phụ lục bắt buộc",
+                IsRequired = true,
+                IsSelectedByDefault = true,
+                DisplayOrder = 1,
+                CreatedEmployeeId = EmployeeId,
+                CreatedDate = DateTime.UtcNow,
+                RowVersion = InitialRowVersion()
+            },
+            new TblContractTemplateAppendix
+            {
+                TemplateAppendixId = 66,
+                TemplateVersionId = TemplateVersionId,
+                AppendixCode = "PL-OPT",
+                AppendixName = "Phụ lục tùy chọn",
+                IsRequired = false,
+                IsSelectedByDefault = false,
+                DisplayOrder = 2,
+                CreatedEmployeeId = EmployeeId,
+                CreatedDate = DateTime.UtcNow,
+                RowVersion = InitialRowVersion()
+            });
+        context.TblContractTemplateAppendixTerms.AddRange(
+            new TblContractTemplateAppendixTerm
+            {
+                TemplateAppendixTermId = 67,
+                TemplateAppendixId = 65,
+                TermCode = "REQ-01",
+                TermTitle = "Điều khoản bắt buộc",
+                TermContent = RichText("Nội dung bắt buộc"),
+                DisplayOrder = 1,
+                CreatedEmployeeId = EmployeeId,
+                CreatedDate = DateTime.UtcNow,
+                RowVersion = InitialRowVersion()
+            },
+            new TblContractTemplateAppendixTerm
+            {
+                TemplateAppendixTermId = 68,
+                TemplateAppendixId = 66,
+                TermCode = "OPT-01",
+                TermTitle = "Điều khoản tùy chọn",
+                TermContent = RichText("Nội dung tùy chọn"),
+                DisplayOrder = 1,
+                CreatedEmployeeId = EmployeeId,
+                CreatedDate = DateTime.UtcNow,
+                RowVersion = InitialRowVersion()
+            });
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
     }

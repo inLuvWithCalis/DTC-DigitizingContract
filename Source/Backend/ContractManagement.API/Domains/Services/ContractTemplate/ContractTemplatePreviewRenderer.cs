@@ -39,7 +39,8 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
             ItemTableColumnWidthsBps = authoringData?.ItemTableColumnWidthsBps
                 ?? data.ItemTableColumnWidthsBps,
             LegalBases = authoringData?.LegalBases ?? data.LegalBases,
-            Terms = terms
+            Terms = terms,
+            Appendices = authoringData?.Appendices ?? data.Appendices
         });
     }
 
@@ -79,6 +80,7 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                     "PlaceholderSnapshotMissing",
                     "Dữ liệu render không có snapshot placeholder của template version.");
             var dynamicParagraphs = LocateDynamicParagraphs(mainPart, definitions);
+            EnsureAppendixMarkerIsLastDynamicBlock(mainPart, dynamicParagraphs);
             ReplaceDynamicBlocks(dynamicParagraphs, languageMode, renderData);
 
             foreach (var root in GetTextRoots(mainPart))
@@ -150,6 +152,30 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
         return result;
     }
 
+    private static void EnsureAppendixMarkerIsLastDynamicBlock(
+        MainDocumentPart mainPart,
+        IReadOnlyDictionary<string, W.Paragraph> paragraphs)
+    {
+        if (!paragraphs.TryGetValue("CONTRACT_APPENDICES", out var appendix))
+        {
+            return;
+        }
+
+        var bodyParagraphs = mainPart.Document!.Body!
+            .Descendants<W.Paragraph>()
+            .ToList();
+        var appendixIndex = bodyParagraphs.IndexOf(appendix);
+        var laterDynamicBlockExists = paragraphs
+            .Where(item => item.Key != "CONTRACT_APPENDICES")
+            .Any(item => bodyParagraphs.IndexOf(item.Value) > appendixIndex);
+        if (appendixIndex < 0 || laterDynamicBlockExists)
+        {
+            throw new ContractTemplatePreviewException(
+                "AppendixMarkerPositionInvalid",
+                "CONTRACT_APPENDICES phải là block động cuối cùng, sau toàn bộ nội dung hợp đồng gốc.");
+        }
+    }
+
     private static void ReplaceDynamicBlocks(
         IReadOnlyDictionary<string, W.Paragraph> paragraphs,
         ContractLanguageMode languageMode,
@@ -168,6 +194,8 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
                 "CONTRACT_LEGAL_BASES" => CreateLegalBasisElements(
                     languageMode, renderData, availableWidthDxa),
                 "CONTRACT_TERMS" => CreateTermElements(
+                    languageMode, renderData, availableWidthDxa),
+                "CONTRACT_APPENDICES" => CreateAppendixElements(
                     languageMode, renderData, availableWidthDxa),
                 "SIGNATURE_PROVIDER" =>
                 [
@@ -289,6 +317,58 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
             {
                 elements.AddRange(CreateTermContentElements(
                     term.ContentEn, availableWidthDxa));
+            }
+        }
+
+        return elements;
+    }
+
+    private static IEnumerable<OpenXmlElement> CreateAppendixElements(
+        ContractLanguageMode languageMode,
+        ContractTemplateRenderData renderData,
+        int availableWidthDxa)
+    {
+        var elements = new List<OpenXmlElement>();
+        foreach (var appendix in renderData.Appendices)
+        {
+            elements.Add(new W.Paragraph(
+                new W.Run(CreateGeneratedRunProperties(),
+                    new W.Break { Type = W.BreakValues.Page })));
+            var title = languageMode == ContractLanguageMode.Bilingual
+                && !string.IsNullOrWhiteSpace(appendix.NameEn)
+                ? $"PHỤ LỤC {appendix.Code}: {appendix.NameVi} / APPENDIX {appendix.Code}: {appendix.NameEn}"
+                : $"PHỤ LỤC {appendix.Code}: {appendix.NameVi}";
+            elements.Add(CreateStyledParagraph(title, bold: true,
+                justification: W.JustificationValues.Center));
+            elements.Add(CreateStyledParagraph(appendix.ReferenceVi,
+                italic: true));
+            if (languageMode == ContractLanguageMode.Bilingual
+                && !string.IsNullOrWhiteSpace(appendix.ReferenceEn))
+            {
+                elements.Add(CreateStyledParagraph(appendix.ReferenceEn!,
+                    italic: true));
+            }
+
+            foreach (var term in appendix.Terms)
+            {
+                var termTitle = languageMode == ContractLanguageMode.Bilingual
+                    && !string.IsNullOrWhiteSpace(term.TitleEn)
+                    ? $"Điều {term.No}. {term.TitleVi} / Article {term.No}. {term.TitleEn}"
+                    : $"Điều {term.No}. {term.TitleVi}";
+                elements.Add(CreateParagraph(termTitle, bold: true));
+                elements.AddRange(CreateRichTextElements(
+                    term.ContentVi,
+                    "ContractAppendixTermRichTextInvalid",
+                    "Nội dung điều khoản phụ lục tiếng Việt không hợp lệ.",
+                    availableWidthDxa));
+                if (languageMode == ContractLanguageMode.Bilingual)
+                {
+                    elements.AddRange(CreateRichTextElements(
+                        term.ContentEn,
+                        "ContractAppendixTermRichTextInvalid",
+                        "Nội dung điều khoản phụ lục tiếng Anh không hợp lệ.",
+                        availableWidthDxa));
+                }
             }
         }
 
@@ -830,6 +910,23 @@ public sealed class ContractTemplatePreviewRenderer : IContractTemplatePreviewRe
     private static W.Paragraph CreateParagraph(string value, bool bold = false)
     {
         return new W.Paragraph(CreateRun(value, bold));
+    }
+
+    private static W.Paragraph CreateStyledParagraph(
+        string value,
+        bool bold = false,
+        bool italic = false,
+        W.JustificationValues? justification = null)
+    {
+        var paragraph = new W.Paragraph(
+            new W.Run(CreateGeneratedRunProperties(
+                bold: bold, italic: italic), Text(value)));
+        if (justification.HasValue)
+        {
+            paragraph.ParagraphProperties = new W.ParagraphProperties(
+                new W.Justification { Val = justification.Value });
+        }
+        return paragraph;
     }
 
     private static W.Run CreateRun(string value, bool bold = false) =>

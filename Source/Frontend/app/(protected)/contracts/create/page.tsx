@@ -96,6 +96,7 @@ import {
   TemplateDocumentType,
   type AvailableContractTemplateVersionResponse,
   type ContractTemplatePaymentMilestoneResponse,
+  type ContractTemplateAppendixResponse,
 } from "@/services/contract-template-api";
 import { useAuthStore } from "@/hooks/use-auth-store";
 import { usePermission } from "@/hooks/use-permission";
@@ -389,6 +390,11 @@ export default function CreateContractPage() {
   const [paymentMilestones, setPaymentMilestones] = useState<
     ContractTemplatePaymentMilestoneResponse[]
   >([]);
+  const [templateAppendices, setTemplateAppendices] = useState<
+    ContractTemplateAppendixResponse[]
+  >([]);
+  const [selectedOptionalAppendixIds, setSelectedOptionalAppendixIds] =
+    useState<number[]>([]);
   const [manualPaymentDates, setManualPaymentDates] = useState<
     Record<number, string>
   >({});
@@ -595,6 +601,8 @@ export default function CreateContractPage() {
     if (!templateVersionId) {
       setContractTerms([]);
       setPaymentMilestones([]);
+      setTemplateAppendices([]);
+      setSelectedOptionalAppendixIds([]);
       setManualPaymentDates({});
       setTemplateDetailError(null);
       return;
@@ -605,6 +613,8 @@ export default function CreateContractPage() {
     setTemplateDetailError(null);
     setContractTerms([]);
     setPaymentMilestones([]);
+    setTemplateAppendices([]);
+    setSelectedOptionalAppendixIds([]);
     setManualPaymentDates({});
     contractTemplateApi
       .getAvailableByVersionId(Number(templateVersionId))
@@ -631,6 +641,18 @@ export default function CreateContractPage() {
             .flatMap((term) => term.paymentMilestones)
             .sort((a, b) => a.displayOrder - b.displayOrder);
           setPaymentMilestones(milestones);
+          const appendices = [...detail.appendices].sort(
+            (a, b) => a.displayOrder - b.displayOrder,
+          );
+          setTemplateAppendices(appendices);
+          setSelectedOptionalAppendixIds(
+            appendices
+              .filter(
+                (appendix) =>
+                  !appendix.isRequired && appendix.isSelectedByDefault,
+              )
+              .map((appendix) => appendix.templateAppendixId),
+          );
           setManualPaymentDates(
             Object.fromEntries(
               milestones
@@ -647,6 +669,8 @@ export default function CreateContractPage() {
           console.error("Failed to load template terms:", error);
           setContractTerms([]);
           setPaymentMilestones([]);
+          setTemplateAppendices([]);
+          setSelectedOptionalAppendixIds([]);
           setManualPaymentDates({});
           setTemplateDetailError("Không thể tải điều khoản của template.");
         }
@@ -1193,6 +1217,9 @@ export default function CreateContractPage() {
             sourceTemplatePaymentMilestoneId: item.templatePaymentMilestoneId,
             anchorDate: manualPaymentDates[item.templatePaymentMilestoneId],
           })),
+        ...(selectedOptionalAppendixIds.length > 0
+          ? { selectedOptionalTemplateAppendixIds: selectedOptionalAppendixIds }
+          : {}),
       };
 
       const response = await contractApi.create(payload);
@@ -2300,6 +2327,69 @@ export default function CreateContractPage() {
                           }))
                         }
                       />
+                      {templateAppendices.length > 0 && (
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-base">
+                              Phụ lục đính kèm
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            {templateAppendices.map((appendix) => {
+                              const checked =
+                                appendix.isRequired ||
+                                selectedOptionalAppendixIds.includes(
+                                  appendix.templateAppendixId,
+                                );
+                              return (
+                                <div
+                                  key={appendix.templateAppendixId}
+                                  className="flex items-start justify-between gap-4 rounded-xl border p-4"
+                                >
+                                  <div className="min-w-0 space-y-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <p className="font-medium">
+                                        {appendix.appendixCode} — {appendix.appendixName}
+                                      </p>
+                                      <Badge variant={appendix.isRequired ? "default" : "outline"}>
+                                        {appendix.isRequired ? "Bắt buộc" : "Tùy chọn"}
+                                      </Badge>
+                                    </div>
+                                    {appendix.appendixDescription && (
+                                      <p className="text-sm text-muted-foreground">
+                                        {appendix.appendixDescription}
+                                      </p>
+                                    )}
+                                    <p className="text-xs text-muted-foreground">
+                                      {appendix.terms.length} điều khoản
+                                    </p>
+                                  </div>
+                                  <Switch
+                                    aria-label={`Chọn phụ lục ${appendix.appendixName}`}
+                                    checked={checked}
+                                    disabled={appendix.isRequired || isSubmitting}
+                                    onCheckedChange={(nextChecked) =>
+                                      setSelectedOptionalAppendixIds((current) =>
+                                        nextChecked
+                                          ? Array.from(
+                                              new Set([
+                                                ...current,
+                                                appendix.templateAppendixId,
+                                              ]),
+                                            )
+                                          : current.filter(
+                                              (id) =>
+                                                id !== appendix.templateAppendixId,
+                                            ),
+                                      )
+                                    }
+                                  />
+                                </div>
+                              );
+                            })}
+                          </CardContent>
+                        </Card>
+                      )}
                       {contractTermsValidationError &&
                         contractTerms.length > 0 && (
                           <Alert variant="destructive">
@@ -2566,6 +2656,37 @@ export default function CreateContractPage() {
                         </AlertDescription>
                       </Alert>
                     </div>
+
+                    {templateAppendices.length > 0 && (
+                      <div>
+                        <p className="mb-2 text-sm font-semibold">
+                          Phụ lục đính kèm
+                        </p>
+                        <div className="space-y-2 rounded-xl border p-4">
+                          {templateAppendices
+                            .filter(
+                              (appendix) =>
+                                appendix.isRequired ||
+                                selectedOptionalAppendixIds.includes(
+                                  appendix.templateAppendixId,
+                                ),
+                            )
+                            .map((appendix) => (
+                              <div
+                                key={appendix.templateAppendixId}
+                                className="flex items-center justify-between gap-3 text-sm"
+                              >
+                                <span>
+                                  {appendix.appendixCode} — {appendix.appendixName}
+                                </span>
+                                {appendix.isRequired && (
+                                  <Badge variant="secondary">Bắt buộc</Badge>
+                                )}
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

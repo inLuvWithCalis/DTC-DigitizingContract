@@ -39,6 +39,7 @@ public static class SoftwareSupplyPreviewDatasetV1
         "CONTRACT_ITEM_TABLE",
         "SIGNATURE_PROVIDER",
         "SIGNATURE_CUSTOMER",
+        "CONTRACT_APPENDICES",
         "CONTRACT_NAME_EN",
         "CUSTOMER_FAX",
         "CUSTOMER_BANK_ACCOUNT_NUMBER",

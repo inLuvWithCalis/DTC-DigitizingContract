@@ -120,6 +120,34 @@ public interface IContractTemplateService
         int employeeId,
         CancellationToken cancellationToken = default);
 
+    Task<ContractTemplateAppendixResponse> AddAppendixAsync(int versionId,
+        CreateContractTemplateAppendixRequest request, int employeeId,
+        CancellationToken cancellationToken = default);
+    Task<ContractTemplateAppendixResponse> UpdateAppendixAsync(int versionId,
+        int appendixId, UpdateContractTemplateAppendixRequest request,
+        int employeeId, CancellationToken cancellationToken = default);
+    Task DeleteAppendixAsync(int versionId, int appendixId,
+        DeleteContractTemplateAppendixRequest request, int employeeId,
+        CancellationToken cancellationToken = default);
+    Task<ContractTemplateVersionDetailResponse> ReorderAppendicesAsync(
+        int versionId, ReorderContractTemplateAppendicesRequest request,
+        int employeeId, CancellationToken cancellationToken = default);
+    Task<ContractTemplateAppendixTermResponse> AddAppendixTermAsync(
+        int versionId, int appendixId,
+        CreateContractTemplateAppendixTermRequest request, int employeeId,
+        CancellationToken cancellationToken = default);
+    Task<ContractTemplateAppendixTermResponse> UpdateAppendixTermAsync(
+        int versionId, int appendixId, int termId,
+        UpdateContractTemplateAppendixTermRequest request, int employeeId,
+        CancellationToken cancellationToken = default);
+    Task DeleteAppendixTermAsync(int versionId, int appendixId, int termId,
+        DeleteContractTemplateAppendixTermRequest request, int employeeId,
+        CancellationToken cancellationToken = default);
+    Task<ContractTemplateAppendixResponse> ReorderAppendixTermsAsync(
+        int versionId, int appendixId,
+        ReorderContractTemplateAppendixTermsRequest request, int employeeId,
+        CancellationToken cancellationToken = default);
+
     Task<ContractTemplatePaymentMilestoneResponse> AddPaymentMilestoneAsync(
         int versionId, int termId,
         CreateContractTemplatePaymentMilestoneRequest request, int employeeId,

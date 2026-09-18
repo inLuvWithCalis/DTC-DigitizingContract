@@ -29,7 +29,15 @@ public sealed class ContractTemplateAuditWriter : IContractTemplateAuditWriter
         ContractTemplateAuditActionTypes.TemplateVersionPublished,
         ContractTemplateAuditActionTypes.TemplateVersionRetired,
         ContractTemplateAuditActionTypes.PdfRenderFailed,
-        ContractTemplateAuditActionTypes.PublishConcurrencyConflict
+        ContractTemplateAuditActionTypes.PublishConcurrencyConflict,
+        ContractTemplateAuditActionTypes.TemplateAppendixCreated,
+        ContractTemplateAuditActionTypes.TemplateAppendixUpdated,
+        ContractTemplateAuditActionTypes.TemplateAppendixDeleted,
+        ContractTemplateAuditActionTypes.TemplateAppendicesReordered,
+        ContractTemplateAuditActionTypes.TemplateAppendixTermCreated,
+        ContractTemplateAuditActionTypes.TemplateAppendixTermUpdated,
+        ContractTemplateAuditActionTypes.TemplateAppendixTermDeleted,
+        ContractTemplateAuditActionTypes.TemplateAppendixTermsReordered
     ];
 
     private static readonly HashSet<string> Results =
@@ -177,9 +185,15 @@ public sealed class ContractTemplateAuditWriter : IContractTemplateAuditWriter
         {
             ContractTemplateAuditFieldCode.DocumentFileId
                 or ContractTemplateAuditFieldCode.PreviewFileId
-                or ContractTemplateAuditFieldCode.PublishedPreviewPdfFileId =>
+                or ContractTemplateAuditFieldCode.PublishedPreviewPdfFileId
+                or ContractTemplateAuditFieldCode.TemplateAppendixId
+                or ContractTemplateAuditFieldCode.TemplateAppendixTermId =>
                 value.IntegerValue is > 0 && value.LongValue is null
                 && value.StringValue is null,
+            ContractTemplateAuditFieldCode.AppendixCount
+                or ContractTemplateAuditFieldCode.AppendixTermCount =>
+                value.IntegerValue is >= 0 and <= 10_000
+                && value.LongValue is null && value.StringValue is null,
             ContractTemplateAuditFieldCode.DocumentSizeBytes
                 or ContractTemplateAuditFieldCode.PreviewSizeBytes
                 or ContractTemplateAuditFieldCode.PublishedPreviewPdfSizeBytes =>

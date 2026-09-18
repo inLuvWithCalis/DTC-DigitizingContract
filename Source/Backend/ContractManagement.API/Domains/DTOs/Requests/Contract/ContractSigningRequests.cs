@@ -4,6 +4,8 @@ public abstract class ContractSignedEvidenceFileRequest
 {
     public IFormFile File { get; set; } = null!;
 
+    public DateTime SignDate { get; set; }
+
     public int CurrentVersionId { get; set; }
 
     public string ContractRowVersion { get; set; } = string.Empty;

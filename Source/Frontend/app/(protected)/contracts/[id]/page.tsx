@@ -63,6 +63,7 @@ import {
 } from "@/components/contracts/contract-helpers";
 import { ContractOverview } from "@/components/contracts/contract-overview";
 import { ContractTerms } from "@/components/contracts/contract-terms";
+import { ContractAppendices } from "@/components/contracts/contract-appendices";
 import { ContractNegotiation } from "@/components/contracts/contract-negotiation";
 import { ContractSignature } from "@/components/contracts/contract-signature";
 import { ContractDocuments } from "@/components/contracts/contract-attachments";
@@ -77,6 +78,7 @@ import { ContractPaymentDueAnchor } from "@/services/contract-completion-api";
 const CONTRACT_TABS = [
   "overview",
   "terms",
+  "appendices",
   "negotiation",
   "approval",
   "customer-access",
@@ -904,6 +906,9 @@ export default function ContractDetailPage() {
             <TabsTrigger value="documents">Chứng từ</TabsTrigger>
             <TabsTrigger value="negotiation">Vòng đàm phán</TabsTrigger>
             <TabsTrigger value="terms">Điều khoản - Trao đổi</TabsTrigger>
+            <TabsTrigger value="appendices">
+              Phụ lục ({contract.currentVersion.appendices?.length ?? 0})
+            </TabsTrigger>
             {canViewCustomerAccess && (
               <TabsTrigger value="customer-access">
                 Truy cập khách hàng
@@ -931,6 +936,15 @@ export default function ContractDetailPage() {
               canEdit={canUpdateDraft}
               canComment={canCommentOnCurrentVersion}
               onDraftChange={() => setHasUnsavedChanges(true)}
+            />
+          </TabsContent>
+
+          <TabsContent value="appendices">
+            <ContractAppendices
+              key={contract.currentVersion.rowVersion}
+              contract={contract}
+              canEdit={canUpdateDraft}
+              onRefetch={() => fetchContractDetail(false)}
             />
           </TabsContent>
 

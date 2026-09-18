@@ -62,20 +62,55 @@ public partial class DbDtctechContext
                 .Where(IsMutated).Select(x => x.Entity.VersionId))
             .Concat(ChangeTracker.Entries<TblContractVersionPlaceholderValue>()
                 .Where(IsMutated).Select(x => x.Entity.VersionId))
+            .Concat(ChangeTracker.Entries<TblContractAppendix>()
+                .Where(IsMutated).Select(x => x.Entity.VersionId))
+            .Where(id => id > 0)
+            .ToHashSet();
+
+        var changedAppendixIds = ChangeTracker
+            .Entries<TblContractAppendixTerm>()
+            .Where(IsMutated)
+            .Select(entry => entry.Entity.AppendixId)
             .Where(id => id > 0)
             .Distinct()
             .ToArray();
-        if (changedVersionIds.Length == 0)
+        if (changedAppendixIds.Length > 0)
+        {
+            var trackedAppendices = ChangeTracker.Entries<TblContractAppendix>()
+                .Where(entry => changedAppendixIds.Contains(
+                    entry.Entity.AppendixId))
+                .ToDictionary(entry => entry.Entity.AppendixId,
+                    entry => entry.Entity.VersionId);
+            changedVersionIds.UnionWith(trackedAppendices.Values
+                .Where(id => id > 0));
+            var unresolvedAppendixIds = changedAppendixIds
+                .Where(id => !trackedAppendices.ContainsKey(id))
+                .ToArray();
+            if (unresolvedAppendixIds.Length > 0)
+            {
+                var query = TblContractAppendices.AsNoTracking()
+                    .Where(appendix => unresolvedAppendixIds.Contains(
+                        appendix.AppendixId))
+                    .Select(appendix => appendix.VersionId);
+                var resolvedVersionIds = useAsync
+                    ? await query.ToListAsync(cancellationToken)
+                    : query.ToList();
+                changedVersionIds.UnionWith(resolvedVersionIds);
+            }
+        }
+
+        var changedVersionIdArray = changedVersionIds.ToArray();
+        if (changedVersionIdArray.Length == 0)
         {
             return;
         }
 
         var trackedLockedIds = ChangeTracker.Entries<TblContractVersion>()
-            .Where(entry => changedVersionIds.Contains(entry.Entity.VersionId)
+            .Where(entry => changedVersionIdArray.Contains(entry.Entity.VersionId)
                 && entry.Entity.IsLocked)
             .Select(entry => entry.Entity.VersionId)
             .ToHashSet();
-        var unresolvedIds = changedVersionIds.Except(trackedLockedIds).ToArray();
+        var unresolvedIds = changedVersionIdArray.Except(trackedLockedIds).ToArray();
         if (unresolvedIds.Length > 0)
         {
             var query = TblContractVersions.AsNoTracking()
@@ -91,7 +126,7 @@ public partial class DbDtctechContext
         if (trackedLockedIds.Count > 0)
         {
             throw new InvalidOperationException(
-                "Item, điều khoản, căn cứ pháp lý và placeholder của version đã khóa là dữ liệu bất biến.");
+                "Item, điều khoản, căn cứ pháp lý, placeholder và phụ lục của version đã khóa là dữ liệu bất biến.");
         }
     }
 

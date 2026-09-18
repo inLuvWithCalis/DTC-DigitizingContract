@@ -59,6 +59,8 @@ public partial class DbDtctechContext : DbContext
 
     public virtual DbSet<TblContractAppendix> TblContractAppendices { get; set; }
 
+    public virtual DbSet<TblContractAppendixTerm> TblContractAppendixTerms { get; set; }
+
     public virtual DbSet<TblContractAttachment> TblContractAttachments { get; set; }
 
     public virtual DbSet<TblContractSignedEvidence>
@@ -66,6 +68,12 @@ public partial class DbDtctechContext : DbContext
 
     public virtual DbSet<TblContractAcceptanceEvidence>
         TblContractAcceptanceEvidences { get; set; }
+
+    public virtual DbSet<TblContractAcceptanceRecord> TblContractAcceptanceRecords { get; set; }
+    public virtual DbSet<TblContractAcceptanceReference> TblContractAcceptanceReferences { get; set; }
+    public virtual DbSet<TblContractAcceptanceParty> TblContractAcceptanceParties { get; set; }
+    public virtual DbSet<TblContractAcceptanceSection> TblContractAcceptanceSections { get; set; }
+    public virtual DbSet<TblContractAcceptanceMilestone> TblContractAcceptanceMilestones { get; set; }
 
     public virtual DbSet<TblContractPaymentLedger>
         TblContractPaymentLedgers { get; set; }
@@ -106,6 +114,9 @@ public partial class DbDtctechContext : DbContext
     public virtual DbSet<TblContractTemplateField> TblContractTemplateFields { get; set; }
 
     public virtual DbSet<TblContractTemplateTerm> TblContractTemplateTerms { get; set; }
+
+    public virtual DbSet<TblContractTemplateAppendix> TblContractTemplateAppendices { get; set; }
+    public virtual DbSet<TblContractTemplateAppendixTerm> TblContractTemplateAppendixTerms { get; set; }
 
     public virtual DbSet<TblContractTemplatePaymentMilestone>
         TblContractTemplatePaymentMilestones { get; set; }
@@ -1045,7 +1056,6 @@ public partial class DbDtctechContext : DbContext
             entity.Property(e => e.AppendixCode)
                 .HasMaxLength(50)
                 .IsUnicode(false);
-            entity.Property(e => e.AppendixDate).HasColumnType("datetime");
             entity.Property(e => e.AppendixDescription).HasMaxLength(2000);
             entity.Property(e => e.AppendixName).HasMaxLength(1000);
             entity.Property(e => e.AppendixNameEn)
@@ -1081,10 +1091,10 @@ public partial class DbDtctechContext : DbContext
                 table.HasCheckConstraint("CK_tbl_ContractTemplateAuditValue_Side",
                     "[ValueSide] IN (1, 2)");
                 table.HasCheckConstraint("CK_tbl_ContractTemplateAuditValue_FieldCode",
-                    "[FieldCode] BETWEEN 1 AND 11");
+                    "[FieldCode] BETWEEN 1 AND 15");
                 table.HasCheckConstraint("CK_tbl_ContractTemplateAuditValue_Value",
                     "([IsNull] = 1 AND [IntegerValue] IS NULL AND [LongValue] IS NULL AND [StringValue] IS NULL) OR " +
-                    "([IsNull] = 0 AND (([FieldCode] IN (1, 5, 6, 9) AND [IntegerValue] IS NOT NULL AND [LongValue] IS NULL AND [StringValue] IS NULL) OR " +
+                    "([IsNull] = 0 AND (([FieldCode] IN (1, 5, 6, 9, 12, 13, 14, 15) AND [IntegerValue] IS NOT NULL AND [LongValue] IS NULL AND [StringValue] IS NULL) OR " +
                     "([FieldCode] IN (3, 7, 10) AND [IntegerValue] IS NULL AND [LongValue] IS NOT NULL AND [StringValue] IS NULL) OR " +
                     "([FieldCode] IN (2, 4, 8, 11) AND [IntegerValue] IS NULL AND [LongValue] IS NULL AND [StringValue] IS NOT NULL)))");
                 table.HasCheckConstraint("CK_tbl_ContractTemplateAuditValue_NullField",
@@ -1178,16 +1188,12 @@ public partial class DbDtctechContext : DbContext
             entity.HasKey(e => e.AcceptanceEvidenceId);
             entity.ToTable("tbl_ContractAcceptanceEvidence", table =>
             {
-                table.HasCheckConstraint("CK_tbl_ContractAcceptanceEvidence_ContractId", "[ContractId] > 0");
-                table.HasCheckConstraint("CK_tbl_ContractAcceptanceEvidence_VersionId", "[VersionId] > 0");
+                table.HasCheckConstraint("CK_tbl_ContractAcceptanceEvidence_RecordId", "[AcceptanceRecordId] > 0");
                 table.HasCheckConstraint("CK_tbl_ContractAcceptanceEvidence_FileId", "[FileId] > 0");
             });
-            entity.HasIndex(e => new { e.ContractId, e.VersionId }).IsUnique();
             entity.HasIndex(e => e.FileId).IsUnique();
             entity.Property(e => e.UploadedAt).HasColumnType("datetime2");
             entity.Property(e => e.RowVersion).IsRowVersion().IsConcurrencyToken();
-            entity.HasOne<TblContract>().WithMany().HasForeignKey(e => e.ContractId).OnDelete(DeleteBehavior.Restrict);
-            entity.HasOne<TblContractVersion>().WithMany().HasForeignKey(e => e.VersionId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<TblFileStorage>().WithMany().HasForeignKey(e => e.FileId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<TblEmployee>().WithMany().HasForeignKey(e => e.UploadedByEmployeeId).OnDelete(DeleteBehavior.Restrict);
         });
@@ -2688,6 +2694,7 @@ public partial class DbDtctechContext : DbContext
         ConfigurePlaceholders(modelBuilder);
         ConfigureLegalBases(modelBuilder);
         ConfigureContractVersionSnapshots(modelBuilder);
+        AppendixAcceptanceModelConfiguration.Configure(modelBuilder);
         OnModelCreatingPartial(modelBuilder);
     }
 

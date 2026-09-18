@@ -190,6 +190,89 @@ public sealed class ReorderContractTemplateTermItem
     public int DisplayOrder { get; set; }
 }
 
+public class CreateContractTemplateAppendixRequest
+{
+    [Required, MaxLength(50)]
+    public string AppendixCode { get; set; } = string.Empty;
+    [Required, MaxLength(500)]
+    public string AppendixName { get; set; } = string.Empty;
+    [MaxLength(500)]
+    public string? AppendixNameEn { get; set; }
+    [MaxLength(2000)]
+    public string? AppendixDescription { get; set; }
+    public bool IsRequired { get; set; }
+    public bool IsSelectedByDefault { get; set; }
+    [Range(0, int.MaxValue)]
+    public int DisplayOrder { get; set; }
+    [Required]
+    public string VersionRowVersion { get; set; } = string.Empty;
+}
+
+public sealed class UpdateContractTemplateAppendixRequest
+    : CreateContractTemplateAppendixRequest
+{
+    [Required]
+    public string RowVersion { get; set; } = string.Empty;
+}
+
+public sealed class DeleteContractTemplateAppendixRequest
+{
+    [Required] public string RowVersion { get; set; } = string.Empty;
+    [Required] public string VersionRowVersion { get; set; } = string.Empty;
+}
+
+public sealed class ReorderContractTemplateAppendicesRequest
+{
+    [Required] public string VersionRowVersion { get; set; } = string.Empty;
+    [Required] public List<ReorderContractTemplateAppendixItem> Appendices { get; set; } = [];
+}
+
+public sealed class ReorderContractTemplateAppendixItem
+{
+    [Range(1, int.MaxValue)] public int TemplateAppendixId { get; set; }
+    [Required] public string RowVersion { get; set; } = string.Empty;
+    [Range(0, int.MaxValue)] public int DisplayOrder { get; set; }
+}
+
+public class CreateContractTemplateAppendixTermRequest
+{
+    [Required, MaxLength(100)] public string TermCode { get; set; } = string.Empty;
+    [Required, MaxLength(1000)] public string TermTitle { get; set; } = string.Empty;
+    [MaxLength(1000)] public string? TermTitleEn { get; set; }
+    public string? TermContent { get; set; }
+    public string? TermContentEn { get; set; }
+    [Range(0, int.MaxValue)] public int DisplayOrder { get; set; }
+    [Required] public string VersionRowVersion { get; set; } = string.Empty;
+    [Required] public string AppendixRowVersion { get; set; } = string.Empty;
+}
+
+public sealed class UpdateContractTemplateAppendixTermRequest
+    : CreateContractTemplateAppendixTermRequest
+{
+    [Required] public string RowVersion { get; set; } = string.Empty;
+}
+
+public sealed class DeleteContractTemplateAppendixTermRequest
+{
+    [Required] public string RowVersion { get; set; } = string.Empty;
+    [Required] public string AppendixRowVersion { get; set; } = string.Empty;
+    [Required] public string VersionRowVersion { get; set; } = string.Empty;
+}
+
+public sealed class ReorderContractTemplateAppendixTermsRequest
+{
+    [Required] public string VersionRowVersion { get; set; } = string.Empty;
+    [Required] public string AppendixRowVersion { get; set; } = string.Empty;
+    [Required] public List<ReorderContractTemplateAppendixTermItem> Terms { get; set; } = [];
+}
+
+public sealed class ReorderContractTemplateAppendixTermItem
+{
+    [Range(1, int.MaxValue)] public int TemplateAppendixTermId { get; set; }
+    [Required] public string RowVersion { get; set; } = string.Empty;
+    [Range(0, int.MaxValue)] public int DisplayOrder { get; set; }
+}
+
 public class CreateContractTemplateLegalBasisRequest
 {
     [Required]

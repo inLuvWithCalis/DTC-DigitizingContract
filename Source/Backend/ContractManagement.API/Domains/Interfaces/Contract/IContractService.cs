@@ -183,6 +183,25 @@ namespace ContractManagement.Domains.Interfaces.Contract
                 int employeeId,
                 bool canReadTenant = false);
 
+        Task<ContractAppendixResponse> AddAppendixAsync(
+            int contractId, int versionId, AddContractAppendixRequest request,
+            int employeeId);
+        Task DeleteAppendixAsync(
+            int contractId, int versionId, int appendixId,
+            DeleteContractAppendixRequest request, int employeeId);
+        Task<ContractAppendixTermResponse> AddAppendixTermAsync(
+            int contractId, int versionId, int appendixId,
+            CreateContractAppendixTermRequest request, int employeeId);
+        Task<ContractAppendixTermResponse> UpdateAppendixTermAsync(
+            int contractId, int versionId, int appendixId, int termId,
+            UpdateContractAppendixTermRequest request, int employeeId);
+        Task DeleteAppendixTermAsync(
+            int contractId, int versionId, int appendixId, int termId,
+            DeleteContractAppendixTermRequest request, int employeeId);
+        Task<ContractAppendixResponse> ReorderAppendixTermsAsync(
+            int contractId, int versionId, int appendixId,
+            ReorderContractAppendixTermsRequest request, int employeeId);
+
         Task<SubmitContractForApprovalResponse> SubmitForApprovalAsync(
             int contractId,
             SubmitContractForApprovalRequest request,

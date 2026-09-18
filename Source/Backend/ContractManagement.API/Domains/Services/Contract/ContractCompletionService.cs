@@ -78,18 +78,34 @@ public sealed class ContractCompletionService : IContractCompletionService
                 var (contract, version) = await LoadWritableStateAsync(contractId, request.CurrentVersionId,
                     request.ContractRowVersion, request.VersionRowVersion, cancellationToken);
                 EnsureSigned(contract, version);
-                if (await _db.TblContractAcceptanceEvidences.AnyAsync(x => x.ContractId == contractId && x.VersionId == version.VersionId, cancellationToken))
-                    throw Rule("AcceptanceEvidenceExists", "Version này đã có biên bản nghiệm thu.", StatusCodes.Status409Conflict);
+                var acceptanceRecord = await _db.TblContractAcceptanceRecords
+                    .SingleOrDefaultAsync(x => x.ContractId == contractId
+                        && x.ContractVersionId == version.VersionId
+                        && x.Status == (byte)AcceptanceRecordStatus.Finalized,
+                        cancellationToken)
+                    ?? throw Rule("AcceptanceRecordRequired",
+                        "Phải finalize biên bản nghiệm thu trước khi tải bản ký.",
+                        StatusCodes.Status409Conflict);
+                if (await _db.TblContractAcceptanceEvidences.AnyAsync(
+                        x => x.AcceptanceRecordId == acceptanceRecord.AcceptanceRecordId,
+                        cancellationToken))
+                    throw Rule("AcceptanceEvidenceExists", "Biên bản nghiệm thu này đã có bản ký.", StatusCodes.Status409Conflict);
 
                 var metadata = CreateFile(stored, AcceptanceObjectType, contractId, employeeId);
                 _db.TblFileStorages.Add(metadata);
                 await _db.SaveChangesAsync(cancellationToken);
                 var evidence = new TblContractAcceptanceEvidence
                 {
-                    ContractId = contractId, VersionId = version.VersionId, FileId = metadata.FileId,
+                    AcceptanceRecordId = acceptanceRecord.AcceptanceRecordId,
+                    FileId = metadata.FileId,
                     UploadedByEmployeeId = employeeId, UploadedAt = DateTime.UtcNow
                 };
                 _db.TblContractAcceptanceEvidences.Add(evidence);
+                acceptanceRecord.Status = (byte)AcceptanceRecordStatus.Signed;
+                acceptanceRecord.SignedAt = evidence.UploadedAt;
+                acceptanceRecord.SignedByEmployeeId = employeeId;
+                acceptanceRecord.UpdatedDate = evidence.UploadedAt;
+                acceptanceRecord.UpdatedEmployeeId = employeeId;
                 await _db.SaveChangesAsync(cancellationToken);
                 await ActivateMilestonesAsync(version.VersionId,
                     PaymentDueAnchor.AcceptanceCompleted, evidence.UploadedAt.Date,
@@ -536,7 +552,15 @@ public sealed class ContractCompletionService : IContractCompletionService
         var contract = await _db.TblContracts.AsNoTracking().SingleOrDefaultAsync(x => x.ContractId == contractId, ct) ?? throw new KeyNotFoundException("Không tìm thấy hợp đồng.");
         if (!contract.CurrentVersionId.HasValue) throw new InvalidOperationException("Hợp đồng chưa có version hiện hành.");
         var version = await _db.TblContractVersions.AsNoTracking().SingleAsync(x => x.VersionId == contract.CurrentVersionId && x.ContractId == contractId, ct);
-        var acceptanceId = await _db.TblContractAcceptanceEvidences.AsNoTracking().Where(x => x.ContractId == contractId && x.VersionId == version.VersionId).Select(x => (int?)x.AcceptanceEvidenceId).SingleOrDefaultAsync(ct);
+        var acceptanceId = await (
+            from evidence in _db.TblContractAcceptanceEvidences.AsNoTracking()
+            join record in _db.TblContractAcceptanceRecords.AsNoTracking()
+                on evidence.AcceptanceRecordId equals record.AcceptanceRecordId
+            where record.ContractId == contractId
+                && record.ContractVersionId == version.VersionId
+                && record.Status == (byte)AcceptanceRecordStatus.Signed
+            orderby evidence.AcceptanceEvidenceId descending
+            select (int?)evidence.AcceptanceEvidenceId).FirstOrDefaultAsync(ct);
         var paymentIds = await _db.TblContractPaymentLedgers.AsNoTracking().Where(x => x.ContractId == contractId && x.VersionId == version.VersionId).OrderByDescending(x => x.PaymentDate).ThenByDescending(x => x.ContractPaymentId).Select(x => x.ContractPaymentId).ToListAsync(ct);
         var payments = new List<ContractPaymentResponse>();
         foreach (var id in paymentIds) payments.Add(await LoadPaymentAsync(id, ct));
@@ -601,7 +625,10 @@ public sealed class ContractCompletionService : IContractCompletionService
     private async Task<ContractCompletionReadinessResponse> BuildReadinessAsync(TblContract contract, TblContractVersion version, CancellationToken ct)
     {
         var signed = await _db.TblContractSignedEvidences.AsNoTracking().AnyAsync(x => x.ContractId == contract.ContractId && x.VersionId == version.VersionId && x.Status == (byte)SignedEvidenceStatus.Active, ct);
-        var acceptance = await _db.TblContractAcceptanceEvidences.AsNoTracking().AnyAsync(x => x.ContractId == contract.ContractId && x.VersionId == version.VersionId, ct);
+        var acceptance = await _db.TblContractAcceptanceRecords.AsNoTracking()
+            .AnyAsync(x => x.ContractId == contract.ContractId
+                && x.ContractVersionId == version.VersionId
+                && x.Status == (byte)AcceptanceRecordStatus.Signed, ct);
         var milestoneAmounts = await _db.TblContractPaymentMilestones.AsNoTracking()
             .Where(x => x.VersionId == version.VersionId)
             .Select(x => new
@@ -733,9 +760,10 @@ public sealed class ContractCompletionService : IContractCompletionService
     private async Task<ContractAcceptanceEvidenceResponse> LoadAcceptanceAsync(int id, CancellationToken ct)
     {
         var row = await (from e in _db.TblContractAcceptanceEvidences.AsNoTracking() join f in _db.TblFileStorages.AsNoTracking() on e.FileId equals f.FileId
-            join v in _db.TblContractVersions.AsNoTracking() on e.VersionId equals v.VersionId join u in _db.TblEmployees.AsNoTracking() on e.UploadedByEmployeeId equals u.EmployeeId
-            where e.AcceptanceEvidenceId == id select new { e, f, v.VersionNo, u.EmployeeFullName }).SingleAsync(ct);
-        return new() { AcceptanceEvidenceId = id, ContractId = row.e.ContractId, VersionId = row.e.VersionId, VersionNo = row.VersionNo,
+            join a in _db.TblContractAcceptanceRecords.AsNoTracking() on e.AcceptanceRecordId equals a.AcceptanceRecordId
+            join v in _db.TblContractVersions.AsNoTracking() on a.ContractVersionId equals v.VersionId join u in _db.TblEmployees.AsNoTracking() on e.UploadedByEmployeeId equals u.EmployeeId
+            where e.AcceptanceEvidenceId == id select new { e, a, f, v.VersionNo, u.EmployeeFullName }).SingleAsync(ct);
+        return new() { AcceptanceEvidenceId = id, ContractId = row.a.ContractId, VersionId = row.a.ContractVersionId, VersionNo = row.VersionNo,
             FileId = row.f.FileId, FileName = row.f.FileName, FileType = row.f.FileType ?? "", ContentType = row.f.ContentType ?? "", FileSize = row.f.FileSize ?? 0,
             Sha256 = row.f.Sha256 ?? "", UploadedByEmployeeId = row.e.UploadedByEmployeeId, UploadedByEmployeeName = row.EmployeeFullName,
             UploadedAt = row.e.UploadedAt, RowVersion = Encode(row.e.RowVersion) };
